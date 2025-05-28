@@ -19,6 +19,7 @@
 <p align="center">
   <a href="#-example">Example</a> •
   <a href="#-supported-agents">Supported Agents</a> •
+  <a href="#-ask-code-mode">Ask & Code Mode</a> •
   <a href="#-sdk">SDK</a> •
   <a href="#-configuration">Configuration</a> •
   <a href="https://discord.com/invite/mhmJUTjW4b" target="_blank">Discord</a> 
@@ -74,8 +75,23 @@ await vibeKit.kill();
 
 ## Supported Agents
 
-- [x] OpenAI Codex
-- [x] Claude Code
+-- [x] OpenAI Codex
+-- [x] Claude Code
+
+## Ask & Code Mode
+
+VibeKit provides an interactive *Ask & Code* mode where the agent can ask clarifying questions to refine requirements before generating and applying code changes. To enable Ask & Code mode, pass the `askAndCode: true` option to `generateCode`:
+
+```ts
+// Interactive Ask & Code mode
+const result = await vibeKit.generateCode("Add error handling to the login function", {
+  askAndCode: true,
+  onUpdate: (msg) => console.log(msg),
+  onError: (err) => console.error(err),
+});
+```
+
+By default, generateCode runs in one-shot mode and does not ask follow-up questions.
 
 ## SDK
 
