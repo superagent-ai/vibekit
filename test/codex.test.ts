@@ -3,6 +3,7 @@ import { CodexAgent } from "../src/agents/codex.js";
 import { CodexConfig, CodexStreamCallbacks } from "../src/types";
 import { Sandbox } from "@e2b/code-interpreter";
 import { generatePRMetadata } from "../src/agents/utils.js";
+import { trace } from "@opentelemetry/api";
 
 // Mock dependencies
 vi.mock("@e2b/code-interpreter");
@@ -258,6 +259,61 @@ describe("CodexAgent", () => {
       await expect(codexAgent.generateCode("test prompt")).rejects.toThrow(
         "Failed to generate code: Sandbox creation failed"
       );
+    });
+
+    it("should instrument stream updates with opentelemetry spans", async () => {
+      const mockSpan = { setAttribute: vi.fn(), end: vi.fn() };
+      const mockTracer = { startActiveSpan: vi.fn((name, fn) => fn(mockSpan)) };
+      const getTracerSpy = vi.spyOn(trace, "getTracer").mockReturnValue(
+        mockTracer as any
+      );
+
+      const callbacks: CodexStreamCallbacks = { onUpdate: vi.fn() };
+      mockSandbox.commands.run.mockImplementation(({ onStdout, onStderr }) => {
+        onStdout("foo");
+        onStderr("bar");
+        return Promise.resolve({ exitCode: 0, stdout: "", stderr: "" });
+      });
+
+      await codexAgent.generateCode("prompt", "code", [], callbacks);
+
+      expect(getTracerSpy).toHaveBeenCalledWith("vibekit");
+      expect(mockTracer.startActiveSpan).toHaveBeenCalledWith(
+        "codex.stream.update",
+        expect.any(Function)
+      );
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith("message.length", 3);
+      expect(mockSpan.end).toHaveBeenCalled();
+      getTracerSpy.mockRestore();
+    });
+
+    it("should instrument errors with opentelemetry spans on error", async () => {
+      const mockSpan = { setAttribute: vi.fn(), end: vi.fn() };
+      const mockTracer = { startActiveSpan: vi.fn((name, fn) => fn(mockSpan)) };
+      const getTracerSpy = vi.spyOn(trace, "getTracer").mockReturnValue(
+        mockTracer as any
+      );
+
+      mockSandbox.commands.run.mockRejectedValue(new Error("fail"));
+      const callbacks: CodexStreamCallbacks = { onError: vi.fn() };
+
+      await expect(
+        codexAgent.generateCode("prompt", "code", [], callbacks)
+      ).rejects.toThrow("Failed to generate code: fail");
+
+      expect(getTracerSpy).toHaveBeenCalledWith("vibekit");
+      expect(mockTracer.startActiveSpan).toHaveBeenCalledWith(
+        "codex.stream.error",
+        expect.any(Function)
+      );
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "error.message",
+        "Failed to generate code: fail"
+      );
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        "Failed to generate code: fail"
+      );
+      getTracerSpy.mockRestore();
     });
   });
 });

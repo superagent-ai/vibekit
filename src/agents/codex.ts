@@ -7,6 +7,7 @@ import {
   CodexStreamCallbacks,
   Conversation,
 } from "../types";
+import { trace } from "@opentelemetry/api";
 
 export class CodexAgent {
   private config: CodexConfig;
@@ -68,6 +69,25 @@ export class CodexAgent {
     callbacks?: CodexStreamCallbacks
   ): Promise<CodexResponse> {
     const config = this.config;
+    const tracer = trace.getTracer("vibekit");
+    const instrumentedUpdate = (message: string) => {
+      if (callbacks?.onUpdate) {
+        tracer.startActiveSpan("codex.stream.update", (span) => {
+          span.setAttribute("message.length", message.length);
+          callbacks.onUpdate!(message);
+          span.end();
+        });
+      }
+    };
+    const instrumentedError = (err: string) => {
+      if (callbacks?.onError) {
+        tracer.startActiveSpan("codex.stream.error", (span) => {
+          span.setAttribute("error.message", err);
+          callbacks.onError!(err);
+          span.end();
+        });
+      }
+    };
     let instruction: string;
     if (mode === "ask") {
       instruction =
@@ -91,10 +111,8 @@ export class CodexAgent {
       const sbx = await this.getSandbox();
       const repoDir = config.repoUrl.split("/")[1];
       if (!config.sandboxId && sbx.sandboxId) {
-        callbacks?.onUpdate?.(
-          `{"type": "start", "sandbox_id": "${sbx.sandboxId}"}`
-        );
-        callbacks?.onUpdate?.(
+        instrumentedUpdate(`{"type": "start", "sandbox_id": "${sbx.sandboxId}"}`);
+        instrumentedUpdate(
           `{"type": "git", "output": "Cloning repository: ${config.repoUrl}"}`
         );
         await sbx.commands.run(
@@ -107,7 +125,7 @@ export class CodexAgent {
           { timeoutMs: 60000 }
         );
       } else if (config.sandboxId) {
-        callbacks?.onUpdate?.(
+        instrumentedUpdate(
           `{"type": "start", "sandbox_id": "${config.sandboxId}"}`
         );
       }
@@ -118,15 +136,15 @@ export class CodexAgent {
         } --quiet "${_prompt}"`,
         {
           timeoutMs: 3600000,
-          onStdout: (data) => callbacks?.onUpdate?.(data),
-          onStderr: (data) => callbacks?.onUpdate?.(data),
+          onStdout: (data) => instrumentedUpdate(data),
+          onStderr: (data) => instrumentedUpdate(data),
         }
       );
 
-      callbacks?.onUpdate?.(
-        `{"type": "end", "sandbox_id": "${
-          sbx.sandboxId
-        }", "output": "${JSON.stringify(result)}"}`
+      instrumentedUpdate(
+        `{"type": "end", "sandbox_id": "${sbx.sandboxId}", "output": "${
+          JSON.stringify(result)
+        }"}`
       );
 
       this.lastPrompt = prompt;
@@ -140,7 +158,7 @@ export class CodexAgent {
       const errorMessage = `Failed to generate code: ${
         error instanceof Error ? error.message : String(error)
       }`;
-      callbacks?.onError?.(errorMessage);
+      instrumentedError(errorMessage);
       throw new Error(errorMessage);
     }
   }
