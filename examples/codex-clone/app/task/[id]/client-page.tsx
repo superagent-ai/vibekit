@@ -7,7 +7,7 @@ import MessageInput from "./_components/message-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fetchRealtimeSubscriptionToken } from "@/app/actions/inngest";
 import { useTaskStore } from "@/stores/tasks";
-import { Terminal, Bot, User } from "lucide-react";
+import { Terminal, Bot, User, Loader2 } from "lucide-react";
 import { TextShimmer } from "@/components/ui/text-shimmer";
 import { Markdown } from "@/components/markdown";
 import { StreamingIndicator } from "@/components/streaming-indicator";
@@ -30,7 +30,79 @@ interface StreamingMessage {
     text?: string;
     isStreaming?: boolean;
     streamId?: string;
+    chunkIndex?: number;
+    totalChunks?: number;
   };
+}
+
+interface IncomingMessage {
+  role: "user" | "assistant";
+  type: string;
+  data: Record<string, unknown> & {
+    text?: string;
+    isStreaming?: boolean;
+    streamId?: string;
+    chunkIndex?: number;
+    totalChunks?: number;
+    call_id?: string;
+    action?: {
+      command?: string[];
+    };
+    output?: string;
+  };
+}
+
+// Type guard to check if a message has streaming properties
+function isStreamingMessage(message: unknown): message is IncomingMessage & {
+  data: { isStreaming: true; streamId: string };
+} {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    "type" in message &&
+    message.type === "message" &&
+    "data" in message &&
+    typeof message.data === "object" &&
+    message.data !== null &&
+    "isStreaming" in message.data &&
+    message.data.isStreaming === true &&
+    "streamId" in message.data &&
+    typeof message.data.streamId === "string"
+  );
+}
+
+// Type guard to check if a message is a completed stream
+function isCompletedStreamMessage(
+  message: unknown
+): message is IncomingMessage & {
+  data: { streamId: string; isStreaming: false };
+} {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    "type" in message &&
+    message.type === "message" &&
+    "data" in message &&
+    typeof message.data === "object" &&
+    message.data !== null &&
+    "streamId" in message.data &&
+    typeof message.data.streamId === "string" &&
+    (!("isStreaming" in message.data) || message.data.isStreaming === false)
+  );
+}
+
+// Type guard to check if message is a valid incoming message
+function isValidIncomingMessage(message: unknown): message is IncomingMessage {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    "role" in message &&
+    "type" in message &&
+    "data" in message &&
+    (message.role === "user" || message.role === "assistant") &&
+    typeof message.type === "string" &&
+    typeof message.data === "object"
+  );
 }
 
 export default function TaskClientPage({ id }: Props) {
@@ -39,7 +111,9 @@ export default function TaskClientPage({ id }: Props) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const chatScrollAreaRef = useRef<HTMLDivElement>(null);
   const [subscriptionEnabled, setSubscriptionEnabled] = useState(true);
-  const [streamingMessages, setStreamingMessages] = useState<Map<string, StreamingMessage>>(new Map());
+  const [streamingMessages, setStreamingMessages] = useState<
+    Map<string, StreamingMessage>
+  >(new Map());
 
   // Function to get the output message for a given shell call message
   const getOutputForCall = (callId: string) => {
@@ -59,50 +133,57 @@ export default function TaskClientPage({ id }: Props) {
   useEffect(() => {
     if (latestData?.channel === "tasks" && latestData.topic === "update") {
       const { taskId, message } = latestData.data;
-      
-      if (taskId === id && message) {
+
+      if (taskId === id && message && isValidIncomingMessage(message)) {
         // Handle streaming messages
-        if (message.type === "message" && message.data?.isStreaming) {
-          const streamId = message.data.streamId as string;
-          
-          setStreamingMessages(prev => {
+        if (isStreamingMessage(message)) {
+          const streamId = message.data.streamId;
+
+          setStreamingMessages((prev) => {
             const newMap = new Map(prev);
             const existingMessage = newMap.get(streamId);
-            
+
             if (existingMessage) {
               // Append to existing streaming message
               newMap.set(streamId, {
                 ...existingMessage,
                 data: {
                   ...existingMessage.data,
-                  text: (existingMessage.data.text || '') + (message.data.text || '')
-                }
+                  text:
+                    (existingMessage.data.text || "") +
+                    (message.data.text || ""),
+                  chunkIndex: message.data.chunkIndex,
+                  totalChunks: message.data.totalChunks,
+                },
               });
             } else {
               // New streaming message
               newMap.set(streamId, message as StreamingMessage);
             }
-            
+
             return newMap;
           });
-        } else if (message.type === "message" && message.data?.streamId && !message.data?.isStreaming) {
+        } else if (isCompletedStreamMessage(message)) {
           // Stream ended, move to regular messages
-          const streamId = message.data.streamId as string;
+          const streamId = message.data.streamId;
           const streamingMessage = streamingMessages.get(streamId);
-          
+
           if (streamingMessage) {
             updateTask(id, {
-              messages: [...(task?.messages || []), {
-                ...streamingMessage,
-                data: {
-                  ...streamingMessage.data,
-                  text: message.data.text || streamingMessage.data.text,
-                  isStreaming: false
-                }
-              }]
+              messages: [
+                ...(task?.messages || []),
+                {
+                  ...streamingMessage,
+                  data: {
+                    ...streamingMessage.data,
+                    text: message.data.text || streamingMessage.data.text,
+                    isStreaming: false,
+                  },
+                },
+              ],
             });
-            
-            setStreamingMessages(prev => {
+
+            setStreamingMessages((prev) => {
               const newMap = new Map(prev);
               newMap.delete(streamId);
               return newMap;
@@ -111,7 +192,7 @@ export default function TaskClientPage({ id }: Props) {
         } else {
           // Regular non-streaming message
           updateTask(id, {
-            messages: [...(task?.messages || []), message]
+            messages: [...(task?.messages || []), message],
           });
         }
       }
@@ -154,7 +235,10 @@ export default function TaskClientPage({ id }: Props) {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar for chat messages */}
         <div className="w-full max-w-3xl mx-auto border-r border-border bg-gradient-to-b from-background to-muted/5 flex flex-col h-full">
-          <ScrollArea ref={chatScrollAreaRef} className="flex-1 overflow-y-auto scroll-area-custom">
+          <ScrollArea
+            ref={chatScrollAreaRef}
+            className="flex-1 overflow-y-auto scroll-area-custom"
+          >
             <div className="p-6 flex flex-col gap-y-6">
               {/* Initial task message */}
               <div className="flex justify-end animate-in slide-in-from-right duration-300">
@@ -187,8 +271,8 @@ export default function TaskClientPage({ id }: Props) {
                       }
                       className={cn(
                         "flex gap-3 animate-in duration-300",
-                        isAssistant 
-                          ? "justify-start slide-in-from-left" 
+                        isAssistant
+                          ? "justify-start slide-in-from-left"
                           : "justify-end slide-in-from-right"
                       )}
                     >
@@ -199,12 +283,14 @@ export default function TaskClientPage({ id }: Props) {
                           </div>
                         </div>
                       )}
-                      <div className={cn(
-                        "max-w-[85%] rounded-2xl px-5 py-3 shadow-sm",
-                        isAssistant
-                          ? "bg-card border border-border"
-                          : "bg-primary text-primary-foreground"
-                      )}>
+                      <div
+                        className={cn(
+                          "max-w-[85%] rounded-2xl px-5 py-3 shadow-sm",
+                          isAssistant
+                            ? "bg-card border border-border"
+                            : "bg-primary text-primary-foreground"
+                        )}
+                      >
                         {isAssistant ? (
                           <div className="prose prose-sm dark:prose-invert max-w-none overflow-hidden">
                             <Markdown
@@ -219,7 +305,9 @@ export default function TaskClientPage({ id }: Props) {
                             </Markdown>
                           </div>
                         ) : (
-                          <p className="text-sm leading-relaxed break-words">{message.data?.text as string}</p>
+                          <p className="text-sm leading-relaxed break-words">
+                            {message.data?.text as string}
+                          </p>
                         )}
                       </div>
                       {!isAssistant && (
@@ -232,7 +320,7 @@ export default function TaskClientPage({ id }: Props) {
                     </div>
                   );
                 })}
-              
+
               {/* Render streaming messages */}
               {Array.from(streamingMessages.values()).map((message) => {
                 const isAssistant = message.role === "assistant";
@@ -241,8 +329,8 @@ export default function TaskClientPage({ id }: Props) {
                     key={message.data.streamId as string}
                     className={cn(
                       "flex gap-3 animate-in duration-300",
-                      isAssistant 
-                        ? "justify-start slide-in-from-left" 
+                      isAssistant
+                        ? "justify-start slide-in-from-left"
                         : "justify-end slide-in-from-right"
                     )}
                   >
@@ -250,7 +338,7 @@ export default function TaskClientPage({ id }: Props) {
                       <div className="flex-shrink-0">
                         <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center border border-border relative overflow-hidden">
                           <Bot className="w-4 h-4 text-muted-foreground z-10 relative" />
-                          <div 
+                          <div
                             className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent"
                             style={{
                               animation: "shimmer 2s linear infinite",
@@ -260,12 +348,14 @@ export default function TaskClientPage({ id }: Props) {
                         </div>
                       </div>
                     )}
-                    <div className={cn(
-                      "max-w-[85%] rounded-2xl px-5 py-3 shadow-sm",
-                      isAssistant
-                        ? "bg-card border border-border"
-                        : "bg-primary text-primary-foreground"
-                    )}>
+                    <div
+                      className={cn(
+                        "max-w-[85%] rounded-2xl px-5 py-3 shadow-sm",
+                        isAssistant
+                          ? "bg-card border border-border"
+                          : "bg-primary text-primary-foreground"
+                      )}
+                    >
                       {isAssistant ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none overflow-hidden">
                           <Markdown
@@ -281,15 +371,23 @@ export default function TaskClientPage({ id }: Props) {
                           {/* Enhanced streaming indicator */}
                           <span className="inline-flex items-center gap-2 ml-1">
                             <StreamingIndicator size="sm" variant="cursor" />
-                            {message.data.chunkIndex !== undefined && message.data.totalChunks !== undefined && (
-                              <span className="text-[10px] text-muted-foreground/60 font-mono">
-                                {Math.round(((message.data.chunkIndex + 1) / message.data.totalChunks) * 100)}%
-                              </span>
-                            )}
+                            {typeof message.data.chunkIndex === "number" &&
+                              typeof message.data.totalChunks === "number" && (
+                                <span className="text-[10px] text-muted-foreground/60 font-mono">
+                                  {Math.round(
+                                    ((message.data.chunkIndex + 1) /
+                                      message.data.totalChunks) *
+                                      100
+                                  )}
+                                  %
+                                </span>
+                              )}
                           </span>
                         </div>
                       ) : (
-                        <p className="text-sm leading-relaxed break-words">{message.data?.text as string}</p>
+                        <p className="text-sm leading-relaxed break-words">
+                          {message.data?.text as string}
+                        </p>
                       )}
                     </div>
                     {!isAssistant && (
@@ -302,28 +400,29 @@ export default function TaskClientPage({ id }: Props) {
                   </div>
                 );
               })}
-              
-              {task?.status === "IN_PROGRESS" && streamingMessages.size === 0 && (
-                <div className="flex justify-start animate-in slide-in-from-left duration-300">
-                  <div className="flex gap-3">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center border border-border animate-pulse">
-                        <Bot className="w-4 h-4 text-muted-foreground" />
+
+              {task?.status === "IN_PROGRESS" &&
+                streamingMessages.size === 0 && (
+                  <div className="flex justify-start animate-in slide-in-from-left duration-300">
+                    <div className="flex gap-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center border border-border animate-pulse">
+                          <Bot className="w-4 h-4 text-muted-foreground" />
+                        </div>
                       </div>
-                    </div>
-                    <div className="bg-card border border-border rounded-2xl px-5 py-3 shadow-sm">
-                      <div className="flex items-center gap-2">
-                        <Terminal className="size-4 text-muted-foreground animate-spin" />
-                        <TextShimmer className="text-sm">
-                          {task?.statusMessage
-                            ? `${task.statusMessage}...`
-                            : "Working on task..."}
-                        </TextShimmer>
+                      <div className="bg-card border border-border rounded-2xl px-5 py-3 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+                          <TextShimmer className="text-sm">
+                            {task?.statusMessage
+                              ? `${task.statusMessage}`
+                              : "Working on task..."}
+                          </TextShimmer>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
           </ScrollArea>
 
