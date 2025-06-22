@@ -30,7 +30,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className="antialiased"
+        style={{
+          '--font-geist-sans': geistSans.style.fontFamily,
+          '--font-geist-mono': geistMono.style.fontFamily,
+        } as React.CSSProperties}
       >
         <ThemeProvider
           attribute="class"

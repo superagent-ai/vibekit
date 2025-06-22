@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { VibeKit, VibeKitConfig } from "@vibe-kit/sdk";
 import { Task } from "@/stores/tasks";
 
-export const createPullRequestAction = async ({ task }: { task: Task }) => {
+export const createPullRequestAction = async ({ task, isDraft = false }: { task: Task; isDraft?: boolean }) => {
   const cookieStore = await cookies();
   const githubToken = cookieStore.get("github_access_token")?.value;
 
@@ -33,7 +33,7 @@ export const createPullRequestAction = async ({ task }: { task: Task }) => {
 
   const vibekit = new VibeKit(config);
 
-  const pr = await vibekit.createPullRequest();
+  const pr = await vibekit.createPullRequest({ draft: isDraft });
 
   return pr;
 };

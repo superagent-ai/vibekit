@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 import { fetchRealtimeSubscriptionToken } from "@/app/actions/inngest";
 import { useTaskStore } from "@/stores/tasks";
+import FontInitializer from "@/components/font-initializer";
 
 export default function Container({ children }: { children: React.ReactNode }) {
   const { updateTask, getTaskById } = useTaskStore();
@@ -81,5 +82,10 @@ export default function Container({ children }: { children: React.ReactNode }) {
     }
   }, [latestData]);
 
-  return children;
+  return (
+    <>
+      <FontInitializer />
+      {children}
+    </>
+  );
 }

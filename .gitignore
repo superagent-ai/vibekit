@@ -43,6 +43,7 @@ test-package.ts
 test-envs.ts
 test-run-tests.ts
 test-togetherai.ts
+test-togetherai.ts
 test-opencode.ts
 .cluso/config.json
 .inngest/main.db

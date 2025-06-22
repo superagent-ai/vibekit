@@ -24,6 +24,13 @@ export default function Navbar() {
           >
             Environments
           </Link>
+          <Dot className="text-muted-foreground/40" />
+          <Link
+            href="/settings"
+            className="hover:opacity-45 transition-opacity duration-300"
+          >
+            Settings
+          </Link>
         </div>
         <ThemeToggle />
       </div>

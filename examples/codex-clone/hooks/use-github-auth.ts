@@ -62,7 +62,7 @@ export function useGitHubAuth(): UseGitHubAuthReturn {
           setUser(null);
         }
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
+        if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('Component unmounted'))) {
           // Ignore abort errors
           return;
         }
