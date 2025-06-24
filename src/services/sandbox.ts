@@ -1,5 +1,6 @@
 import { Sandbox as E2BSandbox } from "@e2b/code-interpreter";
 import { Daytona, DaytonaConfig } from "@daytonaio/sdk";
+import { CodeSandbox } from "@codesandbox/sdk";
 
 import {
   SandboxInstance,
@@ -212,15 +213,142 @@ export class DaytonaSandboxProvider implements SandboxProvider {
   }
 }
 
+// TogetherAI implementation
+class TogetherAISandboxInstance implements SandboxInstance {
+  constructor(
+    private session: any, // TogetherAI session object
+    private sandbox: any, // TogetherAI sandbox object
+    public sandboxId: string
+  ) {}
+
+  get commands(): SandboxCommands {
+    return {
+      run: async (command: string, options?: SandboxCommandOptions) => {
+        try {
+          // Execute command using TogetherAI's session API
+          const response = await this.session.commands.run(command);
+
+          // Handle streaming callbacks if provided
+          if (options?.onStdout && response.stdout) {
+            options.onStdout(response.stdout);
+          }
+          if (options?.onStderr && response.stderr) {
+            options.onStderr(response.stderr);
+          }
+
+          // TogetherAI returns: { exitCode, stdout, stderr }
+          return {
+            exitCode: response.exitCode || 0,
+            stdout: response.stdout || "",
+            stderr: response.stderr || "",
+          };
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          if (options?.onStderr) {
+            options.onStderr(errorMessage);
+          }
+          return {
+            exitCode: 1,
+            stdout: "",
+            stderr: errorMessage,
+          };
+        }
+      },
+    };
+  }
+
+  async kill(): Promise<void> {
+    if (this.sandbox) {
+      await this.sandbox.kill();
+    }
+  }
+
+  async pause(): Promise<void> {
+    // TogetherAI doesn't have a direct pause equivalent
+    console.log(
+      "Pause not directly supported for TogetherAI sandboxes - sandbox remains active"
+    );
+  }
+}
+
+export class TogetherAISandboxProvider implements SandboxProvider {
+  async create(
+    config: SandboxConfig,
+    envs?: Record<string, string>,
+    agentType?: "codex" | "claude"
+  ): Promise<SandboxInstance> {
+    try {
+      const sdk = new CodeSandbox(config.apiKey);
+
+      // Create sandbox - the SDK might handle environment variables differently
+      const sandbox = await sdk.sandboxes.create();
+
+      // Connect to the sandbox to get a session
+      const session = await sandbox.connect();
+      console.log("Session connected");
+
+      // Set environment variables if provided (may need to be done after connection)
+      if (envs && Object.keys(envs).length > 0) {
+        for (const [key, value] of Object.entries(envs)) {
+          await session.commands.run(`export ${key}="${value}"`);
+        }
+      }
+
+      return new TogetherAISandboxInstance(session, sandbox, sandbox.id);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes("Cannot resolve module")
+      ) {
+        throw new Error(
+          "TogetherAI SDK not found. Please install @codesandbox/sdk: npm install @codesandbox/sdk"
+        );
+      }
+      throw new Error(
+        `Failed to create TogetherAI sandbox: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  async resume(
+    sandboxId: string,
+    config: SandboxConfig
+  ): Promise<SandboxInstance> {
+    try {
+      const sdk = new CodeSandbox(config.apiKey);
+
+      // Resume existing sandbox by ID - assuming the SDK provides this functionality
+      // If not available, we might need to store sandbox references differently
+      const sandbox = await sdk.sandboxes.resume(sandboxId);
+
+      // Connect to the sandbox to get a session
+      const session = await sandbox.connect();
+
+      return new TogetherAISandboxInstance(session, sandbox, sandboxId);
+    } catch (error) {
+      throw new Error(
+        `Failed to resume TogetherAI sandbox: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+}
+
 // Factory function to create appropriate sandbox provider
 export function createSandboxProvider(
-  type: "e2b" | "daytona"
+  type: "e2b" | "daytona" | "togetherai"
 ): SandboxProvider {
   switch (type) {
     case "e2b":
       return new E2BSandboxProvider();
     case "daytona":
       return new DaytonaSandboxProvider();
+    case "togetherai":
+      return new TogetherAISandboxProvider();
     default:
       throw new Error(`Unsupported sandbox type: ${type}`);
   }
@@ -231,7 +359,16 @@ export function createSandboxConfigFromEnvironment(
   environment: any,
   agentType?: "codex" | "claude"
 ): SandboxConfig {
-  // Try Daytona first if configured
+  // Try TogetherAI first if configured
+  if (environment.togetherai) {
+    return {
+      type: "togetherai",
+      apiKey: environment.togetherai.apiKey,
+      templateId: environment.togetherai.templateId,
+    };
+  }
+
+  // Try Daytona if configured
   if (environment.daytona) {
     // Determine default image based on agent type
     let defaultImage = "ubuntu:22.04"; // fallback

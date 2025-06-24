@@ -33,9 +33,15 @@ export type DaytonaConfig = {
   serverUrl?: string;
 };
 
+export type TogetherAIConfig = {
+  apiKey: string;
+  templateId?: string;
+};
+
 export type EnvironmentConfig = {
   e2b?: E2BConfig;
   daytona?: DaytonaConfig;
+  togetherai?: TogetherAIConfig;
 };
 
 export type GithubConfig = {
@@ -178,9 +184,9 @@ export interface SandboxInstance {
 }
 
 export interface SandboxConfig {
-  type: "e2b" | "daytona";
+  type: "e2b" | "daytona" | "togetherai";
   apiKey: string;
-  templateId?: string; // for E2B
+  templateId?: string; // for E2B and TogetherAI
   image?: string; // for Daytona
   serverUrl?: string; // for Daytona
 }
