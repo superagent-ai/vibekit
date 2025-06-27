@@ -34,9 +34,21 @@ export type DaytonaConfig = {
   serverUrl?: string;
 };
 
+export type DockerConfig = {
+  socketPath?: string;
+  host?: string;
+  port?: number;
+  protocol?: 'http' | 'https';
+  ca?: string;
+  cert?: string;
+  key?: string;
+  image?: string;
+};
+
 export type EnvironmentConfig = {
   e2b?: E2BConfig;
   daytona?: DaytonaConfig;
+  docker?: DockerConfig;
 };
 
 export type GithubConfig = {
@@ -243,11 +255,18 @@ export interface SandboxInstance {
 }
 
 export interface SandboxConfig {
-  type: "e2b" | "daytona";
-  apiKey: string;
+  type: "e2b" | "daytona" | "docker";
+  apiKey?: string;
   templateId?: string; // for E2B
-  image?: string; // for Daytona
+  image?: string; // for Daytona and Docker
   serverUrl?: string; // for Daytona
+  socketPath?: string; // for Docker
+  host?: string; // for Docker
+  port?: number; // for Docker
+  protocol?: 'http' | 'https'; // for Docker
+  ca?: string; // for Docker TLS
+  cert?: string; // for Docker TLS
+  key?: string; // for Docker TLS
 }
 
 export interface SandboxProvider {
