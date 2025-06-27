@@ -1,0 +1,4 @@
+{
+  "name": "vibekit-claude-code",
+  "build": { "dockerfile": "Dockerfile.claude" },
+}

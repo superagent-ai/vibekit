@@ -43,7 +43,7 @@ export const CodeComponent: React.FC<CodeComponentProps> = ({
   if (inline) {
     return (
       <code
-        className="text-sm bg-background dark:bg-zinc-800 py-0.5 px-1 rounded-md"
+        className="text-sm bg-muted/50 dark:bg-zinc-800 py-0.5 px-1 rounded-md"
         style={{ wordBreak: "break-all" }}
         {...props}
       >
@@ -55,8 +55,8 @@ export const CodeComponent: React.FC<CodeComponentProps> = ({
   // Code block with language
   if (match) {
     return (
-      <div className="border rounded-lg bg-background my-2 overflow-hidden">
-        <div className="flex items-center justify-between bg-sidebar px-2 py-1 border-b">
+      <div className="border rounded-lg bg-background dark:bg-zinc-900 my-2 overflow-hidden">
+        <div className="flex items-center justify-between bg-muted px-2 py-1 border-b">
           <span className="text-xs text-muted-foreground">{match[1]}</span>
           <Button
             variant="ghost"
@@ -108,7 +108,7 @@ export const CodeComponent: React.FC<CodeComponentProps> = ({
   // Code block without language
   return (
     <code
-      className="relative rounded !bg-sidebar border border-muted-foreground/20 px-[0.3rem] py-[0.2rem] font-mono text-xs"
+      className="relative rounded !bg-muted/50 dark:!bg-zinc-800 border border-muted-foreground/20 px-[0.3rem] py-[0.2rem] font-mono text-xs"
       style={{ wordBreak: "break-word" }}
     >
       {children}
@@ -149,8 +149,35 @@ const components: Partial<Components> = {
     </p>
   ),
   a: ({ children, href, ...props }) => {
+    // Check if this is a file reference link (contains line numbers)
+    const childText = React.Children.toArray(children).join('');
+    const fileRefPattern = /^(.+?):(\d+)(?:-(\d+))?$/;
+    const isFileRef = fileRefPattern.test(childText);
+    
     // Check if the URL is external (starts with http/https) or internal
     const isExternal = href?.startsWith("http") || href?.startsWith("https");
+
+    if (isFileRef && isExternal) {
+      const match = childText.match(fileRefPattern);
+      if (match) {
+        const [, filename, startLine, endLine] = match;
+        return (
+          <a
+            className="inline-flex items-center gap-1 font-mono text-xs bg-muted/50 dark:bg-zinc-800 rounded px-1.5 py-0.5 hover:bg-muted/70 dark:hover:bg-zinc-700 transition-colors no-underline"
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            {...props}
+          >
+            <span className="text-blue-500">{filename}</span>
+            <span className="text-muted-foreground">:</span>
+            <span className="text-green-600 dark:text-green-400">
+              {endLine ? `${startLine}-${endLine}` : startLine}
+            </span>
+          </a>
+        );
+      }
+    }
 
     if (isExternal) {
       return (
@@ -317,9 +344,10 @@ interface MarkdownProps {
   children: string;
   repoUrl?: string;
   branch?: string;
+  onFileClick?: (filename: string, startLine?: number, endLine?: number) => void;
 }
 
-const NonMemoizedMarkdown = ({ children, repoUrl, branch }: MarkdownProps) => {
+const NonMemoizedMarkdown = ({ children, repoUrl, branch, onFileClick }: MarkdownProps) => {
   const processedContent = processCitations(children, repoUrl, branch);
 
   return (
@@ -340,5 +368,6 @@ export const Markdown = memo(
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children &&
     prevProps.repoUrl === nextProps.repoUrl &&
-    prevProps.branch === nextProps.branch
+    prevProps.branch === nextProps.branch &&
+    prevProps.onFileClick === nextProps.onFileClick
 );

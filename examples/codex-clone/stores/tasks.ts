@@ -25,6 +25,8 @@ export interface Task {
   mode: "code" | "ask";
   hasChanges: boolean;
   pullRequest?: PullRequestResponse;
+  feedback?: 'up' | 'down';
+  feedbackAt?: string;
 }
 
 interface TaskStore {
@@ -58,6 +60,7 @@ export const useTaskStore = create<TaskStore>()(
         const id = crypto.randomUUID();
         const newTask = {
           ...task,
+          title: task.title.trim(), // Clean up title
           id,
           createdAt: now,
           updatedAt: now,
@@ -72,7 +75,12 @@ export const useTaskStore = create<TaskStore>()(
         set((state) => ({
           tasks: state.tasks.map((task) =>
             task.id === id
-              ? { ...task, ...updates, updatedAt: new Date().toISOString() }
+              ? { 
+                  ...task, 
+                  ...updates, 
+                  title: updates.title ? updates.title.trim() : task.title,
+                  updatedAt: new Date().toISOString() 
+                }
               : task
           ),
         }));
@@ -124,8 +132,15 @@ export const useTaskStore = create<TaskStore>()(
     }),
     {
       name: "task-store", // key in localStorage
-      // Optionally, customize storage or partialize which fields to persist
-      // storage: () => sessionStorage, // for sessionStorage instead
+      // Clean up task titles on load
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.tasks = state.tasks.map(task => ({
+            ...task,
+            title: task.title.trim()
+          }));
+        }
+      }
     }
   )
 );

@@ -1,13 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "react-diff-view/style/index.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body, var(--font-geist-sans));
+  --font-mono: var(--font-code, var(--font-geist-mono));
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -47,6 +48,11 @@
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  
+  /* Dynamic font settings - will be overridden by FontInitializer */
+  --font-headings: var(--font-geist-sans);
+  --font-body: var(--font-geist-sans);
+  --font-code: var(--font-geist-mono);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -118,6 +124,46 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-body) !important;
+    font-size: var(--font-size-body, 0.875rem) !important;
+  }
+  
+  /* Apply body font to all text elements by default */
+  p, span, div, nav, aside, section, article, header, footer, 
+  button, a, li, td, th, label, input, textarea, select {
+    font-family: inherit;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-headings) !important;
+  }
+  
+  h1 {
+    font-size: var(--font-size-h1, 1.5rem) !important;
+  }
+  
+  h2 {
+    font-size: var(--font-size-h2, 1.125rem) !important;
+  }
+  
+  code, pre {
+    font-family: var(--font-code) !important;
+    font-size: var(--font-size-code, 0.875rem) !important;
+  }
+  
+  /* Ensure buttons and links in navigation inherit fonts */
+  nav button, nav a {
+    font-family: var(--font-body) !important;
+  }
+  
+  /* Apply to shadcn/ui components */
+  .sidebar *, [role="navigation"] * {
+    font-family: inherit;
+  }
+  
+  /* Font preview cards should show their own fonts, not global settings */
+  .font-preview-card {
+    font-family: inherit !important;
   }
 }
 
@@ -196,5 +242,156 @@
   /* Smooth transitions for theme switching */
   * {
     @apply transition-colors duration-200;
+  }
+
+  /* Override react-diff-view default styles */
+  .diff-view {
+    @apply !bg-transparent !text-foreground;
+  }
+
+  .diff-view .diff-gutter {
+    @apply !bg-muted;
+  }
+
+  /* Light mode diff colors */
+  .diff-view .diff-line.diff-line-additions {
+    background-color: rgb(34 197 94 / 0.1) !important;
+  }
+
+  .diff-view .diff-line.diff-line-deletions {
+    background-color: rgb(239 68 68 / 0.1) !important;
+  }
+
+  .diff-view .diff-code-insert,
+  .diff-view .diff-line.diff-line-additions .diff-code {
+    background-color: transparent !important;
+    color: rgb(22, 163, 74) !important;
+  }
+
+  .diff-view .diff-code-delete,
+  .diff-view .diff-line.diff-line-deletions .diff-code {
+    background-color: transparent !important;
+    color: rgb(220, 38, 38) !important;
+  }
+
+  /* Dark mode diff colors - softer tones */
+  .dark .diff-view .diff-line.diff-line-additions {
+    background-color: rgb(34 197 94 / 0.08) !important;
+  }
+
+  .dark .diff-view .diff-line.diff-line-deletions {
+    background-color: rgb(239 68 68 / 0.08) !important;
+  }
+
+  .dark .diff-view .diff-code-insert,
+  .dark .diff-view .diff-line.diff-line-additions .diff-code {
+    color: rgb(74, 222, 128) !important;
+  }
+
+  .dark .diff-view .diff-code-delete,
+  .dark .diff-view .diff-line.diff-line-deletions .diff-code {
+    color: rgb(251, 113, 133) !important;
+  }
+
+  /* Line numbers */
+  .diff-view .diff-gutter-normal {
+    @apply !text-muted-foreground !bg-muted;
+  }
+
+  /* Hunk headers */
+  .diff-view .diff-hunk-header {
+    @apply !bg-muted !text-muted-foreground;
+  }
+
+  /* Ensure proper text colors for normal lines */
+  .diff-view .diff-code-normal {
+    color: var(--foreground) !important;
+  }
+
+  /* Additional selectors for react-diff-view */
+  .diff-line-insert,
+  tr.diff-line-insert,
+  .diff-line[data-change-type="insert"] {
+    background-color: rgb(34 197 94 / 0.1) !important;
+  }
+
+  .diff-line-insert .diff-code,
+  .diff-line-insert td,
+  .diff-line[data-change-type="insert"] .diff-code {
+    color: rgb(22, 163, 74) !important;
+  }
+
+  .diff-line-delete,
+  tr.diff-line-delete,
+  .diff-line[data-change-type="delete"] {
+    background-color: rgb(239 68 68 / 0.1) !important;
+  }
+
+  .diff-line-delete .diff-code,
+  .diff-line-delete td,
+  .diff-line[data-change-type="delete"] .diff-code {
+    color: rgb(220, 38, 38) !important;
+  }
+
+  /* Dark mode additional selectors */
+  .dark .diff-line-insert,
+  .dark tr.diff-line-insert,
+  .dark .diff-line[data-change-type="insert"] {
+    background-color: rgb(34 197 94 / 0.08) !important;
+  }
+
+  .dark .diff-line-insert .diff-code,
+  .dark .diff-line-insert td,
+  .dark .diff-line[data-change-type="insert"] .diff-code {
+    color: rgb(74, 222, 128) !important;
+  }
+
+  .dark .diff-line-delete,
+  .dark tr.diff-line-delete,
+  .dark .diff-line[data-change-type="delete"] {
+    background-color: rgb(239 68 68 / 0.08) !important;
+  }
+
+  .dark .diff-line-delete .diff-code,
+  .dark .diff-line-delete td,
+  .dark .diff-line[data-change-type="delete"] .diff-code {
+    color: rgb(251, 113, 133) !important;
+  }
+
+  /* Pulse border animation */
+  @keyframes pulse-border {
+    0%, 100% {
+      border-color: rgb(var(--border));
+    }
+    50% {
+      border-color: rgb(var(--primary));
+      box-shadow: 0 0 0 3px rgb(var(--primary) / 0.2);
+    }
+  }
+
+  .animate-pulse-border {
+    animation: pulse-border 2s ease-in-out 3;
+    border-color: rgb(var(--primary));
+  }
+
+  /* Allow table display for proper chat layout */
+  /* But ensure no horizontal overflow */
+  .border-r [data-radix-scroll-area-viewport] {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  
+  /* Ensure messages don't overflow */
+  .border-r .prose {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+  
+  /* Ensure tables in prose don't break layout */
+  .prose table,
+  .prose-sm table {
+    display: block !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
   }
 }
