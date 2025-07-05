@@ -43,16 +43,4 @@ export class ToolingManager {
 // Singleton instance
 export const toolingManager = new ToolingManager();
 
-// Example MCP tool
-export const mcpTool: Tool = {
-  name: "mcp",
-  injectToSandbox: async (sandboxConfig) => {
-    // Placeholder: In a real implementation, modify envs, mount files, etc.
-    if (!sandboxConfig.envs) sandboxConfig.envs = {};
-    sandboxConfig.envs.MCP_ENABLED = "1";
-    // You could also mount binaries, scripts, etc. here
-    console.log("MCP tool injected into sandbox config");
-  },
-};
-
-toolingManager.registerTool(mcpTool); 
+ 
