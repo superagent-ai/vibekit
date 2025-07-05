@@ -255,6 +255,18 @@ export const createSession = inngest.createFunction(
     const data = await step.run("get tunnel url", async () => {
       const title = await generateSessionTitle(message);
 
+      if (template.id === "nextjs-supabase-auth") {
+        await vibekit.executeCommand(
+          `export SUPABASE_ACCESS_TOKEN=${process.env.SUPABASE_ACCESS_TOKEN}`,
+          {
+            callbacks: {
+              onUpdate(message) {
+                console.log(message);
+              },
+            },
+          }
+        );
+      }
       await fetchMutation(api.sessions.update, {
         id,
         status: "CLONING_REPO",
@@ -330,6 +342,7 @@ export const createSession = inngest.createFunction(
           id,
           status: command.status,
           sessionId: sandboxId,
+          statusMessage: command.statusMessage,
         });
 
         await vibekit.executeCommand(command.command, {

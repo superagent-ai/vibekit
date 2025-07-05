@@ -7,7 +7,8 @@ export interface Template {
   image?: string;
   startCommands: {
     command: string;
-    status: "INSTALLING_DEPENDENCIES" | "STARTING_DEV_SERVER";
+    status: "INSTALLING_DEPENDENCIES" | "STARTING_DEV_SERVER" | "CUSTOM";
+    statusMessage?: string;
     background?: boolean;
   }[];
   secrets?: Record<string, string>;
@@ -43,13 +44,42 @@ export const templates: Template[] = [
     name: "Next.js + Supabase + Auth",
     description:
       "Build a production-ready SaaS with authentication, database, and real-time features out of the box",
-    repository:
-      "https://github.com/vercel/next.js/tree/canary/examples/with-supabase",
+    repository: "https://github.com/superagent-ai/vibekit-nextjs-supabase",
     logos: ["nextjs.svg", "supabase.jpeg"],
     startCommands: [
       {
-        command: "npm i",
+        command: "npm i && npm i supabase --save-dev",
         status: "INSTALLING_DEPENDENCIES",
+      },
+      {
+        // Step 1: Generate a project name
+        command: `export PROJECT_NAME=vibe0-$(date +%F)-$RANDOM`,
+        status: "CUSTOM",
+        statusMessage: "GENERATING PROJECT NAME",
+      },
+      {
+        // Step 2: Create the project
+        command: `npx supabase projects create $PROJECT_NAME --db-password $(openssl rand -base64 32) --org-id bdnfcdckdiuoxnvimgkz`,
+        status: "CUSTOM",
+        statusMessage: "CREATING SUPABASE PROJECT",
+      },
+      {
+        // Step 3: Retrieve the project ref
+        command: `export PROJECT_REF=$(npx supabase projects list | grep $PROJECT_NAME | awk '{print $1}')`,
+        status: "CUSTOM",
+        statusMessage: "FETCHING PROJECT REF",
+      },
+      {
+        // Step 4: Get anon key
+        command: `export NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase projects api-keys --project-ref $PROJECT_REF | grep anon | awk '{print $2}')`,
+        status: "CUSTOM",
+        statusMessage: "FETCHING ANON KEY",
+      },
+      {
+        // Step 5: List env vars instead of saving to .env
+        command: `echo "NEXT_PUBLIC_SUPABASE_URL=https://$PROJECT_REF.supabase.co" && echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY"`,
+        status: "CUSTOM",
+        statusMessage: "DISPLAYING ENV VARS",
       },
       {
         command: "npm run dev",
