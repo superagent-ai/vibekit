@@ -2,7 +2,7 @@
 export interface Tool {
   name: string;
   injectToSandbox?: (sandboxConfig: any) => void | Promise<void>;
-  // Additional properties/methods as needed
+  execute?: (command: string, parameters?: any) => Promise<any>;
 }
 
 // ToolingManager for registering and retrieving tools
@@ -42,5 +42,22 @@ export class ToolingManager {
 
 // Singleton instance
 export const toolingManager = new ToolingManager();
+
+// MCP Tool implementation
+import { mcpService } from "./mcp";
+
+export const mcpTool: Tool = {
+  name: "mcp",
+  injectToSandbox: async (sandboxConfig) => {
+    if (!sandboxConfig.envs) sandboxConfig.envs = {};
+    sandboxConfig.envs.MCP_ENABLED = "1";
+    sandboxConfig.envs.MCP_SERVICE_URL = "http://localhost:3001"; // Default MCP server
+  },
+  execute: async (command, parameters) => {
+    return await mcpService.executeTool(command, parameters);
+  }
+};
+
+toolingManager.registerTool(mcpTool);
 
  

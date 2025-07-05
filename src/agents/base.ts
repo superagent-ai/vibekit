@@ -525,11 +525,12 @@ export abstract class BaseAgent {
     let patchContent = patch?.stdout || diffHead?.stdout || "";
 
     // Add all changes and commit
-    const { commitMessage } = await generateCommitMessage(
+    const commitResult = await generateCommitMessage(
       patchContent,
       this.getModelConfig(),
       this.lastPrompt || ""
     );
+    const commitMessage = (commitResult as { commitMessage: string }).commitMessage;
 
     await sbx.commands.run(
       `cd ${this.WORKING_DIR} && git add -A && git commit -m "${commitMessage}"`,
@@ -617,11 +618,17 @@ export abstract class BaseAgent {
       throw new Error("No patch content found after checking all diff methods");
     }
 
-    const { title, body, branchName, commitMessage } = await generatePRMetadata(
+    const prResult = await generatePRMetadata(
       patchContent,
       this.getModelConfig(),
       this.lastPrompt || ""
     );
+    const { title, body, branchName, commitMessage } = prResult as {
+      title: string;
+      body: string;
+      branchName: string;
+      commitMessage: string;
+    };
 
     const _branchName = branchPrefix
       ? `${branchPrefix}/${branchName}`
@@ -800,6 +807,44 @@ export abstract class BaseAgent {
       console.error(
         `Failed to add label '${labelName}' to PR #${prNumber}: ${addLabelResponse.status} ${errorText}`
       );
+    }
+  }
+
+  /**
+   * Check if MCP tools are available in the current sandbox
+   */
+  public async hasMCPTools(): Promise<boolean> {
+    if (!this.sandboxInstance) {
+      return false;
+    }
+
+    try {
+      const result = await this.sandboxInstance.commands.run(
+        `cd ${this.WORKING_DIR} && echo $MCP_ENABLED`,
+        { timeoutMs: 30000 }
+      );
+      return result.stdout.trim() === "1";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Execute a command with MCP context if available
+   */
+  public async executeWithMCP(command: string, options?: {
+    timeoutMs?: number;
+    background?: boolean;
+    callbacks?: StreamCallbacks;
+  }): Promise<AgentResponse> {
+    const hasMCP = await this.hasMCPTools();
+    
+    if (hasMCP) {
+      // Execute command with MCP environment
+      return await this.executeCommand(`MCP_ENABLED=1 ${command}`, options);
+    } else {
+      // Execute command normally
+      return await this.executeCommand(command, options);
     }
   }
 }
