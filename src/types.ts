@@ -275,6 +275,7 @@ export interface SandboxConfig {
   persistentVolume?: string; // for Northflank
   persistentVolumeStorage?: number; // for Northflank
   workingDirectory?: string; // for Nortflank
+  tools?: string[]; // List of tool names to inject (e.g., ["mcp"])
 }
 
 export interface SandboxProvider {
