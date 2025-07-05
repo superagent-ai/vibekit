@@ -14,6 +14,7 @@ import {
   ApiClientInMemoryContextProvider,
   GetServicePortsResult,
 } from "@northflank/js-client";
+import { toolingManager } from "./tooling";
 
 // E2B implementation
 export class E2BSandboxInstance implements SandboxInstance {
@@ -73,6 +74,8 @@ export class E2BSandboxProvider implements SandboxProvider {
     envs?: Record<string, string>,
     agentType?: AgentType
   ): Promise<SandboxInstance> {
+    // Inject tools before sandbox creation
+    await toolingManager.injectTools(config);
     // Determine default template based on agent type if not specified in config
     let templateId = config.templateId;
     if (!templateId) {
@@ -219,6 +222,8 @@ export class DaytonaSandboxProvider implements SandboxProvider {
     envs?: Record<string, string>,
     agentType?: AgentType
   ): Promise<SandboxInstance> {
+    // Inject tools before sandbox creation
+    await toolingManager.injectTools(config);
     try {
       // Dynamic import to avoid dependency issues if daytona-sdk is not installed
       const daytonaConfig: DaytonaConfig = {
@@ -523,6 +528,8 @@ export class NorthflankSandboxProvider implements SandboxProvider {
     envs?: Record<string, string>,
     agentType?: AgentType
   ): Promise<SandboxInstance> {
+    // Inject tools before sandbox creation
+    await toolingManager.injectTools(config);
     if (!config.projectId || !config.apiKey) {
       throw new Error(
         "Northflank sandbox configuration missing one of required parameters: projectId, apiKey"
