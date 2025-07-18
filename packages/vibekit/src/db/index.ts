@@ -19,6 +19,10 @@ export { DrizzleTelemetryOperations } from './operations';
 export { DrizzleTelemetryService } from './drizzle-telemetry-service';
 export type { TelemetryData } from './drizzle-telemetry-service';
 
+// Phase 3: Advanced Features exports
+export { DrizzleTelemetryPerformanceOptimizer } from './performance-optimizer';
+export { runPhase3Tests, Phase3TestSuite } from './test-phase3';
+
 // Utility functions and constants
 export const DB_VERSION = '1.0.0';
 export const DEFAULT_DB_PATH = '.vibekit/telemetry.db';
@@ -52,5 +56,30 @@ export function createDrizzleConfig(overrides?: Partial<import('./types').Drizzl
     enableQueryLogging: false,
     enableMetrics: true,
     ...overrides,
+  };
+}
+
+// Phase 3: Convenience functions for common operations
+export async function initializeOptimizedTelemetrySystem(config?: Partial<import('./types').DrizzleTelemetryConfig>) {
+  const { DrizzleTelemetryOperations } = await import('./operations');
+  const { DrizzleTelemetryPerformanceOptimizer } = await import('./performance-optimizer');
+  const { initializeTelemetryDB } = await import('./connection');
+  
+  const fullConfig = createDrizzleConfig(config);
+  
+  // Initialize database
+  await initializeTelemetryDB(fullConfig);
+  
+  // Create operations instance
+  const operations = new DrizzleTelemetryOperations(fullConfig);
+  await operations.initialize();
+  
+  // Create performance optimizer
+  const optimizer = new DrizzleTelemetryPerformanceOptimizer(operations, fullConfig);
+  
+  return {
+    operations,
+    optimizer,
+    config: fullConfig,
   };
 } 
