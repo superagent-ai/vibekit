@@ -108,6 +108,15 @@ export class DrizzleTelemetryService {
     return `vibekit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
+  /**
+   * Public initialization method for external use (e.g., benchmarks)
+   */
+  public async initialize(): Promise<void> {
+    if (this.config.localStore?.isEnabled) {
+      await this.initializeDrizzleDB();
+    }
+  }
+
   private shouldSample(): boolean {
     if (this.config.samplingRatio === undefined) return true;
     return Math.random() < this.config.samplingRatio;
@@ -960,9 +969,9 @@ export class DrizzleTelemetryService {
   }
 
   /**
-   * Get performance metrics for a time window
+   * Get performance analytics for a time window
    */
-  async getPerformanceMetrics(
+  async getPerformanceAnalytics(
     timeWindow: 'hour' | 'day' | 'week' | 'month',
     fromTime?: number,
     toTime?: number
@@ -1095,7 +1104,7 @@ export class DrizzleTelemetryService {
 
     const [realTime, performance, percentiles, anomalies, sessionSummaries] = await Promise.all([
       this.getRealTimeMetrics(),
-      this.getPerformanceMetrics(timeWindow, fromTime, now),
+      this.getPerformanceAnalytics(timeWindow, fromTime, now),
       this.getAllPercentiles(fromTime, now),
       this.detectAnomalies(fromTime, now),
       this.getSessionSummaries({ limit: 20, fromTime })
