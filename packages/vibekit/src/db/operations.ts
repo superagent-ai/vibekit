@@ -34,8 +34,16 @@ import {
 export class DrizzleTelemetryOperations {
   private dbManager: DrizzleTelemetryDB;
 
-  constructor(config?: DrizzleTelemetryConfig) {
-    this.dbManager = getTelemetryDB(config);
+  constructor(config?: DrizzleTelemetryConfig);
+  constructor(dbInstance: DrizzleTelemetryDB);
+  constructor(configOrInstance?: DrizzleTelemetryConfig | DrizzleTelemetryDB) {
+    if (configOrInstance && 'initialize' in configOrInstance) {
+      // It's a DrizzleTelemetryDB instance
+      this.dbManager = configOrInstance;
+    } else {
+      // It's a config object or undefined
+      this.dbManager = getTelemetryDB(configOrInstance);
+    }
   }
 
   /**
@@ -331,19 +339,19 @@ export class DrizzleTelemetryOperations {
     return await this.dbManager.executeWithMetrics(
       'INSERT_EVENT_BATCH',
       async () => {
-        const result = await db.transaction(async (tx) => {
+        const result = db.transaction((tx) => {
           // Insert all events
           const eventsWithTimestamp = events.map(event => ({
             ...event,
             createdAt: Date.now(),
           }));
 
-          await tx.insert(telemetryEvents).values(eventsWithTimestamp);
+          tx.insert(telemetryEvents).values(eventsWithTimestamp).run();
 
           // Update session statistics for affected sessions
           const sessionIds = [...new Set(events.map(e => e.sessionId))];
           for (const sessionId of sessionIds) {
-            await this.updateSessionStatsInTransaction(tx, sessionId);
+            this.updateSessionStatsInTransactionSync(tx, sessionId);
           }
 
           return {
@@ -353,11 +361,49 @@ export class DrizzleTelemetryOperations {
             errorsLogged: 0,
             processingTime: Date.now() - startTime,
           };
-        });
+        })();
 
         return result;
       }
     );
+  }
+
+  /**
+   * Update session statistics within a transaction (synchronous version)
+   */
+  private updateSessionStatsInTransactionSync(tx: any, sessionId: string): void {
+    const stats = tx
+      .select({
+        totalEvents: count(),
+        streamEvents: count(sql`CASE WHEN ${telemetryEvents.eventType} = 'stream' THEN 1 END`),
+        errorEvents: count(sql`CASE WHEN ${telemetryEvents.eventType} = 'error' THEN 1 END`),
+        minTimestamp: min(telemetryEvents.timestamp),
+        maxTimestamp: max(telemetryEvents.timestamp),
+      })
+      .from(telemetryEvents)
+      .where(eq(telemetryEvents.sessionId, sessionId))
+      .groupBy(telemetryEvents.sessionId)
+      .all();
+
+    if (stats.length > 0) {
+      const stat = stats[0];
+      const duration = stat.maxTimestamp && stat.minTimestamp 
+        ? stat.maxTimestamp - stat.minTimestamp 
+        : null;
+
+      tx
+        .update(telemetrySessions)
+        .set({
+          eventCount: stat.totalEvents,
+          streamEventCount: stat.streamEvents,
+          errorCount: stat.errorEvents,
+          duration,
+          endTime: stat.maxTimestamp,
+          updatedAt: Date.now(),
+        })
+        .where(eq(telemetrySessions.id, sessionId))
+        .run();
+    }
   }
 
   /**

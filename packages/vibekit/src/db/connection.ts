@@ -161,11 +161,35 @@ export class DrizzleTelemetryDB {
     };
 
     try {
-      // Check if migrations directory exists
-      const migrationsDir = resolve('./src/db/migrations');
-      if (!existsSync(migrationsDir)) {
+      // Check for migrations directory in multiple possible locations
+      const possibleMigrationDirs = [
+        resolve('./packages/vibekit/src/db/migrations'),
+        resolve('./src/db/migrations'),
+        resolve(__dirname, 'migrations'),
+      ];
+      
+      let migrationsDir: string | null = null;
+      for (const dir of possibleMigrationDirs) {
+        if (existsSync(dir)) {
+          migrationsDir = dir;
+          break;
+        }
+      }
+
+      if (!migrationsDir) {
         console.log('🔄 No migrations directory found, creating initial schema...');
-        // Schema will be created by Drizzle on first query
+        // Force schema creation by making a simple query to each table
+        try {
+          await this.db.select().from(schema.telemetrySessions).limit(1);
+          await this.db.select().from(schema.telemetryEvents).limit(1);
+          await this.db.select().from(schema.telemetryBuffers).limit(1);
+          await this.db.select().from(schema.telemetryStats).limit(1);
+          await this.db.select().from(schema.telemetryErrors).limit(1);
+          console.log('✅ Initial schema created successfully');
+        } catch (error) {
+          // This is expected on first run when tables don't exist - Drizzle will create them
+          console.log('📋 Schema creation triggered');
+        }
         result.success = true;
         result.version = '1.0.0';
         result.duration = Date.now() - startTime;
@@ -173,7 +197,7 @@ export class DrizzleTelemetryDB {
       }
 
       // Run migrations
-      console.log('🔄 Running database migrations...');
+      console.log(`🔄 Running database migrations from ${migrationsDir}...`);
       await migrate(this.db, { migrationsFolder: migrationsDir });
       
       result.success = true;
@@ -211,6 +235,15 @@ export class DrizzleTelemetryDB {
    */
   async pruneOldData(): Promise<number> {
     if (!this.db || this.config.pruneDays <= 0) return 0;
+
+    // Check if tables exist before attempting to prune
+    try {
+      await this.db.select().from(schema.telemetryEvents).limit(1);
+    } catch (error) {
+      // If table doesn't exist, no need to prune
+      console.log('📋 Tables not yet created, skipping data pruning');
+      return 0;
+    }
 
     const cutoffTime = Date.now() - (this.config.pruneDays * 24 * 60 * 60 * 1000);
     

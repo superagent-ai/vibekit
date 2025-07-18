@@ -388,30 +388,30 @@ export class TelemetryService {
 
     // Handle OpenTelemetry tracing
     if (this.config.isEnabled && this.tracer) {
-      try {
-        const span = this.createSpan(
-          `vibekit.start`,
-          agentType,
+    try {
+      const span = this.createSpan(
+        `vibekit.start`,
+        agentType,
           mode || 'code',
           prompt || '',
-          metadata
-        );
+        metadata
+      );
 
-        if (span) {
-          // Add event to span
-          span.addEvent("operation_started", {
-            "vibekit.event_type": "start",
+      if (span) {
+        // Add event to span
+        span.addEvent("operation_started", {
+          "vibekit.event_type": "start",
             timestamp,
-          });
+        });
 
-          // End span immediately for start events
-          span.setStatus({ code: SpanStatusCode.OK });
-          span.end();
-        }
-      } catch (error) {
-        console.warn("Failed to track start event:", error);
+        // End span immediately for start events
+        span.setStatus({ code: SpanStatusCode.OK });
+        span.end();
       }
+    } catch (error) {
+      console.warn("Failed to track start event:", error);
     }
+  }
 
     // Handle local storage persistence
     await this.persistEvent({
@@ -488,30 +488,30 @@ export class TelemetryService {
 
     // Handle OpenTelemetry tracing
     if (this.config.isEnabled && this.tracer) {
-      try {
+    try {
         const span = this.createSpan(`vibekit.stream`, agentType, mode || 'code', prompt || '', {
-          "vibekit.sandbox_id": sandboxId || "",
-          "vibekit.repo_url": repoUrl || "",
+        "vibekit.sandbox_id": sandboxId || "",
+        "vibekit.repo_url": repoUrl || "",
           "vibekit.stream_data_length": streamData?.length || 0,
-          ...metadata,
+        ...metadata,
+      });
+
+      if (span) {
+        // Add stream data as an event
+        span.addEvent("stream_data", {
+          "vibekit.event_type": "stream",
+          "stream.data": streamData,
+            timestamp,
         });
 
-        if (span) {
-          // Add stream data as an event
-          span.addEvent("stream_data", {
-            "vibekit.event_type": "stream",
-            "stream.data": streamData,
-            timestamp,
-          });
-
-          // End span immediately for stream events
-          span.setStatus({ code: SpanStatusCode.OK });
-          span.end();
-        }
-      } catch (error) {
-        console.warn("Failed to track stream event:", error);
+        // End span immediately for stream events
+        span.setStatus({ code: SpanStatusCode.OK });
+        span.end();
       }
+    } catch (error) {
+      console.warn("Failed to track stream event:", error);
     }
+  }
 
     // Handle local storage persistence with buffering
     if (this.db) {
@@ -616,28 +616,28 @@ export class TelemetryService {
 
     // Handle OpenTelemetry tracing
     if (this.config.isEnabled && this.tracer) {
-      try {
+    try {
         const span = this.createSpan(`vibekit.end`, agentType, mode || 'code', prompt || '', {
-          "vibekit.sandbox_id": sandboxId || "",
-          "vibekit.repo_url": repoUrl || "",
-          ...metadata,
+        "vibekit.sandbox_id": sandboxId || "",
+        "vibekit.repo_url": repoUrl || "",
+        ...metadata,
+      });
+
+      if (span) {
+        // Add event to span
+        span.addEvent("operation_completed", {
+          "vibekit.event_type": "end",
+            timestamp,
         });
 
-        if (span) {
-          // Add event to span
-          span.addEvent("operation_completed", {
-            "vibekit.event_type": "end",
-            timestamp,
-          });
-
-          // End span
-          span.setStatus({ code: SpanStatusCode.OK });
-          span.end();
-        }
-      } catch (error) {
-        console.warn("Failed to track end event:", error);
+        // End span
+        span.setStatus({ code: SpanStatusCode.OK });
+        span.end();
       }
+    } catch (error) {
+      console.warn("Failed to track end event:", error);
     }
+  }
 
     // Handle local storage persistence
     if (this.db) {
@@ -710,38 +710,38 @@ export class TelemetryService {
 
     // Handle OpenTelemetry tracing
     if (this.config.isEnabled && this.tracer) {
-      try {
-        const span = this.createSpan(
-          `vibekit.error`,
-          agentType,
+    try {
+      const span = this.createSpan(
+        `vibekit.error`,
+        agentType,
           mode || 'code',
           prompt || '',
-          metadata
-        );
+        metadata
+      );
 
-        if (span) {
-          // Record the error
-          span.recordException(new Error(error));
+      if (span) {
+        // Record the error
+        span.recordException(new Error(error));
 
-          // Add error event
-          span.addEvent("error_occurred", {
-            "vibekit.event_type": "error",
-            "error.message": error,
+        // Add error event
+        span.addEvent("error_occurred", {
+          "vibekit.event_type": "error",
+          "error.message": error,
             timestamp,
-          });
+        });
 
-          // Set error status
-          span.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: error,
-          });
+        // Set error status
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error,
+        });
 
-          span.end();
-        }
-      } catch (err) {
-        console.warn("Failed to track error event:", err);
+        span.end();
       }
+    } catch (err) {
+      console.warn("Failed to track error event:", err);
     }
+  }
 
     // Handle local storage persistence
     if (this.db) {
