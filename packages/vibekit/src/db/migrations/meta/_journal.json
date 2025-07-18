@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1752850264870,
+      "tag": "0000_flowery_emma_frost",
+      "breakpoints": true
+    }
+  ]
+}
