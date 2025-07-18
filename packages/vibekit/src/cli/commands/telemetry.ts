@@ -203,14 +203,18 @@ function parseTimestamp(timeStr: string): number {
 }
 
 async function executeQuery(options: TelemetryCliOptions): Promise<void> {
+  console.log("DEBUG: executeQuery called with options:", options);
   const dbPath = options.database || join(process.cwd(), '.vibekit', 'telemetry.db');
+  console.log("DEBUG: Database path:", dbPath);
   
   if (!existsSync(dbPath)) {
+    console.log("DEBUG: Database does not exist");
     TelemetryCliLogger.error(`Telemetry database not found at: ${dbPath}`);
     TelemetryCliLogger.info("Run some VibeKit operations first to generate telemetry data");
     return;
   }
 
+  console.log("DEBUG: Database exists, proceeding with query");
   try {
     const db = new TelemetryDB({ isEnabled: true, path: dbPath });
     const analyzer = new TelemetryAnalyzer(db);
@@ -356,7 +360,16 @@ export function registerTelemetryCommands(program: Command): void {
     .option("-e, --event-type <type>", "Filter by event type")
     .option("--since <time>", "Show records since time (ISO string or relative like '1h', '30m', '7d')")
     .option("--until <time>", "Show records until time (ISO string or relative)")
-    .action((options: TelemetryCliOptions) => executeQuery(options));
+    .action((options: TelemetryCliOptions) => {
+      console.log("DEBUG: Query action called with options:", options);
+      executeQuery(options).then(() => {
+        console.log("DEBUG: Query execution completed");
+      }).catch((error) => {
+        console.log("DEBUG: Query execution error:", error);
+        TelemetryCliLogger.error(`Failed to execute query: ${error instanceof Error ? error.message : error}`);
+        process.exit(1);
+      });
+    });
 
   // Sessions command  
   telemetryCmd
@@ -368,21 +381,31 @@ export function registerTelemetryCommands(program: Command): void {
     .option("-o, --output <file>", "Output file (for json/csv formats)")
     .option("-l, --limit <number>", "Limit number of sessions")
     .option("-a, --agent-type <type>", "Filter by agent type")
-    .option("--since <time>", "Show sessions since time")
-    .option("--until <time>", "Show sessions until time")
-    .action((options: TelemetryCliOptions) => executeQuery({ ...options, stats: true }));
+    .action(async (options: TelemetryCliOptions) => {
+      try {
+        await executeQuery({ ...options, stats: true });
+      } catch (error) {
+        TelemetryCliLogger.error(`Failed to execute sessions query: ${error instanceof Error ? error.message : error}`);
+        process.exit(1);
+      }
+    });
 
   // Performance command
   telemetryCmd
     .command("performance")
-    .alias("perf")
-    .description("Show performance statistics and analytics")
-    .option("-d, --database <path>", "Path to telemetry database") 
+    .alias("p")
+    .description("Show performance statistics and metrics")
+    .option("-d, --database <path>", "Path to telemetry database")
     .option("-f, --format <format>", "Output format (table|json)", "table")
     .option("-a, --agent-type <type>", "Filter by agent type")
-    .option("--since <time>", "Analyze performance since time")
-    .option("--until <time>", "Analyze performance until time")
-    .action((options: TelemetryCliOptions) => executeQuery({ ...options, performance: true }));
+    .action(async (options: TelemetryCliOptions) => {
+      try {
+        await executeQuery({ ...options, performance: true });
+      } catch (error) {
+        TelemetryCliLogger.error(`Failed to execute performance query: ${error instanceof Error ? error.message : error}`);
+        process.exit(1);
+      }
+    });
 
   // Export command
   telemetryCmd
@@ -391,18 +414,34 @@ export function registerTelemetryCommands(program: Command): void {
     .description("Export telemetry data to file")
     .option("-d, --database <path>", "Path to telemetry database")
     .option("-f, --format <format>", "Export format (json|csv)", "json")
-    .requiredOption("-o, --output <file>", "Output file path")
+    .option("-o, --output <file>", "Output file path (required)")
+    .option("-l, --limit <number>", "Limit number of records")
     .option("-s, --session-id <id>", "Filter by session ID")
-    .option("-a, --agent-type <type>", "Filter by agent type") 
+    .option("-a, --agent-type <type>", "Filter by agent type")
     .option("-e, --event-type <type>", "Filter by event type")
     .option("--since <time>", "Export records since time")
     .option("--until <time>", "Export records until time")
-    .action((options: TelemetryCliOptions) => executeQuery(options));
+    .action(async (options: TelemetryCliOptions) => {
+      try {
+        await executeQuery(options);
+      } catch (error) {
+        TelemetryCliLogger.error(`Failed to export data: ${error instanceof Error ? error.message : error}`);
+        process.exit(1);
+      }
+    });
 
   // Clear command
   telemetryCmd
     .command("clear")
-    .description("Clear all telemetry data")
+    .alias("c")
+    .description("Clear all telemetry data (use with caution)")
     .option("-d, --database <path>", "Path to telemetry database")
-    .action((options: TelemetryCliOptions) => clearData(options));
+    .action(async (options: TelemetryCliOptions) => {
+      try {
+        await clearData(options);
+      } catch (error) {
+        TelemetryCliLogger.error(`Failed to clear data: ${error instanceof Error ? error.message : error}`);
+        process.exit(1);
+      }
+    });
 } 

@@ -34,6 +34,12 @@ export interface LocalStoreConfig {
    * @default undefined (no limit)
    */
   maxSizeMB?: number;
+
+  /**
+   * Whether to enable audit trail functionality
+   * @default true
+   */
+  auditEnabled?: boolean;
 }
 
 export interface TelemetryRecord {

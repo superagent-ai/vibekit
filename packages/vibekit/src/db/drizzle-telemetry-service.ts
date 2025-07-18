@@ -1,5 +1,6 @@
 /**
  * Phase 2.2: Drizzle-Based Telemetry Service
+ * Enhanced with Phase 5.1 Data Integrity Features
  * 
  * This service replaces the existing TelemetryService with Drizzle ORM operations
  * while maintaining full compatibility with the existing interface.
@@ -22,6 +23,13 @@ import {
   NewTelemetrySession,
   TelemetryEvent,
 } from './index';
+import { 
+  createDataIntegrityService, 
+  DataIntegrityService,
+  TelemetryDataError,
+  TelemetryValidationError,
+  TelemetryAuditError
+} from './data-integrity';
 
 export interface TelemetryData {
   sessionId?: string;
@@ -42,6 +50,7 @@ export class DrizzleTelemetryService {
   private tracer: any;
   private sdk?: NodeSDK;
   private dbOps?: DrizzleTelemetryOperations;
+  private dataIntegrity?: DataIntegrityService;
   private streamBuffer: Map<string, TelemetryData[]>;
   private bufferMetadata: Map<string, { createdAt: number; lastUpdated: number; flushCount: number }>;
   private flushTimer?: NodeJS.Timeout;
@@ -98,6 +107,24 @@ export class DrizzleTelemetryService {
       await initializeTelemetryDB(drizzleConfig);
       this.dbOps = new DrizzleTelemetryOperations(drizzleConfig);
       await this.dbOps.initialize();
+
+      // Initialize data integrity service
+      try {
+        const db = await this.dbOps.getDatabase();
+        if (db) {
+          this.dataIntegrity = createDataIntegrityService(
+            db, 
+            {
+              auditEnabled: this.config.localStore?.auditEnabled ?? true,
+              schemaVersion: '1.0.0'
+            }
+          );
+          await this.dataIntegrity.initialize();
+          console.log('✅ Data integrity service initialized with validation and audit trail');
+        }
+      } catch (error) {
+        console.warn('Failed to initialize data integrity service:', error);
+      }
 
       // Create initial session record
       await this.createSessionRecord();

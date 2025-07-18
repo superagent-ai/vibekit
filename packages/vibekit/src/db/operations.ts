@@ -52,6 +52,13 @@ export class DrizzleTelemetryOperations {
     return await this.dbManager.getDatabase();
   }
 
+  /**
+   * Get the database instance for external services (e.g., data integrity)
+   */
+  async getDatabase() {
+    return await this.dbManager.getDatabase();
+  }
+
   // =============================================================================
   // SESSION OPERATIONS
   // =============================================================================
