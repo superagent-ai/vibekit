@@ -11,7 +11,7 @@ CREATE TABLE `telemetry_audit_log` (
 	`reason` text,
 	`metadata` text,
 	`timestamp` real NOT NULL,
-	`created_at` real DEFAULT 1752856263397 NOT NULL
+	`created_at` real DEFAULT (unixepoch()) NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX `idx_audit_table` ON `telemetry_audit_log` (`table_name`);--> statement-breakpoint
@@ -26,7 +26,7 @@ CREATE TABLE `telemetry_schema_versions` (
 	`description` text NOT NULL,
 	`migration_script` text,
 	`rollback_script` text,
-	`applied_at` real DEFAULT 1752856263397 NOT NULL,
+	`applied_at` real DEFAULT (unixepoch()) NOT NULL,
 	`is_active` integer DEFAULT true NOT NULL,
 	`metadata` text
 );
@@ -44,8 +44,8 @@ CREATE TABLE `telemetry_validation_rules` (
 	`error_message` text NOT NULL,
 	`is_active` integer DEFAULT true NOT NULL,
 	`priority` integer DEFAULT 100 NOT NULL,
-	`created_at` real DEFAULT 1752856263397 NOT NULL,
-	`updated_at` real DEFAULT 1752856263397 NOT NULL
+	`created_at` real DEFAULT (unixepoch()) NOT NULL,
+	`updated_at` real DEFAULT (unixepoch()) NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX `idx_validation_table_field` ON `telemetry_validation_rules` (`table_name`,`field_name`);--> statement-breakpoint
@@ -59,8 +59,8 @@ CREATE TABLE `__new_telemetry_buffers` (
 	`event_count` integer DEFAULT 0 NOT NULL,
 	`buffer_data` text NOT NULL,
 	`max_size` integer DEFAULT 50 NOT NULL,
-	`created_at` real DEFAULT 1752856263397 NOT NULL,
-	`last_updated` real DEFAULT 1752856263397 NOT NULL,
+	`created_at` real DEFAULT (unixepoch()) NOT NULL,
+	`last_updated` real DEFAULT (unixepoch()) NOT NULL,
 	`flushed_at` real,
 	`flush_attempts` integer DEFAULT 0 NOT NULL,
 	`version` integer DEFAULT 1 NOT NULL,
@@ -68,7 +68,8 @@ CREATE TABLE `__new_telemetry_buffers` (
 	FOREIGN KEY (`session_id`) REFERENCES `telemetry_sessions`(`id`) ON UPDATE cascade ON DELETE cascade
 );
 --> statement-breakpoint
-INSERT INTO `__new_telemetry_buffers`("id", "session_id", "status", "event_count", "buffer_data", "max_size", "created_at", "last_updated", "flushed_at", "flush_attempts", "version", "schema_version") SELECT "id", "session_id", "status", "event_count", "buffer_data", "max_size", "created_at", "last_updated", "flushed_at", "flush_attempts", "version", "schema_version" FROM `telemetry_buffers`;--> statement-breakpoint
+INSERT INTO `__new_telemetry_buffers`("id", "session_id", "status", "event_count", "buffer_data", "max_size", "created_at", "last_updated", "flushed_at", "flush_attempts", "version", "schema_version") 
+SELECT "id", "session_id", "status", "event_count", "buffer_data", "max_size", "created_at", "last_updated", "flushed_at", "flush_attempts", 1, '1.0.0' FROM `telemetry_buffers`;--> statement-breakpoint
 DROP TABLE `telemetry_buffers`;--> statement-breakpoint
 ALTER TABLE `__new_telemetry_buffers` RENAME TO `telemetry_buffers`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
@@ -88,7 +89,7 @@ CREATE TABLE `__new_telemetry_errors` (
 	`resolved` integer DEFAULT false NOT NULL,
 	`metadata` text,
 	`timestamp` real NOT NULL,
-	`created_at` real DEFAULT 1752856263397 NOT NULL,
+	`created_at` real DEFAULT (unixepoch()) NOT NULL,
 	`resolved_at` real,
 	`resolved_by` text,
 	`version` integer DEFAULT 1 NOT NULL,
@@ -97,9 +98,11 @@ CREATE TABLE `__new_telemetry_errors` (
 	FOREIGN KEY (`event_id`) REFERENCES `telemetry_events`(`id`) ON UPDATE cascade ON DELETE set null
 );
 --> statement-breakpoint
-INSERT INTO `__new_telemetry_errors`("id", "session_id", "event_id", "error_type", "error_message", "error_stack", "context", "severity", "resolved", "metadata", "timestamp", "created_at", "resolved_at", "resolved_by", "version", "schema_version") SELECT "id", "session_id", "event_id", "error_type", "error_message", "error_stack", "context", "severity", "resolved", "metadata", "timestamp", "created_at", "resolved_at", "resolved_by", "version", "schema_version" FROM `telemetry_errors`;--> statement-breakpoint
+INSERT INTO `__new_telemetry_errors`("id", "session_id", "event_id", "error_type", "error_message", "error_stack", "context", "severity", "resolved", "metadata", "timestamp", "created_at", "resolved_at", "resolved_by", "version", "schema_version") 
+SELECT "id", "session_id", "event_id", "error_type", "error_message", "error_stack", "context", "severity", "resolved", "metadata", "timestamp", "created_at", NULL, NULL, 1, '1.0.0' FROM `telemetry_errors`;--> statement-breakpoint
 DROP TABLE `telemetry_errors`;--> statement-breakpoint
 ALTER TABLE `__new_telemetry_errors` RENAME TO `telemetry_errors`;--> statement-breakpoint
+PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE INDEX `idx_errors_session` ON `telemetry_errors` (`session_id`);--> statement-breakpoint
 CREATE INDEX `idx_errors_type` ON `telemetry_errors` (`error_type`);--> statement-breakpoint
 CREATE INDEX `idx_errors_severity` ON `telemetry_errors` (`severity`);--> statement-breakpoint
@@ -118,15 +121,17 @@ CREATE TABLE `__new_telemetry_events` (
 	`repo_url` text,
 	`metadata` text,
 	`timestamp` real NOT NULL,
-	`created_at` real DEFAULT 1752856263397 NOT NULL,
+	`created_at` real DEFAULT (unixepoch()) NOT NULL,
 	`version` integer DEFAULT 1 NOT NULL,
 	`schema_version` text DEFAULT '1.0.0' NOT NULL,
 	FOREIGN KEY (`session_id`) REFERENCES `telemetry_sessions`(`id`) ON UPDATE cascade ON DELETE cascade
 );
 --> statement-breakpoint
-INSERT INTO `__new_telemetry_events`("id", "session_id", "event_type", "agent_type", "mode", "prompt", "stream_data", "sandbox_id", "repo_url", "metadata", "timestamp", "created_at", "version", "schema_version") SELECT "id", "session_id", "event_type", "agent_type", "mode", "prompt", "stream_data", "sandbox_id", "repo_url", "metadata", "timestamp", "created_at", "version", "schema_version" FROM `telemetry_events`;--> statement-breakpoint
+INSERT INTO `__new_telemetry_events`("id", "session_id", "event_type", "agent_type", "mode", "prompt", "stream_data", "sandbox_id", "repo_url", "metadata", "timestamp", "created_at", "version", "schema_version") 
+SELECT "id", "session_id", "event_type", "agent_type", "mode", "prompt", "stream_data", "sandbox_id", "repo_url", "metadata", "timestamp", "created_at", 1, '1.0.0' FROM `telemetry_events`;--> statement-breakpoint
 DROP TABLE `telemetry_events`;--> statement-breakpoint
 ALTER TABLE `__new_telemetry_events` RENAME TO `telemetry_events`;--> statement-breakpoint
+PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE INDEX `idx_events_timestamp` ON `telemetry_events` (`timestamp`);--> statement-breakpoint
 CREATE INDEX `idx_events_session` ON `telemetry_events` (`session_id`);--> statement-breakpoint
 CREATE INDEX `idx_events_type` ON `telemetry_events` (`event_type`);--> statement-breakpoint
@@ -147,13 +152,14 @@ CREATE TABLE `__new_telemetry_sessions` (
 	`sandbox_id` text,
 	`repo_url` text,
 	`metadata` text,
-	`created_at` real DEFAULT 1752856263397 NOT NULL,
-	`updated_at` real DEFAULT 1752856263397 NOT NULL,
+	`created_at` real DEFAULT (unixepoch()) NOT NULL,
+	`updated_at` real DEFAULT (unixepoch()) NOT NULL,
 	`version` integer DEFAULT 1 NOT NULL,
 	`schema_version` text DEFAULT '1.0.0' NOT NULL
 );
 --> statement-breakpoint
-INSERT INTO `__new_telemetry_sessions`("id", "agent_type", "mode", "status", "start_time", "end_time", "duration", "event_count", "stream_event_count", "error_count", "sandbox_id", "repo_url", "metadata", "created_at", "updated_at", "version", "schema_version") SELECT "id", "agent_type", "mode", "status", "start_time", "end_time", "duration", "event_count", "stream_event_count", "error_count", "sandbox_id", "repo_url", "metadata", "created_at", "updated_at", "version", "schema_version" FROM `telemetry_sessions`;--> statement-breakpoint
+INSERT INTO `__new_telemetry_sessions`("id", "agent_type", "mode", "status", "start_time", "end_time", "duration", "event_count", "stream_event_count", "error_count", "sandbox_id", "repo_url", "metadata", "created_at", "updated_at", "version", "schema_version") 
+SELECT "id", "agent_type", "mode", "status", "start_time", "end_time", "duration", "event_count", "stream_event_count", "error_count", "sandbox_id", "repo_url", "metadata", "created_at", "updated_at", 1, '1.0.0' FROM `telemetry_sessions`;--> statement-breakpoint
 DROP TABLE `telemetry_sessions`;--> statement-breakpoint
 ALTER TABLE `__new_telemetry_sessions` RENAME TO `telemetry_sessions`;--> statement-breakpoint
 CREATE INDEX `idx_sessions_status` ON `telemetry_sessions` (`status`);--> statement-breakpoint
@@ -176,13 +182,14 @@ CREATE TABLE `__new_telemetry_stats` (
 	`avg_session_duration` real,
 	`min_timestamp` real,
 	`max_timestamp` real,
-	`computed_at` real DEFAULT 1752856263397 NOT NULL,
-	`updated_at` real DEFAULT 1752856263397 NOT NULL,
+	`computed_at` real DEFAULT (unixepoch()) NOT NULL,
+	`updated_at` real DEFAULT (unixepoch()) NOT NULL,
 	`version` integer DEFAULT 1 NOT NULL,
 	`schema_version` text DEFAULT '1.0.0' NOT NULL
 );
 --> statement-breakpoint
-INSERT INTO `__new_telemetry_stats`("id", "stat_type", "stat_key", "total_events", "start_events", "stream_events", "end_events", "error_events", "unique_sessions", "agent_breakdown", "mode_breakdown", "avg_session_duration", "min_timestamp", "max_timestamp", "computed_at", "updated_at", "version", "schema_version") SELECT "id", "stat_type", "stat_key", "total_events", "start_events", "stream_events", "end_events", "error_events", "unique_sessions", "agent_breakdown", "mode_breakdown", "avg_session_duration", "min_timestamp", "max_timestamp", "computed_at", "updated_at", "version", "schema_version" FROM `telemetry_stats`;--> statement-breakpoint
+INSERT INTO `__new_telemetry_stats`("id", "stat_type", "stat_key", "total_events", "start_events", "stream_events", "end_events", "error_events", "unique_sessions", "agent_breakdown", "mode_breakdown", "avg_session_duration", "min_timestamp", "max_timestamp", "computed_at", "updated_at", "version", "schema_version") 
+SELECT "id", "stat_type", "stat_key", "total_events", "start_events", "stream_events", "end_events", "error_events", "unique_sessions", "agent_breakdown", "mode_breakdown", "avg_session_duration", "min_timestamp", "max_timestamp", "computed_at", "updated_at", 1, '1.0.0' FROM `telemetry_stats`;--> statement-breakpoint
 DROP TABLE `telemetry_stats`;--> statement-breakpoint
 ALTER TABLE `__new_telemetry_stats` RENAME TO `telemetry_stats`;--> statement-breakpoint
 CREATE UNIQUE INDEX `idx_stats_type_key` ON `telemetry_stats` (`stat_type`,`stat_key`);--> statement-breakpoint

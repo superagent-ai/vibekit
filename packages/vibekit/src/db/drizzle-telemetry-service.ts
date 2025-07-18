@@ -1,6 +1,7 @@
 /**
  * Phase 2.2: Drizzle-Based Telemetry Service
  * Enhanced with Phase 5.1 Data Integrity Features
+ * Enhanced with Phase 5.2 Analytics Features
  * 
  * This service replaces the existing TelemetryService with Drizzle ORM operations
  * while maintaining full compatibility with the existing interface.
@@ -30,6 +31,17 @@ import {
   TelemetryValidationError,
   TelemetryAuditError
 } from './data-integrity';
+import { 
+  TelemetryAnalyticsService, 
+  AnalyticsConfig, 
+  SessionSummary, 
+  PerformanceMetrics, 
+  RealTimeMetrics, 
+  PercentileData, 
+  AnomalyDetection,
+  HourlyAggregation,
+  DailyAggregation
+} from './analytics';
 
 export interface TelemetryData {
   sessionId?: string;
@@ -51,6 +63,7 @@ export class DrizzleTelemetryService {
   private sdk?: NodeSDK;
   private dbOps?: DrizzleTelemetryOperations;
   private dataIntegrity?: DataIntegrityService;
+  private analytics?: TelemetryAnalyticsService;
   private streamBuffer: Map<string, TelemetryData[]>;
   private bufferMetadata: Map<string, { createdAt: number; lastUpdated: number; flushCount: number }>;
   private flushTimer?: NodeJS.Timeout;
@@ -121,9 +134,19 @@ export class DrizzleTelemetryService {
           );
           await this.dataIntegrity.initialize();
           console.log('✅ Data integrity service initialized with validation and audit trail');
+
+          // Initialize analytics service
+          this.analytics = new TelemetryAnalyticsService(db as any, {
+            materializedViewRefreshInterval: 15, // 15 minutes
+            percentileCalculationInterval: 5,   // 5 minutes
+            anomalyDetectionThreshold: 2.5,     // 2.5 standard deviations
+            realTimeAggregationWindow: 1,       // 1 minute
+            enableBackgroundRefresh: true,
+          });
+          console.log('✅ Analytics service initialized with materialized views and anomaly detection');
         }
       } catch (error) {
-        console.warn('Failed to initialize data integrity service:', error);
+        console.warn('Failed to initialize data integrity and analytics services:', error);
       }
 
       // Create initial session record
@@ -895,8 +918,218 @@ export class DrizzleTelemetryService {
     });
   }
 
+  // ========================================
+  // ANALYTICS METHODS - Phase 5.2
+  // ========================================
+
   /**
-   * Gracefully shutdown the OpenTelemetry SDK and local database
+   * Get session summaries with optional filtering
+   */
+  async getSessionSummaries(options: {
+    limit?: number;
+    offset?: number;
+    fromTime?: number;
+    toTime?: number;
+    agentType?: string;
+    status?: string;
+  } = {}): Promise<SessionSummary[]> {
+    if (!this.analytics) {
+      throw new TelemetryDataError(
+        'Analytics service not initialized - local store must be enabled',
+        'ANALYTICS_NOT_AVAILABLE'
+      );
+    }
+    return this.analytics.getSessionSummaries(options);
+  }
+
+  /**
+   * Get performance metrics for a time window
+   */
+  async getPerformanceMetrics(
+    timeWindow: 'hour' | 'day' | 'week' | 'month',
+    fromTime?: number,
+    toTime?: number
+  ): Promise<PerformanceMetrics[]> {
+    if (!this.analytics) {
+      throw new TelemetryDataError(
+        'Analytics service not initialized - local store must be enabled',
+        'ANALYTICS_NOT_AVAILABLE'
+      );
+    }
+    return this.analytics.getPerformanceMetrics(timeWindow, fromTime, toTime);
+  }
+
+  /**
+   * Get hourly aggregations
+   */
+  async getHourlyAggregations(
+    fromTime: number,
+    toTime: number
+  ): Promise<HourlyAggregation[]> {
+    if (!this.analytics) {
+      throw new TelemetryDataError(
+        'Analytics service not initialized - local store must be enabled',
+        'ANALYTICS_NOT_AVAILABLE'
+      );
+    }
+    return this.analytics.getHourlyAggregations(fromTime, toTime);
+  }
+
+  /**
+   * Get daily aggregations
+   */
+  async getDailyAggregations(
+    fromTime: number,
+    toTime: number
+  ): Promise<DailyAggregation[]> {
+    if (!this.analytics) {
+      throw new TelemetryDataError(
+        'Analytics service not initialized - local store must be enabled',
+        'ANALYTICS_NOT_AVAILABLE'
+      );
+    }
+    return this.analytics.getDailyAggregations(fromTime, toTime);
+  }
+
+  /**
+   * Get real-time metrics for live dashboard
+   */
+  async getRealTimeMetrics(): Promise<RealTimeMetrics> {
+    if (!this.analytics) {
+      throw new TelemetryDataError(
+        'Analytics service not initialized - local store must be enabled',
+        'ANALYTICS_NOT_AVAILABLE'
+      );
+    }
+    return this.analytics.getRealTimeMetrics();
+  }
+
+  /**
+   * Calculate percentiles for specific metrics
+   */
+  async calculatePercentiles(
+    metric: 'session_duration' | 'events_per_session' | 'response_time',
+    fromTime: number,
+    toTime: number
+  ): Promise<PercentileData | null> {
+    if (!this.analytics) {
+      throw new TelemetryDataError(
+        'Analytics service not initialized - local store must be enabled',
+        'ANALYTICS_NOT_AVAILABLE'
+      );
+    }
+    return this.analytics.calculatePercentiles(metric, fromTime, toTime);
+  }
+
+  /**
+   * Get all percentile metrics for a time range
+   */
+  async getAllPercentiles(
+    fromTime: number,
+    toTime: number
+  ): Promise<Record<string, PercentileData | null>> {
+    if (!this.analytics) {
+      throw new TelemetryDataError(
+        'Analytics service not initialized - local store must be enabled',
+        'ANALYTICS_NOT_AVAILABLE'
+      );
+    }
+    return this.analytics.getAllPercentiles(fromTime, toTime);
+  }
+
+  /**
+   * Detect anomalies in telemetry data
+   */
+  async detectAnomalies(
+    fromTime: number,
+    toTime: number
+  ): Promise<AnomalyDetection[]> {
+    if (!this.analytics) {
+      throw new TelemetryDataError(
+        'Analytics service not initialized - local store must be enabled',
+        'ANALYTICS_NOT_AVAILABLE'
+      );
+    }
+    return this.analytics.detectAnomalies(fromTime, toTime);
+  }
+
+  /**
+   * Get comprehensive analytics dashboard data
+   */
+  async getAnalyticsDashboard(timeWindow: 'hour' | 'day' | 'week' = 'day'): Promise<{
+    realTime: RealTimeMetrics;
+    performance: PerformanceMetrics[];
+    percentiles: Record<string, PercentileData | null>;
+    anomalies: AnomalyDetection[];
+    sessionSummaries: SessionSummary[];
+    hourlyAggregations?: HourlyAggregation[];
+    dailyAggregations?: DailyAggregation[];
+  }> {
+    if (!this.analytics) {
+      throw new TelemetryDataError(
+        'Analytics service not initialized - local store must be enabled',
+        'ANALYTICS_NOT_AVAILABLE'
+      );
+    }
+
+    const now = Date.now();
+    const windowMs = this.getTimeWindowMs(timeWindow);
+    const fromTime = now - windowMs;
+
+    const [realTime, performance, percentiles, anomalies, sessionSummaries] = await Promise.all([
+      this.getRealTimeMetrics(),
+      this.getPerformanceMetrics(timeWindow, fromTime, now),
+      this.getAllPercentiles(fromTime, now),
+      this.detectAnomalies(fromTime, now),
+      this.getSessionSummaries({ limit: 20, fromTime })
+    ]);
+
+    const result: any = {
+      realTime,
+      performance,
+      percentiles,
+      anomalies,
+      sessionSummaries,
+    };
+
+    // Add aggregations based on time window
+    if (timeWindow === 'day' || timeWindow === 'week') {
+      result.hourlyAggregations = await this.getHourlyAggregations(fromTime, now);
+    }
+    if (timeWindow === 'week' || timeWindow === 'month') {
+      result.dailyAggregations = await this.getDailyAggregations(fromTime, now);
+    }
+
+    return result;
+  }
+
+  /**
+   * Get analytics configuration and status
+   */
+  getAnalyticsInfo(): {
+    enabled: boolean;
+    config?: AnalyticsConfig;
+    status: string;
+  } {
+    return {
+      enabled: !!this.analytics,
+      config: this.analytics?.['config'],
+      status: this.analytics ? 'active' : 'disabled - local store not enabled'
+    };
+  }
+
+  private getTimeWindowMs(window: 'hour' | 'day' | 'week' | 'month'): number {
+    switch (window) {
+      case 'hour': return 60 * 60 * 1000;
+      case 'day': return 24 * 60 * 60 * 1000;
+      case 'week': return 7 * 24 * 60 * 60 * 1000;
+      case 'month': return 30 * 24 * 60 * 60 * 1000;
+      default: return 24 * 60 * 60 * 1000;
+    }
+  }
+
+  /**
+   * Shutdown telemetry service and cleanup resources
    */
   public async shutdown(): Promise<void> {
     // Clear periodic flush timer
