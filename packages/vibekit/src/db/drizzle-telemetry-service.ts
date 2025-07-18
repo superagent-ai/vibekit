@@ -42,6 +42,12 @@ import {
   HourlyAggregation,
   DailyAggregation
 } from './analytics';
+import { 
+  TelemetryExportService, 
+  ExportFilter, 
+  ExportConfig, 
+  ExportMetadata 
+} from './export';
 
 export interface TelemetryData {
   sessionId?: string;
@@ -64,6 +70,7 @@ export class DrizzleTelemetryService {
   private dbOps?: DrizzleTelemetryOperations;
   private dataIntegrity?: DataIntegrityService;
   private analytics?: TelemetryAnalyticsService;
+  private exportService?: TelemetryExportService;
   private streamBuffer: Map<string, TelemetryData[]>;
   private bufferMetadata: Map<string, { createdAt: number; lastUpdated: number; flushCount: number }>;
   private flushTimer?: NodeJS.Timeout;
@@ -144,9 +151,19 @@ export class DrizzleTelemetryService {
             enableBackgroundRefresh: true,
           });
           console.log('✅ Analytics service initialized with materialized views and anomaly detection');
+
+          // Initialize export service
+          this.exportService = new TelemetryExportService(db as any, {
+            exportIntervalMs: 60000, // 1 minute
+            maxExportBatchSize: 1000,
+            enableCompression: true,
+            compressionLevel: 6,
+          });
+          await this.exportService.initialize();
+          console.log('✅ Export service initialized for data archival');
         }
       } catch (error) {
-        console.warn('Failed to initialize data integrity and analytics services:', error);
+        console.warn('Failed to initialize data integrity, analytics, and export services:', error);
       }
 
       // Create initial session record
@@ -1115,6 +1132,52 @@ export class DrizzleTelemetryService {
       enabled: !!this.analytics,
       config: this.analytics?.['config'],
       status: this.analytics ? 'active' : 'disabled - local store not enabled'
+    };
+  }
+
+  /**
+   * Get database instance for testing and integration purposes
+   */
+  async getDatabase() {
+    if (!this.dbOps) {
+      throw new Error('Database operations not initialized - local store must be enabled');
+    }
+    return await this.dbOps.getDatabase();
+  }
+
+  // ========================================
+  // EXPORT FUNCTIONALITY
+  // ========================================
+
+  /**
+   * Export telemetry data in various formats
+   */
+  async exportData(filter: ExportFilter = {}, config: ExportConfig): Promise<ExportMetadata> {
+    if (!this.exportService) {
+      throw new Error('Export service not initialized - local store must be enabled');
+    }
+    return await this.exportService.export(filter, config);
+  }
+
+  /**
+   * Get export service instance
+   */
+  getExportService(): TelemetryExportService | undefined {
+    return this.exportService;
+  }
+
+  /**
+   * Get export capabilities and status
+   */
+  getExportInfo(): {
+    enabled: boolean;
+    supportedFormats: string[];
+    status: string;
+  } {
+    return {
+      enabled: !!this.exportService,
+      supportedFormats: ['json', 'csv', 'otlp'],
+      status: this.exportService ? 'active' : 'disabled - local store not enabled'
     };
   }
 
