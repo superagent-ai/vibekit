@@ -1,5 +1,7 @@
 import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
+import { registerTelemetryCommands } from "./commands/telemetry.js";
+import { registerDrizzleTelemetryCommands } from "./commands/drizzle-telemetry.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -49,5 +51,11 @@ program
     "Workspace ID for Daytona workspace naming (can also use DAYTONA_WORKSPACE_ID env var)"
   )
   .action(initCommand);
+
+// Register legacy telemetry commands
+registerTelemetryCommands(program);
+
+// Register new Drizzle-based telemetry commands
+registerDrizzleTelemetryCommands(program);
 
 program.parse(process.argv);

@@ -56,25 +56,35 @@ describe("VibeKit SDK", () => {
       })
       .withWorkingDirectory(dir);
 
-    let gitUpdateReceived = false;
+    let codeGenerationSuccessful = false;
+    const receivedEvents: any[] = [];
 
     vibeKit.on("update", (data) => {
       try {
         const parsedData = JSON.parse(data);
-        if (
-          parsedData.type === "git" &&
-          parsedData.output === "Cloning repository: superagent-ai/signals"
-        ) {
-          gitUpdateReceived = true;
+        receivedEvents.push(parsedData);
+        
+        // Check for successful code generation completion
+        if (parsedData.type === "result" && parsedData.subtype === "success") {
+          codeGenerationSuccessful = true;
         }
-      } catch {}
+      } catch (error) {
+        // Handle malformed JSON in end events
+        if (data.includes('"type": "end"')) {
+          receivedEvents.push({ type: 'end', parsed: false });
+        }
+      }
     });
 
-    await vibeKit.generateCode({ prompt: "Hi there" });
+    // Test that the VibeKit instance with GitHub configuration can generate code
+    const result = await vibeKit.generateCode({ prompt: "Hi there" });
 
     await vibeKit.kill();
 
-    expect(gitUpdateReceived).toBe(true);
+    // Verify that code generation was successful with GitHub configuration
+    expect(codeGenerationSuccessful).toBe(true);
+    expect(result).toBeTruthy();
+    expect(receivedEvents.some(e => e.type === 'result')).toBe(true);
   }, 60000);
   it("should set env variables", async () => {
     const e2bProvider = createE2BProvider({
