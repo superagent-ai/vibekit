@@ -691,54 +691,93 @@ await validator.applySchemaVersion({
 });
 ```
 
-## Migration Guide
+## Implementation Guide
 
-### From Legacy TelemetryDB
+### New Project Setup
 
-The system provides automated migration from the legacy implementation:
+Setting up the telemetry system in a new VibeKit project:
 
 ```typescript
-import { DrizzleTelemetryMigrationService } from '@vibe-kit/vibekit';
+import { DrizzleTelemetryService } from '@vibe-kit/vibekit';
 
-// Automatic production migration
-const telemetryService = await DrizzleTelemetryMigrationService
-  .createProductionTelemetryService({
+// 1. Initialize the telemetry service
+const telemetryService = new DrizzleTelemetryService({
+  isEnabled: true,
+  
+  // Local storage configuration
+  localStore: {
     isEnabled: true,
-    localStore: {
-      isEnabled: true,
-      path: '.vibekit/production-telemetry.db'
-    }
-  });
+    path: '.vibekit/telemetry.db',
+    enableMetrics: true,
+    enableAnalytics: true,
+    streamBatchSize: 100,
+    pruneDays: 30
+  }
+});
 
-// Migration automatically:
-// 1. Detects legacy data
-// 2. Migrates with progress tracking
-// 3. Validates data integrity
-// 4. Provides new service instance
+// 2. Initialize the database schema
+await telemetryService.initialize();
 ```
 
-### Migration Process
+### Development vs Production Setup
 
-1. **Detection**: Automatically identifies existing telemetry data
-2. **Backup**: Creates backup of existing data
-3. **Schema Migration**: Applies new Drizzle schema with constraints
-4. **Data Migration**: Batch-processes existing data with validation
-5. **Verification**: Ensures data integrity and completeness
-6. **Cleanup**: Removes temporary files and optimizes database
-
-### Gradual Migration Strategy
+Configure different environments for optimal performance:
 
 ```typescript
-// Phase 1: Run both systems in parallel
-const legacyService = new TelemetryService(legacyConfig);
-const drizzleService = new DrizzleTelemetryService(newConfig);
+// Development environment
+const devTelemetryService = new DrizzleTelemetryService({
+  isEnabled: true,
+  localStore: {
+    isEnabled: true,
+    dbPath: './dev-telemetry.db',
+    enableQueryLogging: true,
+    enableMetrics: true,
+    streamBatchSize: 25,
+    pruneDays: 7
+  }
+});
 
-// Phase 2: Gradually route traffic
-const useNewSystem = Math.random() < 0.1; // 10% traffic
-const service = useNewSystem ? drizzleService : legacyService;
+// Production environment
+const prodTelemetryService = new DrizzleTelemetryService({
+  isEnabled: true,
+  localStore: {
+    isEnabled: true,
+    dbPath: process.env.TELEMETRY_DB_PATH || '/var/lib/vibekit/telemetry.db',
+    enableQueryLogging: false,
+    enableMetrics: true,
+    streamBatchSize: 200,
+    pruneDays: 90,
+    maxSizeMB: 1000
+  }
+});
+```
 
-// Phase 3: Full migration after validation
-// Phase 4: Legacy system decommissioning
+### Integration with Existing OpenTelemetry
+
+The telemetry system can run alongside existing OpenTelemetry setups:
+
+```typescript
+// Dual telemetry setup
+const telemetryService = new DrizzleTelemetryService({
+  // OpenTelemetry configuration (optional)
+  isEnabled: true,
+  endpoint: "http://localhost:4318/v1/traces",
+  
+  // Local telemetry for development and debugging
+  localStore: {
+    isEnabled: true,
+    path: '.vibekit/telemetry.db',
+    enableAnalytics: true
+  }
+});
+
+// Data flows to both OpenTelemetry and local storage
+await telemetryService.trackStart({
+  sessionId: "session-123",
+  agentType: "claude",
+  mode: "code",
+  prompt: "Debug this issue"
+});
 ```
 
 ## Troubleshooting
