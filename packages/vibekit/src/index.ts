@@ -12,6 +12,17 @@ export type {
   Conversation,
 } from "./types";
 
+// Telemetry storage types
+export type {
+  LocalStoreConfig,
+  TelemetryRecord,
+  TelemetryQueryFilter,
+  TelemetryStats,
+  TelemetryDBError,
+  TelemetryDBInitError,
+  TelemetryDBQueryError,
+} from "./types/telemetry-storage";
+
 // Optional exports with dynamic imports
 export const createClaudeAgent = async () => {
   const { ClaudeAgent } = await import("./agents/claude");

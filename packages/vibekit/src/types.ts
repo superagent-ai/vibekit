@@ -1,3 +1,5 @@
+import { LocalStoreConfig } from "./types/telemetry-storage";
+
 // AGENTS
 export type AgentType = "codex" | "claude" | "opencode" | "gemini";
 
@@ -77,6 +79,8 @@ export type TelemetryConfig = {
   samplingRatio?: number;
   /** Additional resource attributes to include in telemetry data */
   resourceAttributes?: Record<string, string>;
+  /** Local storage configuration for telemetry data */
+  localStore?: LocalStoreConfig;
 };
 
 export type VibeKitConfig = {

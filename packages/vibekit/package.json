@@ -45,9 +45,11 @@
     "execa": "^9.5.1",
     "ora": "^8.2.0",
     "uuid": "^11.1.0",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "better-sqlite3": "^11.6.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.15.18",
     "tsup": "^8.4.0",
     "typescript": "^5.8.3"
