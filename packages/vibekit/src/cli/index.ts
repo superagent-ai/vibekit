@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
 import { registerTelemetryCommands } from "./commands/telemetry.js";
 import { registerDrizzleTelemetryCommands } from "./commands/drizzle-telemetry.js";
+import { createLocalCommand } from "./commands/local.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -50,6 +51,14 @@ program
     "-w, --workspace-id <id>",
     "Workspace ID for Daytona workspace naming (can also use DAYTONA_WORKSPACE_ID env var)"
   )
+  .option(
+    "-u, --upload-images",
+    "Automatically upload images to Docker Hub (requires docker login, local provider only)"
+  )
+  .option(
+    "--no-upload-images",
+    "Skip Docker registry setup (local provider only)"
+  )
   .action(initCommand);
 
 // Register legacy telemetry commands
@@ -57,5 +66,7 @@ registerTelemetryCommands(program);
 
 // Register new Drizzle-based telemetry commands
 registerDrizzleTelemetryCommands(program);
+// Add local command with subcommands
+program.addCommand(createLocalCommand());
 
 program.parse(process.argv);

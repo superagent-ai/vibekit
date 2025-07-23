@@ -51,8 +51,8 @@ describe("VibeKit SDK", () => {
       })
       .withSandbox(e2bProvider)
       .withGithub({
-        token: process.env.GH_TOKEN!,
-        repository: process.env.GH_REPOSITORY!,
+        token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
+        repository: process.env.GH_REPOSITORY || "superagent-ai/signals",
       })
       .withWorkingDirectory(dir);
 
@@ -101,8 +101,8 @@ describe("VibeKit SDK", () => {
       })
       .withSandbox(e2bProvider)
       .withGithub({
-        token: process.env.GH_TOKEN!,
-        repository: process.env.GH_REPOSITORY!,
+        token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
+        repository: process.env.GH_REPOSITORY || "superagent-ai/signals",
       })
       .withSecrets({ MY_SECRET: "test" });
 

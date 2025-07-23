@@ -5,6 +5,7 @@ import { execa } from "execa";
 import { installE2B } from "./providers/e2b.js";
 import { installDaytona } from "./providers/daytona.js";
 import { installNorthflank } from "./providers/northflank.js";
+import { installLocal, isDaggerCliInstalled } from "./providers/local.js";
 import { authenticate, checkAuth, isCliInstalled } from "../utils/auth.js";
 import { AGENT_TEMPLATES, SANDBOX_PROVIDERS } from "../../constants/enums.js";
 
@@ -22,14 +23,15 @@ type InstallConfig = {
 type ProviderInstaller = {
   isInstalled: () => Promise<boolean>;
   configTransform: (config: InstallConfig) => InstallConfig;
-  install: (config: InstallConfig, templates: string[]) => Promise<boolean>;
+  install: (config: InstallConfig, templates: string[], uploadImages?: boolean) => Promise<boolean>;
 };
 
 const installers: Record<SANDBOX_PROVIDERS, ProviderInstaller> = {
   [SANDBOX_PROVIDERS.E2B]: {
     isInstalled: async () => await isCliInstalled("e2b"),
     configTransform: (config) => config,
-    install: installE2B,
+    install: (config: InstallConfig, templates: string[], uploadImages?: boolean) => 
+      installE2B(config, templates),
   },
   [SANDBOX_PROVIDERS.DAYTONA]: {
     isInstalled: async () => await isCliInstalled("daytona"),
@@ -37,12 +39,20 @@ const installers: Record<SANDBOX_PROVIDERS, ProviderInstaller> = {
       ...config,
       memory: Math.floor(config.memory / 1024),
     }),
-    install: installDaytona,
+    install: (config: InstallConfig, templates: string[], uploadImages?: boolean) => 
+      installDaytona(config, templates),
   },
   [SANDBOX_PROVIDERS.NORTHFLANK]: {
     isInstalled: async () => await isCliInstalled("northflank"),
     configTransform: (config: InstallConfig) => config,
-    install: installNorthflank,
+    install: (config: InstallConfig, templates: string[], uploadImages?: boolean) => 
+      installNorthflank(config, templates),
+  },
+  [SANDBOX_PROVIDERS.LOCAL]: {
+    isInstalled: async () => await isDaggerCliInstalled(),
+    configTransform: (config: InstallConfig) => config,
+    install: (config: InstallConfig, templates: string[], uploadImages?: boolean) => 
+      installLocal(config, templates, uploadImages),
   },
 };
 
@@ -74,6 +84,7 @@ export async function initCommand(options: {
   disk?: string; 
   projectId?: string;
   workspaceId?: string;
+  uploadImages?: boolean;
 } = {}) {
   try {
     // Display banner
@@ -113,6 +124,7 @@ export async function initCommand(options: {
         'e2b': SANDBOX_PROVIDERS.E2B,
         'daytona': SANDBOX_PROVIDERS.DAYTONA,
         'northflank': SANDBOX_PROVIDERS.NORTHFLANK,
+        'local': SANDBOX_PROVIDERS.LOCAL,
       };
       
       for (const provider of providersInput) {
@@ -343,6 +355,26 @@ export async function initCommand(options: {
       // Use registry for provider-specific handlers
       const installer = installers[provider];
 
+      // Special handling for Local provider (no authentication needed)
+      if (provider === SANDBOX_PROVIDERS.LOCAL) {
+        console.log(chalk.blue(`\n🏠 Setting up ${provider} provider...`));
+        
+        // Proceed directly to installation for local provider
+        const transformedConfig = installer.configTransform(config);
+        const installationSuccess = await installer.install(
+          transformedConfig,
+          templates,
+          options.uploadImages
+        );
+
+        if (installationSuccess) {
+          successfulProviders++;
+        } else {
+          failedProviders++;
+        }
+        continue; // Skip to next provider
+      }
+
       // Check if we need to install the CLI first
       const needsInstall = !(await installer.isInstalled());
       if (needsInstall) {
@@ -396,7 +428,8 @@ export async function initCommand(options: {
       const transformedConfig = installer.configTransform(config);
       const installationSuccess = await installer.install(
         transformedConfig,
-        templates
+        templates,
+        options.uploadImages
       );
 
       if (installationSuccess) {

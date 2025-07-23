@@ -33,5 +33,28 @@ export default defineConfig([
     banner: {
       js: "#!/usr/bin/env node",
     },
+    // Externalize Node.js-specific packages that cause ESM bundling issues
+    external: [
+      "@vibekit/local",
+      "@dagger.io/dagger",
+      "adm-zip",
+      "fs-extra",
+      "child_process",
+      "fs",
+      "path",
+      "os",
+      "util",
+      "crypto",
+      "stream",
+      "events",
+      "url",
+      "http",
+      "https",
+      "net",
+      "tls",
+      "querystring",
+      "zlib",
+      "buffer",
+    ],
   },
 ]);

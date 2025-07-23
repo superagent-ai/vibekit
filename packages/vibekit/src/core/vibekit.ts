@@ -5,6 +5,7 @@ import type {
   ModelProvider,
   SandboxProvider,
   Conversation,
+  LabelOptions,
 } from "../types";
 import { AgentResponse } from "../agents/base";
 
@@ -173,12 +174,15 @@ export class VibeKit extends EventEmitter {
     return this.agent.generateCode(prompt, mode, branch, history, callbacks);
   }
 
-  async createPullRequest(): Promise<any> {
+  async createPullRequest(
+    labelOptions?: LabelOptions,
+    branchPrefix?: string
+  ): Promise<any> {
     if (!this.agent) {
       await this.initializeAgent();
     }
 
-    return this.agent.createPullRequest();
+    return this.agent.createPullRequest(labelOptions, branchPrefix);
   }
 
   async runTests(): Promise<any> {
