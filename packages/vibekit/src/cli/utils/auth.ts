@@ -53,6 +53,7 @@ const authConfigs: Record<SANDBOX_PROVIDERS, ProviderAuthConfig> = {
       return { isAuthenticated: !isAuthError, username };
     },
     loginCommand: ['login'],
+    needsBrowserOpen: true,
   },
   [SANDBOX_PROVIDERS.NORTHFLANK]: {
     cliName: 'northflank',
@@ -192,6 +193,18 @@ export async function authenticate(provider: SANDBOX_PROVIDERS): Promise<boolean
 
     // Run login
     spinner.text = `Running ${provider} login...`;
+    
+    // Open browser for providers that need it
+    if (config.needsBrowserOpen) {
+      spinner.text = `Opening browser for ${provider} authentication...`;
+      // Wait a moment for the CLI to start before opening browser
+      setTimeout(() => {
+        open('https://auth.daytona.io').catch(() => {
+          // Silently fail if browser can't open
+        });
+      }, 1000);
+    }
+    
     await execa(config.cliName, config.loginCommand, { stdio: 'inherit' });
     
     // Verify with retries
