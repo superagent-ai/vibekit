@@ -11,11 +11,11 @@ import enquirer from 'enquirer';
 // Note: @vibekit/local imports temporarily disabled to fix module resolution
 // TODO: Re-enable when @vibekit/local package is properly built
 // import { 
-//   LocalDaggerSandboxProvider, 
+//   LocalSandboxProvider, 
 //   createLocalProvider,
-//   type LocalDaggerConfig,
+//   type LocalConfig,
 //   type AgentType,
-// } from '@vibekit/local';
+// } from '@vibe-kit/local';
 
 // Temporary type definitions for local provider
 type LocalDaggerConfig = any;
@@ -27,7 +27,7 @@ function createLocalProvider(config: LocalDaggerConfig): LocalDaggerSandboxProvi
   throw new Error('@vibekit/local provider not available - module resolution issue');
 }
 
-let localProvider: LocalDaggerSandboxProvider | null = null;
+let localProvider: LocalSandboxProvider | null = null;
 
 // Mock environment interface for the commands
 interface Environment {
@@ -45,7 +45,7 @@ let environments: Environment[] = [];
 /**
  * Get or create the local provider instance
  */
-function getLocalProvider(): LocalDaggerSandboxProvider {
+function getLocalProvider(): LocalSandboxProvider {
   if (!localProvider) {
     localProvider = createLocalProvider({});
   }

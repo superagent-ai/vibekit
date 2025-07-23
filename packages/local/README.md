@@ -1,10 +1,10 @@
-# @vibekit/local
+# @vibe-kit/local
 
 Local sandbox provider for Vibekit using [Dagger](https://dagger.io).
 
 ## Overview
 
-The `@vibekit/local` package enables Vibekit to run AI coding agents in isolated, containerized environments on your local machine. This provides an alternative to cloud-based sandboxes, offering faster iteration, offline development, and cost savings.
+The `@vibe-kit/local` package enables Vibekit to run AI coding agents in isolated, containerized environments on your local machine. This provides an alternative to cloud-based sandboxes, offering faster iteration, offline development, and cost savings.
 
 ## System Requirements
 
@@ -54,7 +54,7 @@ dagger version
 ### Basic API Usage
 
 ```typescript
-import { createLocalProvider } from '@vibekit/local';
+import { createLocalProvider } from '@vibe-kit/local';
 
 // Create a local provider
 const provider = createLocalProvider();
@@ -77,7 +77,7 @@ await sandbox.kill();
 ### Configuration
 
 ```typescript
-import { createLocalProvider, LocalDaggerConfig } from '@vibekit/local';
+import { createLocalProvider, LocalDaggerConfig } from '@vibe-kit/local';
 
 const config: LocalDaggerConfig = {
   // Configuration options for the local provider

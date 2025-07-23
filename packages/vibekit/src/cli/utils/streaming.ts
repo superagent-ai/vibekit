@@ -7,7 +7,7 @@
 
 import { spawn, ChildProcess } from 'child_process';
 import chalk from 'chalk';
-import { Environment } from '@vibekit/local';
+import { Environment } from '@vibe-kit/local';
 
 export interface LogEntry {
   timestamp: Date;

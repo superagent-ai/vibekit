@@ -5,7 +5,7 @@
  * for local sandbox environments.
  */
 
-import { Environment } from '@vibekit/local';
+import { Environment } from '@vibe-kit/local';
 import { MCPServerInstance } from './local-mcp';
 import { BaseAgent } from './base';
 
@@ -308,7 +308,7 @@ export class AgentSessionManager {
     // For now, we'll implement a basic recovery that checks for running environments
     
     try {
-      const { createLocalProvider } = await import('@vibekit/local');
+      const { createLocalProvider } = await import('@vibe-kit/local');
       const provider = createLocalProvider();
       const environments = await provider.listEnvironments();
       

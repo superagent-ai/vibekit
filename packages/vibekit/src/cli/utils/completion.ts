@@ -4,7 +4,7 @@
  * Provides auto-completion support for vibekit local commands
  */
 
-import { LocalSandboxProvider, createLocalProvider } from '@vibekit/local';
+import { LocalSandboxProvider, createLocalProvider } from '@vibe-kit/local';
 
 let cachedProvider: LocalSandboxProvider | null = null;
 
@@ -120,9 +120,9 @@ _vibekit_local_completion() {
     # Get current command structure
     local subcommand=""
     local i=1
-    while [[ $i -lt $cword ]]; do
-        if [[ "${words[i]}" != -* ]]; then
-            subcommand="${words[i]}"
+    while [[ \$i -lt \$cword ]]; do
+        if [[ "\${words[i]}" != -* ]]; then
+            subcommand="\${words[i]}"
             break
         fi
         ((i++))

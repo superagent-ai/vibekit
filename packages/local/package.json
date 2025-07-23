@@ -1,6 +1,6 @@
 {
-  "name": "@vibekit/local",
-  "version": "0.1.0",
+  "name": "@vibe-kit/local",
+  "version": "0.0.1",
   "description": "Local sandbox provider for Vibekit using Dagger",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "build:types": "tsup --dts-only",
     "dev": "tsup --watch",
     "test": "vitest",
     "type-check": "tsc --noEmit"
@@ -28,6 +29,9 @@
     "execa": "^9.0.0",
     "fs-extra": "^11.2.0",
     "which": "^4.0.0"
+  },
+  "peerDependencies": {
+    "@vibe-kit/sdk": "*"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",

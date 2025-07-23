@@ -106,7 +106,7 @@ export interface BaseAgentConfig {
   // Local MCP server configuration
   localMCP?: {
     enabled: boolean;
-    environment?: any; // Environment from @vibekit/local
+    environment?: any; // Environment from @vibe-kit/local
     serverType?: 'stdio' | 'transport';
     autoStart?: boolean;
   };
@@ -269,6 +269,7 @@ export abstract class BaseAgent {
       
       // Create a mock environment object since we're moving away from tight coupling
       const mockEnvironment = {
+        id: this.sandboxInstance.sandboxId,
         name: this.sandboxInstance.sandboxId,
         status: 'running' as const,
         createdAt: new Date(),

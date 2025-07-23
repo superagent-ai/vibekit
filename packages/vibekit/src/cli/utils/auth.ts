@@ -54,6 +54,16 @@ const authConfigs: Record<SANDBOX_PROVIDERS, ProviderAuthConfig> = {
     },
     loginCommand: ['login'],
   },
+  [SANDBOX_PROVIDERS.LOCAL]: {
+    cliName: 'dagger',
+    installInstructions: 'curl -fsSL https://dl.dagger.io/dagger/install.sh | sh',
+    checkAuthCommand: ['version'],
+    parseAuthOutput: (stdout) => ({
+      isAuthenticated: stdout.includes('dagger') && !stdout.includes('command not found'),
+      username: 'Local User',
+    }),
+    loginCommand: [], // No login required for local Dagger
+  },
   [SANDBOX_PROVIDERS.NORTHFLANK]: {
     cliName: 'northflank',
     installInstructions: 'npm install -g @northflank/cli',

@@ -17,6 +17,22 @@ import { EventEmitter } from 'events';
 
 const execAsync = promisify(exec);
 
+// Environment interface for provider methods
+interface Environment {
+  id: string;
+  name: string;
+  status: 'running' | 'stopped' | 'pending' | 'error';
+  agentType?: string;
+  createdAt?: Date;
+  lastUsed?: Date;
+  branch?: string;
+  environment?: {
+    VIBEKIT_AGENT_TYPE?: string;
+    AGENT_TYPE?: string;
+    [key: string]: string | undefined;
+  };
+}
+
 // Interface definitions matching E2B/Northflank patterns
 export interface SandboxExecutionResult {
   exitCode: number;
@@ -60,12 +76,13 @@ export interface SandboxProvider {
 
 export type AgentType = "codex" | "claude" | "opencode" | "gemini";
 
-export interface LocalDaggerConfig {
+export interface LocalConfig {
   githubToken?: string;
   preferRegistryImages?: boolean; // If true, use registry images instead of building from Dockerfiles
   dockerHubUser?: string; // User's Docker Hub username for custom images
   pushImages?: boolean;   // Whether to push images during setup
   privateRegistry?: string; // Alternative registry (ghcr.io, etc.)
+  autoInstall?: boolean;  // Whether to automatically install Dagger CLI if not found
 }
 
 export interface GitConfig {
@@ -96,7 +113,7 @@ const getDockerfilePathFromAgentType = (agentType?: AgentType): string | undefin
 };
 
 // Helper to get registry image name (configurable version for future use)
-const getConfigurableRegistryImage = (agentType?: AgentType, config?: LocalDaggerConfig): string => {
+const getConfigurableRegistryImage = (agentType?: AgentType, config?: LocalConfig): string => {
   const registry = config?.privateRegistry || "docker.io";
   const user = config?.dockerHubUser || "superagent-ai"; // fallback to project default
   
@@ -148,7 +165,7 @@ const getImageTag = (agentType?: AgentType): string => {
 };
 
 // Local Dagger implementation with proper workspace state persistence and VibeKit streaming compatibility
-class LocalDaggerSandboxInstance extends EventEmitter implements SandboxInstance {
+class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
   private isRunning = true;
   private octokit?: Octokit;
   private workspaceDirectory: Directory | null = null;
@@ -629,8 +646,8 @@ class LocalDaggerSandboxInstance extends EventEmitter implements SandboxInstance
   }
 }
 
-export class LocalDaggerSandboxProvider implements SandboxProvider {
-  constructor(private config: LocalDaggerConfig = {}) {}
+export class LocalSandboxProvider implements SandboxProvider {
+  constructor(private config: LocalConfig = {}) {}
 
   async create(
     envs?: Record<string, string>,
@@ -646,7 +663,7 @@ export class LocalDaggerSandboxProvider implements SandboxProvider {
       : getDockerfilePathFromAgentType(agentType);
     
     // Create sandbox instance with Dockerfile if available and not preferring registry, otherwise use registry/base image
-    const instance = new LocalDaggerSandboxInstance(
+    const instance = new LocalSandboxInstance(
       sandboxId,
       "ubuntu:24.04", // fallback image
       envs,
@@ -664,10 +681,16 @@ export class LocalDaggerSandboxProvider implements SandboxProvider {
     // The workspace state is maintained through the Directory persistence
     return await this.create();
   }
+
+  async listEnvironments(): Promise<Environment[]> {
+    // For Dagger-based local provider, we don't maintain persistent environments
+    // Return empty array as environments are created on-demand
+    return [];
+  }
 }
 
-export function createLocalProvider(config: LocalDaggerConfig = {}): LocalDaggerSandboxProvider {
-  return new LocalDaggerSandboxProvider(config);
+export function createLocalProvider(config: LocalConfig = {}): LocalSandboxProvider {
+  return new LocalSandboxProvider(config);
 }
 
 /**

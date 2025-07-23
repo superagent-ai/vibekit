@@ -29,7 +29,7 @@
         "build": "npm run build --workspaces",
         "build:packages": "npm run build --workspace=packages/e2b && npm run build --workspace=packages/daytona && npm run build --workspace=packages/northflank && npm run build --workspace=packages/local && npm run build --workspace=packages/vibekit",
         "dev": "npm run dev --workspace=packages/vibekit",
-        "type-check": "npm run type-check --workspaces",
+        "type-check": "npm run build:types --workspace=packages/local && npm run type-check --workspaces",
         "test": "vitest",
         "benchmark": "tsx scripts/run-benchmarks.ts",
         "benchmark:quick": "tsx scripts/run-benchmarks.ts quick",
@@ -48,6 +48,7 @@
     },
     "dependencies": {
         "@dagger.io/dagger": "^0.18.14",
+        "@octokit/rest": "^22.0.0",
         "dotenv": "^17.2.0"
     }
 }

@@ -7,7 +7,7 @@
 
 import enquirer from 'enquirer';
 import chalk from 'chalk';
-import { Environment } from '@vibekit/local';
+import { Environment } from '@vibe-kit/local';
 
 const { prompt } = enquirer;
 

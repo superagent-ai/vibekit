@@ -6,14 +6,14 @@
  */
 
 import { SandboxProvider, SandboxInstance, SandboxCommands, SandboxExecutionResult, SandboxCommandOptions } from '../types';
-import { LocalDaggerSandboxProvider, createLocalProvider, type LocalDaggerConfig, type AgentType } from '@vibekit/local';
+import { LocalSandboxProvider, createLocalProvider, type LocalConfig, type AgentType } from '@vibe-kit/local';
 import { 
   initializeMCPForAgent, 
   cleanupMCPForSandbox, 
   MCPServerInstance,
 } from './local-mcp';
 
-export interface LocalAgentSandboxConfig extends LocalDaggerConfig {
+export interface LocalAgentSandboxConfig extends LocalConfig {
   workingDirectory?: string;
   enableMCP?: boolean;
   mcpServerType?: 'stdio' | 'transport';
@@ -73,7 +73,7 @@ export class LocalAgentSandboxInstance implements SandboxInstance {
  * Local sandbox provider with agent-specific configuration
  */
 export class LocalAgentSandboxProvider implements SandboxProvider {
-  private baseProvider: LocalDaggerSandboxProvider;
+  private baseProvider: LocalSandboxProvider;
 
   constructor(private config: LocalAgentSandboxConfig = {}) {
     this.baseProvider = createLocalProvider(config);

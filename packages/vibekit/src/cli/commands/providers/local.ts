@@ -89,7 +89,7 @@ export async function installLocal(config: InstallConfig, selectedTemplates?: st
     
     try {
       // Import the Docker registry functions
-      const { checkDockerLogin, setupUserDockerRegistry } = await import('@vibekit/local');
+      const { checkDockerLogin, setupUserDockerRegistry } = await import('@vibe-kit/local');
       
       // Check if user is logged into Docker Hub
       const loginInfo = await checkDockerLogin();
@@ -213,7 +213,7 @@ export async function installLocal(config: InstallConfig, selectedTemplates?: st
       
       try {
         // Import and call the pre-build function
-        const { setupLocalProvider } = await import('@vibekit/local');
+        const { setupLocalProvider } = await import('@vibe-kit/local');
         
         const setupResult = await setupLocalProvider({
           skipPreBuild: false,
