@@ -1,6 +1,8 @@
-import type { NextConfig } from 'next'
-
-const nextConfig: NextConfig = {
+/**
+ * @type {import('next').NextConfig}
+ */
+const nextConfig = {
+  reactStrictMode: true,
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts'],
   },
@@ -10,4 +12,4 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig 
+module.exports = nextConfig 
