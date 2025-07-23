@@ -208,6 +208,23 @@ export abstract class BaseAgent {
       );
     }
 
+    // CRITICAL: Attach error handlers to sandbox EventEmitter to prevent unhandled errors
+    // This is especially important for Dagger LocalSandboxInstance which extends EventEmitter
+    if (this.sandboxInstance && 'on' in this.sandboxInstance) {
+      const eventEmitter = this.sandboxInstance as any;
+      
+      // Handle error events from sandbox (e.g., git clone failures, container issues)
+      eventEmitter.on('error', (error: any) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.warn(`[Sandbox Error] ${errorMessage}`);
+      });
+      
+      // Handle update events for debugging
+      eventEmitter.on('update', (data: any) => {
+        console.log(`[Sandbox Update] ${data}`);
+      });
+    }
+
     // Initialize local MCP server if configured (after sandbox is created)
     if (this.config.localMCP?.enabled && this.config.localMCP.autoStart) {
       await this.initializeLocalMCPServer();
