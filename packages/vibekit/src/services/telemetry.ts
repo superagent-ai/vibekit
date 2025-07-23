@@ -21,6 +21,120 @@ export interface TelemetryData {
   metadata?: Record<string, any>;
 }
 
+// Add security and data protection utilities
+interface PIIDetectionConfig {
+  enableEmailDetection: boolean;
+  enablePhoneDetection: boolean;
+  enableSSNDetection: boolean;
+  enableCreditCardDetection: boolean;
+  enableApiKeyDetection: boolean;
+  customPatterns: { name: string; regex: RegExp; replacement: string }[];
+}
+
+interface DataRetentionConfig {
+  maxAgeDays: number;
+  maxSizeMB: number;
+  compressionEnabled: boolean;
+  archivalPath?: string;
+}
+
+interface HealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  lastCheck: number;
+  checks: {
+    database: { status: string; latency?: number; error?: string; activeConnections?: number };
+    opentelemetry: { status: string; latency?: number; error?: string };
+    rateLimiter: { status: string; activeConnections: number };
+    circuitBreaker: { status: string; isOpen: boolean; failureCount: number };
+    retryQueue: { status: string; queueSize: number };
+  };
+}
+
+interface TelemetryMetrics {
+  events: {
+    total: number;
+    start: number;
+    stream: number;
+    end: number;
+    error: number;
+  };
+  performance: {
+    avgLatency: number;
+    p95Latency: number;
+    throughput: number; // events per second
+  };
+  errors: {
+    total: number;
+    circuitBreakerTrips: number;
+    rateLimitHits: number;
+    retryQueueOverflows: number;
+  };
+  health: {
+    uptime: number;
+    lastHealthCheck: number;
+  };
+}
+
+enum LogLevel {
+  DEBUG = 0,
+  INFO = 1,
+  WARN = 2,
+  ERROR = 3,
+  CRITICAL = 4,
+}
+
+class Logger {
+  private logLevel: LogLevel;
+  private serviceName: string;
+
+  constructor(serviceName: string, logLevel: LogLevel = LogLevel.INFO) {
+    this.serviceName = serviceName;
+    this.logLevel = logLevel;
+  }
+
+  private formatMessage(level: string, message: string, metadata?: Record<string, any>): string {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+      timestamp,
+      level,
+      service: this.serviceName,
+      message,
+      ...metadata,
+    };
+    return JSON.stringify(logEntry);
+  }
+
+  debug(message: string, metadata?: Record<string, any>): void {
+    if (this.logLevel <= LogLevel.DEBUG) {
+      console.debug(this.formatMessage('DEBUG', message, metadata));
+    }
+  }
+
+  info(message: string, metadata?: Record<string, any>): void {
+    if (this.logLevel <= LogLevel.INFO) {
+      console.info(this.formatMessage('INFO', message, metadata));
+    }
+  }
+
+  warn(message: string, metadata?: Record<string, any>): void {
+    if (this.logLevel <= LogLevel.WARN) {
+      console.warn(this.formatMessage('WARN', message, metadata));
+    }
+  }
+
+  error(message: string, metadata?: Record<string, any>): void {
+    if (this.logLevel <= LogLevel.ERROR) {
+      console.error(this.formatMessage('ERROR', message, metadata));
+    }
+  }
+
+  critical(message: string, metadata?: Record<string, any>): void {
+    if (this.logLevel <= LogLevel.CRITICAL) {
+      console.error(this.formatMessage('CRITICAL', message, metadata));
+    }
+  }
+}
+
 export class TelemetryService {
   private config: TelemetryConfig;
   private sessionId: string;
@@ -33,9 +147,74 @@ export class TelemetryService {
   private analytics?: any;
   private exportService?: any;
 
+  // Security and reliability properties
+  private piiConfig: PIIDetectionConfig;
+  private retentionConfig: DataRetentionConfig;
+  private rateLimiter: Map<string, { count: number; lastReset: number }>;
+  private circuitBreaker: { isOpen: boolean; failureCount: number; lastFailureTime: number };
+  private retryQueue: Array<{ operation: () => Promise<void>; attempts: number; lastAttempt: number }>;
+
+  // Monitoring and observability properties
+  private logger: Logger;
+  private healthStatus: HealthStatus;
+  private metrics: TelemetryMetrics;
+  private alertingEnabled: boolean;
+
   constructor(config: TelemetryConfig, sessionId?: string) {
     this.config = config;
     this.sessionId = sessionId || this.generateSessionId();
+
+    // Initialize monitoring and observability
+    this.logger = new Logger(config.serviceName || 'vibekit-telemetry', LogLevel.INFO);
+    this.alertingEnabled = config.resourceAttributes?.['telemetry.alerting'] === 'true' || false;
+    
+    this.healthStatus = {
+      status: 'healthy',
+      lastCheck: Date.now(),
+      checks: {
+        database: { status: 'unknown', activeConnections: 0 },
+        opentelemetry: { status: 'unknown' },
+        rateLimiter: { status: 'healthy', activeConnections: 0 },
+        circuitBreaker: { status: 'healthy', isOpen: false, failureCount: 0 },
+        retryQueue: { status: 'healthy', queueSize: 0 },
+      },
+    };
+
+    this.metrics = {
+      events: { total: 0, start: 0, stream: 0, end: 0, error: 0 },
+      performance: { avgLatency: 0, p95Latency: 0, throughput: 0 },
+      errors: { total: 0, circuitBreakerTrips: 0, rateLimitHits: 0, retryQueueOverflows: 0 },
+      health: { uptime: Date.now(), lastHealthCheck: Date.now() },
+    };
+
+    // Initialize security configurations
+    this.piiConfig = {
+      enableEmailDetection: true,
+      enablePhoneDetection: true,
+      enableSSNDetection: true,
+      enableCreditCardDetection: true,
+      enableApiKeyDetection: true,
+      customPatterns: [
+        { name: 'API_KEY', regex: /\b[A-Za-z0-9]{32,}\b/g, replacement: '[API_KEY_REDACTED]' },
+        { name: 'JWT_TOKEN', regex: /eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*/g, replacement: '[JWT_REDACTED]' },
+      ]
+    };
+
+    this.retentionConfig = {
+      maxAgeDays: config.localStore?.pruneDays || 30,
+      maxSizeMB: config.localStore?.maxSizeMB || 100,
+      compressionEnabled: true,
+    };
+
+    this.rateLimiter = new Map();
+    this.circuitBreaker = { isOpen: false, failureCount: 0, lastFailureTime: 0 };
+    this.retryQueue = [];
+
+    this.logger.info('TelemetryService initialized', {
+      sessionId: this.sessionId,
+      isEnabled: this.config.isEnabled,
+      localStoreEnabled: this.config.localStore?.isEnabled,
+    });
 
     if (this.config.isEnabled) {
       this.initializeOpenTelemetry();
@@ -44,9 +223,12 @@ export class TelemetryService {
     // Initialize local storage if configured (non-blocking)
     if (this.config.localStore?.isEnabled) {
       this.initializeDrizzleDB().catch(error => {
-        console.warn('Local telemetry storage initialization failed, continuing with OpenTelemetry only:', error.message);
+        this.logger.warn('Local telemetry storage initialization failed', { error: error.message });
       });
     }
+
+    // Start background maintenance tasks
+    this.startMaintenanceTasks();
   }
 
   private generateSessionId(): string {
@@ -129,47 +311,81 @@ export class TelemetryService {
       return;
     }
 
-    try {
+    // Apply rate limiting
+    const rateLimitKey = `${agentType}:${this.sessionId}`;
+    if (!this.checkRateLimit(rateLimitKey)) {
+      console.warn('Rate limit exceeded for trackStart');
+      return;
+    }
+
+    // Sanitize sensitive data
+    const sanitizedPrompt = this.sanitizeData(prompt);
+    const sanitizedMetadata = metadata ? this.sanitizeMetadata(metadata) : undefined;
+
+    const trackingOperation = async () => {
+      // Use sessionId from metadata if provided, otherwise use instance sessionId
+      const sessionId = metadata?.sessionId || this.sessionId;
+
       // Phase 3: Create session record if Drizzle is available
       if (this.dbOps) {
-        await this.createSessionRecord(agentType, mode, prompt, metadata);
+        await this.createSessionRecord(agentType, mode, sanitizedPrompt, sanitizedMetadata, sessionId);
       }
 
-      // Original OpenTelemetry tracking (preserved)
-      const span = this.createSpan(
-        `vibekit.start`,
-        agentType,
-        mode,
-        prompt,
-        metadata
-      );
+      // Original OpenTelemetry tracking (preserved) with circuit breaker
+      await this.executeWithCircuitBreaker(async () => {
+        const span = this.createSpan(
+          `vibekit.start`,
+          agentType,
+          mode,
+          sanitizedPrompt,
+          sanitizedMetadata
+        );
 
-      if (span) {
-        // Add event to span
-        span.addEvent("operation_started", {
-          "vibekit.event_type": "start",
-          timestamp: Date.now(),
-        });
+        if (span) {
+          // Add event to span
+          span.addEvent("operation_started", {
+            "vibekit.event_type": "start",
+            timestamp: Date.now(),
+          });
 
-        // End span immediately for start events
-        span.setStatus({ code: SpanStatusCode.OK });
-        span.end();
-      }
+          // End span immediately for start events
+          span.setStatus({ code: SpanStatusCode.OK });
+          span.end();
+        }
+      });
 
       // Phase 3: Persist event to database if available
       if (this.dbOps) {
         await this.persistEvent({
-          sessionId: this.sessionId,
+          sessionId: sessionId,
           agentType,
           mode,
-          prompt,
+          prompt: sanitizedPrompt,
           timestamp: Date.now(),
           eventType: "start",
-          metadata,
+          metadata: sanitizedMetadata,
         });
       }
+    };
+
+    const startTime = Date.now();
+    try {
+      await trackingOperation();
+      // Update metrics on success
+      const latency = Date.now() - startTime;
+      this.updateEventMetrics("start", latency);
+      this.logger.debug('Start event tracked successfully', {
+        agentType,
+        sessionId: this.sessionId,
+        latency,
+      });
     } catch (error) {
-      console.warn("Failed to track start event:", error);
+      this.logger.error("Failed to track start event", { error, agentType, sessionId: this.sessionId });
+      this.metrics.errors.total++;
+      // Queue for retry
+      this.queueForRetry(trackingOperation);
+      // Check for alerts
+      this.checkAndTriggerAlerts();
     }
   }
 
@@ -186,27 +402,43 @@ export class TelemetryService {
       return;
     }
 
-    try {
-      // Original OpenTelemetry tracking (preserved)
-      const span = this.createSpan(`vibekit.stream`, agentType, mode, prompt, {
-        "vibekit.sandbox_id": sandboxId || "",
-        "vibekit.repo_url": repoUrl || "",
-        "vibekit.stream_data_length": streamData.length,
-        ...metadata,
-      });
+    // Apply rate limiting (more permissive for stream events)
+    const rateLimitKey = `stream:${agentType}:${this.sessionId}`;
+    if (!this.checkRateLimit(rateLimitKey, 500)) { // Higher limit for stream events
+      console.warn('Rate limit exceeded for trackStream');
+      return;
+    }
 
-      if (span) {
-        // Add stream data as an event
-        span.addEvent("stream_data", {
-          "vibekit.event_type": "stream",
-          "stream.data": streamData,
-          timestamp: Date.now(),
+    // Sanitize sensitive data
+    const sanitizedPrompt = this.sanitizeData(prompt);
+    const sanitizedStreamData = this.sanitizeData(streamData);
+    const sanitizedMetadata = metadata ? this.sanitizeMetadata(metadata) : undefined;
+    const sanitizedSandboxId = sandboxId ? this.sanitizeData(sandboxId) : undefined;
+    const sanitizedRepoUrl = repoUrl ? this.sanitizeData(repoUrl) : undefined;
+
+    const trackingOperation = async () => {
+      // Original OpenTelemetry tracking (preserved) with circuit breaker
+      await this.executeWithCircuitBreaker(async () => {
+        const span = this.createSpan(`vibekit.stream`, agentType, mode, sanitizedPrompt, {
+          "vibekit.sandbox_id": sanitizedSandboxId || "",
+          "vibekit.repo_url": sanitizedRepoUrl || "",
+          "vibekit.stream_data_length": sanitizedStreamData.length,
+          ...sanitizedMetadata,
         });
 
-        // End span immediately for stream events
-        span.setStatus({ code: SpanStatusCode.OK });
-        span.end();
-      }
+        if (span) {
+          // Add stream data as an event
+          span.addEvent("stream_data", {
+            "vibekit.event_type": "stream",
+            "stream.data": sanitizedStreamData,
+            timestamp: Date.now(),
+          });
+
+          // End span immediately for stream events
+          span.setStatus({ code: SpanStatusCode.OK });
+          span.end();
+        }
+      });
 
       // Phase 3: Persist stream event to database if available
       if (this.dbOps) {
@@ -214,17 +446,25 @@ export class TelemetryService {
           sessionId: this.sessionId,
           agentType,
           mode,
-          prompt,
+          prompt: sanitizedPrompt,
           timestamp: Date.now(),
           eventType: "stream",
-          sandboxId,
-          repoUrl,
-          streamData,
-          metadata,
+          sandboxId: sanitizedSandboxId,
+          repoUrl: sanitizedRepoUrl,
+          streamData: sanitizedStreamData,
+          metadata: sanitizedMetadata,
         });
       }
+    };
+
+    try {
+      await trackingOperation();
     } catch (error) {
       console.warn("Failed to track stream event:", error);
+      // Queue for retry with lower priority (streams are less critical)
+      if (Math.random() < 0.1) { // Only retry 10% of failed stream events
+        this.queueForRetry(trackingOperation);
+      }
     }
   }
 
@@ -240,25 +480,40 @@ export class TelemetryService {
       return;
     }
 
-    try {
-      // Original OpenTelemetry tracking (preserved)
-      const span = this.createSpan(`vibekit.end`, agentType, mode, prompt, {
-        "vibekit.sandbox_id": sandboxId || "",
-        "vibekit.repo_url": repoUrl || "",
-        ...metadata,
-      });
+    // Apply rate limiting
+    const rateLimitKey = `${agentType}:${this.sessionId}`;
+    if (!this.checkRateLimit(rateLimitKey)) {
+      console.warn('Rate limit exceeded for trackEnd');
+      return;
+    }
 
-      if (span) {
-        // Add event to span
-        span.addEvent("operation_completed", {
-          "vibekit.event_type": "end",
-          timestamp: Date.now(),
+    // Sanitize sensitive data
+    const sanitizedPrompt = this.sanitizeData(prompt);
+    const sanitizedMetadata = metadata ? this.sanitizeMetadata(metadata) : undefined;
+    const sanitizedSandboxId = sandboxId ? this.sanitizeData(sandboxId) : undefined;
+    const sanitizedRepoUrl = repoUrl ? this.sanitizeData(repoUrl) : undefined;
+
+    const trackingOperation = async () => {
+      // Original OpenTelemetry tracking (preserved) with circuit breaker
+      await this.executeWithCircuitBreaker(async () => {
+        const span = this.createSpan(`vibekit.end`, agentType, mode, sanitizedPrompt, {
+          "vibekit.sandbox_id": sanitizedSandboxId || "",
+          "vibekit.repo_url": sanitizedRepoUrl || "",
+          ...sanitizedMetadata,
         });
 
-        // End span
-        span.setStatus({ code: SpanStatusCode.OK });
-        span.end();
-      }
+        if (span) {
+          // Add event to span
+          span.addEvent("operation_completed", {
+            "vibekit.event_type": "end",
+            timestamp: Date.now(),
+          });
+
+          // End span
+          span.setStatus({ code: SpanStatusCode.OK });
+          span.end();
+        }
+      });
 
       // Phase 3: Persist end event and update session
       if (this.dbOps) {
@@ -266,12 +521,12 @@ export class TelemetryService {
           sessionId: this.sessionId,
           agentType,
           mode,
-          prompt,
+          prompt: sanitizedPrompt,
           timestamp: Date.now(),
           eventType: "end",
-          sandboxId,
-          repoUrl,
-          metadata,
+          sandboxId: sanitizedSandboxId,
+          repoUrl: sanitizedRepoUrl,
+          metadata: sanitizedMetadata,
         });
 
         // Update session status to completed
@@ -280,8 +535,14 @@ export class TelemetryService {
           endTime: Date.now(),
         });
       }
+    };
+
+    try {
+      await trackingOperation();
     } catch (error) {
       console.warn("Failed to track end event:", error);
+      // End events are critical - always retry
+      this.queueForRetry(trackingOperation);
     }
   }
 
@@ -296,35 +557,44 @@ export class TelemetryService {
       return;
     }
 
-    try {
-      // Original OpenTelemetry tracking (preserved)
-      const span = this.createSpan(
-        `vibekit.error`,
-        agentType,
-        mode,
-        prompt,
-        metadata
-      );
+    // Skip rate limiting for error events - errors are always important
+    
+    // Sanitize sensitive data
+    const sanitizedPrompt = this.sanitizeData(prompt);
+    const sanitizedError = this.sanitizeData(error);
+    const sanitizedMetadata = metadata ? this.sanitizeMetadata(metadata) : undefined;
 
-      if (span) {
-        // Record the error
-        span.recordException(new Error(error));
+    const trackingOperation = async () => {
+      // Original OpenTelemetry tracking (preserved) with circuit breaker
+      await this.executeWithCircuitBreaker(async () => {
+        const span = this.createSpan(
+          `vibekit.error`,
+          agentType,
+          mode,
+          sanitizedPrompt,
+          sanitizedMetadata
+        );
 
-        // Add error event
-        span.addEvent("error_occurred", {
-          "vibekit.event_type": "error",
-          "error.message": error,
-          timestamp: Date.now(),
-        });
+        if (span) {
+          // Record the error
+          span.recordException(new Error(sanitizedError));
 
-        // Set error status
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: error,
-        });
+          // Add error event
+          span.addEvent("error_occurred", {
+            "vibekit.event_type": "error",
+            "error.message": sanitizedError,
+            timestamp: Date.now(),
+          });
 
-        span.end();
-      }
+          // Set error status
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: sanitizedError,
+          });
+
+          span.end();
+        }
+      });
 
       // Phase 3: Persist error event and update session
       if (this.dbOps) {
@@ -332,12 +602,12 @@ export class TelemetryService {
           sessionId: this.sessionId,
           agentType,
           mode,
-          prompt,
+          prompt: sanitizedPrompt,
           timestamp: Date.now(),
           eventType: "error",
           metadata: {
-            ...metadata,
-            error,
+            ...sanitizedMetadata,
+            error: sanitizedError,
           },
         });
 
@@ -347,8 +617,14 @@ export class TelemetryService {
           endTime: Date.now(),
         });
       }
+    };
+
+    try {
+      await trackingOperation();
     } catch (err) {
       console.warn("Failed to track error event:", err);
+      // Error events are critical - always retry
+      this.queueForRetry(trackingOperation);
     }
   }
 
@@ -378,8 +654,11 @@ export class TelemetryService {
       console.log('🗄️  Initializing database:', drizzleConfig.path);
       await initializeTelemetryDB(drizzleConfig);
       
-      this.dbOps = new DrizzleTelemetryOperations(drizzleConfig);
-      await this.dbOps.initialize();
+      const dbOps = new DrizzleTelemetryOperations(drizzleConfig);
+      await dbOps.initialize();
+      
+      // Only set this.dbOps if everything succeeded
+      this.dbOps = dbOps;
       
       console.log('✅ Drizzle telemetry database initialized successfully');
       console.log('📊 Local storage and analytics now available');
@@ -398,13 +677,15 @@ export class TelemetryService {
     agentType: string,
     mode: string,
     prompt: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
+    sessionId?: string
   ): Promise<void> {
     if (!this.dbOps) return;
 
     try {
+      const effectiveSessionId = sessionId || this.sessionId;
       await this.dbOps.createSession({
-        id: this.sessionId,
+        id: effectiveSessionId,
         agentType,
         mode,
         prompt: prompt.substring(0, 1000), // Limit prompt length
@@ -475,51 +756,7 @@ export class TelemetryService {
     }
   }
 
-  /**
-   * Get analytics dashboard data (Phase 2: Use Drizzle when available)
-   */
-  public async getAnalyticsDashboard(timeWindow: 'hour' | 'day' | 'week' = 'day'): Promise<any> {
-    // Phase 2: Check if Drizzle is available and use it
-    if (this.dbOps) {
-      try {
-        console.log('📊 Generating analytics dashboard from local database...');
-        
-        // Try to get basic analytics from Drizzle
-        const sessionSummaries = await this.dbOps.getSessionSummaries?.({ limit: 10 });
-        const totalSessions = sessionSummaries?.length || 0;
-        
-        return {
-          timeWindow,
-          totalSessions,
-          totalEvents: 0, // Will be implemented in Phase 3
-          avgResponseTime: 0, // Will be implemented in Phase 3  
-          errorRate: 0, // Will be implemented in Phase 3
-          topAgents: [], // Will be implemented in Phase 3
-          recentSessions: sessionSummaries || [],
-          message: 'Basic analytics from local database (Phase 2)',
-          source: 'drizzle'
-        };
-        
-      } catch (error: any) {
-        console.warn('Failed to get analytics from local database:', error.message);
-        // Fall through to OpenTelemetry-only response
-      }
-    }
-    
-    // Fallback: OpenTelemetry-only mode
-    console.warn('Analytics dashboard not available with OpenTelemetry-only mode. Enable local storage for analytics.');
-    return {
-      timeWindow,
-      totalSessions: 0,
-      totalEvents: 0,
-      avgResponseTime: 0,
-      errorRate: 0,
-      topAgents: [],
-      recentSessions: [],
-      message: 'Analytics requires local storage with Drizzle integration',
-      source: 'opentelemetry-only'
-    };
-  }
+
 
   /**
    * Gracefully shutdown the OpenTelemetry SDK
@@ -531,6 +768,652 @@ export class TelemetryService {
       } catch (error) {
         console.warn("Failed to shutdown OpenTelemetry SDK:", error);
       }
+    }
+  }
+
+  // ========================================
+  // PRODUCTION READINESS: HEALTH CHECKS & MONITORING
+  // ========================================
+
+  /**
+   * Perform comprehensive health check
+   */
+  public async getHealthStatus(): Promise<HealthStatus> {
+    const startTime = Date.now();
+
+    // Update health check timestamp
+    this.healthStatus.lastCheck = startTime;
+    this.metrics.health.lastHealthCheck = startTime;
+
+    // Check database health
+    await this.checkDatabaseHealth();
+
+    // Check OpenTelemetry health
+    await this.checkOpenTelemetryHealth();
+
+    // Check rate limiter health
+    this.checkRateLimiterHealth();
+
+    // Check circuit breaker health
+    this.checkCircuitBreakerHealth();
+
+    // Check retry queue health
+    this.checkRetryQueueHealth();
+
+    // Determine overall health status
+    this.updateOverallHealthStatus();
+
+    const duration = Date.now() - startTime;
+    this.logger.debug('Health check completed', { duration, status: this.healthStatus.status });
+
+    return { ...this.healthStatus };
+  }
+
+  /**
+   * Get current telemetry metrics
+   */
+  public getTelemetryMetrics(): TelemetryMetrics {
+    // Calculate throughput (events per second over last minute)
+    const uptime = Date.now() - this.metrics.health.uptime;
+    const uptimeSeconds = uptime / 1000;
+    this.metrics.performance.throughput = uptimeSeconds > 0 ? this.metrics.events.total / uptimeSeconds : 0;
+
+    return { ...this.metrics };
+  }
+
+  /**
+   * Reset telemetry metrics
+   */
+  public resetMetrics(): void {
+    this.metrics = {
+      events: { total: 0, start: 0, stream: 0, end: 0, error: 0 },
+      performance: { avgLatency: 0, p95Latency: 0, throughput: 0 },
+      errors: { total: 0, circuitBreakerTrips: 0, rateLimitHits: 0, retryQueueOverflows: 0 },
+      health: { uptime: Date.now(), lastHealthCheck: Date.now() },
+    };
+    this.logger.info('Telemetry metrics reset');
+  }
+
+  /**
+   * Update event metrics
+   */
+  private updateEventMetrics(eventType: "start" | "stream" | "end" | "error", latency?: number): void {
+    this.metrics.events.total++;
+    this.metrics.events[eventType]++;
+
+    if (latency !== undefined) {
+      // Simple moving average for latency
+      this.metrics.performance.avgLatency = 
+        (this.metrics.performance.avgLatency * (this.metrics.events.total - 1) + latency) / this.metrics.events.total;
+    }
+  }
+
+  /**
+   * Check database health
+   */
+  private async checkDatabaseHealth(): Promise<void> {
+    if (!this.dbOps) {
+      this.healthStatus.checks.database = { status: 'disabled' };
+      return;
+    }
+
+    const startTime = Date.now();
+    try {
+      // Simple health check query
+      await this.dbOps.getDatabaseStats?.();
+      const latency = Date.now() - startTime;
+      
+      this.healthStatus.checks.database = {
+        status: latency < 100 ? 'healthy' : 'degraded',
+        latency,
+        activeConnections: 1, // SQLite is single connection
+      };
+    } catch (error: any) {
+      this.healthStatus.checks.database = {
+        status: 'unhealthy',
+        error: error.message,
+        latency: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Check OpenTelemetry health
+   */
+  private async checkOpenTelemetryHealth(): Promise<void> {
+    if (!this.tracer || !this.config.endpoint) {
+      this.healthStatus.checks.opentelemetry = { status: 'disabled' };
+      return;
+    }
+
+    const startTime = Date.now();
+    try {
+      // Create a test span to verify OpenTelemetry is working
+      const testSpan = this.tracer.startSpan('health_check');
+      testSpan.setStatus({ code: SpanStatusCode.OK });
+      testSpan.end();
+
+      const latency = Date.now() - startTime;
+      this.healthStatus.checks.opentelemetry = {
+        status: latency < 50 ? 'healthy' : 'degraded',
+        latency,
+      };
+    } catch (error: any) {
+      this.healthStatus.checks.opentelemetry = {
+        status: 'unhealthy',
+        error: error.message,
+        latency: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Check rate limiter health
+   */
+  private checkRateLimiterHealth(): void {
+    const activeConnections = this.rateLimiter.size;
+    
+    this.healthStatus.checks.rateLimiter = {
+      status: activeConnections < 1000 ? 'healthy' : 'degraded',
+      activeConnections,
+    };
+  }
+
+  /**
+   * Check circuit breaker health
+   */
+  private checkCircuitBreakerHealth(): void {
+    this.healthStatus.checks.circuitBreaker = {
+      status: this.circuitBreaker.isOpen ? 'degraded' : 'healthy',
+      isOpen: this.circuitBreaker.isOpen,
+      failureCount: this.circuitBreaker.failureCount,
+    };
+  }
+
+  /**
+   * Check retry queue health
+   */
+  private checkRetryQueueHealth(): void {
+    const queueSize = this.retryQueue.length;
+    
+    this.healthStatus.checks.retryQueue = {
+      status: queueSize < 100 ? 'healthy' : queueSize < 500 ? 'degraded' : 'unhealthy',
+      queueSize,
+    };
+  }
+
+  /**
+   * Update overall health status based on individual checks
+   */
+  private updateOverallHealthStatus(): void {
+    const checks = Object.values(this.healthStatus.checks);
+    const unhealthyCount = checks.filter(check => check.status === 'unhealthy').length;
+    const degradedCount = checks.filter(check => check.status === 'degraded').length;
+
+    if (unhealthyCount > 0) {
+      this.healthStatus.status = 'unhealthy';
+    } else if (degradedCount > 1) {
+      this.healthStatus.status = 'degraded';
+    } else {
+      this.healthStatus.status = 'healthy';
+    }
+  }
+
+  /**
+   * Check if alerting should be triggered
+   */
+  private checkAndTriggerAlerts(): void {
+    if (!this.alertingEnabled) return;
+
+    // Circuit breaker alert
+    if (this.circuitBreaker.isOpen) {
+      this.logger.critical('Circuit breaker is open', {
+        failureCount: this.circuitBreaker.failureCount,
+        lastFailureTime: this.circuitBreaker.lastFailureTime,
+      });
+    }
+
+    // Retry queue overflow alert
+    if (this.retryQueue.length > 500) {
+      this.logger.critical('Retry queue is overflowing', {
+        queueSize: this.retryQueue.length,
+      });
+      this.metrics.errors.retryQueueOverflows++;
+    }
+
+    // High error rate alert
+    const errorRate = this.metrics.events.total > 0 ? this.metrics.events.error / this.metrics.events.total : 0;
+    if (errorRate > 0.1) { // 10% error rate
+      this.logger.critical('High error rate detected', {
+        errorRate: `${(errorRate * 100).toFixed(2)}%`,
+        totalEvents: this.metrics.events.total,
+        errorEvents: this.metrics.events.error,
+      });
+    }
+  }
+
+  /**
+   * Enhanced getAnalyticsDashboard with production metrics
+   */
+  public async getAnalyticsDashboard(timeWindow: 'hour' | 'day' | 'week' = 'day'): Promise<any> {
+    // Get health status
+    const health = await this.getHealthStatus();
+    const metrics = this.getTelemetryMetrics();
+
+    // Get real-time metrics in the format expected by CLI
+    const realTimeMetrics = await this.getRealTimeMetrics();
+
+    // Phase 2: Check if Drizzle is available and use it
+    if (this.dbOps) {
+      try {
+        this.logger.info('Generating analytics dashboard from local database');
+        
+        // Try to get basic analytics from Drizzle
+        const sessionSummaries = await this.dbOps.querySessions?.({ limit: 10 });
+        const totalSessions = sessionSummaries?.length || 0;
+        
+        return {
+          timeWindow,
+          overview: {
+            totalSessions,
+            totalEvents: metrics.events.total,
+            avgResponseTime: metrics.performance.avgLatency,
+            errorRate: metrics.events.total > 0 ? (metrics.events.error / metrics.events.total) * 100 : 0,
+            throughput: metrics.performance.throughput,
+          },
+          health: {
+            status: health.status,
+            checks: health.checks,
+          },
+          realTime: realTimeMetrics,
+          performance: [], // Empty array for now
+          sessionSummaries: sessionSummaries || [],
+          anomalies: [], // Empty array for now
+          topAgents: [], // Will be implemented in Phase 3
+          message: 'Production analytics dashboard with health monitoring',
+          source: 'drizzle',
+          lastUpdated: Date.now(),
+        };
+        
+      } catch (error: any) {
+        this.logger.warn('Failed to get analytics from local database', { error: error.message });
+        // Fall through to OpenTelemetry-only response
+      }
+    }
+    
+    // Fallback: OpenTelemetry-only mode with basic metrics
+    this.logger.warn('Analytics dashboard in OpenTelemetry-only mode');
+    return {
+      timeWindow,
+      overview: {
+        totalSessions: 0,
+        totalEvents: metrics.events.total,
+        avgResponseTime: metrics.performance.avgLatency,
+        errorRate: metrics.events.total > 0 ? (metrics.events.error / metrics.events.total) * 100 : 0,
+        throughput: metrics.performance.throughput,
+      },
+      health: {
+        status: health.status,
+        checks: health.checks,
+      },
+      realTime: realTimeMetrics,
+      performance: [], // Empty array for now
+      sessionSummaries: [],
+      anomalies: [], // Empty array for now
+      topAgents: [],
+      message: 'Limited analytics - local storage required for full features',
+      source: 'opentelemetry-only',
+      lastUpdated: Date.now(),
+    };
+  }
+
+     /**
+    * Sanitize sensitive data from telemetry data
+    */
+   private sanitizeData(data: string): string {
+     let sanitized = data;
+
+     if (this.piiConfig.enableEmailDetection) {
+       sanitized = sanitized.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '[EMAIL_REDACTED]');
+     }
+
+     if (this.piiConfig.enablePhoneDetection) {
+       sanitized = sanitized.replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, '[PHONE_REDACTED]');
+     }
+
+     if (this.piiConfig.enableSSNDetection) {
+       sanitized = sanitized.replace(/\b\d{3}-?\d{2}-?\d{4}\b/g, '[SSN_REDACTED]');
+     }
+
+     if (this.piiConfig.enableCreditCardDetection) {
+       sanitized = sanitized.replace(/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g, '[CARD_REDACTED]');
+     }
+
+     // Apply custom patterns
+     for (const pattern of this.piiConfig.customPatterns) {
+       sanitized = sanitized.replace(pattern.regex, pattern.replacement);
+     }
+
+     return sanitized;
+   }
+
+   /**
+    * Sanitize metadata object recursively
+    */
+   private sanitizeMetadata(metadata: Record<string, any>): Record<string, any> {
+     const sanitized: Record<string, any> = {};
+
+     for (const [key, value] of Object.entries(metadata)) {
+       if (typeof value === 'string') {
+         sanitized[key] = this.sanitizeData(value);
+       } else if (typeof value === 'object' && value !== null) {
+         if (Array.isArray(value)) {
+           sanitized[key] = value.map(item => 
+             typeof item === 'string' ? this.sanitizeData(item) : 
+             typeof item === 'object' && item !== null ? this.sanitizeMetadata(item) : item
+           );
+         } else {
+           sanitized[key] = this.sanitizeMetadata(value);
+         }
+       } else {
+         sanitized[key] = value;
+       }
+     }
+
+     return sanitized;
+   }
+
+  /**
+   * Check rate limiting for a given identifier
+   */
+  private checkRateLimit(identifier: string, maxRequestsPerMinute: number = 100): boolean {
+    const now = Date.now();
+    const windowMs = 60 * 1000; // 1 minute
+
+    const current = this.rateLimiter.get(identifier) || { count: 0, lastReset: now };
+
+    // Reset if window has passed
+    if (now - current.lastReset > windowMs) {
+      current.count = 0;
+      current.lastReset = now;
+    }
+
+    if (current.count >= maxRequestsPerMinute) {
+      return false; // Rate limited
+    }
+
+    current.count++;
+    this.rateLimiter.set(identifier, current);
+    return true;
+  }
+
+  /**
+   * Circuit breaker pattern for external service calls
+   */
+  private async executeWithCircuitBreaker<T>(operation: () => Promise<T>): Promise<T | null> {
+    const circuitBreakerThreshold = 5;
+    const circuitBreakerTimeoutMs = 30000; // 30 seconds
+
+    // Check if circuit breaker is open
+    if (this.circuitBreaker.isOpen) {
+      const timeSinceLastFailure = Date.now() - this.circuitBreaker.lastFailureTime;
+      if (timeSinceLastFailure < circuitBreakerTimeoutMs) {
+        console.warn('Circuit breaker is open, skipping operation');
+        return null;
+      } else {
+        // Reset circuit breaker
+        this.circuitBreaker.isOpen = false;
+        this.circuitBreaker.failureCount = 0;
+      }
+    }
+
+    try {
+      const result = await operation();
+      // Reset failure count on success
+      this.circuitBreaker.failureCount = 0;
+      return result;
+    } catch (error) {
+      this.circuitBreaker.failureCount++;
+      this.circuitBreaker.lastFailureTime = Date.now();
+
+      if (this.circuitBreaker.failureCount >= circuitBreakerThreshold) {
+        this.circuitBreaker.isOpen = true;
+        console.error('Circuit breaker opened due to repeated failures');
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Add operation to retry queue
+   */
+  private queueForRetry(operation: () => Promise<void>, maxRetries: number = 3): void {
+    if (this.retryQueue.length > 1000) {
+      console.warn('Retry queue is full, dropping oldest operations');
+      this.retryQueue.shift();
+    }
+
+    this.retryQueue.push({
+      operation,
+      attempts: 0,
+      lastAttempt: Date.now(),
+    });
+  }
+
+  /**
+   * Process retry queue
+   */
+  private async processRetryQueue(): Promise<void> {
+    const maxRetries = 3;
+    const retryDelayMs = 5000; // 5 seconds
+    const now = Date.now();
+
+    for (let i = this.retryQueue.length - 1; i >= 0; i--) {
+      const item = this.retryQueue[i];
+
+      // Skip if not enough time has passed since last attempt
+      if (now - item.lastAttempt < retryDelayMs) {
+        continue;
+      }
+
+      try {
+        await item.operation();
+        // Success - remove from queue
+        this.retryQueue.splice(i, 1);
+      } catch (error) {
+        item.attempts++;
+        item.lastAttempt = now;
+
+        if (item.attempts >= maxRetries) {
+          console.error('Operation failed after maximum retries:', error);
+          this.retryQueue.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  /**
+   * Start background maintenance tasks
+   */
+  private startMaintenanceTasks(): void {
+    // Process retry queue every 10 seconds
+    setInterval(() => {
+      this.processRetryQueue().catch(error => {
+        console.warn('Error processing retry queue:', error);
+      });
+    }, 10000);
+
+    // Clean up rate limiter every 5 minutes
+    setInterval(() => {
+      const now = Date.now();
+      const windowMs = 60 * 1000;
+
+      for (const [key, value] of this.rateLimiter.entries()) {
+        if (now - value.lastReset > windowMs * 5) {
+          this.rateLimiter.delete(key);
+        }
+      }
+    }, 5 * 60 * 1000);
+
+    // Data retention cleanup every hour
+    setInterval(() => {
+      this.performDataMaintenance().catch(error => {
+        this.logger.warn('Error during data maintenance', { error: error.message });
+      });
+    }, 60 * 60 * 1000);
+
+    // Health checks every 5 minutes
+    setInterval(() => {
+      this.getHealthStatus().catch(error => {
+        this.logger.warn('Error during health check', { error: error.message });
+      });
+    }, 5 * 60 * 1000);
+
+    // Alerting checks every minute
+    setInterval(() => {
+      this.checkAndTriggerAlerts();
+    }, 60 * 1000);
+  }
+
+  /**
+   * Perform data maintenance tasks
+   */
+  private async performDataMaintenance(): Promise<void> {
+    if (!this.dbOps) return;
+
+    try {
+      // Clean up old records
+      const cutoffTime = Date.now() - (this.retentionConfig.maxAgeDays * 24 * 60 * 60 * 1000);
+      await this.dbOps.deleteOldRecords?.(cutoffTime);
+
+      // Check database size and compress if needed
+      const dbStats = await this.dbOps.getDatabaseStats?.();
+      if (dbStats?.sizeMB > this.retentionConfig.maxSizeMB) {
+        console.log('Database size exceeded limit, performing compression');
+        await this.dbOps.compressDatabase?.();
+      }
+    } catch (error) {
+      console.warn('Data maintenance failed:', error);
+    }
+  }
+
+  /**
+   * Get real-time metrics for CLI stats command
+   */
+  public async getRealTimeMetrics(): Promise<any[]> {
+    const metrics = this.getTelemetryMetrics();
+    
+    return [
+      {
+        metric: 'Total Events',
+        value: metrics.events.total,
+        type: 'counter'
+      },
+      {
+        metric: 'Start Events',
+        value: metrics.events.start,
+        type: 'counter'
+      },
+      {
+        metric: 'Stream Events', 
+        value: metrics.events.stream,
+        type: 'counter'
+      },
+      {
+        metric: 'End Events',
+        value: metrics.events.end,
+        type: 'counter'
+      },
+      {
+        metric: 'Error Events',
+        value: metrics.events.error,
+        type: 'counter'
+      },
+      {
+        metric: 'Average Latency (ms)',
+        value: Math.round(metrics.performance.avgLatency),
+        type: 'gauge'
+      },
+      {
+        metric: 'Throughput (events/sec)',
+        value: parseFloat(metrics.performance.throughput.toFixed(2)),
+        type: 'gauge'
+      },
+      {
+        metric: 'Error Rate (%)',
+        value: metrics.events.total > 0 ? 
+          parseFloat(((metrics.events.error / metrics.events.total) * 100).toFixed(2)) : 0,
+        type: 'gauge'
+      }
+    ];
+  }
+
+  /**
+   * Get analytics service information
+   */
+  public getAnalyticsInfo(): { status: string; enabled: boolean; source: string } {
+    return {
+      status: this.dbOps ? 'enabled' : 'disabled',
+      enabled: this.dbOps !== undefined,
+      source: this.dbOps ? 'local-database' : 'opentelemetry-only'
+    };
+  }
+
+  /**
+   * Get export service information
+   */
+  public getExportInfo(): { status: string; enabled: boolean; formats: string[] } {
+    return {
+      status: this.dbOps ? 'enabled' : 'disabled', 
+      enabled: this.dbOps !== undefined,
+      formats: this.dbOps ? ['json', 'csv', 'otlp'] : []
+    };
+  }
+
+  /**
+   * Get export service instance (for CLI export command)
+   */
+  public getExportService(): any {
+    return this.dbOps ? this : null;
+  }
+
+  /**
+   * Export data method (placeholder implementation)
+   */
+  public async exportData(filter: any, config: any): Promise<any> {
+    if (!this.dbOps) {
+      throw new Error('Export service not available - local store must be enabled');
+    }
+
+    // Basic implementation - could be enhanced with actual export logic
+    const stats = {
+      totalRecords: 0,
+      size: 0
+    };
+
+    return {
+      config,
+      stats,
+      success: true
+    };
+  }
+
+  /**
+   * Get session summaries (for CLI query command)
+   */
+  public async getSessionSummaries(filterOptions: any): Promise<any[]> {
+    if (!this.dbOps) {
+      return [];
+    }
+
+    try {
+      // Try to get sessions from database if available
+      const sessions = await this.dbOps.querySessions?.(filterOptions);
+      return sessions || [];
+    } catch (error) {
+      console.warn('Failed to get session summaries:', error);
+      return [];
     }
   }
 }

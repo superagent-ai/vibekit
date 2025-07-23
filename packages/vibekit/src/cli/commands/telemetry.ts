@@ -315,6 +315,57 @@ async function cleanupCommand(options: TelemetryCliOptions): Promise<void> {
   }
 }
 
+async function serveCommand(options: TelemetryCliOptions): Promise<void> {
+  try {
+    const port = process.env.PORT || '3000';
+    const host = process.env.HOST || 'localhost';
+    
+    TelemetryCliLogger.info(`Starting telemetry HTTP server...`);
+    TelemetryCliLogger.info(`Server will be available at http://${host}:${port}`);
+    
+    // Import and start the telemetry server script
+    const { spawn } = await import('child_process');
+    const path = await import('path');
+    
+    const serverScript = path.join(process.cwd(), 'scripts', 'telemetry-server.js');
+    
+    const server = spawn('node', [serverScript], {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        PORT: port,
+        HOST: host
+      }
+    });
+
+    server.on('error', (error) => {
+      TelemetryCliLogger.error(`Failed to start server: ${error.message}`);
+    });
+
+    server.on('exit', (code) => {
+      if (code === 0) {
+        TelemetryCliLogger.success('Server shut down successfully');
+      } else {
+        TelemetryCliLogger.error(`Server exited with code ${code}`);
+      }
+    });
+
+    // Handle graceful shutdown
+    process.on('SIGINT', () => {
+      TelemetryCliLogger.info('Shutting down server...');
+      server.kill('SIGINT');
+    });
+
+    process.on('SIGTERM', () => {
+      TelemetryCliLogger.info('Shutting down server...');
+      server.kill('SIGTERM');
+    });
+
+  } catch (error) {
+    TelemetryCliLogger.error(`Server failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 export function registerTelemetryCommands(program: Command): void {
   const telemetryCmd = program
     .command('telemetry')
@@ -364,6 +415,14 @@ export function registerTelemetryCommands(program: Command): void {
     .option('--since <date>', 'Filter events since date')
     .option('--until <date>', 'Filter events until date')
     .action(exportCommand);
+
+  // Serve command (NEW)
+  telemetryCmd
+    .command('serve')
+    .description('Start HTTP server for telemetry endpoints')
+    .option('-p, --port <port>', 'Server port', '3000')
+    .option('-h, --host <host>', 'Server host', 'localhost')
+    .action(serveCommand);
 
   // Cleanup command
   telemetryCmd

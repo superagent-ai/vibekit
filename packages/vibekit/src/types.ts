@@ -81,6 +81,45 @@ export type TelemetryConfig = {
   resourceAttributes?: Record<string, string>;
   /** Local storage configuration for telemetry data */
   localStore?: LocalStoreConfig;
+  /** Production-ready configuration options */
+  production?: {
+    /** Enable PII detection and scrubbing */
+    piiDetection?: {
+      enabled: boolean;
+      customPatterns?: Array<{ name: string; regex: string; replacement: string }>;
+    };
+    /** Rate limiting configuration */
+    rateLimiting?: {
+      enabled: boolean;
+      requestsPerMinute?: number;
+      streamRequestsPerMinute?: number;
+    };
+    /** Circuit breaker configuration */
+    circuitBreaker?: {
+      enabled: boolean;
+      failureThreshold?: number;
+      timeoutMs?: number;
+    };
+    /** Alerting configuration */
+    alerting?: {
+      enabled: boolean;
+      errorRateThreshold?: number;
+      channels?: Array<'console' | 'webhook' | 'email'>;
+      webhookUrl?: string;
+    };
+    /** Health check configuration */
+    healthChecks?: {
+      enabled: boolean;
+      intervalMs?: number;
+      timeoutMs?: number;
+    };
+    /** Metrics configuration */
+    metrics?: {
+      enabled: boolean;
+      retentionDays?: number;
+      aggregationIntervalMs?: number;
+    };
+  };
 };
 
 export type VibeKitConfig = {
