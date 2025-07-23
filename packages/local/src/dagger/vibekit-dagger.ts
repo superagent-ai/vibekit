@@ -215,7 +215,8 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
         
         let result: SandboxExecutionResult = { exitCode: 1, stdout: "", stderr: "Command execution failed" };
         
-        await connect(async (client) => {
+        try {
+          await connect(async (client) => {
           try {
             // Get or create persistent workspace container using our reusable base
             let container = await this.getWorkspaceContainer(client);
@@ -277,13 +278,17 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
                 // Fatal error: emit 'error' as per docs
                 const errorMessage = execError instanceof Error ? execError.message : String(execError);
                 this.emit('error', errorMessage);
-                // If the container execution failed, extract exit code and throw for proper error handling
+                // If the container execution failed, extract exit code and return proper result
                 const exitCode = errorMessage.includes('exit code') 
                   ? parseInt(errorMessage.match(/exit code (\d+)/)?.[1] || '1') 
                   : 1;
                 
-                // For foreground commands, throw the error so base agent can handle it
-                throw new Error(`Command failed with exit code ${exitCode}: ${errorMessage}`);
+                // Return error result instead of throwing for better test compatibility
+                result = {
+                  exitCode: exitCode,
+                  stdout: "",
+                  stderr: errorMessage,
+                };
               }
             }
           } catch (error) {
@@ -302,6 +307,22 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
             };
           }
         });
+        } catch (connectError) {
+          // Handle errors from the connect function itself
+          const errorMessage = connectError instanceof Error ? connectError.message : String(connectError);
+          const exitCode = errorMessage.includes('exit code') 
+            ? parseInt(errorMessage.match(/exit code (\d+)/)?.[1] || '1') 
+            : 1;
+          
+          // Emit error event for VibeKit compatibility
+          this.emit('error', errorMessage);
+            
+          result = {
+            exitCode: exitCode,
+            stdout: "",
+            stderr: errorMessage,
+          };
+        }
         
         // Emit end event for VibeKit streaming compatibility
         this.emit('update', JSON.stringify({

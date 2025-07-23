@@ -55,4 +55,10 @@ export {
   cleanupPreBuiltImages,
   type SetupOptions,
   type SetupResult
-} from './setup/installer'; 
+} from './setup/installer';
+
+// Environment storage
+export {
+  EnvironmentStore,
+  type EnvironmentRecord
+} from './storage/environment-store'; 
