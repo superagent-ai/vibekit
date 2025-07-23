@@ -18,12 +18,12 @@ import enquirer from 'enquirer';
 // } from '@vibe-kit/local';
 
 // Temporary type definitions for local provider
-type LocalDaggerConfig = any;
+type LocalConfig = any;
 type AgentType = string;
-type LocalDaggerSandboxProvider = any;
+type LocalSandboxProvider = any;
 
 // Temporary stub function
-function createLocalProvider(config: LocalDaggerConfig): LocalDaggerSandboxProvider {
+function createLocalProvider(config: LocalConfig): LocalSandboxProvider {
   throw new Error('@vibekit/local provider not available - module resolution issue');
 }
 

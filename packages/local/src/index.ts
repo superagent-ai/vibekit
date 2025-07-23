@@ -45,8 +45,8 @@ export {
 } from './dagger/vibekit-dagger';
 
 // Alias for backwards compatibility - keep the old Dagger names available
-export { LocalSandboxProvider as LocalDaggerSandboxProvider } from './dagger/vibekit-dagger';
-export type { LocalConfig as LocalDaggerConfig } from './dagger/vibekit-dagger';
+export { LocalSandboxProvider as LocalSandboxProvider } from './dagger/vibekit-dagger';
+export type { LocalConfig as LocalConfig } from './dagger/vibekit-dagger';
 
 // Setup and installation utilities
 export {
