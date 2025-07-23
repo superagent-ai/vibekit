@@ -10,7 +10,7 @@ export class TelemetryAPI {
   private baseURL: string
 
   constructor(baseURL?: string) {
-    this.baseURL = baseURL || process.env.TELEMETRY_API_URL || 'http://localhost:8080'
+    this.baseURL = baseURL || process.env.NEXT_PUBLIC_TELEMETRY_API_URL || 'http://localhost:3000'
   }
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {

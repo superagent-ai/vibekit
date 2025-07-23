@@ -26,6 +26,7 @@
   "license": "MIT",
   "dependencies": {
     "@dagger.io/dagger": "^0.13.6",
+    "@octokit/rest": "^22.0.0",
     "execa": "^9.0.0",
     "fs-extra": "^11.2.0",
     "which": "^4.0.0"

@@ -23,6 +23,7 @@ export default defineConfig([
   {
     entry: {
       "cli/index": "src/cli/index.ts",
+      "cli/dashboard": "src/cli/index-dashboard-only.ts",
     },
     format: ["esm"],
     dts: false,
@@ -33,28 +34,19 @@ export default defineConfig([
     banner: {
       js: "#!/usr/bin/env node",
     },
-    // Externalize Node.js-specific packages that cause ESM bundling issues
+    platform: "node",
+    target: "node18",
+    // Externalize all Node.js built-ins and problematic packages
     external: [
       "@vibe-kit/local",
-      "@dagger.io/dagger",
+      "@dagger.io/dagger", 
       "adm-zip",
       "fs-extra",
-      "child_process",
-      "fs",
-      "path",
-      "os",
-      "util",
-      "crypto",
-      "stream",
-      "events",
-      "url",
-      "http",
-      "https",
-      "net",
-      "tls",
-      "querystring",
-      "zlib",
-      "buffer",
     ],
+    noExternal: [],
+    // Keep Node.js built-ins as external imports
+    esbuildOptions(options) {
+      options.packages = "external";
+    },
   },
 ]);

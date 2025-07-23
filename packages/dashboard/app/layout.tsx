@@ -2,8 +2,8 @@ import React from 'react'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider } from 'next-themes'
+import { QueryProvider } from '../providers/query-provider'
+import { ThemeProvider } from '../providers/theme-provider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,17 +20,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <QueryClientProvider client={new QueryClient()}>
+        <ThemeProvider>
+          <QueryProvider>
             <div className="min-h-screen bg-background">
               {children}
             </div>
-          </QueryClientProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>
