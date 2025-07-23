@@ -1,0 +1,68 @@
+{
+  "name": "@vibe-kit/db",
+  "version": "1.0.0",
+  "description": "VibeKit database layer with Drizzle ORM and telemetry operations",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*",
+    "src/**/*",
+    "migrations/**/*"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "keywords": [
+    "vibekit",
+    "database",
+    "drizzle",
+    "sqlite",
+    "telemetry",
+    "orm"
+  ],
+  "author": "VibeKit Team",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^9.2.2",
+    "drizzle-orm": "^0.29.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "drizzle-kit": "^0.20.6",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./connection": {
+      "types": "./dist/connection.d.ts",
+      "import": "./dist/connection.js",
+      "require": "./dist/connection.cjs"
+    },
+    "./operations": {
+      "types": "./dist/operations.d.ts",
+      "import": "./dist/operations.js",
+      "require": "./dist/operations.cjs"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js",
+      "require": "./dist/schema.cjs"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js",
+      "require": "./dist/types.cjs"
+    }
+  }
+} 

@@ -179,10 +179,10 @@ export class DrizzleTelemetryDB {
       const __dirname = dirname(__filename);
       
       const possibleMigrationDirs = [
-        resolve('./packages/vibekit/src/db/migrations'),
-        resolve('./src/db/migrations'),
-        resolve(__dirname, 'migrations'),
-        resolve(__dirname, '../migrations'), // Additional fallback
+        resolve('./packages/db/migrations'),
+        resolve('./migrations'),
+        resolve(__dirname, '../migrations'),
+        resolve(__dirname, '../../migrations'),
       ];
       
       let migrationsDir: string | null = null;

@@ -635,9 +635,9 @@ export class TelemetryService {
     console.log('🔍 Initializing Drizzle telemetry database...');
     
     try {
-      // Try to dynamically import Drizzle components
-      const { DrizzleTelemetryOperations } = await import('../db/operations');
-      const { initializeTelemetryDB } = await import('../db/connection');
+          // Try to dynamically import Drizzle components
+    const { DrizzleTelemetryOperations } = await import('@vibe-kit/db');
+      const { initializeTelemetryDB } = await import('@vibe-kit/db');
       
       console.log('✅ Drizzle telemetry components loaded');
       
