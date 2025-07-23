@@ -5,7 +5,7 @@ import { execa } from "execa";
 import { installE2B } from "./providers/e2b.js";
 import { installDaytona } from "./providers/daytona.js";
 import { installNorthflank } from "./providers/northflank.js";
-import { installLocal, isDaggerCliInstalled } from "./providers/local.js";
+import { installLocal, isDaggerCliInstalled } from "./providers/dagger.js";
 import { authenticate, checkAuth, isCliInstalled } from "../utils/auth.js";
 import { AGENT_TEMPLATES, SANDBOX_PROVIDERS } from "../../constants/enums.js";
 
@@ -16,22 +16,29 @@ type InstallConfig = {
   cpu: number;
   memory: number;
   disk: number; // Make required to match Daytona expectations
-  projectId?: string;    // For Northflank project ID
-  workspaceId?: string;  // For Daytona workspace naming
+  projectId?: string; // For Northflank project ID
+  workspaceId?: string; // For Daytona workspace naming
 };
 
 type ProviderInstaller = {
   isInstalled: () => Promise<boolean>;
   configTransform: (config: InstallConfig) => InstallConfig;
-  install: (config: InstallConfig, templates: string[], uploadImages?: boolean) => Promise<boolean>;
+  install: (
+    config: InstallConfig,
+    templates: string[],
+    uploadImages?: boolean
+  ) => Promise<boolean>;
 };
 
 const installers: Record<SANDBOX_PROVIDERS, ProviderInstaller> = {
   [SANDBOX_PROVIDERS.E2B]: {
     isInstalled: async () => await isCliInstalled("e2b"),
     configTransform: (config) => config,
-    install: (config: InstallConfig, templates: string[], uploadImages?: boolean) => 
-      installE2B(config, templates),
+    install: (
+      config: InstallConfig,
+      templates: string[],
+      uploadImages?: boolean
+    ) => installE2B(config, templates),
   },
   [SANDBOX_PROVIDERS.DAYTONA]: {
     isInstalled: async () => await isCliInstalled("daytona"),
@@ -39,20 +46,29 @@ const installers: Record<SANDBOX_PROVIDERS, ProviderInstaller> = {
       ...config,
       memory: Math.floor(config.memory / 1024),
     }),
-    install: (config: InstallConfig, templates: string[], uploadImages?: boolean) => 
-      installDaytona(config, templates),
+    install: (
+      config: InstallConfig,
+      templates: string[],
+      uploadImages?: boolean
+    ) => installDaytona(config, templates),
   },
   [SANDBOX_PROVIDERS.NORTHFLANK]: {
     isInstalled: async () => await isCliInstalled("northflank"),
     configTransform: (config: InstallConfig) => config,
-    install: (config: InstallConfig, templates: string[], uploadImages?: boolean) => 
-      installNorthflank(config, templates),
+    install: (
+      config: InstallConfig,
+      templates: string[],
+      uploadImages?: boolean
+    ) => installNorthflank(config, templates),
   },
-  [SANDBOX_PROVIDERS.LOCAL]: {
+  [SANDBOX_PROVIDERS.DAGGER]: {
     isInstalled: async () => await isDaggerCliInstalled(),
     configTransform: (config: InstallConfig) => config,
-    install: (config: InstallConfig, templates: string[], uploadImages?: boolean) => 
-      installLocal(config, templates, uploadImages),
+    install: (
+      config: InstallConfig,
+      templates: string[],
+      uploadImages?: boolean
+    ) => installLocal(config, templates, uploadImages),
   },
 };
 
@@ -76,16 +92,18 @@ async function checkDockerStatus(): Promise<{
   }
 }
 
-export async function initCommand(options: { 
-  providers?: string; 
-  agents?: string; 
-  cpu?: string; 
-  memory?: string; 
-  disk?: string; 
-  projectId?: string;
-  workspaceId?: string;
-  uploadImages?: boolean;
-} = {}) {
+export async function initCommand(
+  options: {
+    providers?: string;
+    agents?: string;
+    cpu?: string;
+    memory?: string;
+    disk?: string;
+    projectId?: string;
+    workspaceId?: string;
+    uploadImages?: boolean;
+  } = {}
+) {
   try {
     // Display banner
     cfonts.say("VIBEKIT", {
@@ -116,32 +134,41 @@ export async function initCommand(options: {
 
     // Handle providers from CLI flag
     if (options.providers) {
-      const providersInput = options.providers.split(',').map(p => p.trim());
+      const providersInput = options.providers.split(",").map((p) => p.trim());
       const validProviders = Object.values(SANDBOX_PROVIDERS);
-      
+
       // Create mapping for case-insensitive lookup
       const providerMapping: Record<string, SANDBOX_PROVIDERS> = {
-        'e2b': SANDBOX_PROVIDERS.E2B,
-        'daytona': SANDBOX_PROVIDERS.DAYTONA,
-        'northflank': SANDBOX_PROVIDERS.NORTHFLANK,
-        'local': SANDBOX_PROVIDERS.LOCAL,
+        e2b: SANDBOX_PROVIDERS.E2B,
+        daytona: SANDBOX_PROVIDERS.DAYTONA,
+        northflank: SANDBOX_PROVIDERS.NORTHFLANK,
+        dagger: SANDBOX_PROVIDERS.DAGGER,
       };
-      
+
       for (const provider of providersInput) {
         const lowerProvider = provider.toLowerCase();
-        const mappedProvider = providerMapping[lowerProvider] || provider as SANDBOX_PROVIDERS;
-        
+        const mappedProvider =
+          providerMapping[lowerProvider] || (provider as SANDBOX_PROVIDERS);
+
         if (validProviders.includes(mappedProvider)) {
           providers.push(mappedProvider);
         } else {
           console.log(chalk.red(`❌ Invalid provider: ${provider}`));
-          console.log(chalk.gray(`   Valid providers: ${Object.keys(providerMapping).join(', ')} (case-insensitive)`));
+          console.log(
+            chalk.gray(
+              `   Valid providers: ${Object.keys(providerMapping).join(
+                ", "
+              )} (case-insensitive)`
+            )
+          );
           process.exit(1);
         }
       }
     } else {
       // Prompt for provider selection
-      console.log(chalk.gray("↑/↓: Navigate • Space: Select • Enter: Confirm\n"));
+      console.log(
+        chalk.gray("↑/↓: Navigate • Space: Select • Enter: Confirm\n")
+      );
 
       const result = await prompt<{ providers: SANDBOX_PROVIDERS[] }>({
         type: "multiselect",
@@ -162,18 +189,24 @@ export async function initCommand(options: {
 
     // Handle agents from CLI flag
     if (options.agents) {
-      const agentsInput = options.agents.split(',').map(a => a.trim());
-      const validAgents = AGENT_TEMPLATES.map(t => t.name);
-      
+      const agentsInput = options.agents.split(",").map((a) => a.trim());
+      const validAgents = AGENT_TEMPLATES.map((t) => t.name);
+
       for (const agent of agentsInput) {
         const lowerAgent = agent.toLowerCase();
-        const foundAgent = validAgents.find(valid => valid.toLowerCase() === lowerAgent);
-        
+        const foundAgent = validAgents.find(
+          (valid) => valid.toLowerCase() === lowerAgent
+        );
+
         if (foundAgent) {
           templates.push(foundAgent);
         } else {
           console.log(chalk.red(`❌ Invalid agent: ${agent}`));
-          console.log(chalk.gray(`   Valid agents: ${validAgents.join(', ')} (case-insensitive)`));
+          console.log(
+            chalk.gray(
+              `   Valid agents: ${validAgents.join(", ")} (case-insensitive)`
+            )
+          );
           process.exit(1);
         }
       }
@@ -247,13 +280,17 @@ export async function initCommand(options: {
 
     // Handle resource configuration from CLI flags or prompts
     let cpu: string, memory: string, disk: string;
-    
-    if (options.cpu && options.memory && (options.disk || !providers.includes(SANDBOX_PROVIDERS.DAYTONA))) {
+
+    if (
+      options.cpu &&
+      options.memory &&
+      (options.disk || !providers.includes(SANDBOX_PROVIDERS.DAYTONA))
+    ) {
       // Use CLI flags when provided
       cpu = options.cpu;
       memory = options.memory;
       disk = options.disk || "1"; // Default for providers that don't need disk config
-      
+
       console.log(chalk.gray("\nUsing provided resource configuration:"));
       console.log(chalk.gray(`  CPU cores: ${cpu}`));
       console.log(chalk.gray(`  Memory: ${memory} MB`));
@@ -279,17 +316,25 @@ export async function initCommand(options: {
     const cpuNum = parseInt(cpu);
     const memoryNum = parseInt(memory);
     const diskNum = parseInt(disk);
-    
+
     if (isNaN(cpuNum) || cpuNum <= 0) {
-      console.log(chalk.red(`❌ Invalid CPU value: ${cpu}. Must be a positive number.`));
+      console.log(
+        chalk.red(`❌ Invalid CPU value: ${cpu}. Must be a positive number.`)
+      );
       process.exit(1);
     }
     if (isNaN(memoryNum) || memoryNum <= 0) {
-      console.log(chalk.red(`❌ Invalid memory value: ${memory}. Must be a positive number.`));
+      console.log(
+        chalk.red(
+          `❌ Invalid memory value: ${memory}. Must be a positive number.`
+        )
+      );
       process.exit(1);
     }
     if (isNaN(diskNum) || diskNum <= 0) {
-      console.log(chalk.red(`❌ Invalid disk value: ${disk}. Must be a positive number.`));
+      console.log(
+        chalk.red(`❌ Invalid disk value: ${disk}. Must be a positive number.`)
+      );
       process.exit(1);
     }
 
@@ -301,9 +346,19 @@ export async function initCommand(options: {
     if (providers.includes(SANDBOX_PROVIDERS.NORTHFLANK) && !projectId) {
       console.log(chalk.red(`❌ Northflank requires a project ID.`));
       console.log(chalk.yellow(`💡 Solutions:`));
-      console.log(chalk.yellow(`   1. Use --project-id flag: vibekit init --project-id your-project-id`));
-      console.log(chalk.yellow(`   2. Set environment variable: export NORTHFLANK_PROJECT_ID=your-project-id`));
-      console.log(chalk.gray(`📖 Learn more: https://northflank.com/docs/v1/api/projects`));
+      console.log(
+        chalk.yellow(
+          `   1. Use --project-id flag: vibekit init --project-id your-project-id`
+        )
+      );
+      console.log(
+        chalk.yellow(
+          `   2. Set environment variable: export NORTHFLANK_PROJECT_ID=your-project-id`
+        )
+      );
+      console.log(
+        chalk.gray(`📖 Learn more: https://northflank.com/docs/v1/api/projects`)
+      );
       process.exit(1);
     }
 
@@ -356,9 +411,9 @@ export async function initCommand(options: {
       const installer = installers[provider];
 
       // Special handling for Local provider (no authentication needed)
-      if (provider === SANDBOX_PROVIDERS.LOCAL) {
+      if (provider === SANDBOX_PROVIDERS.DAGGER) {
         console.log(chalk.blue(`\n🏠 Setting up ${provider} provider...`));
-        
+
         // Proceed directly to installation for local provider
         const transformedConfig = installer.configTransform(config);
         const installationSuccess = await installer.install(

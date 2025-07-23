@@ -1,15 +1,15 @@
 /**
  * CLI Configuration Management
- * 
+ *
  * Handles loading configuration from environment variables, .env files,
  * and config files for VibeKit CLI commands.
  */
 
-import { readFile } from 'fs/promises';
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
-import type { AgentType } from '@vibe-kit/local';
+import { readFile } from "fs/promises";
+import { existsSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
+import type { AgentType } from "@vibe-kit/dagger";
 
 export interface CLIConfig {
   agents: {
@@ -36,7 +36,7 @@ export interface CLIConfig {
   storage: {
     path: string;
     maxEnvironments: number;
-    logLevel: 'debug' | 'info' | 'warn' | 'error';
+    logLevel: "debug" | "info" | "warn" | "error";
   };
   telemetry: {
     enabled: boolean;
@@ -59,19 +59,19 @@ export interface AgentConfig {
  * Load environment variables from .env file if it exists
  */
 function loadDotEnv(): void {
-  const envPath = join(process.cwd(), '.env');
-  
+  const envPath = join(process.cwd(), ".env");
+
   if (existsSync(envPath)) {
     try {
-      const content = require('fs').readFileSync(envPath, 'utf-8');
-      const lines = content.split('\n');
-      
+      const content = require("fs").readFileSync(envPath, "utf-8");
+      const lines = content.split("\n");
+
       for (const line of lines) {
         const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith('#')) {
-          const [key, ...valueParts] = trimmed.split('=');
+        if (trimmed && !trimmed.startsWith("#")) {
+          const [key, ...valueParts] = trimmed.split("=");
           if (key && valueParts.length > 0) {
-            const value = valueParts.join('=').replace(/^["'](.*)["']$/, '$1');
+            const value = valueParts.join("=").replace(/^["'](.*)["']$/, "$1");
             if (!process.env[key]) {
               process.env[key] = value;
             }
@@ -109,7 +109,7 @@ function getEnvNumber(key: string, defaultValue: number): number {
 function getEnvBoolean(key: string, defaultValue: boolean): boolean {
   const value = process.env[key];
   if (value) {
-    return value.toLowerCase() === 'true' || value === '1';
+    return value.toLowerCase() === "true" || value === "1";
   }
   return defaultValue;
 }
@@ -125,28 +125,31 @@ export function loadConfig(): CLIConfig {
   const config: CLIConfig = {
     agents: {},
     defaults: {
-      agent: (getEnv('VIBEKIT_DEFAULT_AGENT') as AgentType) || 'claude',
-      model: getEnv('VIBEKIT_DEFAULT_MODEL'),
-      timeout: getEnvNumber('VIBEKIT_DEFAULT_TIMEOUT', 30000),
-      workingDir: getEnv('VIBEKIT_DEFAULT_WORKING_DIR') || '/vibe0'
+      agent: (getEnv("VIBEKIT_DEFAULT_AGENT") as AgentType) || "claude",
+      model: getEnv("VIBEKIT_DEFAULT_MODEL"),
+      timeout: getEnvNumber("VIBEKIT_DEFAULT_TIMEOUT", 30000),
+      workingDir: getEnv("VIBEKIT_DEFAULT_WORKING_DIR") || "/vibe0",
     },
     docker: {
-      registry: getEnv('DOCKER_REGISTRY') || 'docker.io',
-      username: getEnv('DOCKER_USERNAME'),
-      preferRegistryImages: getEnvBoolean('VIBEKIT_PREFER_REGISTRY_IMAGES', true)
+      registry: getEnv("DOCKER_REGISTRY") || "docker.io",
+      username: getEnv("DOCKER_USERNAME"),
+      preferRegistryImages: getEnvBoolean(
+        "VIBEKIT_PREFER_REGISTRY_IMAGES",
+        true
+      ),
     },
     storage: {
-      path: getEnv('VIBEKIT_STORAGE_PATH') || join(homedir(), '.vibekit'),
-      maxEnvironments: getEnvNumber('VIBEKIT_MAX_ENVIRONMENTS', 10),
-      logLevel: (getEnv('VIBEKIT_LOG_LEVEL') as any) || 'info'
+      path: getEnv("VIBEKIT_STORAGE_PATH") || join(homedir(), ".vibekit"),
+      maxEnvironments: getEnvNumber("VIBEKIT_MAX_ENVIRONMENTS", 10),
+      logLevel: (getEnv("VIBEKIT_LOG_LEVEL") as any) || "info",
     },
     telemetry: {
-      enabled: getEnvBoolean('VIBEKIT_TELEMETRY_ENABLED', false),
-      endpoint: getEnv('VIBEKIT_TELEMETRY_ENDPOINT'),
-      serviceName: getEnv('VIBEKIT_TELEMETRY_SERVICE_NAME') || 'vibekit-cli',
-      serviceVersion: getEnv('VIBEKIT_TELEMETRY_SERVICE_VERSION') || '1.0.0',
+      enabled: getEnvBoolean("VIBEKIT_TELEMETRY_ENABLED", false),
+      endpoint: getEnv("VIBEKIT_TELEMETRY_ENDPOINT"),
+      serviceName: getEnv("VIBEKIT_TELEMETRY_SERVICE_NAME") || "vibekit-cli",
+      serviceVersion: getEnv("VIBEKIT_TELEMETRY_SERVICE_VERSION") || "1.0.0",
       headers: (() => {
-        const headersStr = getEnv('VIBEKIT_TELEMETRY_HEADERS');
+        const headersStr = getEnv("VIBEKIT_TELEMETRY_HEADERS");
         if (headersStr) {
           try {
             return JSON.parse(headersStr);
@@ -156,54 +159,54 @@ export function loadConfig(): CLIConfig {
         }
         return undefined;
       })(),
-      timeout: getEnvNumber('VIBEKIT_TELEMETRY_TIMEOUT', 5000),
+      timeout: getEnvNumber("VIBEKIT_TELEMETRY_TIMEOUT", 5000),
       samplingRatio: (() => {
-        const ratio = getEnv('VIBEKIT_TELEMETRY_SAMPLING_RATIO');
+        const ratio = getEnv("VIBEKIT_TELEMETRY_SAMPLING_RATIO");
         return ratio ? parseFloat(ratio) : 1.0;
       })(),
-      sessionId: getEnv('VIBEKIT_TELEMETRY_SESSION_ID')
-    }
+      sessionId: getEnv("VIBEKIT_TELEMETRY_SESSION_ID"),
+    },
   };
 
   // Add agent configurations if API keys are available
-  const openaiKey = getEnv('OPENAI_API_KEY');
+  const openaiKey = getEnv("OPENAI_API_KEY");
   if (openaiKey) {
     config.agents.openai = {
       apiKey: openaiKey,
-      model: getEnv('OPENAI_MODEL') || getEnv('VIBEKIT_DEFAULT_MODEL')
+      model: getEnv("OPENAI_MODEL") || getEnv("VIBEKIT_DEFAULT_MODEL"),
     };
   }
 
-  const anthropicKey = getEnv('ANTHROPIC_API_KEY');
+  const anthropicKey = getEnv("ANTHROPIC_API_KEY");
   if (anthropicKey) {
     config.agents.anthropic = {
       apiKey: anthropicKey,
-      model: getEnv('ANTHROPIC_MODEL') || getEnv('VIBEKIT_DEFAULT_MODEL')
+      model: getEnv("ANTHROPIC_MODEL") || getEnv("VIBEKIT_DEFAULT_MODEL"),
     };
   }
 
-  const googleKey = getEnv('GOOGLE_API_KEY');
+  const googleKey = getEnv("GOOGLE_API_KEY");
   if (googleKey) {
     config.agents.google = {
       apiKey: googleKey,
-      model: getEnv('GOOGLE_MODEL') || getEnv('VIBEKIT_DEFAULT_MODEL')
+      model: getEnv("GOOGLE_MODEL") || getEnv("VIBEKIT_DEFAULT_MODEL"),
     };
   }
 
-  const groqKey = getEnv('GROQ_API_KEY');
+  const groqKey = getEnv("GROQ_API_KEY");
   if (groqKey) {
     config.agents.groq = {
       apiKey: groqKey,
-      model: getEnv('GROQ_MODEL') || getEnv('VIBEKIT_DEFAULT_MODEL')
+      model: getEnv("GROQ_MODEL") || getEnv("VIBEKIT_DEFAULT_MODEL"),
     };
   }
 
   // Add GitHub configuration if token is available
-  const githubToken = getEnv('GITHUB_TOKEN');
+  const githubToken = getEnv("GITHUB_TOKEN");
   if (githubToken) {
     config.github = {
       token: githubToken,
-      repository: getEnv('GITHUB_REPOSITORY')
+      repository: getEnv("GITHUB_REPOSITORY"),
     };
   }
 
@@ -213,27 +216,36 @@ export function loadConfig(): CLIConfig {
 /**
  * Get agent configuration for a specific agent type
  */
-export function getAgentConfig(agentType: AgentType, config: CLIConfig): AgentConfig {
+export function getAgentConfig(
+  agentType: AgentType,
+  config: CLIConfig
+): AgentConfig {
   switch (agentType) {
-    case 'claude':
+    case "claude":
       if (!config.agents.anthropic) {
-        throw new Error('Anthropic API key not configured. Set ANTHROPIC_API_KEY environment variable.');
+        throw new Error(
+          "Anthropic API key not configured. Set ANTHROPIC_API_KEY environment variable."
+        );
       }
       return config.agents.anthropic;
-      
-    case 'codex':
+
+    case "codex":
       if (!config.agents.openai) {
-        throw new Error('OpenAI API key not configured. Set OPENAI_API_KEY environment variable.');
+        throw new Error(
+          "OpenAI API key not configured. Set OPENAI_API_KEY environment variable."
+        );
       }
       return config.agents.openai;
-      
-    case 'gemini':
+
+    case "gemini":
       if (!config.agents.google) {
-        throw new Error('Google API key not configured. Set GOOGLE_API_KEY environment variable.');
+        throw new Error(
+          "Google API key not configured. Set GOOGLE_API_KEY environment variable."
+        );
       }
       return config.agents.google;
-      
-    case 'opencode':
+
+    case "opencode":
       // OpenCode can use various providers, try in order of preference
       if (config.agents.groq) {
         return config.agents.groq;
@@ -244,8 +256,10 @@ export function getAgentConfig(agentType: AgentType, config: CLIConfig): AgentCo
       if (config.agents.anthropic) {
         return config.agents.anthropic;
       }
-      throw new Error('No API key configured for OpenCode agent. Set GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY.');
-      
+      throw new Error(
+        "No API key configured for OpenCode agent. Set GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY."
+      );
+
     default:
       throw new Error(`Unknown agent type: ${agentType}`);
   }
@@ -261,11 +275,11 @@ export function validateConfig(config: CLIConfig): string[] {
   const hasAnyAgent = Object.keys(config.agents).length > 0;
   if (!hasAnyAgent) {
     errors.push(
-      'No AI agent API keys configured. Please set at least one of:\n' +
-      '  - OPENAI_API_KEY (for Codex agent)\n' +
-      '  - ANTHROPIC_API_KEY (for Claude agent)\n' +
-      '  - GOOGLE_API_KEY (for Gemini agent)\n' +
-      '  - GROQ_API_KEY (for OpenCode agent)'
+      "No AI agent API keys configured. Please set at least one of:\n" +
+        "  - OPENAI_API_KEY (for Codex agent)\n" +
+        "  - ANTHROPIC_API_KEY (for Claude agent)\n" +
+        "  - GOOGLE_API_KEY (for Gemini agent)\n" +
+        "  - GROQ_API_KEY (for OpenCode agent)"
     );
   }
 
@@ -275,18 +289,18 @@ export function validateConfig(config: CLIConfig): string[] {
   } catch (error) {
     errors.push(
       `Default agent '${config.defaults.agent}' is not configured. ` +
-      `Either configure the required API key or change VIBEKIT_DEFAULT_AGENT.`
+        `Either configure the required API key or change VIBEKIT_DEFAULT_AGENT.`
     );
   }
 
   // Validate timeout
   if (config.defaults.timeout <= 0) {
-    errors.push('VIBEKIT_DEFAULT_TIMEOUT must be a positive number');
+    errors.push("VIBEKIT_DEFAULT_TIMEOUT must be a positive number");
   }
 
   // Validate max environments
   if (config.storage.maxEnvironments <= 0) {
-    errors.push('VIBEKIT_MAX_ENVIRONMENTS must be a positive number');
+    errors.push("VIBEKIT_MAX_ENVIRONMENTS must be a positive number");
   }
 
   return errors;
@@ -297,16 +311,16 @@ export function validateConfig(config: CLIConfig): string[] {
  */
 export function getDefaultModel(agentType: AgentType): string {
   switch (agentType) {
-    case 'claude':
-      return 'claude-3-5-sonnet-20241022';
-    case 'codex':
-      return 'gpt-4o';
-    case 'gemini':
-      return 'gemini-1.5-pro';
-    case 'opencode':
-      return 'llama-3.1-70b-versatile'; // Groq model
+    case "claude":
+      return "claude-3-5-sonnet-20241022";
+    case "codex":
+      return "gpt-4o";
+    case "gemini":
+      return "gemini-1.5-pro";
+    case "opencode":
+      return "llama-3.1-70b-versatile"; // Groq model
     default:
-      return 'gpt-4o';
+      return "gpt-4o";
   }
 }
 
@@ -325,14 +339,14 @@ export function createVibeKitConfig(
     agent: {
       type: agentType,
       model,
-      apiKey: agentConfig.apiKey
+      apiKey: agentConfig.apiKey,
     },
     github: config.github,
     environment: {
       local: {
         sandboxId: env.sandboxId,
-        workingDirectory: env.workingDirectory
-      }
-    }
+        workingDirectory: env.workingDirectory,
+      },
+    },
   };
-} 
+}

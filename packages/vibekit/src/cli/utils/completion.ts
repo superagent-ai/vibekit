@@ -1,10 +1,10 @@
 /**
  * Shell Completion Utilities
- * 
+ *
  * Provides auto-completion support for vibekit local commands
  */
 
-import { LocalSandboxProvider, createLocalProvider } from '@vibe-kit/local';
+import { LocalSandboxProvider, createLocalProvider } from "@vibe-kit/dagger";
 
 let cachedProvider: LocalSandboxProvider | null = null;
 
@@ -25,7 +25,7 @@ export async function getEnvironmentNames(): Promise<string[]> {
   try {
     const provider = getProvider();
     const environments = await provider.listEnvironments();
-    return environments.map(env => env.name);
+    return environments.map((env) => env.name);
   } catch (error) {
     // Silently fail for completion
     return [];
@@ -35,13 +35,15 @@ export async function getEnvironmentNames(): Promise<string[]> {
 /**
  * Get environment names with specific status for completion
  */
-export async function getEnvironmentNamesByStatus(status: string): Promise<string[]> {
+export async function getEnvironmentNamesByStatus(
+  status: string
+): Promise<string[]> {
   try {
     const provider = getProvider();
     const environments = await provider.listEnvironments();
     return environments
-      .filter(env => env.status === status)
-      .map(env => env.name);
+      .filter((env) => env.status === status)
+      .map((env) => env.name);
   } catch (error) {
     // Silently fail for completion
     return [];
@@ -52,21 +54,21 @@ export async function getEnvironmentNamesByStatus(status: string): Promise<strin
  * Get running environment names for completion
  */
 export async function getRunningEnvironmentNames(): Promise<string[]> {
-  return getEnvironmentNamesByStatus('running');
+  return getEnvironmentNamesByStatus("running");
 }
 
 /**
  * Get stopped environment names for completion
  */
 export async function getStoppedEnvironmentNames(): Promise<string[]> {
-  return getEnvironmentNamesByStatus('stopped');
+  return getEnvironmentNamesByStatus("stopped");
 }
 
 /**
  * Get available agent types for completion
  */
 export function getAgentTypes(): string[] {
-  return ['cursor', 'claude', 'codex', 'gemini'];
+  return ["cursor", "claude", "codex", "gemini"];
 }
 
 /**
@@ -74,14 +76,14 @@ export function getAgentTypes(): string[] {
  */
 export function getBaseImages(): string[] {
   return [
-    'ubuntu:24.04',
-    'ubuntu:22.04',
-    'node:20',
-    'node:18',
-    'python:3.11',
-    'python:3.10',
-    'alpine:latest',
-    'debian:bookworm',
+    "ubuntu:24.04",
+    "ubuntu:22.04",
+    "node:20",
+    "node:18",
+    "python:3.11",
+    "python:3.10",
+    "alpine:latest",
+    "debian:bookworm",
   ];
 }
 
@@ -89,7 +91,7 @@ export function getBaseImages(): string[] {
  * Get environment status values for completion
  */
 export function getStatusValues(): string[] {
-  return ['running', 'stopped', 'starting', 'stopping', 'error'];
+  return ["running", "stopped", "starting", "stopping", "error"];
 }
 
 /**
@@ -251,20 +253,20 @@ _vibekit_local "$@"
 /**
  * Install completion script for current shell
  */
-export async function installCompletion(shell: string = 'auto'): Promise<void> {
-  const os = require('os');
-  const fs = require('fs').promises;
-  const path = require('path');
+export async function installCompletion(shell: string = "auto"): Promise<void> {
+  const os = require("os");
+  const fs = require("fs").promises;
+  const path = require("path");
 
   // Auto-detect shell if not specified
-  if (shell === 'auto') {
-    const shellEnv = process.env.SHELL || '/bin/bash';
-    if (shellEnv.includes('zsh')) {
-      shell = 'zsh';
-    } else if (shellEnv.includes('bash')) {
-      shell = 'bash';
+  if (shell === "auto") {
+    const shellEnv = process.env.SHELL || "/bin/bash";
+    if (shellEnv.includes("zsh")) {
+      shell = "zsh";
+    } else if (shellEnv.includes("bash")) {
+      shell = "bash";
     } else {
-      shell = 'bash'; // Default fallback
+      shell = "bash"; // Default fallback
     }
   }
 
@@ -273,26 +275,26 @@ export async function installCompletion(shell: string = 'auto'): Promise<void> {
   let targetPath: string;
 
   switch (shell) {
-    case 'bash':
+    case "bash":
       script = generateBashCompletion();
-      targetPath = path.join(homeDir, '.bash_completion.d', 'vibekit-local');
-      
+      targetPath = path.join(homeDir, ".bash_completion.d", "vibekit-local");
+
       // Ensure directory exists
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
       break;
 
-    case 'zsh':
+    case "zsh":
       script = generateZshCompletion();
-      
+
       // Try common zsh completion directories
       const zshDirs = [
-        path.join(homeDir, '.zsh', 'completions'),
-        '/usr/local/share/zsh/site-functions',
-        '/opt/homebrew/share/zsh/site-functions',
+        path.join(homeDir, ".zsh", "completions"),
+        "/usr/local/share/zsh/site-functions",
+        "/opt/homebrew/share/zsh/site-functions",
       ];
-      
-      targetPath = path.join(zshDirs[0], '_vibekit_local');
-      
+
+      targetPath = path.join(zshDirs[0], "_vibekit_local");
+
       // Ensure directory exists
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
       break;
@@ -302,16 +304,16 @@ export async function installCompletion(shell: string = 'auto'): Promise<void> {
   }
 
   // Write completion script
-  await fs.writeFile(targetPath, script, 'utf8');
-  
+  await fs.writeFile(targetPath, script, "utf8");
+
   console.log(`Shell completion installed to: ${targetPath}`);
-  
-  if (shell === 'bash') {
-    console.log('Add this to your ~/.bashrc to enable completion:');
+
+  if (shell === "bash") {
+    console.log("Add this to your ~/.bashrc to enable completion:");
     console.log(`source ${targetPath}`);
-  } else if (shell === 'zsh') {
-    console.log('Add this to your ~/.zshrc to enable completion:');
+  } else if (shell === "zsh") {
+    console.log("Add this to your ~/.zshrc to enable completion:");
     console.log(`fpath=(${path.dirname(targetPath)} $fpath)`);
-    console.log('autoload -U compinit && compinit');
+    console.log("autoload -U compinit && compinit");
   }
-} 
+}

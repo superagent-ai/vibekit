@@ -1,13 +1,13 @@
 /**
  * Interactive CLI Utilities
- * 
+ *
  * Provides interactive prompts, formatted output, and selection mechanisms
  * for local sandbox management.
  */
 
-import enquirer from 'enquirer';
-import chalk from 'chalk';
-import { Environment } from '@vibe-kit/local';
+import enquirer from "enquirer";
+import chalk from "chalk";
+import { Environment } from "@vibe-kit/dagger";
 
 const { prompt } = enquirer;
 
@@ -31,7 +31,7 @@ export interface MultiSelectPromptResult {
  */
 export async function selectEnvironmentPrompt(
   environments: Environment[],
-  message: string = 'Select an environment:'
+  message: string = "Select an environment:"
 ): Promise<string | null> {
   if (environments.length === 0) {
     return null;
@@ -41,17 +41,17 @@ export async function selectEnvironmentPrompt(
     return environments[0].name;
   }
 
-  const choices = environments.map(env => ({
+  const choices = environments.map((env) => ({
     name: formatEnvironmentChoice(env),
     value: env.name,
     description: getEnvironmentDescription(env),
-    disabled: env.status === 'error',
+    disabled: env.status === "error",
   }));
 
   try {
     const result = await prompt<SelectionPromptResult>({
-      type: 'select',
-      name: 'environment',
+      type: "select",
+      name: "environment",
       message,
       choices,
     });
@@ -68,23 +68,23 @@ export async function selectEnvironmentPrompt(
  */
 export async function multiSelectEnvironmentPrompt(
   environments: Environment[],
-  message: string = 'Select environments:'
+  message: string = "Select environments:"
 ): Promise<string[]> {
   if (environments.length === 0) {
     return [];
   }
 
-  const choices = environments.map(env => ({
+  const choices = environments.map((env) => ({
     name: formatEnvironmentChoice(env),
     value: env.name,
     description: getEnvironmentDescription(env),
-    disabled: env.status === 'error',
+    disabled: env.status === "error",
   }));
 
   try {
     const result = await prompt<MultiSelectPromptResult>({
-      type: 'multiselect',
-      name: 'environments',
+      type: "multiselect",
+      name: "environments",
       message,
       choices,
     });
@@ -105,8 +105,8 @@ export async function confirmPrompt(
 ): Promise<boolean> {
   try {
     const result = await prompt<{ confirmed: boolean }>({
-      type: 'confirm',
-      name: 'confirmed',
+      type: "confirm",
+      name: "confirmed",
       message,
       initial: defaultValue,
     });
@@ -128,8 +128,8 @@ export async function textInputPrompt(
 ): Promise<string | null> {
   try {
     const result = await prompt<{ input: string }>({
-      type: 'input',
-      name: 'input',
+      type: "input",
+      name: "input",
       message,
       initial: defaultValue,
       validate: validate as any,
@@ -147,14 +147,15 @@ export async function textInputPrompt(
  */
 function formatEnvironmentChoice(env: Environment): string {
   const statusIcon = getStatusIcon(env.status);
-  const agentType = env.environment?.VIBEKIT_AGENT_TYPE || env.environment?.AGENT_TYPE;
-  
+  const agentType =
+    env.environment?.VIBEKIT_AGENT_TYPE || env.environment?.AGENT_TYPE;
+
   let display = `${statusIcon} ${env.name}`;
-  
+
   if (agentType) {
     display += chalk.gray(` (${agentType})`);
   }
-  
+
   return display;
 }
 
@@ -176,7 +177,7 @@ function getEnvironmentDescription(env: Environment): string {
 
   parts.push(`status: ${env.status}`);
 
-  return parts.join(', ');
+  return parts.join(", ");
 }
 
 /**
@@ -184,12 +185,18 @@ function getEnvironmentDescription(env: Environment): string {
  */
 function getStatusIcon(status: string): string {
   switch (status) {
-    case 'running': return '🟢';
-    case 'stopped': return '🔴';
-    case 'starting': return '🟡';
-    case 'stopping': return '🟡';
-    case 'error': return '💥';
-    default: return '⚪';
+    case "running":
+      return "🟢";
+    case "stopped":
+      return "🔴";
+    case "starting":
+      return "🟡";
+    case "stopping":
+      return "🟡";
+    case "error":
+      return "💥";
+    default:
+      return "⚪";
   }
 }
 
@@ -204,13 +211,13 @@ function getTimeAgo(date: Date): string {
   const diffDays = Math.floor(diffHours / 24);
 
   if (diffDays > 0) {
-    return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+    return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
   } else if (diffHours > 0) {
-    return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
   } else if (diffMinutes > 0) {
-    return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+    return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
   } else {
-    return 'just now';
+    return "just now";
   }
 }
 
@@ -219,51 +226,65 @@ function getTimeAgo(date: Date): string {
  */
 export function formatEnvironmentTable(environments: Environment[]): void {
   if (environments.length === 0) {
-    console.log(chalk.yellow('📭 No environments found'));
+    console.log(chalk.yellow("📭 No environments found"));
     return;
   }
 
-  console.log(chalk.blue('📋 Local Environments:'));
-  console.log('');
+  console.log(chalk.blue("📋 Local Environments:"));
+  console.log("");
 
   // Calculate column widths
-  const nameWidth = Math.max(4, ...environments.map(env => env.name.length));
-  const statusWidth = Math.max(6, ...environments.map(env => env.status.length));
-  const agentWidth = Math.max(5, ...environments.map(env => {
-    const agentType = env.environment?.VIBEKIT_AGENT_TYPE || env.environment?.AGENT_TYPE || 'unknown';
-    return agentType.length;
-  }));
+  const nameWidth = Math.max(4, ...environments.map((env) => env.name.length));
+  const statusWidth = Math.max(
+    6,
+    ...environments.map((env) => env.status.length)
+  );
+  const agentWidth = Math.max(
+    5,
+    ...environments.map((env) => {
+      const agentType =
+        env.environment?.VIBEKIT_AGENT_TYPE ||
+        env.environment?.AGENT_TYPE ||
+        "unknown";
+      return agentType.length;
+    })
+  );
 
   // Header
   const header = [
-    chalk.bold('NAME'.padEnd(nameWidth)),
-    chalk.bold('STATUS'.padEnd(statusWidth)),
-    chalk.bold('AGENT'.padEnd(agentWidth)),
-    chalk.bold('BRANCH'),
-    chalk.bold('CREATED')
-  ].join('  ');
-  
+    chalk.bold("NAME".padEnd(nameWidth)),
+    chalk.bold("STATUS".padEnd(statusWidth)),
+    chalk.bold("AGENT".padEnd(agentWidth)),
+    chalk.bold("BRANCH"),
+    chalk.bold("CREATED"),
+  ].join("  ");
+
   console.log(header);
-  console.log('-'.repeat(header.length - 20)); // Subtract ANSI codes length
+  console.log("-".repeat(header.length - 20)); // Subtract ANSI codes length
 
   // Rows
   for (const env of environments) {
     const statusIcon = getStatusIcon(env.status);
-    const agentType = env.environment?.VIBEKIT_AGENT_TYPE || env.environment?.AGENT_TYPE || 'unknown';
-    const createdAt = env.createdAt ? getTimeAgo(new Date(env.createdAt)) : 'unknown';
-    
+    const agentType =
+      env.environment?.VIBEKIT_AGENT_TYPE ||
+      env.environment?.AGENT_TYPE ||
+      "unknown";
+    const createdAt = env.createdAt
+      ? getTimeAgo(new Date(env.createdAt))
+      : "unknown";
+
     const row = [
       env.name.padEnd(nameWidth),
       `${statusIcon} ${getStatusColor(env.status)}`.padEnd(statusWidth + 2),
       chalk.cyan(agentType.padEnd(agentWidth)),
-      (env.branch || 'unknown').padEnd(15),
-      chalk.gray(createdAt)
-    ].join('  ');
-    
+      (env.branch || "unknown").padEnd(15),
+      chalk.gray(createdAt),
+    ].join("  ");
+
     console.log(row);
   }
-  
-  console.log('');
+
+  console.log("");
 }
 
 /**
@@ -271,12 +292,18 @@ export function formatEnvironmentTable(environments: Environment[]): void {
  */
 function getStatusColor(status: string): string {
   switch (status) {
-    case 'running': return chalk.green(status);
-    case 'stopped': return chalk.red(status);
-    case 'starting': return chalk.yellow(status);
-    case 'stopping': return chalk.yellow(status);
-    case 'error': return chalk.red(status);
-    default: return chalk.gray(status);
+    case "running":
+      return chalk.green(status);
+    case "stopped":
+      return chalk.red(status);
+    case "starting":
+      return chalk.yellow(status);
+    case "stopping":
+      return chalk.yellow(status);
+    case "error":
+      return chalk.red(status);
+    default:
+      return chalk.gray(status);
   }
 }
 
@@ -295,35 +322,38 @@ export class ProgressIndicator {
   }
 
   start(initialMessage?: string) {
-    const ora = require('ora');
-    this.spinner = ora(initialMessage || this.steps[0] || 'Processing...').start();
+    const ora = require("ora");
+    this.spinner = ora(
+      initialMessage || this.steps[0] || "Processing..."
+    ).start();
   }
 
   nextStep(message?: string) {
     if (!this.spinner) return;
-    
+
     this.currentStep++;
-    const stepMessage = message || this.steps[this.currentStep] || `Step ${this.currentStep + 1}`;
+    const stepMessage =
+      message || this.steps[this.currentStep] || `Step ${this.currentStep + 1}`;
     const progress = `[${this.currentStep}/${this.totalSteps}] ${stepMessage}`;
-    
+
     this.spinner.text = progress;
   }
 
   succeed(message?: string) {
     if (!this.spinner) return;
-    
-    this.spinner.succeed(message || 'Completed successfully');
+
+    this.spinner.succeed(message || "Completed successfully");
   }
 
   fail(message?: string) {
     if (!this.spinner) return;
-    
-    this.spinner.fail(message || 'Failed');
+
+    this.spinner.fail(message || "Failed");
   }
 
   stop() {
     if (!this.spinner) return;
-    
+
     this.spinner.stop();
   }
 }
@@ -338,7 +368,7 @@ export function displayHelp(sections: { title: string; content: string[] }[]) {
       console.log(`  ${line}`);
     }
   }
-  console.log('');
+  console.log("");
 }
 
 /**
@@ -346,10 +376,10 @@ export function displayHelp(sections: { title: string; content: string[] }[]) {
  */
 export function displayTips(tips: string[]) {
   if (tips.length === 0) return;
-  
-  console.log(chalk.yellow('\n💡 Tips:'));
+
+  console.log(chalk.yellow("\n💡 Tips:"));
   for (const tip of tips) {
     console.log(`  • ${tip}`);
   }
-  console.log('');
-} 
+  console.log("");
+}

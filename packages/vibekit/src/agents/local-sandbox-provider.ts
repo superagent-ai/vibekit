@@ -1,22 +1,33 @@
 /**
  * Local Sandbox Provider for Agent Integration (Dagger-based)
- * 
+ *
  * Provides a specialized sandbox provider that integrates dagger-based
  * local sandboxes with Vibekit agents, including simplified MCP integration.
  */
 
-import { SandboxProvider, SandboxInstance, SandboxCommands, SandboxExecutionResult, SandboxCommandOptions } from '../types';
-import { LocalSandboxProvider, createLocalProvider, type LocalConfig, type AgentType } from '@vibe-kit/local';
-import { 
-  initializeMCPForAgent, 
-  cleanupMCPForSandbox, 
+import {
+  SandboxProvider,
+  SandboxInstance,
+  SandboxCommands,
+  SandboxExecutionResult,
+  SandboxCommandOptions,
+} from "../types";
+import {
+  LocalSandboxProvider,
+  createLocalProvider,
+  type LocalConfig,
+  type AgentType,
+} from "@vibe-kit/dagger";
+import {
+  initializeMCPForAgent,
+  cleanupMCPForSandbox,
   MCPServerInstance,
-} from './local-mcp';
+} from "./local-mcp";
 
 export interface LocalAgentSandboxConfig extends LocalConfig {
   workingDirectory?: string;
   enableMCP?: boolean;
-  mcpServerType?: 'stdio' | 'transport';
+  mcpServerType?: "stdio" | "transport";
 }
 
 /**
@@ -41,10 +52,15 @@ export class LocalAgentSandboxInstance implements SandboxInstance {
   async initializeMCP(): Promise<void> {
     if (this.config.enableMCP) {
       try {
-        const server = await initializeMCPForAgent(this.baseSandbox, this.agentType);
+        const server = await initializeMCPForAgent(
+          this.baseSandbox,
+          this.agentType
+        );
         this.mcpServer = server || undefined;
       } catch (error) {
-        console.warn(`Failed to initialize MCP for sandbox ${this.sandboxId}: ${error}`);
+        console.warn(
+          `Failed to initialize MCP for sandbox ${this.sandboxId}: ${error}`
+        );
       }
     }
   }
@@ -85,8 +101,8 @@ export class LocalAgentSandboxProvider implements SandboxProvider {
     workingDirectory?: string
   ): Promise<LocalAgentSandboxInstance> {
     const baseSandbox = await this.baseProvider.create(
-      envs, 
-      agentType, 
+      envs,
+      agentType,
       workingDirectory || this.config.workingDirectory
     );
 
@@ -117,7 +133,9 @@ export class LocalAgentSandboxProvider implements SandboxProvider {
 /**
  * Create a local agent sandbox provider with configuration
  */
-export function createLocalAgentProvider(config: LocalAgentSandboxConfig = {}): LocalAgentSandboxProvider {
+export function createLocalAgentProvider(
+  config: LocalAgentSandboxConfig = {}
+): LocalAgentSandboxProvider {
   return new LocalAgentSandboxProvider(config);
 }
 
@@ -127,26 +145,26 @@ export function createLocalAgentProvider(config: LocalAgentSandboxConfig = {}): 
 export const AgentProviderConfigs = {
   claude: {
     enableMCP: true,
-    mcpServerType: 'stdio' as const,
-    workingDirectory: '/workspace',
+    mcpServerType: "stdio" as const,
+    workingDirectory: "/workspace",
   },
-  
+
   codex: {
     enableMCP: true,
-    mcpServerType: 'stdio' as const,
-    workingDirectory: '/workspace',
+    mcpServerType: "stdio" as const,
+    workingDirectory: "/workspace",
   },
-  
+
   opencode: {
     enableMCP: true,
-    mcpServerType: 'stdio' as const,
-    workingDirectory: '/workspace',
+    mcpServerType: "stdio" as const,
+    workingDirectory: "/workspace",
   },
-  
+
   gemini: {
     enableMCP: true,
-    mcpServerType: 'stdio' as const,
-    workingDirectory: '/workspace',
+    mcpServerType: "stdio" as const,
+    workingDirectory: "/workspace",
   },
 };
 
@@ -157,7 +175,8 @@ export function createAgentProvider(
   agentType: AgentType,
   overrides: Partial<LocalAgentSandboxConfig> = {}
 ): LocalAgentSandboxProvider {
-  const defaultConfig = AgentProviderConfigs[agentType] || AgentProviderConfigs.codex;
+  const defaultConfig =
+    AgentProviderConfigs[agentType] || AgentProviderConfigs.codex;
   const config = { ...defaultConfig, ...overrides };
   return createLocalAgentProvider(config);
-} 
+}

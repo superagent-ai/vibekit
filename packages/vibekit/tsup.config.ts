@@ -38,8 +38,8 @@ export default defineConfig([
     target: "node18",
     // Externalize all Node.js built-ins and problematic packages
     external: [
-      "@vibe-kit/local",
-      "@dagger.io/dagger", 
+      "@vibe-kit/dagger",
+      "@dagger.io/dagger",
       "adm-zip",
       "fs-extra",
     ],

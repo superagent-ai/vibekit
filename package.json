@@ -27,9 +27,9 @@
     },
     "scripts": {
         "build": "npm run build --workspaces",
-        "build:packages": "npm run build --workspace=packages/db && npm run build --workspace=packages/e2b && npm run build --workspace=packages/daytona && npm run build --workspace=packages/northflank && npm run build --workspace=packages/local && npm run build --workspace=packages/vibekit",
+        "build:packages": "npm run build --workspace=packages/db && npm run build --workspace=packages/e2b && npm run build --workspace=packages/daytona && npm run build --workspace=packages/northflank && npm run build --workspace=packages/dagger && npm run build --workspace=packages/vibekit",
         "dev": "npm run dev --workspace=packages/vibekit",
-        "type-check": "npm run build:types --workspace=packages/local && npm run type-check --workspaces",
+        "type-check": "npm run build:types --workspace=packages/dagger && npm run type-check --workspaces",
         "test": "vitest",
         "benchmark": "tsx scripts/run-benchmarks.ts",
         "benchmark:quick": "tsx scripts/run-benchmarks.ts quick",

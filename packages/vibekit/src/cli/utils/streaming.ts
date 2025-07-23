@@ -1,18 +1,18 @@
 /**
  * Log Streaming Utilities
- * 
+ *
  * Provides real-time log streaming and multi-environment monitoring
  * for local sandbox environments.
  */
 
-import { spawn, ChildProcess } from 'child_process';
-import chalk from 'chalk';
-import { Environment } from '@vibe-kit/local';
+import { spawn, ChildProcess } from "child_process";
+import chalk from "chalk";
+import { Environment } from "@vibe-kit/dagger";
 
 export interface LogEntry {
   timestamp: Date;
   environment: string;
-  level: 'info' | 'warn' | 'error' | 'debug';
+  level: "info" | "warn" | "error" | "debug";
   message: string;
   source?: string;
 }
@@ -54,60 +54,66 @@ export class LogStream {
     return new Promise((resolve, reject) => {
       try {
         // Build container-use log command
-        const args = ['log', this.environment.name];
-        
+        const args = ["log", this.environment.name];
+
         if (this.options.follow) {
-          args.push('--follow');
+          args.push("--follow");
         }
-        
+
         if (this.options.tail) {
-          args.push('--tail', this.options.tail.toString());
+          args.push("--tail", this.options.tail.toString());
         }
 
         if (this.options.since) {
-          args.push('--since', this.options.since.toISOString());
+          args.push("--since", this.options.since.toISOString());
         }
 
-        this.process = spawn('container-use', args, {
-          stdio: ['pipe', 'pipe', 'pipe'],
+        this.process = spawn("container-use", args, {
+          stdio: ["pipe", "pipe", "pipe"],
         });
 
-        this.process.stdout?.on('data', (data: Buffer) => {
-          const lines = data.toString().split('\n').filter(line => line.trim());
-          
+        this.process.stdout?.on("data", (data: Buffer) => {
+          const lines = data
+            .toString()
+            .split("\n")
+            .filter((line) => line.trim());
+
           for (const line of lines) {
             const entry = this.parseLogLine(line);
             if (entry && this.shouldIncludeEntry(entry)) {
-              this.listeners.forEach(listener => listener(entry));
+              this.listeners.forEach((listener) => listener(entry));
             }
           }
         });
 
-        this.process.stderr?.on('data', (data: Buffer) => {
+        this.process.stderr?.on("data", (data: Buffer) => {
           const errorEntry: LogEntry = {
             timestamp: new Date(),
             environment: this.environment.name,
-            level: 'error',
+            level: "error",
             message: data.toString().trim(),
-            source: 'container-use',
+            source: "container-use",
           };
-          this.listeners.forEach(listener => listener(errorEntry));
+          this.listeners.forEach((listener) => listener(errorEntry));
         });
 
-        this.process.on('error', (error) => {
+        this.process.on("error", (error) => {
           reject(error);
         });
 
-        this.process.on('spawn', () => {
+        this.process.on("spawn", () => {
           resolve();
         });
 
-        this.process.on('exit', (code) => {
+        this.process.on("exit", (code) => {
           if (code !== 0) {
-            console.warn(chalk.yellow(`Log stream for ${this.environment.name} exited with code ${code}`));
+            console.warn(
+              chalk.yellow(
+                `Log stream for ${this.environment.name} exited with code ${code}`
+              )
+            );
           }
         });
-
       } catch (error) {
         reject(error);
       }
@@ -119,7 +125,7 @@ export class LogStream {
    */
   stop(): void {
     if (this.process) {
-      this.process.kill('SIGTERM');
+      this.process.kill("SIGTERM");
       this.process = null;
     }
   }
@@ -143,14 +149,16 @@ export class LogStream {
    */
   private parseLogLine(line: string): LogEntry | null {
     // Try to parse container log format: timestamp level message
-    const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[\.\d]*Z?)\s+(\w+)\s+(.+)$/);
-    
+    const match = line.match(
+      /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[\.\d]*Z?)\s+(\w+)\s+(.+)$/
+    );
+
     if (match) {
       const [, timestamp, level, message] = match;
       return {
         timestamp: new Date(timestamp),
         environment: this.environment.name,
-        level: level.toLowerCase() as LogEntry['level'],
+        level: level.toLowerCase() as LogEntry["level"],
         message: message.trim(),
       };
     }
@@ -159,7 +167,7 @@ export class LogStream {
     return {
       timestamp: new Date(),
       environment: this.environment.name,
-      level: 'info',
+      level: "info",
       message: line.trim(),
     };
   }
@@ -192,14 +200,20 @@ export class MultiLogStream {
   private environments: Environment[];
   private options: MultiStreamOptions;
   private colors: string[] = [
-    'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white",
   ];
   private environmentColors: Map<string, string> = new Map();
 
   constructor(environments: Environment[], options: MultiStreamOptions = {}) {
     this.environments = environments;
     this.options = { prefix: true, colors: true, interleave: true, ...options };
-    
+
     // Assign colors to environments
     this.assignColors();
   }
@@ -219,7 +233,9 @@ export class MultiLogStream {
       try {
         await stream.start();
       } catch (error) {
-        console.warn(chalk.yellow(`Failed to start log stream for ${env.name}: ${error}`));
+        console.warn(
+          chalk.yellow(`Failed to start log stream for ${env.name}: ${error}`)
+        );
       }
     });
 
@@ -250,10 +266,10 @@ export class MultiLogStream {
   private formatLogEntry(entry: LogEntry): string {
     const timestamp = entry.timestamp.toLocaleTimeString();
     const level = this.formatLevel(entry.level);
-    
-    let prefix = '';
+
+    let prefix = "";
     if (this.options.prefix) {
-      const envColor = this.environmentColors.get(entry.environment) || 'white';
+      const envColor = this.environmentColors.get(entry.environment) || "white";
       const coloredEnv = this.colorText(entry.environment, envColor);
       prefix = `[${coloredEnv}] `;
     }
@@ -264,16 +280,16 @@ export class MultiLogStream {
   /**
    * Format log level with colors
    */
-  private formatLevel(level: LogEntry['level']): string {
+  private formatLevel(level: LogEntry["level"]): string {
     switch (level) {
-      case 'error':
-        return chalk.red('ERROR');
-      case 'warn':
-        return chalk.yellow('WARN ');
-      case 'info':
-        return chalk.blue('INFO ');
-      case 'debug':
-        return chalk.gray('DEBUG');
+      case "error":
+        return chalk.red("ERROR");
+      case "warn":
+        return chalk.yellow("WARN ");
+      case "info":
+        return chalk.blue("INFO ");
+      case "debug":
+        return chalk.gray("DEBUG");
       default:
         return chalk.white(String(level).toUpperCase().padEnd(5));
     }
@@ -284,14 +300,22 @@ export class MultiLogStream {
    */
   private colorText(text: string, color: string): string {
     switch (color) {
-      case 'red': return chalk.red(text);
-      case 'green': return chalk.green(text);
-      case 'yellow': return chalk.yellow(text);
-      case 'blue': return chalk.blue(text);
-      case 'magenta': return chalk.magenta(text);
-      case 'cyan': return chalk.cyan(text);
-      case 'white': return chalk.white(text);
-      default: return chalk.white(text);
+      case "red":
+        return chalk.red(text);
+      case "green":
+        return chalk.green(text);
+      case "yellow":
+        return chalk.yellow(text);
+      case "blue":
+        return chalk.blue(text);
+      case "magenta":
+        return chalk.magenta(text);
+      case "cyan":
+        return chalk.cyan(text);
+      case "white":
+        return chalk.white(text);
+      default:
+        return chalk.white(text);
     }
   }
 
@@ -309,10 +333,10 @@ export class MultiLogStream {
    * Get statistics about the streams
    */
   getStats(): { environment: string; active: boolean; color: string }[] {
-    return this.environments.map(env => ({
+    return this.environments.map((env) => ({
       environment: env.name,
       active: this.streams.has(env.name),
-      color: this.environmentColors.get(env.name) || 'white',
+      color: this.environmentColors.get(env.name) || "white",
     }));
   }
 }
@@ -335,17 +359,22 @@ export class InteractiveLogViewer {
    * Start interactive log viewing
    */
   async start(): Promise<void> {
-    console.log(chalk.blue('📺 Interactive Log Viewer'));
-    console.log(chalk.gray('Press Ctrl+C to exit, Space to pause/resume, H for help\n'));
-    
+    console.log(chalk.blue("📺 Interactive Log Viewer"));
+    console.log(
+      chalk.gray("Press Ctrl+C to exit, Space to pause/resume, H for help\n")
+    );
+
     const stats = this.multiStream.getStats();
-         console.log(chalk.blue('Watching environments:'));
-     stats.forEach(stat => {
-       const statusIcon = stat.active ? '🟢' : '🔴';
-       const coloredEnv = this.multiStream['colorText'](stat.environment, stat.color);
-       console.log(`  ${statusIcon} ${coloredEnv}`);
-     });
-    console.log('');
+    console.log(chalk.blue("Watching environments:"));
+    stats.forEach((stat) => {
+      const statusIcon = stat.active ? "🟢" : "🔴";
+      const coloredEnv = this.multiStream["colorText"](
+        stat.environment,
+        stat.color
+      );
+      console.log(`  ${statusIcon} ${coloredEnv}`);
+    });
+    console.log("");
 
     await this.multiStream.start();
   }
@@ -356,7 +385,7 @@ export class InteractiveLogViewer {
   stop(): void {
     this.multiStream.stop();
     process.stdin.setRawMode?.(false);
-    process.stdin.removeAllListeners('data');
+    process.stdin.removeAllListeners("data");
   }
 
   /**
@@ -366,22 +395,22 @@ export class InteractiveLogViewer {
     if (process.stdin.isTTY) {
       process.stdin.setRawMode?.(true);
       process.stdin.resume();
-      process.stdin.setEncoding('utf8');
+      process.stdin.setEncoding("utf8");
 
-      process.stdin.on('data', (key: string) => {
+      process.stdin.on("data", (key: string) => {
         switch (key) {
-          case ' ': // Space - pause/resume
+          case " ": // Space - pause/resume
             this.togglePause();
             break;
-          case 'h':
-          case 'H':
+          case "h":
+          case "H":
             this.showHelp();
             break;
-          case 'c':
-          case 'C':
+          case "c":
+          case "C":
             this.clearScreen();
             break;
-          case '\u0003': // Ctrl+C
+          case "\u0003": // Ctrl+C
             this.stop();
             process.exit(0);
             break;
@@ -390,9 +419,9 @@ export class InteractiveLogViewer {
     }
 
     // Handle normal Ctrl+C
-    process.on('SIGINT', () => {
+    process.on("SIGINT", () => {
       this.stop();
-      console.log(chalk.gray('\nStopped watching logs'));
+      console.log(chalk.gray("\nStopped watching logs"));
       process.exit(0);
     });
   }
@@ -402,8 +431,8 @@ export class InteractiveLogViewer {
    */
   private togglePause(): void {
     this.paused = !this.paused;
-    const status = this.paused ? 'PAUSED' : 'RESUMED';
-    const color = this.paused ? 'yellow' : 'green';
+    const status = this.paused ? "PAUSED" : "RESUMED";
+    const color = this.paused ? "yellow" : "green";
     console.log(chalk[color](`\n--- ${status} ---\n`));
   }
 
@@ -411,12 +440,12 @@ export class InteractiveLogViewer {
    * Show help
    */
   private showHelp(): void {
-    console.log(chalk.blue('\n--- HELP ---'));
-    console.log('  Space   - Pause/Resume log streaming');
-    console.log('  C       - Clear screen');
-    console.log('  H       - Show this help');
-    console.log('  Ctrl+C  - Exit');
-    console.log('');
+    console.log(chalk.blue("\n--- HELP ---"));
+    console.log("  Space   - Pause/Resume log streaming");
+    console.log("  C       - Clear screen");
+    console.log("  H       - Show this help");
+    console.log("  Ctrl+C  - Exit");
+    console.log("");
   }
 
   /**
@@ -424,7 +453,7 @@ export class InteractiveLogViewer {
    */
   private clearScreen(): void {
     console.clear();
-    console.log(chalk.blue('📺 Interactive Log Viewer (Screen cleared)\n'));
+    console.log(chalk.blue("📺 Interactive Log Viewer (Screen cleared)\n"));
   }
 }
 
@@ -440,7 +469,7 @@ export async function watchEnvironmentLogs(
   options: StreamOptions = {}
 ): Promise<LogStream> {
   const stream = new LogStream(environment, options);
-  
+
   stream.onLogEntry((entry) => {
     const timestamp = entry.timestamp.toLocaleTimeString();
     const level = formatSimpleLevel(entry.level);
@@ -478,17 +507,17 @@ export async function createInteractiveViewer(
 /**
  * Simple level formatting
  */
-function formatSimpleLevel(level: LogEntry['level']): string {
+function formatSimpleLevel(level: LogEntry["level"]): string {
   switch (level) {
-    case 'error':
-      return chalk.red('ERROR');
-    case 'warn':
-      return chalk.yellow('WARN ');
-    case 'info':
-      return chalk.blue('INFO ');
-    case 'debug':
-      return chalk.gray('DEBUG');
+    case "error":
+      return chalk.red("ERROR");
+    case "warn":
+      return chalk.yellow("WARN ");
+    case "info":
+      return chalk.blue("INFO ");
+    case "debug":
+      return chalk.gray("DEBUG");
     default:
       return chalk.white(String(level).toUpperCase().padEnd(5));
   }
-} 
+}

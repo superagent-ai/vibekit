@@ -106,8 +106,8 @@ export interface BaseAgentConfig {
   // Local MCP server configuration
   localMCP?: {
     enabled: boolean;
-    environment?: any; // Environment from @vibe-kit/local
-    serverType?: 'stdio' | 'transport';
+    environment?: any; // Environment from @vibe-kit/dagger
+    serverType?: "stdio" | "transport";
     autoStart?: boolean;
   };
 }
@@ -227,8 +227,8 @@ export abstract class BaseAgent {
 
     try {
       // Dynamically import to avoid circular dependencies
-      const { initializeMCPForAgent } = await import('./local-mcp');
-      
+      const { initializeMCPForAgent } = await import("./local-mcp");
+
       const agentType = this.getAgentType();
       this.mcpServerInstance = await initializeMCPForAgent(
         this.sandboxInstance,
@@ -253,7 +253,9 @@ export abstract class BaseAgent {
    * Check if local MCP is enabled and running
    */
   protected isLocalMCPEnabled(): boolean {
-    return !!(this.config.localMCP?.enabled && this.mcpServerInstance?.isRunning);
+    return !!(
+      this.config.localMCP?.enabled && this.mcpServerInstance?.isRunning
+    );
   }
 
   /**
@@ -265,19 +267,19 @@ export abstract class BaseAgent {
     }
 
     try {
-      const { createAgentSession } = await import('./session-manager');
-      
+      const { createAgentSession } = await import("./session-manager");
+
       // Create a mock environment object since we're moving away from tight coupling
       const mockEnvironment = {
         id: this.sandboxInstance.sandboxId,
         name: this.sandboxInstance.sandboxId,
-        status: 'running' as const,
+        status: "running" as const,
         createdAt: new Date(),
         environment: {
-          VIBEKIT_AGENT_TYPE: this.getAgentType()
-        }
+          VIBEKIT_AGENT_TYPE: this.getAgentType(),
+        },
       };
-      
+
       createAgentSession(
         this.getAgentType(),
         mockEnvironment,
@@ -295,7 +297,7 @@ export abstract class BaseAgent {
   protected updateActivity(metadata?: any): void {
     if (this.config.localMCP?.enabled) {
       try {
-        import('./session-manager').then(({ updateAgentActivity }) => {
+        import("./session-manager").then(({ updateAgentActivity }) => {
           updateAgentActivity(this, metadata);
         });
       } catch (error) {
@@ -316,7 +318,7 @@ export abstract class BaseAgent {
     // Clean up MCP server first
     if (this.mcpServerInstance && this.sandboxInstance) {
       try {
-        const { cleanupMCPForSandbox } = await import('./local-mcp');
+        const { cleanupMCPForSandbox } = await import("./local-mcp");
         await cleanupMCPForSandbox(this.sandboxInstance.sandboxId);
         this.mcpServerInstance = undefined;
       } catch (error) {
