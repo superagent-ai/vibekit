@@ -54,7 +54,43 @@ graph TB
 
 ## Quick Start
 
-### 1. Installation & Setup
+### Launch Dashboard (Recommended)
+
+The fastest way to get started with VibeKit telemetry is using the integrated dashboard:
+
+```bash
+# Start telemetry server, build & launch dashboard, and open in browser
+vibekit dashboard
+
+# With custom ports
+vibekit dashboard --port 4000 --dashboard-port 4001
+
+# Skip building if dashboard is already built
+vibekit dashboard --no-build
+
+# Skip opening browser automatically
+vibekit dashboard --no-open
+```
+
+This command will:
+- ✅ Build the dashboard (if needed)  
+- 🚀 Start the telemetry server with WebSocket support
+- 📊 Launch the real-time dashboard UI
+- 🌐 Open your browser to view live metrics
+
+### Alternative: Standalone Script
+
+If you encounter CLI build issues, use the standalone script:
+
+```bash
+# Start everything and open in browser
+node scripts/dashboard.js
+
+# With custom ports and no browser
+node scripts/dashboard.js --port 4000 --dashboard-port 4001 --no-open
+```
+
+### 1. Manual Installation & Setup
 
 ```typescript
 import { DrizzleTelemetryService } from '@vibe-kit/vibekit';
