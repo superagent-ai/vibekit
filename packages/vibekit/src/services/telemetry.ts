@@ -7,6 +7,7 @@ import {
   ATTR_SERVICE_VERSION,
 } from "@opentelemetry/semantic-conventions";
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
+import { EventEmitter } from "events";
 
 export interface TelemetryData {
   sessionId?: string;
@@ -135,7 +136,7 @@ class Logger {
   }
 }
 
-export class TelemetryService {
+export class TelemetryService extends EventEmitter {
   private config: TelemetryConfig;
   private sessionId: string;
   private tracer: any;
@@ -161,6 +162,7 @@ export class TelemetryService {
   private alertingEnabled: boolean;
 
   constructor(config: TelemetryConfig, sessionId?: string) {
+    super(); // Call EventEmitter constructor
     this.config = config;
     this.sessionId = sessionId || this.generateSessionId();
 
@@ -229,6 +231,14 @@ export class TelemetryService {
 
     // Start background maintenance tasks
     this.startMaintenanceTasks();
+
+    // Temporary: Add event listeners for testing real-time events
+    this.on('new:start', (data) => console.log('🟢 Event emitted: new:start', { sessionId: data.sessionId, agentType: data.agentType }));
+    this.on('new:stream', (data) => console.log('🔵 Event emitted: new:stream', { sessionId: data.sessionId, streamLength: data.streamData?.length }));
+    this.on('new:end', (data) => console.log('🔴 Event emitted: new:end', { sessionId: data.sessionId, agentType: data.agentType }));
+    this.on('new:error', (data) => console.log('⚠️ Event emitted: new:error', { sessionId: data.sessionId, error: data.error }));
+    this.on('update:metrics', (metrics) => console.log('📊 Event emitted: update:metrics', { totalEvents: metrics.events.total }));
+    this.on('update:health', (health) => console.log('💚 Event emitted: update:health', { status: health.status }));
   }
 
   private generateSessionId(): string {
@@ -307,7 +317,7 @@ export class TelemetryService {
     prompt: string,
     metadata?: Record<string, any>
   ): Promise<void> {
-    if (!this.config.isEnabled || !this.tracer) {
+    if (!this.config.isEnabled) {
       return;
     }
 
@@ -331,28 +341,30 @@ export class TelemetryService {
         await this.createSessionRecord(agentType, mode, sanitizedPrompt, sanitizedMetadata, sessionId);
       }
 
-      // Original OpenTelemetry tracking (preserved) with circuit breaker
-      await this.executeWithCircuitBreaker(async () => {
-        const span = this.createSpan(
-          `vibekit.start`,
-          agentType,
-          mode,
-          sanitizedPrompt,
-          sanitizedMetadata
-        );
+      // Original OpenTelemetry tracking (preserved) with circuit breaker - only if tracer available
+      if (this.tracer) {
+        await this.executeWithCircuitBreaker(async () => {
+          const span = this.createSpan(
+            `vibekit.start`,
+            agentType,
+            mode,
+            sanitizedPrompt,
+            sanitizedMetadata
+          );
 
-        if (span) {
-          // Add event to span
-          span.addEvent("operation_started", {
-            "vibekit.event_type": "start",
-            timestamp: Date.now(),
-          });
+          if (span) {
+            // Add event to span
+            span.addEvent("operation_started", {
+              "vibekit.event_type": "start",
+              timestamp: Date.now(),
+            });
 
-          // End span immediately for start events
-          span.setStatus({ code: SpanStatusCode.OK });
-          span.end();
-        }
-      });
+            // End span immediately for start events
+            span.setStatus({ code: SpanStatusCode.OK });
+            span.end();
+          }
+        });
+      }
 
       // Phase 3: Persist event to database if available
       if (this.dbOps) {
@@ -366,6 +378,16 @@ export class TelemetryService {
           metadata: sanitizedMetadata,
         });
       }
+
+      // Emit real-time event for WebSocket broadcasting
+      this.emit('new:start', { 
+        sessionId: sessionId, 
+        agentType, 
+        mode, 
+        prompt: sanitizedPrompt, 
+        metadata: sanitizedMetadata, 
+        timestamp: Date.now() 
+      });
     };
 
     const startTime = Date.now();
@@ -398,7 +420,7 @@ export class TelemetryService {
     repoUrl?: string,
     metadata?: Record<string, any>
   ): Promise<void> {
-    if (!this.config.isEnabled || !this.tracer) {
+    if (!this.config.isEnabled) {
       return;
     }
 
@@ -417,33 +439,38 @@ export class TelemetryService {
     const sanitizedRepoUrl = repoUrl ? this.sanitizeData(repoUrl) : undefined;
 
     const trackingOperation = async () => {
-      // Original OpenTelemetry tracking (preserved) with circuit breaker
-      await this.executeWithCircuitBreaker(async () => {
-        const span = this.createSpan(`vibekit.stream`, agentType, mode, sanitizedPrompt, {
-          "vibekit.sandbox_id": sanitizedSandboxId || "",
-          "vibekit.repo_url": sanitizedRepoUrl || "",
-          "vibekit.stream_data_length": sanitizedStreamData.length,
-          ...sanitizedMetadata,
-        });
+      // Use sessionId from metadata if provided, otherwise use instance sessionId
+      const sessionId = metadata?.sessionId || this.sessionId;
 
-        if (span) {
-          // Add stream data as an event
-          span.addEvent("stream_data", {
-            "vibekit.event_type": "stream",
-            "stream.data": sanitizedStreamData,
-            timestamp: Date.now(),
+      // Original OpenTelemetry tracking (preserved) with circuit breaker - only if tracer available
+      if (this.tracer) {
+        await this.executeWithCircuitBreaker(async () => {
+          const span = this.createSpan(`vibekit.stream`, agentType, mode, sanitizedPrompt, {
+            "vibekit.sandbox_id": sanitizedSandboxId || "",
+            "vibekit.repo_url": sanitizedRepoUrl || "",
+            "vibekit.stream_data_length": sanitizedStreamData.length,
+            ...sanitizedMetadata,
           });
 
-          // End span immediately for stream events
-          span.setStatus({ code: SpanStatusCode.OK });
-          span.end();
-        }
-      });
+          if (span) {
+            // Add stream data as an event
+            span.addEvent("stream_data", {
+              "vibekit.event_type": "stream",
+              "stream.data": sanitizedStreamData,
+              timestamp: Date.now(),
+            });
+
+            // End span immediately for stream events
+            span.setStatus({ code: SpanStatusCode.OK });
+            span.end();
+          }
+        });
+      }
 
       // Phase 3: Persist stream event to database if available
       if (this.dbOps) {
         await this.persistEvent({
-          sessionId: this.sessionId,
+          sessionId: sessionId,
           agentType,
           mode,
           prompt: sanitizedPrompt,
@@ -455,6 +482,19 @@ export class TelemetryService {
           metadata: sanitizedMetadata,
         });
       }
+
+      // Emit real-time event for WebSocket broadcasting
+      this.emit('new:stream', { 
+        sessionId: sessionId, 
+        agentType, 
+        mode, 
+        prompt: sanitizedPrompt, 
+        streamData: sanitizedStreamData,
+        sandboxId: sanitizedSandboxId,
+        repoUrl: sanitizedRepoUrl,
+        metadata: sanitizedMetadata, 
+        timestamp: Date.now() 
+      });
     };
 
     try {
@@ -476,7 +516,7 @@ export class TelemetryService {
     repoUrl?: string,
     metadata?: Record<string, any>
   ): Promise<void> {
-    if (!this.config.isEnabled || !this.tracer) {
+    if (!this.config.isEnabled) {
       return;
     }
 
@@ -494,31 +534,36 @@ export class TelemetryService {
     const sanitizedRepoUrl = repoUrl ? this.sanitizeData(repoUrl) : undefined;
 
     const trackingOperation = async () => {
-      // Original OpenTelemetry tracking (preserved) with circuit breaker
-      await this.executeWithCircuitBreaker(async () => {
-        const span = this.createSpan(`vibekit.end`, agentType, mode, sanitizedPrompt, {
-          "vibekit.sandbox_id": sanitizedSandboxId || "",
-          "vibekit.repo_url": sanitizedRepoUrl || "",
-          ...sanitizedMetadata,
-        });
+      // Use sessionId from metadata if provided, otherwise use instance sessionId
+      const sessionId = metadata?.sessionId || this.sessionId;
 
-        if (span) {
-          // Add event to span
-          span.addEvent("operation_completed", {
-            "vibekit.event_type": "end",
-            timestamp: Date.now(),
+      // Original OpenTelemetry tracking (preserved) with circuit breaker - only if tracer available
+      if (this.tracer) {
+        await this.executeWithCircuitBreaker(async () => {
+          const span = this.createSpan(`vibekit.end`, agentType, mode, sanitizedPrompt, {
+            "vibekit.sandbox_id": sanitizedSandboxId || "",
+            "vibekit.repo_url": sanitizedRepoUrl || "",
+            ...sanitizedMetadata,
           });
 
-          // End span
-          span.setStatus({ code: SpanStatusCode.OK });
-          span.end();
-        }
-      });
+          if (span) {
+            // Add event to span
+            span.addEvent("operation_completed", {
+              "vibekit.event_type": "end",
+              timestamp: Date.now(),
+            });
+
+            // End span
+            span.setStatus({ code: SpanStatusCode.OK });
+            span.end();
+          }
+        });
+      }
 
       // Phase 3: Persist end event and update session
       if (this.dbOps) {
         await this.persistEvent({
-          sessionId: this.sessionId,
+          sessionId: sessionId,
           agentType,
           mode,
           prompt: sanitizedPrompt,
@@ -530,11 +575,23 @@ export class TelemetryService {
         });
 
         // Update session status to completed
-        await this.updateSessionRecord(this.sessionId, {
+        await this.updateSessionRecord(sessionId, {
           status: 'completed',
           endTime: Date.now(),
         });
       }
+
+      // Emit real-time event for WebSocket broadcasting
+      this.emit('new:end', { 
+        sessionId: sessionId, 
+        agentType, 
+        mode, 
+        prompt: sanitizedPrompt, 
+        sandboxId: sanitizedSandboxId,
+        repoUrl: sanitizedRepoUrl,
+        metadata: sanitizedMetadata, 
+        timestamp: Date.now() 
+      });
     };
 
     try {
@@ -553,7 +610,7 @@ export class TelemetryService {
     error: string,
     metadata?: Record<string, any>
   ): Promise<void> {
-    if (!this.config.isEnabled || !this.tracer) {
+    if (!this.config.isEnabled) {
       return;
     }
 
@@ -565,41 +622,46 @@ export class TelemetryService {
     const sanitizedMetadata = metadata ? this.sanitizeMetadata(metadata) : undefined;
 
     const trackingOperation = async () => {
-      // Original OpenTelemetry tracking (preserved) with circuit breaker
-      await this.executeWithCircuitBreaker(async () => {
-        const span = this.createSpan(
-          `vibekit.error`,
-          agentType,
-          mode,
-          sanitizedPrompt,
-          sanitizedMetadata
-        );
+      // Use sessionId from metadata if provided, otherwise use instance sessionId
+      const sessionId = metadata?.sessionId || this.sessionId;
 
-        if (span) {
-          // Record the error
-          span.recordException(new Error(sanitizedError));
+      // Original OpenTelemetry tracking (preserved) with circuit breaker - only if tracer available
+      if (this.tracer) {
+        await this.executeWithCircuitBreaker(async () => {
+          const span = this.createSpan(
+            `vibekit.error`,
+            agentType,
+            mode,
+            sanitizedPrompt,
+            sanitizedMetadata
+          );
 
-          // Add error event
-          span.addEvent("error_occurred", {
-            "vibekit.event_type": "error",
-            "error.message": sanitizedError,
-            timestamp: Date.now(),
-          });
+          if (span) {
+            // Record the error
+            span.recordException(new Error(sanitizedError));
 
-          // Set error status
-          span.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: sanitizedError,
-          });
+            // Add error event
+            span.addEvent("error_occurred", {
+              "vibekit.event_type": "error",
+              "error.message": sanitizedError,
+              timestamp: Date.now(),
+            });
 
-          span.end();
-        }
-      });
+            // Set error status
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: sanitizedError,
+            });
+
+            span.end();
+          }
+        });
+      }
 
       // Phase 3: Persist error event and update session
       if (this.dbOps) {
         await this.persistEvent({
-          sessionId: this.sessionId,
+          sessionId: sessionId,
           agentType,
           mode,
           prompt: sanitizedPrompt,
@@ -612,11 +674,25 @@ export class TelemetryService {
         });
 
         // Update session status to error
-        await this.updateSessionRecord(this.sessionId, {
+        await this.updateSessionRecord(sessionId, {
           status: 'error',
           endTime: Date.now(),
         });
       }
+
+      // Emit real-time event for WebSocket broadcasting
+      this.emit('new:error', { 
+        sessionId: sessionId, 
+        agentType, 
+        mode, 
+        prompt: sanitizedPrompt, 
+        error: sanitizedError,
+        metadata: {
+          ...sanitizedMetadata,
+          error: sanitizedError,
+        }, 
+        timestamp: Date.now() 
+      });
     };
 
     try {
@@ -806,6 +882,9 @@ export class TelemetryService {
     const duration = Date.now() - startTime;
     this.logger.debug('Health check completed', { duration, status: this.healthStatus.status });
 
+    // Emit real-time health update for WebSocket broadcasting
+    this.emit('update:health', this.healthStatus);
+
     return { ...this.healthStatus };
   }
 
@@ -846,6 +925,9 @@ export class TelemetryService {
       this.metrics.performance.avgLatency = 
         (this.metrics.performance.avgLatency * (this.metrics.events.total - 1) + latency) / this.metrics.events.total;
     }
+
+    // Emit real-time metrics update for WebSocket broadcasting
+    this.emit('update:metrics', this.metrics);
   }
 
   /**

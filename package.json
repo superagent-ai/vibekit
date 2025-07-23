@@ -48,7 +48,7 @@
     },
     "dependencies": {
         "@dagger.io/dagger": "^0.18.14",
-        "@octokit/rest": "^22.0.0",
-        "dotenv": "^17.2.0"
+        "dotenv": "^17.2.0",
+        "socket.io": "^4.8.1"
     }
 }

@@ -25,7 +25,7 @@ export default function DashboardPage() {
             Failed to connect to telemetry server
           </p>
           <p className="text-sm text-muted-foreground">
-            Make sure the telemetry server is running on port 8080
+            Make sure the telemetry server is running on port 3000
           </p>
         </div>
       </div>

@@ -5,7 +5,8 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['lucide-react', 'recharts'],
   },
   env: {
-    TELEMETRY_API_URL: process.env.TELEMETRY_API_URL || 'http://localhost:8080',
+    TELEMETRY_API_URL: process.env.TELEMETRY_API_URL || 'http://localhost:3000',
+    NEXT_PUBLIC_TELEMETRY_API_URL: process.env.NEXT_PUBLIC_TELEMETRY_API_URL || 'http://localhost:3000',
   },
 }
 
