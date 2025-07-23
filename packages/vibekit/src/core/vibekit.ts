@@ -6,8 +6,10 @@ import type {
   SandboxProvider,
   Conversation,
   LabelOptions,
+  TelemetryConfig,
 } from "../types";
 import { AgentResponse } from "../agents/base";
+import { TelemetryService } from "../services/telemetry";
 
 export interface VibeKitEvents {
   stdout: (chunk: string) => void;
@@ -31,6 +33,14 @@ export interface VibeKitOptions {
   telemetry?: {
     enabled: boolean;
     sessionId?: string;
+    localStore?: {
+      isEnabled?: boolean;
+      path?: string;
+      streamBatchSize?: number;
+      streamFlushIntervalMs?: number;
+    };
+    endpoint?: string;
+    headers?: Record<string, string>;
   };
   workingDirectory?: string;
   secrets?: Record<string, string>;
@@ -40,7 +50,7 @@ export interface VibeKitOptions {
 export class VibeKit extends EventEmitter {
   private options: Partial<VibeKitOptions> = {};
   private agent?: any;
-  private telemetryService?: any;
+  private telemetryService?: TelemetryService;
 
   constructor() {
     super();
@@ -66,7 +76,18 @@ export class VibeKit extends EventEmitter {
     return this;
   }
 
-  withTelemetry(config: { enabled: boolean; sessionId?: string }): this {
+  withTelemetry(config: { 
+    enabled: boolean; 
+    sessionId?: string;
+    localStore?: {
+      isEnabled?: boolean;
+      path?: string;
+      streamBatchSize?: number;
+      streamFlushIntervalMs?: number;
+    };
+    endpoint?: string;
+    headers?: Record<string, string>;
+  }): this {
     this.options.telemetry = config;
     return this;
   }
@@ -123,6 +144,29 @@ export class VibeKit extends EventEmitter {
       );
     }
 
+    // Initialize telemetry service if enabled
+    if (this.options.telemetry?.enabled) {
+      const telemetryConfig: TelemetryConfig = {
+        isEnabled: true,
+        localStore: {
+          isEnabled: true,
+          path: this.options.telemetry.localStore?.path || '.vibekit/telemetry.db',
+          streamBatchSize: this.options.telemetry.localStore?.streamBatchSize || 50,
+          streamFlushIntervalMs: this.options.telemetry.localStore?.streamFlushIntervalMs || 1000,
+        },
+        endpoint: this.options.telemetry.endpoint,
+        headers: this.options.telemetry.headers,
+        serviceName: 'vibekit',
+        serviceVersion: '1.0.0',
+      };
+
+      this.telemetryService = new TelemetryService(
+        telemetryConfig, 
+        this.options.telemetry.sessionId
+      );
+      await this.telemetryService.initialize();
+    }
+
     // Initialize agent with configuration
     const agentConfig = {
       providerApiKey: apiKey,
@@ -140,15 +184,6 @@ export class VibeKit extends EventEmitter {
     };
 
     this.agent = new AgentClass(agentConfig);
-
-    // Initialize telemetry if enabled
-    if (this.options.telemetry?.enabled) {
-      const { TelemetryService } = await import("../services/telemetry");
-      this.telemetryService = new TelemetryService(
-        { isEnabled: true },
-        this.options.telemetry.sessionId
-      );
-    }
   }
 
   async generateCode({
@@ -166,12 +201,95 @@ export class VibeKit extends EventEmitter {
       await this.initializeAgent();
     }
 
+    const agentType = this.options.agent!.type;
+    const startTime = Date.now();
+
+    // Track telemetry start event
+    if (this.telemetryService) {
+      try {
+        await this.telemetryService.trackStart(agentType, mode, prompt, {
+          branch,
+          repoUrl: this.options.github?.repository,
+          provider: this.options.agent!.provider,
+          model: this.options.agent!.model,
+        });
+      } catch (error) {
+        console.warn('Failed to track telemetry start:', error);
+      }
+    }
+
     const callbacks = {
-      onUpdate: (data: string) => this.emit("update", data),
-      onError: (error: string) => this.emit("error", error),
+      onUpdate: (data: string) => {
+        this.emit("update", data);
+        
+        // Track stream events for telemetry
+        if (this.telemetryService) {
+          try {
+            this.telemetryService.trackStream(agentType, mode, prompt, data, undefined, this.options.github?.repository, {
+              branch,
+              timestamp: Date.now(),
+            }).catch(error => {
+              console.warn('Failed to track telemetry stream:', error);
+            });
+          } catch (error) {
+            console.warn('Failed to track telemetry stream:', error);
+          }
+        }
+      },
+      onError: (error: string) => {
+        this.emit("error", error);
+        
+        // Track error events for telemetry
+        if (this.telemetryService) {
+          try {
+            this.telemetryService.trackError(agentType, mode, prompt, error, {
+              branch,
+              repoUrl: this.options.github?.repository,
+              timestamp: Date.now(),
+            }).catch(err => {
+              console.warn('Failed to track telemetry error:', err);
+            });
+          } catch (err) {
+            console.warn('Failed to track telemetry error:', err);
+          }
+        }
+      },
     };
 
-    return this.agent.generateCode(prompt, mode, branch, history, callbacks);
+    try {
+      const result = await this.agent.generateCode(prompt, mode, branch, history, callbacks);
+
+      // Track telemetry end event
+      if (this.telemetryService) {
+        try {
+          await this.telemetryService.trackEnd(agentType, mode, prompt, result.sandboxId, this.options.github?.repository, {
+            branch,
+            exitCode: result.exitCode,
+            duration: Date.now() - startTime,
+            stdout: result.stdout?.substring(0, 500), // Limit to first 500 chars
+            stderr: result.stderr?.substring(0, 500),
+          });
+        } catch (error) {
+          console.warn('Failed to track telemetry end:', error);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      // Track error event
+      if (this.telemetryService) {
+        try {
+          await this.telemetryService.trackError(agentType, mode, prompt, error instanceof Error ? error.message : String(error), {
+            branch,
+            repoUrl: this.options.github?.repository,
+            duration: Date.now() - startTime,
+          });
+        } catch (err) {
+          console.warn('Failed to track telemetry error:', err);
+        }
+      }
+      throw error;
+    }
   }
 
   async createPullRequest(
@@ -182,7 +300,53 @@ export class VibeKit extends EventEmitter {
       await this.initializeAgent();
     }
 
-    return this.agent.createPullRequest(labelOptions, branchPrefix);
+    const startTime = Date.now();
+    const agentType = this.options.agent!.type;
+
+    // Track telemetry start event for PR creation
+    if (this.telemetryService) {
+      try {
+        await this.telemetryService.trackStart(agentType, 'code', 'create_pull_request', {
+          repoUrl: this.options.github?.repository,
+          labelOptions,
+          branchPrefix,
+        });
+      } catch (error) {
+        console.warn('Failed to track telemetry start for PR:', error);
+      }
+    }
+
+    try {
+      const result = await this.agent.createPullRequest(labelOptions, branchPrefix);
+
+      // Track telemetry end event
+      if (this.telemetryService) {
+        try {
+          await this.telemetryService.trackEnd(agentType, 'code', 'create_pull_request', undefined, this.options.github?.repository, {
+            duration: Date.now() - startTime,
+            prUrl: result?.url,
+            prNumber: result?.number,
+          });
+        } catch (error) {
+          console.warn('Failed to track telemetry end for PR:', error);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      // Track error event
+      if (this.telemetryService) {
+        try {
+          await this.telemetryService.trackError(agentType, 'code', 'create_pull_request', error instanceof Error ? error.message : String(error), {
+            repoUrl: this.options.github?.repository,
+            duration: Date.now() - startTime,
+          });
+        } catch (err) {
+          console.warn('Failed to track telemetry error for PR:', err);
+        }
+      }
+      throw error;
+    }
   }
 
   async runTests(): Promise<any> {
@@ -190,12 +354,88 @@ export class VibeKit extends EventEmitter {
       await this.initializeAgent();
     }
 
+    const agentType = this.options.agent!.type;
+    const startTime = Date.now();
+
+    // Track telemetry start event for test execution
+    if (this.telemetryService) {
+      try {
+        await this.telemetryService.trackStart(agentType, 'code', 'run_tests', {
+          repoUrl: this.options.github?.repository,
+        });
+      } catch (error) {
+        console.warn('Failed to track telemetry start for tests:', error);
+      }
+    }
+
     const callbacks = {
-      onUpdate: (data: string) => this.emit("update", data),
-      onError: (error: string) => this.emit("error", error),
+      onUpdate: (data: string) => {
+        this.emit("update", data);
+        
+        // Track stream events for telemetry
+        if (this.telemetryService) {
+          try {
+            this.telemetryService.trackStream(agentType, 'code', 'run_tests', data, undefined, this.options.github?.repository, {
+              timestamp: Date.now(),
+            }).catch(error => {
+              console.warn('Failed to track telemetry stream for tests:', error);
+            });
+          } catch (error) {
+            console.warn('Failed to track telemetry stream for tests:', error);
+          }
+        }
+      },
+      onError: (error: string) => {
+        this.emit("error", error);
+        
+        // Track error events for telemetry
+        if (this.telemetryService) {
+          try {
+            this.telemetryService.trackError(agentType, 'code', 'run_tests', error, {
+              repoUrl: this.options.github?.repository,
+              timestamp: Date.now(),
+            }).catch(err => {
+              console.warn('Failed to track telemetry error for tests:', err);
+            });
+          } catch (err) {
+            console.warn('Failed to track telemetry error for tests:', err);
+          }
+        }
+      },
     };
 
-    return this.agent.runTests(undefined, undefined, callbacks);
+    try {
+      const result = await this.agent.runTests(undefined, undefined, callbacks);
+
+      // Track telemetry end event
+      if (this.telemetryService) {
+        try {
+          await this.telemetryService.trackEnd(agentType, 'code', 'run_tests', result?.sandboxId, this.options.github?.repository, {
+            duration: Date.now() - startTime,
+            exitCode: result?.exitCode,
+            stdout: result?.stdout?.substring(0, 500),
+            stderr: result?.stderr?.substring(0, 500),
+          });
+        } catch (error) {
+          console.warn('Failed to track telemetry end for tests:', error);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      // Track error event
+      if (this.telemetryService) {
+        try {
+          await this.telemetryService.trackError(agentType, 'code', 'run_tests', error instanceof Error ? error.message : String(error), {
+            repoUrl: this.options.github?.repository,
+            duration: Date.now() - startTime,
+          });
+        } catch (err) {
+          console.warn('Failed to track telemetry error for tests:', err);
+        }
+      }
+      throw error;
+    }
   }
 
   async executeCommand(command: string): Promise<any> {
@@ -203,16 +443,107 @@ export class VibeKit extends EventEmitter {
       await this.initializeAgent();
     }
 
+    const agentType = this.options.agent!.type;
+    const startTime = Date.now();
+
+    // Track telemetry start event for command execution
+    if (this.telemetryService) {
+      try {
+        await this.telemetryService.trackStart(agentType, 'code', command, {
+          repoUrl: this.options.github?.repository,
+          commandType: 'execute_command',
+        });
+      } catch (error) {
+        console.warn('Failed to track telemetry start for command:', error);
+      }
+    }
+
     const callbacks = {
-      onUpdate: (data: string) => this.emit("stdout", data),
-      onError: (error: string) => this.emit("stderr", error),
+      onUpdate: (data: string) => {
+        this.emit("stdout", data);
+        
+        // Track stream events for telemetry
+        if (this.telemetryService) {
+          try {
+            this.telemetryService.trackStream(agentType, 'code', command, data, undefined, this.options.github?.repository, {
+              timestamp: Date.now(),
+              commandType: 'execute_command',
+            }).catch(error => {
+              console.warn('Failed to track telemetry stream for command:', error);
+            });
+          } catch (error) {
+            console.warn('Failed to track telemetry stream for command:', error);
+          }
+        }
+      },
+      onError: (error: string) => {
+        this.emit("stderr", error);
+        
+        // Track error events for telemetry
+        if (this.telemetryService) {
+          try {
+            this.telemetryService.trackError(agentType, 'code', command, error, {
+              repoUrl: this.options.github?.repository,
+              timestamp: Date.now(),
+              commandType: 'execute_command',
+            }).catch(err => {
+              console.warn('Failed to track telemetry error for command:', err);
+            });
+          } catch (err) {
+            console.warn('Failed to track telemetry error for command:', err);
+          }
+        }
+      },
     };
 
-    return this.agent.executeCommand(command, { callbacks });
+    try {
+      const result = await this.agent.executeCommand(command, { callbacks });
+
+      // Track telemetry end event
+      if (this.telemetryService) {
+        try {
+          await this.telemetryService.trackEnd(agentType, 'code', command, result?.sandboxId, this.options.github?.repository, {
+            duration: Date.now() - startTime,
+            exitCode: result?.exitCode,
+            stdout: result?.stdout?.substring(0, 500),
+            stderr: result?.stderr?.substring(0, 500),
+            commandType: 'execute_command',
+          });
+        } catch (error) {
+          console.warn('Failed to track telemetry end for command:', error);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      // Track error event
+      if (this.telemetryService) {
+        try {
+          await this.telemetryService.trackError(agentType, 'code', command, error instanceof Error ? error.message : String(error), {
+            repoUrl: this.options.github?.repository,
+            duration: Date.now() - startTime,
+            commandType: 'execute_command',
+          });
+        } catch (err) {
+          console.warn('Failed to track telemetry error for command:', err);
+        }
+      }
+      throw error;
+    }
   }
 
   async kill(): Promise<void> {
     if (!this.agent) return;
+    
+    // Shutdown telemetry service
+    if (this.telemetryService) {
+      try {
+        await this.telemetryService.shutdown();
+      } catch (error) {
+        console.warn('Failed to shutdown telemetry service:', error);
+      }
+    }
+    
     return this.agent.killSandbox();
   }
 
@@ -241,5 +572,22 @@ export class VibeKit extends EventEmitter {
       await this.initializeAgent();
     }
     return this.agent.getHost(port);
+  }
+
+  /**
+   * Get telemetry service instance for advanced analytics
+   */
+  getTelemetryService(): TelemetryService | undefined {
+    return this.telemetryService;
+  }
+
+  /**
+   * Get analytics dashboard data if telemetry is enabled
+   */
+  async getAnalyticsDashboard(timeWindow: 'hour' | 'day' | 'week' = 'day'): Promise<any> {
+    if (!this.telemetryService) {
+      throw new Error('Telemetry is not enabled. Use withTelemetry() to enable analytics.');
+    }
+    return this.telemetryService.getAnalyticsDashboard(timeWindow);
   }
 }

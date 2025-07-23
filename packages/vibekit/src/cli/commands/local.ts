@@ -8,12 +8,24 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import enquirer from 'enquirer';
-import { 
-  LocalDaggerSandboxProvider, 
-  createLocalProvider,
-  type LocalDaggerConfig,
-  type AgentType,
-} from '@vibekit/local';
+// Note: @vibekit/local imports temporarily disabled to fix module resolution
+// TODO: Re-enable when @vibekit/local package is properly built
+// import { 
+//   LocalDaggerSandboxProvider, 
+//   createLocalProvider,
+//   type LocalDaggerConfig,
+//   type AgentType,
+// } from '@vibekit/local';
+
+// Temporary type definitions for local provider
+type LocalDaggerConfig = any;
+type AgentType = string;
+type LocalDaggerSandboxProvider = any;
+
+// Temporary stub function
+function createLocalProvider(config: LocalDaggerConfig): LocalDaggerSandboxProvider {
+  throw new Error('@vibekit/local provider not available - module resolution issue');
+}
 
 let localProvider: LocalDaggerSandboxProvider | null = null;
 

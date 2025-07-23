@@ -4,6 +4,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { lt, sql } from 'drizzle-orm';
 import { existsSync, mkdirSync, statSync } from 'fs';
 import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import * as schema from './schema';
 import {
   DrizzleTelemetryConfig,
@@ -162,10 +163,15 @@ export class DrizzleTelemetryDB {
 
     try {
       // Check for migrations directory in multiple possible locations
+      // ES modules compatibility: calculate __dirname equivalent
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      
       const possibleMigrationDirs = [
         resolve('./packages/vibekit/src/db/migrations'),
         resolve('./src/db/migrations'),
         resolve(__dirname, 'migrations'),
+        resolve(__dirname, '../migrations'), // Additional fallback
       ];
       
       let migrationsDir: string | null = null;

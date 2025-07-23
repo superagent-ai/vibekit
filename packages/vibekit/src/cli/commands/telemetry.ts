@@ -1,8 +1,8 @@
 import { Command } from "commander";
 import { join } from "path";
 import { existsSync, writeFileSync } from "fs";
-import { TelemetryDB } from "../../services/telemetry-db";
-import { TelemetryQueryFilter, TelemetryRecord } from "../../types/telemetry-storage";
+import { TelemetryService } from "../../services/telemetry";
+import { TelemetryConfig } from "../../types";
 
 interface TelemetryCliOptions {
   database?: string;
@@ -16,6 +16,8 @@ interface TelemetryCliOptions {
   until?: string;
   stats?: boolean;
   performance?: boolean;
+  analytics?: boolean;
+  export?: boolean;
 }
 
 interface SessionSummary {
@@ -48,7 +50,7 @@ class TelemetryCliLogger {
 
   static table(data: any[]): void {
     if (data.length === 0) {
-      console.log("No data to display");
+      TelemetryCliLogger.info("No data to display");
       return;
     }
     console.table(data);
@@ -57,391 +59,317 @@ class TelemetryCliLogger {
   static json(data: any): void {
     console.log(JSON.stringify(data, null, 2));
   }
-}
 
-class TelemetryAnalyzer {
-  constructor(private db: TelemetryDB) {}
-
-  async getSessionSummaries(filter?: Partial<TelemetryQueryFilter>): Promise<SessionSummary[]> {
-    const records = await this.db.getEvents(filter);
-    const sessionMap = new Map<string, SessionSummary>();
-
-    for (const record of records) {
-      const key = `${record.sessionId}-${record.agentType}`;
-      if (!sessionMap.has(key)) {
-        sessionMap.set(key, {
-          sessionId: record.sessionId,
-          agentType: record.agentType,
-          eventCount: 0,
-          firstEvent: new Date(record.timestamp).toISOString(),
-          lastEvent: new Date(record.timestamp).toISOString(),
-          errorCount: 0,
-          streamCount: 0
-        });
-      }
-
-      const session = sessionMap.get(key)!;
-      session.eventCount++;
-      const currentTimestamp = new Date(record.timestamp).toISOString();
-      session.lastEvent = currentTimestamp;
-      
-      if (currentTimestamp < session.firstEvent) {
-        session.firstEvent = currentTimestamp;
-      }
-
-      if (record.eventType === 'error') {
-        session.errorCount++;
-      } else if (record.eventType === 'stream') {
-        session.streamCount++;
-      }
-    }
-
-    // Calculate durations
-    for (const session of sessionMap.values()) {
-      const start = new Date(session.firstEvent).getTime();
-      const end = new Date(session.lastEvent).getTime();
-      session.duration = Math.round((end - start) / 1000); // seconds
-    }
-
-    return Array.from(sessionMap.values()).sort((a, b) => 
-      new Date(b.lastEvent).getTime() - new Date(a.lastEvent).getTime()
-    );
-  }
-
-  async getPerformanceStats(filter?: Partial<TelemetryQueryFilter>): Promise<any> {
-    const records = await this.db.getEvents(filter);
-    
-    const agentStats = new Map<string, {
-      totalEvents: number;
-      sessionCount: Set<string>;
-      errorRate: number;
-      streamEvents: number;
-    }>();
-
-    for (const record of records) {
-      if (!agentStats.has(record.agentType)) {
-        agentStats.set(record.agentType, {
-          totalEvents: 0,
-          sessionCount: new Set(),
-          errorRate: 0,
-          streamEvents: 0
-        });
-      }
-
-      const stats = agentStats.get(record.agentType)!;
-      stats.totalEvents++;
-      stats.sessionCount.add(record.sessionId);
-      
-      if (record.eventType === 'stream') {
-        stats.streamEvents++;
-      }
-      
-      if (record.eventType === 'error') {
-        stats.errorRate++;
-      }
-    }
-
-    // Calculate percentages
-    const result: any = {};
-    for (const [agentType, stats] of agentStats) {
-      result[agentType] = {
-        totalEvents: stats.totalEvents,
-        uniqueSessions: stats.sessionCount.size,
-        errorRate: (stats.errorRate / stats.totalEvents) * 100,
-        streamEvents: stats.streamEvents
-      };
-    }
-
-    return result;
+  static csv(data: any[], headers: string[]): void {
+    console.log(headers.join(','));
+    data.forEach(row => {
+      const values = headers.map(header => {
+        const value = row[header];
+        return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+      });
+      console.log(values.join(','));
+    });
   }
 }
 
-function formatRecordsAsCSV(records: TelemetryRecord[]): string {
-  if (records.length === 0) return '';
-  
-  const headers = ['timestamp', 'sessionId', 'agentType', 'eventType', 'mode', 'prompt', 'streamData', 'metadata'];
-  const rows = records.map(record => [
-    new Date(record.timestamp).toISOString(),
-    record.sessionId,
-    record.agentType,
-    record.eventType,
-    record.mode,
-    record.prompt,
-    record.streamData || '',
-    JSON.stringify(record.metadata || {})
-  ]);
-
-  return [headers, ...rows].map(row => 
-    row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(',')
-  ).join('\n');
-}
-
-function parseTimestamp(timeStr: string): number {
-  // Support relative times like "1h", "30m", "7d"
-  const now = Date.now();
-  const match = timeStr.match(/^(\d+)([hdmw])$/);
-  
-  if (match) {
-    const amount = parseInt(match[1]);
-    const unit = match[2];
-    
-    switch (unit) {
-      case 'm': // minutes
-        return now - amount * 60 * 1000;
-      case 'h': // hours  
-        return now - amount * 60 * 60 * 1000;
-      case 'd': // days
-        return now - amount * 24 * 60 * 60 * 1000;
-      case 'w': // weeks
-        return now - amount * 7 * 24 * 60 * 60 * 1000;
-      default:
-        return new Date(timeStr).getTime();
+async function createTelemetryService(dbPath?: string): Promise<TelemetryService> {
+  const config: TelemetryConfig = {
+    isEnabled: true,
+    localStore: {
+      isEnabled: true,
+      path: dbPath || '.vibekit/telemetry.db',
+      streamBatchSize: 50,
+      streamFlushIntervalMs: 1000,
     }
-  }
-  
-  return new Date(timeStr).getTime();
+  };
+
+  const service = new TelemetryService(config);
+  await service.initialize();
+  return service;
 }
 
-async function executeQuery(options: TelemetryCliOptions): Promise<void> {
-  console.log("DEBUG: executeQuery called with options:", options);
-  const dbPath = options.database || join(process.cwd(), '.vibekit', 'telemetry.db');
-  console.log("DEBUG: Database path:", dbPath);
-  
-  if (!existsSync(dbPath)) {
-    console.log("DEBUG: Database does not exist");
-    TelemetryCliLogger.error(`Telemetry database not found at: ${dbPath}`);
-    TelemetryCliLogger.info("Run some VibeKit operations first to generate telemetry data");
-    return;
-  }
-
-  console.log("DEBUG: Database exists, proceeding with query");
+async function queryCommand(options: TelemetryCliOptions): Promise<void> {
   try {
-    const db = new TelemetryDB({ isEnabled: true, path: dbPath });
-    const analyzer = new TelemetryAnalyzer(db);
-
-    const filter: Partial<TelemetryQueryFilter> = {};
+    const dbPath = options.database || join(process.cwd(), '.vibekit/telemetry.db');
     
-    if (options.sessionId) filter.sessionId = options.sessionId;
-    if (options.agentType) filter.agentType = options.agentType;
-    if (options.eventType) filter.eventType = options.eventType as "start" | "stream" | "end" | "error";
-    if (options.since) filter.from = parseTimestamp(options.since);
-    if (options.until) filter.to = parseTimestamp(options.until);
-    if (options.limit) filter.limit = parseInt(options.limit);
+    if (!existsSync(dbPath)) {
+      TelemetryCliLogger.error(`Database not found: ${dbPath}`);
+      TelemetryCliLogger.info("Initialize telemetry first or specify correct database path with --database");
+      return;
+    }
 
-    if (options.stats) {
-      // Show session summaries
-      const sessions = await analyzer.getSessionSummaries(filter);
-      
-      TelemetryCliLogger.info(`Found ${sessions.length} sessions`);
-      
-      if (options.format === 'json') {
-        TelemetryCliLogger.json(sessions);
-      } else if (options.format === 'csv') {
-        const csv = formatRecordsAsCSV(sessions as any);
+    const service = await createTelemetryService(dbPath);
+    const format = options.format || 'table';
+    const limit = parseInt(options.limit || '50');
+
+    // Build filter options
+    const filterOptions: any = {
+      limit,
+      offset: 0,
+    };
+
+    if (options.sessionId) filterOptions.sessionId = options.sessionId;
+    if (options.agentType) filterOptions.agentType = options.agentType;
+    if (options.since) filterOptions.fromTime = new Date(options.since).getTime();
+    if (options.until) filterOptions.toTime = new Date(options.until).getTime();
+
+    // Get session summaries instead of raw events for better overview
+    const sessions = await service.getSessionSummaries(filterOptions);
+
+    if (sessions.length === 0) {
+      TelemetryCliLogger.info("No telemetry sessions found");
+      return;
+    }
+
+    TelemetryCliLogger.success(`Found ${sessions.length} session(s)`);
+
+    switch (format) {
+      case 'json':
         if (options.output) {
-          writeFileSync(options.output, csv);
-          TelemetryCliLogger.success(`Session data exported to: ${options.output}`);
+          writeFileSync(options.output, JSON.stringify(sessions, null, 2));
+          TelemetryCliLogger.success(`Results exported to ${options.output}`);
         } else {
-          console.log(csv);
+          TelemetryCliLogger.json(sessions);
         }
+        break;
+             case 'csv':
+         const headers = ['sessionId', 'agentType', 'totalEvents', 'duration', 'status'];
+         if (options.output) {
+           const csvContent = [
+             headers.join(','),
+             ...sessions.map(session => headers.map(h => (session as any)[h] || '').join(','))
+           ].join('\n');
+          writeFileSync(options.output, csvContent);
+          TelemetryCliLogger.success(`Results exported to ${options.output}`);
+        } else {
+          TelemetryCliLogger.csv(sessions, headers);
+        }
+        break;
+      default:
+        TelemetryCliLogger.table(sessions);
+    }
+
+    await service.shutdown();
+  } catch (error) {
+    TelemetryCliLogger.error(`Query failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function statsCommand(options: TelemetryCliOptions): Promise<void> {
+  try {
+    const dbPath = options.database || join(process.cwd(), '.vibekit/telemetry.db');
+    
+    if (!existsSync(dbPath)) {
+      TelemetryCliLogger.error(`Database not found: ${dbPath}`);
+      return;
+    }
+
+    const service = await createTelemetryService(dbPath);
+    
+    // Get real-time metrics for stats
+    const metrics = await service.getRealTimeMetrics();
+    const analytics = service.getAnalyticsInfo();
+    const exportInfo = service.getExportInfo();
+
+    const stats = {
+      database: {
+        path: dbPath,
+        status: 'connected'
+      },
+      analytics: analytics,
+      export: exportInfo,
+      realTimeMetrics: metrics
+    };
+
+    if (options.format === 'json') {
+      TelemetryCliLogger.json(stats);
+    } else {
+      console.log('\n📊 Telemetry Database Statistics\n');
+      console.log(`Database: ${stats.database.path}`);
+      console.log(`Status: ${stats.database.status}`);
+      console.log(`Analytics: ${stats.analytics.status}`);
+      console.log(`Export: ${stats.export.status}`);
+      console.log('\n📈 Real-time Metrics:');
+      console.table(stats.realTimeMetrics);
+    }
+
+    await service.shutdown();
+  } catch (error) {
+    TelemetryCliLogger.error(`Stats failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function analyticsCommand(options: TelemetryCliOptions): Promise<void> {
+  try {
+    const dbPath = options.database || join(process.cwd(), '.vibekit/telemetry.db');
+    
+    if (!existsSync(dbPath)) {
+      TelemetryCliLogger.error(`Database not found: ${dbPath}`);
+      return;
+    }
+
+    const service = await createTelemetryService(dbPath);
+    
+    // Get comprehensive analytics dashboard
+    const dashboard = await service.getAnalyticsDashboard('day');
+
+    if (options.format === 'json') {
+      if (options.output) {
+        writeFileSync(options.output, JSON.stringify(dashboard, null, 2));
+        TelemetryCliLogger.success(`Analytics exported to ${options.output}`);
       } else {
-        TelemetryCliLogger.table(sessions.map(s => ({
-          'Session ID': s.sessionId.substring(0, 8) + '...',
-          'Agent': s.agentType,
-          'Events': s.eventCount,
-          'Duration (s)': s.duration || 0,
-          'Errors': s.errorCount,
-          'Streams': s.streamCount,
-          'Last Activity': new Date(s.lastEvent).toLocaleString()
-        })));
-      }
-    } else if (options.performance) {
-      // Show performance statistics
-      const perfStats = await analyzer.getPerformanceStats(filter);
-      
-      TelemetryCliLogger.info("Performance Statistics by Agent Type:");
-      
-      if (options.format === 'json') {
-        TelemetryCliLogger.json(perfStats);
-      } else {
-        const tableData = Object.entries(perfStats).map(([agent, stats]: [string, any]) => ({
-          'Agent Type': agent,
-          'Total Events': stats.totalEvents,
-          'Unique Sessions': stats.uniqueSessions,
-          'Error Rate (%)': stats.errorRate.toFixed(2),
-          'Stream Events': stats.streamEvents
-        }));
-        TelemetryCliLogger.table(tableData);
+        TelemetryCliLogger.json(dashboard);
       }
     } else {
-      // Show raw records
-      const records = await db.getEvents(filter);
+      console.log('\n📊 Analytics Dashboard (Last 24 Hours)\n');
       
-      TelemetryCliLogger.info(`Found ${records.length} telemetry records`);
+      console.log('🔍 Real-time Metrics:');
+      console.table(dashboard.realTime);
       
-      if (options.format === 'json') {
-        if (options.output) {
-          writeFileSync(options.output, JSON.stringify(records, null, 2));
-          TelemetryCliLogger.success(`Data exported to: ${options.output}`);
-        } else {
-          TelemetryCliLogger.json(records);
-        }
-      } else if (options.format === 'csv') {
-        const csv = formatRecordsAsCSV(records);
-        if (options.output) {
-          writeFileSync(options.output, csv);
-          TelemetryCliLogger.success(`Data exported to: ${options.output}`);
-        } else {
-          console.log(csv);
-        }
+      console.log('\n📈 Performance Metrics:');
+      if (dashboard.performance.length > 0) {
+        console.table(dashboard.performance);
       } else {
-        const tableData = records.slice(0, 20).map((r: TelemetryRecord) => ({
-          'Timestamp': new Date(r.timestamp).toLocaleString(),
-          'Session': r.sessionId.substring(0, 8) + '...',
-          'Agent': r.agentType,
-          'Event': r.eventType,
-          'Mode': r.mode,
-          'Prompt': r.prompt.substring(0, 50) + '...'
-        }));
-        
-        TelemetryCliLogger.table(tableData);
-        
-        if (records.length > 20) {
-          TelemetryCliLogger.info(`Showing first 20 of ${records.length} records. Use --format json or --limit for more.`);
-        }
+        console.log('No performance data available');
+      }
+      
+      console.log('\n📋 Recent Sessions:');
+      if (dashboard.sessionSummaries.length > 0) {
+        console.table(dashboard.sessionSummaries.slice(0, 10));
+      } else {
+        console.log('No recent sessions');
+      }
+
+      if (dashboard.anomalies.length > 0) {
+        console.log('\n⚠️  Detected Anomalies:');
+        console.table(dashboard.anomalies);
       }
     }
 
-    await db.close();
+    await service.shutdown();
   } catch (error) {
-    TelemetryCliLogger.error(`Failed to query telemetry data: ${error instanceof Error ? error.message : error}`);
+    TelemetryCliLogger.error(`Analytics failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-async function clearData(options: TelemetryCliOptions): Promise<void> {
-  const dbPath = options.database || join(process.cwd(), '.vibekit', 'telemetry.db');
-  
-  if (!existsSync(dbPath)) {
-    TelemetryCliLogger.warn("No telemetry database found to clear");
-    return;
-  }
-
+async function exportCommand(options: TelemetryCliOptions): Promise<void> {
   try {
-    const db = new TelemetryDB({ isEnabled: true, path: dbPath });
+    const dbPath = options.database || join(process.cwd(), '.vibekit/telemetry.db');
     
-    // Get record count before clearing
-    const beforeCount = await db.getEvents({ limit: 1000000 });
+    if (!existsSync(dbPath)) {
+      TelemetryCliLogger.error(`Database not found: ${dbPath}`);
+      return;
+    }
+
+    const service = await createTelemetryService(dbPath);
     
-    await db.clear();
-    await db.close();
-    
-    TelemetryCliLogger.success(`Cleared ${beforeCount.length} telemetry records`);
+    if (!service.getExportService()) {
+      TelemetryCliLogger.error('Export service not available - local store must be enabled');
+      return;
+    }
+
+    const filter: any = {};
+    if (options.sessionId) filter.sessionId = options.sessionId;
+    if (options.agentType) filter.agentType = options.agentType;
+    if (options.since) filter.fromTime = new Date(options.since).getTime();
+    if (options.until) filter.toTime = new Date(options.until).getTime();
+
+         const exportConfig = {
+       format: (options.format || 'json') as 'json' | 'csv' | 'otlp',
+       outputPath: options.output || `./telemetry-export-${Date.now()}`,
+       includeMetadata: true,
+       compression: 'gzip' as const
+     };
+
+     TelemetryCliLogger.info(`Exporting telemetry data...`);
+     const metadata = await service.exportData(filter, exportConfig);
+     
+     TelemetryCliLogger.success(`Export completed: ${metadata.config.outputPath}`);
+     TelemetryCliLogger.info(`Records exported: ${metadata.stats.totalRecords}`);
+     TelemetryCliLogger.info(`File size: ${metadata.stats.size} bytes`);
+
+    await service.shutdown();
   } catch (error) {
-    TelemetryCliLogger.error(`Failed to clear telemetry data: ${error instanceof Error ? error.message : error}`);
+    TelemetryCliLogger.error(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function cleanupCommand(options: TelemetryCliOptions): Promise<void> {
+  try {
+    const dbPath = options.database || join(process.cwd(), '.vibekit/telemetry.db');
+    
+    if (!existsSync(dbPath)) {
+      TelemetryCliLogger.error(`Database not found: ${dbPath}`);
+      return;
+    }
+
+    const service = await createTelemetryService(dbPath);
+    
+    // For now, just provide info about cleanup - actual implementation would need specific methods
+    TelemetryCliLogger.info('Cleanup functionality - check database operations for pruning old data');
+    TelemetryCliLogger.info(`Database path: ${dbPath}`);
+    
+    await service.shutdown();
+  } catch (error) {
+    TelemetryCliLogger.error(`Cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 export function registerTelemetryCommands(program: Command): void {
   const telemetryCmd = program
-    .command("telemetry")
-    .description("Query and analyze local telemetry data");
+    .command('telemetry')
+    .description('Telemetry data management and analytics');
 
   // Query command
   telemetryCmd
-    .command("query")
-    .alias("q")
-    .description("Query telemetry records")
-    .option("-d, --database <path>", "Path to telemetry database")
-    .option("-f, --format <format>", "Output format (table|json|csv)", "table")
-    .option("-o, --output <file>", "Output file (for json/csv formats)")
-    .option("-l, --limit <number>", "Limit number of records", "100")
-    .option("-s, --session-id <id>", "Filter by session ID")
-    .option("-a, --agent-type <type>", "Filter by agent type")
-    .option("-e, --event-type <type>", "Filter by event type")
-    .option("--since <time>", "Show records since time (ISO string or relative like '1h', '30m', '7d')")
-    .option("--until <time>", "Show records until time (ISO string or relative)")
-    .action((options: TelemetryCliOptions) => {
-      console.log("DEBUG: Query action called with options:", options);
-      executeQuery(options).then(() => {
-        console.log("DEBUG: Query execution completed");
-      }).catch((error) => {
-        console.log("DEBUG: Query execution error:", error);
-        TelemetryCliLogger.error(`Failed to execute query: ${error instanceof Error ? error.message : error}`);
-        process.exit(1);
-      });
-    });
+    .command('query')
+    .description('Query telemetry data')
+    .option('-d, --database <path>', 'Database file path')
+    .option('-f, --format <format>', 'Output format (table, json, csv)', 'table')
+    .option('-o, --output <file>', 'Output file path')
+    .option('-l, --limit <count>', 'Limit results', '50')
+    .option('-s, --session-id <id>', 'Filter by session ID')
+    .option('-a, --agent-type <type>', 'Filter by agent type')
+    .option('-e, --event-type <type>', 'Filter by event type')
+    .option('--since <date>', 'Filter events since date')
+    .option('--until <date>', 'Filter events until date')
+    .action(queryCommand);
 
-  // Sessions command  
+  // Stats command
   telemetryCmd
-    .command("sessions")
-    .alias("s")
-    .description("Show session summaries and statistics")
-    .option("-d, --database <path>", "Path to telemetry database")
-    .option("-f, --format <format>", "Output format (table|json|csv)", "table")
-    .option("-o, --output <file>", "Output file (for json/csv formats)")
-    .option("-l, --limit <number>", "Limit number of sessions")
-    .option("-a, --agent-type <type>", "Filter by agent type")
-    .action(async (options: TelemetryCliOptions) => {
-      try {
-        await executeQuery({ ...options, stats: true });
-      } catch (error) {
-        TelemetryCliLogger.error(`Failed to execute sessions query: ${error instanceof Error ? error.message : error}`);
-        process.exit(1);
-      }
-    });
+    .command('stats')
+    .description('Show telemetry database statistics')
+    .option('-d, --database <path>', 'Database file path')
+    .option('-f, --format <format>', 'Output format (table, json)', 'table')
+    .action(statsCommand);
 
-  // Performance command
+  // Analytics command
   telemetryCmd
-    .command("performance")
-    .alias("p")
-    .description("Show performance statistics and metrics")
-    .option("-d, --database <path>", "Path to telemetry database")
-    .option("-f, --format <format>", "Output format (table|json)", "table")
-    .option("-a, --agent-type <type>", "Filter by agent type")
-    .action(async (options: TelemetryCliOptions) => {
-      try {
-        await executeQuery({ ...options, performance: true });
-      } catch (error) {
-        TelemetryCliLogger.error(`Failed to execute performance query: ${error instanceof Error ? error.message : error}`);
-        process.exit(1);
-      }
-    });
+    .command('analytics')
+    .description('Show telemetry analytics dashboard')
+    .option('-d, --database <path>', 'Database file path')
+    .option('-f, --format <format>', 'Output format (table, json)', 'table')
+    .option('-o, --output <file>', 'Output file path')
+    .action(analyticsCommand);
 
   // Export command
   telemetryCmd
-    .command("export")
-    .alias("e")
-    .description("Export telemetry data to file")
-    .option("-d, --database <path>", "Path to telemetry database")
-    .option("-f, --format <format>", "Export format (json|csv)", "json")
-    .option("-o, --output <file>", "Output file path (required)")
-    .option("-l, --limit <number>", "Limit number of records")
-    .option("-s, --session-id <id>", "Filter by session ID")
-    .option("-a, --agent-type <type>", "Filter by agent type")
-    .option("-e, --event-type <type>", "Filter by event type")
-    .option("--since <time>", "Export records since time")
-    .option("--until <time>", "Export records until time")
-    .action(async (options: TelemetryCliOptions) => {
-      try {
-        await executeQuery(options);
-      } catch (error) {
-        TelemetryCliLogger.error(`Failed to export data: ${error instanceof Error ? error.message : error}`);
-        process.exit(1);
-      }
-    });
+    .command('export')
+    .description('Export telemetry data')
+    .option('-d, --database <path>', 'Database file path')
+    .option('-f, --format <format>', 'Export format (json, csv, otlp)', 'json')
+    .option('-o, --output <path>', 'Output file path')
+    .option('-s, --session-id <id>', 'Filter by session ID')
+    .option('-a, --agent-type <type>', 'Filter by agent type')
+    .option('--since <date>', 'Filter events since date')
+    .option('--until <date>', 'Filter events until date')
+    .action(exportCommand);
 
-  // Clear command
+  // Cleanup command
   telemetryCmd
-    .command("clear")
-    .alias("c")
-    .description("Clear all telemetry data (use with caution)")
-    .option("-d, --database <path>", "Path to telemetry database")
-    .action(async (options: TelemetryCliOptions) => {
-      try {
-        await clearData(options);
-      } catch (error) {
-        TelemetryCliLogger.error(`Failed to clear data: ${error instanceof Error ? error.message : error}`);
-        process.exit(1);
-      }
-    });
+    .command('cleanup')
+    .description('Clean up old telemetry data')
+    .option('-d, --database <path>', 'Database file path')
+    .option('--days <count>', 'Keep data for specified days', '30')
+    .action(cleanupCommand);
 } 

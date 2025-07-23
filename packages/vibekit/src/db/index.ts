@@ -1,8 +1,42 @@
-// Schema exports
-export * from './schema';
+// Internal imports for helper functions
+import { 
+  telemetryEvents, 
+  telemetrySessions, 
+  telemetryStats,
+  telemetryErrors,
+  telemetryBuffers,
+  telemetryAuditLog,
+} from './schema';
+import type { DrizzleTelemetryConfig } from './types';
+import { initializeTelemetryDB, getTelemetryDB } from './connection';
 
-// Type exports
-export * from './types';
+// Core schema and types exports
+export { 
+  telemetryEvents, 
+  telemetrySessions, 
+  telemetryStats,
+  telemetryErrors,
+  telemetryBuffers,
+  telemetryAuditLog,
+} from './schema';
+
+export type { 
+  TelemetryEvent,
+  TelemetrySession,
+  TelemetryStats,
+  TelemetryError,
+  TelemetryBuffer,
+  TelemetryAuditLog,
+  NewTelemetryEvent,
+  NewTelemetrySession,
+  NewTelemetryStats,
+  NewTelemetryError,
+  NewTelemetryBuffer,
+  NewTelemetryAuditLog,
+} from './schema';
+
+// Configuration types
+export type { DrizzleTelemetryConfig } from './types';
 
 // Database connection exports
 export {
@@ -15,13 +49,13 @@ export {
 // Operations exports
 export { DrizzleTelemetryOperations } from './operations';
 
-// Service exports
-export { DrizzleTelemetryService } from './drizzle-telemetry-service';
-export type { TelemetryData } from './drizzle-telemetry-service';
+// Legacy compatibility
+// TelemetryData is now exported from the consolidated TelemetryService
+export type { TelemetryData } from '../services/telemetry';
 
 // Phase 3: Advanced Features exports
 export { DrizzleTelemetryPerformanceOptimizer } from './performance-optimizer';
-export { runPhase3Tests, Phase3TestSuite } from './test-phase3';
+// Note: Phase 3 test exports removed for consolidation
 
 // Utility functions and constants
 export const DB_VERSION = '1.0.0';
@@ -29,57 +63,67 @@ export const DEFAULT_DB_PATH = '.vibekit/telemetry.db';
 export const DEFAULT_BATCH_SIZE = 50;
 export const DEFAULT_FLUSH_INTERVAL = 1000;
 
-// Migration helpers
-export const MIGRATION_PATHS = {
-  development: '.vibekit/telemetry-dev.db',
-  production: '.vibekit/telemetry.db',
-  test: '.vibekit/telemetry-test.db',
-} as const;
-
-// Error helpers
-export function isDrizzleTelemetryError(error: unknown): error is import('./types').DrizzleTelemetryConnectionError | import('./types').DrizzleTelemetryMigrationError {
-  return error instanceof Error && (error.name === 'DrizzleTelemetryConnectionError' || error.name === 'DrizzleTelemetryMigrationError');
-}
-
 // Configuration helpers
-export function createDrizzleConfig(overrides?: Partial<import('./types').DrizzleTelemetryConfig>): Required<import('./types').DrizzleTelemetryConfig> {
+export function createDefaultConfig(dbPath?: string): DrizzleTelemetryConfig {
   return {
-    dbPath: DEFAULT_DB_PATH,
-    pruneDays: 30,
+    dbPath: dbPath || DEFAULT_DB_PATH,
+    enableQueryLogging: false,
+    enableWAL: true,
+    queryTimeoutMs: 5000,
     streamBatchSize: DEFAULT_BATCH_SIZE,
     streamFlushIntervalMs: DEFAULT_FLUSH_INTERVAL,
-    maxSizeMB: 100,
-    enableWAL: true,
-    enableForeignKeys: true,
-    poolSize: 1,
-    queryTimeoutMs: 5000,
-    enableQueryLogging: false,
-    enableMetrics: true,
-    ...overrides,
   };
 }
 
-// Phase 3: Convenience functions for common operations
-export async function initializeOptimizedTelemetrySystem(config?: Partial<import('./types').DrizzleTelemetryConfig>) {
-  const { DrizzleTelemetryOperations } = await import('./operations');
-  const { DrizzleTelemetryPerformanceOptimizer } = await import('./performance-optimizer');
-  const { initializeTelemetryDB } = await import('./connection');
+// Database initialization helper
+export async function initializeDatabase(config?: Partial<DrizzleTelemetryConfig>): Promise<void> {
+  const fullConfig = createDefaultConfig(config?.dbPath);
+  Object.assign(fullConfig, config);
   
-  const fullConfig = createDrizzleConfig(config);
-  
-  // Initialize database
   await initializeTelemetryDB(fullConfig);
+}
+
+// Helper to check if database exists
+export function isDatabaseInitialized(dbPath: string = DEFAULT_DB_PATH): boolean {
+  try {
+    const fs = require('fs');
+    return fs.existsSync(dbPath);
+  } catch {
+    return false;
+  }
+}
+
+// Export health check functionality
+export async function checkDatabaseHealth(dbPath: string = DEFAULT_DB_PATH): Promise<{
+  exists: boolean;
+  accessible: boolean;
+  version: string;
+  recordCount?: number;
+}> {
+  const exists = isDatabaseInitialized(dbPath);
   
-  // Create operations instance
-  const operations = new DrizzleTelemetryOperations(fullConfig);
-  await operations.initialize();
-  
-  // Create performance optimizer
-  const optimizer = new DrizzleTelemetryPerformanceOptimizer(operations, fullConfig);
-  
-  return {
-    operations,
-    optimizer,
-    config: fullConfig,
-  };
+  if (!exists) {
+    return {
+      exists: false,
+      accessible: false,
+      version: DB_VERSION,
+    };
+  }
+
+  try {
+    // Try to initialize the database to test accessibility
+    await getTelemetryDB();
+    
+    return {
+      exists: true,
+      accessible: true,
+      version: DB_VERSION,
+    };
+  } catch (error) {
+    return {
+      exists: true,
+      accessible: false,
+      version: DB_VERSION,
+    };
+  }
 } 

@@ -1,7 +1,6 @@
 import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
 import { registerTelemetryCommands } from "./commands/telemetry.js";
-import { registerDrizzleTelemetryCommands } from "./commands/drizzle-telemetry.js";
 import { createLocalCommand } from "./commands/local.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -61,11 +60,9 @@ program
   )
   .action(initCommand);
 
-// Register legacy telemetry commands
+// Register consolidated telemetry commands (includes all Drizzle features)
 registerTelemetryCommands(program);
 
-// Register new Drizzle-based telemetry commands
-registerDrizzleTelemetryCommands(program);
 // Add local command with subcommands
 program.addCommand(createLocalCommand());
 
