@@ -48,6 +48,7 @@
     },
     "dependencies": {
         "@dagger.io/dagger": "^0.18.14",
+        "chokidar": "^4.0.3",
         "dotenv": "^17.2.0",
         "socket.io": "^4.8.1"
     }

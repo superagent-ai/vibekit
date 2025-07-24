@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { io, Socket } from 'socket.io-client'
 import { telemetryAPI } from '@/lib/telemetry-api'
@@ -14,55 +14,189 @@ export const QUERY_KEYS = {
   apiInfo: ['telemetry', 'info'] as const,
 }
 
-// Real-time WebSocket subscription hook
-export function useRealTimeSubscription<T>(
-  channel: string, 
-  queryKey: readonly unknown[], 
-  onUpdate?: (data: T) => void
-) {
-  const queryClient = useQueryClient()
+// Global socket instance - created once and reused
+let globalSocket: Socket | null = null
+let isInitialized = false
+const connectionCallbacks: ((connected: boolean) => void)[] = []
 
-  useEffect(() => {
-    // Connect to Socket.IO server
-    const socket: Socket = io(import.meta.env.VITE_TELEMETRY_API_URL || 'http://localhost:3000')
-    
-    socket.on('connect', () => {
-      console.log(`🔌 Connected to telemetry server, subscribing to channel: ${channel}`)
-      socket.emit('subscribe', channel)
-    })
-    
-    socket.on(`update:${channel}`, (data: T) => {
-      console.log(`📡 Received real-time update for ${channel}:`, data)
-      
-      // Call custom update handler if provided
-      if (onUpdate) {
-        onUpdate(data)
+// Initialize socket once and reuse it
+export function initializeSocket() {
+  if (isInitialized || globalSocket) {
+    return globalSocket
+  }
+  
+  console.log('🔌 Creating persistent Socket.IO connection')
+  isInitialized = true
+  
+  globalSocket = io(import.meta.env.VITE_TELEMETRY_API_URL || 'http://localhost:3000', {
+    transports: ['websocket', 'polling'],
+    timeout: 10000,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    forceNew: false,
+    autoConnect: true,
+  })
+  
+  globalSocket.on('connect', () => {
+    console.log('🔌 Persistent socket connected to telemetry server')
+    connectionCallbacks.forEach(callback => {
+      try {
+        callback(true)
+      } catch (error) {
+        console.warn('Connection callback error:', error)
       }
-      
-      // Update React Query cache with new data
-      queryClient.setQueryData(queryKey, data)
     })
     
-    socket.on('disconnect', () => {
-      console.log(`🔌 Disconnected from telemetry server`)
+    // Subscribe to all channels
+    console.log('📡 Subscribing to channels: health, metrics, events')
+    globalSocket!.emit('subscribe', 'health')
+    globalSocket!.emit('subscribe', 'metrics') 
+    globalSocket!.emit('subscribe', 'events')
+  })
+  
+  globalSocket.on('disconnect', (reason) => {
+    console.log('🔌 Persistent socket disconnected:', reason)
+    connectionCallbacks.forEach(callback => {
+      try {
+        callback(false)
+      } catch (error) {
+        console.warn('Disconnect callback error:', error)
+      }
     })
-    
-    socket.on('connect_error', (error) => {
-      console.warn(`⚠️ WebSocket connection error:`, error)
+  })
+  
+  globalSocket.on('connect_error', (error) => {
+    console.warn('⚠️ Persistent socket connection error:', error)
+    connectionCallbacks.forEach(callback => {
+      try {
+        callback(false)
+      } catch (error) {
+        console.warn('Error callback error:', error)
+      }
     })
+  })
+  
+  // Set up global event listeners once
+  globalSocket.on('update:health', (data: any) => {
+    console.log('📡 Health update received:', data)
+    // We'll handle this through invalidation instead of direct cache updates
+  })
+
+  globalSocket.on('update:metrics', (data: any) => {
+    console.log('📡 Metrics update received:', data)
+    // We'll handle this through invalidation instead of direct cache updates
+  })
+
+  globalSocket.on('update:event', (eventData: any) => {
+    console.log('📡 Event update received:', eventData)
+    // Trigger invalidation for all dependent queries
+    window.dispatchEvent(new CustomEvent('telemetry-event-update', { detail: eventData }))
+  })
+
+  // New database change events from Chokidar file watcher
+  globalSocket.on('update:analytics', (data: any) => {
+    console.log('📊 Analytics update received:', data)
+    // Trigger analytics-specific invalidation
+    window.dispatchEvent(new CustomEvent('telemetry-analytics-update', { detail: data }))
+  })
+
+  globalSocket.on('update:sessions', (data: any) => {
+    console.log('👥 Sessions update received:', data)
+    // Trigger sessions-specific invalidation
+    window.dispatchEvent(new CustomEvent('telemetry-sessions-update', { detail: data }))
+  })
+
+  globalSocket.on('database_change', (data: any) => {
+    console.log('💾 Database change detected:', data)
+    // Trigger comprehensive invalidation for database changes
+    window.dispatchEvent(new CustomEvent('telemetry-db-change', { detail: data }))
+  })
+  
+  return globalSocket
+}
+
+// Hook to get connection status
+export function useConnectionStatus() {
+  const [isConnected, setIsConnected] = useState(false)
+  
+  useEffect(() => {
+    // Initialize socket if not already done
+    const socket = initializeSocket()
     
-    // Cleanup on unmount
-    return () => {
-      console.log(`🔌 Cleaning up WebSocket connection for channel: ${channel}`)
-      socket.disconnect()
+    const callback = (connected: boolean) => {
+      setIsConnected(connected)
     }
-  }, [channel, queryKey, onUpdate, queryClient])
+    
+    connectionCallbacks.push(callback)
+    
+    // Set initial status
+    if (socket) {
+      setIsConnected(socket.connected)
+    }
+    
+    return () => {
+      const index = connectionCallbacks.indexOf(callback)
+      if (index > -1) {
+        connectionCallbacks.splice(index, 1)
+      }
+    }
+  }, [])
+  
+  return isConnected
+}
+
+// Hook to invalidate queries on socket events
+function useSocketEventInvalidation() {
+  const queryClient = useQueryClient()
+  
+  useEffect(() => {
+    const handleEventUpdate = (event: CustomEvent) => {
+      console.log('📡 Invalidating queries due to socket event')
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events })
+      queryClient.invalidateQueries({ queryKey: ['telemetry', 'sessions'] })
+      queryClient.invalidateQueries({ queryKey: ['telemetry', 'analytics'] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metrics })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.health })
+    }
+
+    const handleAnalyticsUpdate = (event: CustomEvent) => {
+      console.log('📊 Invalidating analytics queries due to database change')
+      queryClient.invalidateQueries({ queryKey: ['telemetry', 'analytics'] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events })
+    }
+
+    const handleSessionsUpdate = (event: CustomEvent) => {
+      console.log('👥 Invalidating sessions queries due to database change')
+      queryClient.invalidateQueries({ queryKey: ['telemetry', 'sessions'] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metrics })
+    }
+
+    const handleDatabaseChange = (event: CustomEvent) => {
+      console.log('💾 Comprehensive invalidation due to database change')
+      // Invalidate everything for database changes
+      queryClient.invalidateQueries({ queryKey: ['telemetry'] })
+    }
+    
+    window.addEventListener('telemetry-event-update', handleEventUpdate as EventListener)
+    window.addEventListener('telemetry-analytics-update', handleAnalyticsUpdate as EventListener)
+    window.addEventListener('telemetry-sessions-update', handleSessionsUpdate as EventListener)
+    window.addEventListener('telemetry-db-change', handleDatabaseChange as EventListener)
+    
+    return () => {
+      window.removeEventListener('telemetry-event-update', handleEventUpdate as EventListener)
+      window.removeEventListener('telemetry-analytics-update', handleAnalyticsUpdate as EventListener)
+      window.removeEventListener('telemetry-sessions-update', handleSessionsUpdate as EventListener)
+      window.removeEventListener('telemetry-db-change', handleDatabaseChange as EventListener)
+    }
+  }, [queryClient])
 }
 
 // Health status hook with real-time updates
 export function useHealthStatus() {
-  // Set up real-time subscription
-  useRealTimeSubscription('health', QUERY_KEYS.health)
+  useSocketEventInvalidation()
+  initializeSocket() // Ensure socket is initialized
   
   return useQuery({
     queryKey: QUERY_KEYS.health,
@@ -74,8 +208,8 @@ export function useHealthStatus() {
 
 // Real-time metrics hook with WebSocket updates
 export function useMetrics() {
-  // Set up real-time subscription
-  useRealTimeSubscription('metrics', QUERY_KEYS.metrics)
+  useSocketEventInvalidation()
+  initializeSocket() // Ensure socket is initialized
   
   return useQuery({
     queryKey: QUERY_KEYS.metrics,
@@ -87,20 +221,26 @@ export function useMetrics() {
 
 // Analytics dashboard hook with real-time updates  
 export function useAnalytics(window: 'hour' | 'day' | 'week' = 'day') {
+  useSocketEventInvalidation()
+  initializeSocket() // Ensure socket is initialized
+  
   return useQuery({
     queryKey: QUERY_KEYS.analytics(window),
     queryFn: () => telemetryAPI.getAnalytics(window),
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 60000, // Fallback polling every minute
     staleTime: 30000,
   })
 }
 
-// Sessions query hook - now using the correct query endpoint
+// Sessions query hook with real-time updates
 export function useSessions(filters: FilterOptions = {}) {
+  useSocketEventInvalidation()
+  initializeSocket() // Ensure socket is initialized
+  
   return useQuery({
     queryKey: QUERY_KEYS.sessions(filters),
     queryFn: () => telemetryAPI.querySessions(filters),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000, // Fallback polling every 30 seconds
     staleTime: 15000,
   })
 }
@@ -115,38 +255,31 @@ export function useApiInfo() {
   })
 }
 
-// Events hook - now creates synthetic events from available data
+// Events hook with improved real-time handling
 export function useTelemetryEvents(onEvent?: (event: any) => void) {
+  useSocketEventInvalidation()
+  const socket = initializeSocket() // Ensure socket is initialized
+  
   const eventsQuery = useQuery({
     queryKey: QUERY_KEYS.events,
     queryFn: () => telemetryAPI.getEvents(),
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 10000, // Fallback polling every 10 seconds
     staleTime: 5000,
   })
 
-  // Set up real-time event listening
+  // Set up custom event handler if provided
   useEffect(() => {
-    const socket: Socket = io(import.meta.env.VITE_TELEMETRY_API_URL || 'http://localhost:3000')
-    
-    socket.on('connect', () => {
-      console.log('🔌 Connected for telemetry events, subscribing to events channel')
-      socket.emit('subscribe', 'events')
-    })
-    
-    socket.on('update:event', (eventData: any) => {
-      console.log(`📡 Received telemetry event:`, eventData)
-      
-      if (onEvent) {
-        onEvent(eventData)
+    if (onEvent) {
+      const handleCustomEvent = (event: CustomEvent) => {
+        console.log('📡 Custom event handler called:', event.detail)
+        onEvent(event.detail)
       }
-    })
-    
-    socket.on('disconnect', () => {
-      console.log('🔌 Disconnected from telemetry events')
-    })
-    
-    return () => {
-      socket.disconnect()
+      
+      window.addEventListener('telemetry-event-update', handleCustomEvent as EventListener)
+      
+      return () => {
+        window.removeEventListener('telemetry-event-update', handleCustomEvent as EventListener)
+      }
     }
   }, [onEvent])
 
@@ -158,18 +291,22 @@ export function useRefreshData() {
   const queryClient = useQueryClient()
 
   const refreshAll = () => {
+    console.log('🔄 Manual refresh: Invalidating all telemetry queries')
     queryClient.invalidateQueries({ queryKey: ['telemetry'] })
   }
 
   const refreshHealth = () => {
+    console.log('🔄 Manual refresh: Health')
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.health })
   }
 
   const refreshMetrics = () => {
+    console.log('🔄 Manual refresh: Metrics')
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metrics })
   }
 
   const refreshAnalytics = (window?: string) => {
+    console.log('🔄 Manual refresh: Analytics', window)
     if (window) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.analytics(window) })
     } else {
@@ -178,6 +315,7 @@ export function useRefreshData() {
   }
 
   const refreshSessions = (filters?: FilterOptions) => {
+    console.log('🔄 Manual refresh: Sessions', filters)
     if (filters) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sessions(filters) })
     } else {
@@ -186,6 +324,7 @@ export function useRefreshData() {
   }
 
   const refreshEvents = () => {
+    console.log('🔄 Manual refresh: Events')
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events })
   }
 

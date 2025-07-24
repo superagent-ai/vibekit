@@ -11,6 +11,7 @@ import http from 'http';
 import url from 'url';
 import { spawn } from 'child_process';
 import { Server as SocketIOServer } from 'socket.io';
+import chokidar from 'chokidar';
 import { createTelemetryService as createTelemetryServiceClass } from '../packages/vibekit/dist/index.js';
 
 const PORT = process.env.PORT || 3000;
@@ -262,27 +263,197 @@ const routes = {
             agent: 'agent type filter',
             session: 'session ID filter'
           }
+        },
+        testEvent: {
+          path: '/test-event',
+          method: 'POST',
+          description: 'Trigger a test event for real-time verification'
         }
       },
       examples: [
         `http://${HOST}:${PORT}/health`,
         `http://${HOST}:${PORT}/metrics`,
         `http://${HOST}:${PORT}/analytics?window=day`,
-        `http://${HOST}:${PORT}/query?limit=10&agent=claude`
+        `http://${HOST}:${PORT}/query?limit=10&agent=claude`,
+        `curl -X POST http://${HOST}:${PORT}/test-event`
       ]
     };
 
     sendJSON(res, 200, apiInfo);
+  },
+
+  '/test-event': async (req, res) => {
+    try {
+      if (req.method !== 'POST') {
+        return sendJSON(res, 405, {
+          error: 'Method Not Allowed',
+          message: 'This endpoint only accepts POST requests',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Read POST body
+      let body = '';
+      req.on('data', chunk => {
+        body += chunk.toString();
+      });
+      
+      req.on('end', () => {
+        try {
+          const eventData = body ? JSON.parse(body) : {};
+          
+          // Create a test event
+          const testEvent = {
+            type: eventData.type || 'test',
+            data: {
+              ...eventData,
+              testId: `test-${Date.now()}`,
+              source: 'dashboard',
+              timestamp: new Date().toISOString()
+            }
+          };
+
+          console.log('🧪 Broadcasting test event:', testEvent);
+
+          // Broadcast to all connected clients
+          io.to('events').emit('update:event', testEvent);
+          
+          // Also trigger metrics and analytics updates
+          io.to('metrics').emit('update:metrics', { testEvent: true, timestamp: new Date().toISOString() });
+          
+          sendJSON(res, 200, {
+            success: true,
+            message: 'Test event broadcasted successfully',
+            event: testEvent,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (parseError) {
+          sendJSON(res, 400, {
+            error: 'Invalid JSON in request body',
+            message: parseError.message,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      });
+    } catch (error) {
+      sendJSON(res, 500, {
+        error: 'Failed to trigger test event',
+        message: error.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
 };
 
 // Initialize persistent TelemetryService
 let telemetryService;
+let dbWatcher; // Add watcher variable
 
 async function initializeTelemetryService() {
   console.log('🔧 Initializing persistent TelemetryService...');
   telemetryService = await createTelemetryService();
   console.log('✅ TelemetryService initialized and ready for real-time events');
+}
+
+// Setup SQLite file watcher for real-time database changes
+function setupDatabaseWatcher() {
+  const dbPath = '.vibekit/telemetry.db';
+  
+  console.log(`👁️  Setting up database watcher for: ${dbPath}`);
+  
+  dbWatcher = chokidar.watch(dbPath, {
+    ignored: /(^|[\/\\])\../, // Ignore dotfiles
+    persistent: true, // Keep watching even if no listeners
+    awaitWriteFinish: { // Wait for writes to stabilize (prevents rapid-fire events)
+      stabilityThreshold: 200, // Wait 200ms after last change
+      pollInterval: 100, // Check every 100ms during stability period
+    },
+    usePolling: false, // Use native fs events (faster); set to true if on network FS
+  });
+
+  // Debounce multiple rapid changes
+  let debounceTimer;
+  
+  // On file change, query new data and broadcast
+  dbWatcher.on('change', async (path) => {
+    console.log(`🔔 DB file changed: ${path}`);
+    
+    // Clear existing timer and set new one
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      try {
+        if (!telemetryService) {
+          console.log('⚠️  TelemetryService not available, skipping update');
+          return;
+        }
+
+        // Query updated data from multiple sources
+        const [metrics, analytics, sessions] = await Promise.all([
+          telemetryService.getRealTimeMetrics().catch(err => {
+            console.warn('Warning: Failed to get metrics:', err.message);
+            return null;
+          }),
+          telemetryService.getAnalyticsDashboard('day').catch(err => {
+            console.warn('Warning: Failed to get analytics:', err.message);
+            return null;
+          }),
+          telemetryService.getSessionSummaries({ limit: 10, offset: 0 }).catch(err => {
+            console.warn('Warning: Failed to get sessions:', err.message);
+            return null;
+          })
+        ]);
+
+        // Broadcast updates to different channels
+        if (metrics) {
+          io.to('metrics').emit('update:metrics', {
+            realTime: metrics,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        if (analytics) {
+          io.to('events').emit('update:analytics', {
+            ...analytics,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        if (sessions) {
+          io.to('events').emit('update:sessions', {
+            sessions,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        // Broadcast a general data update event
+        io.to('events').emit('update:event', {
+          type: 'database_change',
+          data: {
+            hasMetrics: !!metrics,
+            hasAnalytics: !!analytics,
+            hasSessions: !!sessions,
+            timestamp: new Date().toISOString()
+          }
+        });
+
+        console.log(`📡 Broadcasted real-time updates - Metrics: ${!!metrics}, Analytics: ${!!analytics}, Sessions: ${!!sessions}`);
+        
+      } catch (error) {
+        console.error('❌ Error querying/broadcasting real-time updates:', error);
+      }
+    }, 300); // Debounce by 300ms
+  });
+
+  // Error handling for watcher
+  dbWatcher.on('error', (error) => {
+    console.error('❌ Chokidar watcher error:', error);
+  });
+
+  dbWatcher.on('ready', () => {
+    console.log('👁️  Database watcher is ready and monitoring for changes');
+  });
+
+  console.log('📻 Real-time database change monitoring configured');
 }
 
 // Create HTTP server
@@ -302,7 +473,7 @@ const server = http.createServer(async (req, res) => {
 
   // Route request
   const handler = routes[pathname];
-  if (handler && req.method === 'GET') {
+  if (handler && (req.method === 'GET' || (req.method === 'POST' && pathname === '/test-event'))) {
     try {
       await handler(req, res);
     } catch (error) {
@@ -399,6 +570,9 @@ async function startServer() {
     // Set up event broadcasting
     setupEventBroadcasting();
     
+    // Setup database watcher for real-time updates
+    setupDatabaseWatcher();
+    
     // Start HTTP server
     server.listen(PORT, HOST, () => {
       console.log(`🚀 VibeKit Telemetry Server running at http://${HOST}:${PORT}`);
@@ -428,6 +602,12 @@ async function gracefulShutdown(signal) {
     if (io) {
       console.log('🔌 Closing WebSocket connections...');
       io.close();
+    }
+    
+    // Close database watcher
+    if (dbWatcher) {
+      console.log('👁️  Closing database watcher...');
+      await dbWatcher.close();
     }
     
     // Shutdown telemetry service

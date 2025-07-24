@@ -1,15 +1,74 @@
 import React, { useState } from 'react'
-import { useHealthStatus, useMetrics, useSessions, useTelemetryEvents, useAnalytics } from './hooks/use-telemetry-api'
+import { 
+  useHealthStatus, 
+  useMetrics, 
+  useAnalytics, 
+  useSessions, 
+  useTelemetryEvents,
+  useRefreshData,
+  useConnectionStatus
+} from '@/hooks/use-telemetry-api'
 import { formatBytes, formatDuration, formatNumber, getStatusColor, formatDate } from './lib/utils'
 
 function App() {
   const [activeTab, setActiveTab] = useState('overview')
   
+  console.log('🎯 App component rendering...')
+  
+  // Data hooks
   const { data: health, isLoading: healthLoading, error: healthError } = useHealthStatus()
   const { data: metrics, isLoading: metricsLoading, error: metricsError } = useMetrics()
+  const { data: analytics, isLoading: analyticsLoading, error: analyticsError } = useAnalytics()
   const { data: sessions, isLoading: sessionsLoading, error: sessionsError } = useSessions()
-  const { data: analytics } = useAnalytics()
   const { data: events, isLoading: eventsLoading, error: eventsError } = useTelemetryEvents()
+  
+  console.log('📊 Data loaded:', { health: !!health, metrics: !!metrics, analytics: !!analytics, sessions: !!sessions, events: !!events })
+  console.log('⏳ Loading states:', { healthLoading, metricsLoading, analyticsLoading, sessionsLoading, eventsLoading })
+  console.log('❌ Errors:', { healthError, metricsError, analyticsError, sessionsError, eventsError })
+  
+  // Connection status
+  const isConnected = useConnectionStatus()
+  console.log('🔌 Connection status:', isConnected)
+  
+  // Refresh functions
+  const { refreshAll, refreshHealth, refreshMetrics, refreshAnalytics, refreshSessions, refreshEvents } = useRefreshData()
+
+  // Error handling
+  if (healthError || metricsError || analyticsError || sessionsError || eventsError) {
+    console.error('❌ App has errors:', { healthError, metricsError, analyticsError, sessionsError, eventsError })
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
+          <h1 className="text-xl font-bold text-red-600 mb-4">Dashboard Error</h1>
+          <div className="space-y-2 text-sm text-gray-600">
+            {healthError && <p>Health: {String(healthError)}</p>}
+            {metricsError && <p>Metrics: {String(metricsError)}</p>}
+            {analyticsError && <p>Analytics: {String(analyticsError)}</p>}
+            {sessionsError && <p>Sessions: {String(sessionsError)}</p>}
+            {eventsError && <p>Events: {String(eventsError)}</p>}
+          </div>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Loading state
+  if (healthLoading && metricsLoading && analyticsLoading && sessionsLoading && eventsLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-md">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 text-center">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: '📊' },
@@ -45,6 +104,95 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">VibeKit Telemetry Dashboard</h1>
+              <p className="text-gray-600">Real-time monitoring and analytics</p>
+            </div>
+            
+            {/* Connection Status and Controls */}
+            <div className="flex items-center gap-4">
+              {/* WebSocket Connection Status */}
+              <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-1">
+                  <div className={`w-2 h-2 rounded-full ${
+                    isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                  }`}></div>
+                  <span className="text-gray-600">
+                    {isConnected ? 'Connected' : 'Disconnected'}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Test Event Button */}
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  
+                  // Use a timeout to prevent blocking the UI
+                  setTimeout(async () => {
+                    try {
+                      console.log('🧪 Triggering test telemetry event...')
+                      const response = await fetch(`${import.meta.env.VITE_TELEMETRY_API_URL || 'http://localhost:3000'}/test-event`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                          type: 'dashboard_test',
+                          timestamp: new Date().toISOString(),
+                          message: 'Dashboard real-time test event'
+                        })
+                      })
+                      
+                      if (response.ok) {
+                        console.log('✅ Test event sent successfully')
+                        const result = await response.json()
+                        console.log('📡 Test event result:', result)
+                      } else {
+                        console.warn('⚠️ Test event failed:', response.status)
+                      }
+                    } catch (error) {
+                      console.error('❌ Error sending test event:', error)
+                    }
+                  }, 0)
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm"
+                title="Send test event to verify real-time updates"
+                type="button"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Test Event
+              </button>
+              
+              {/* Manual Refresh Button */}
+              <button
+                onClick={refreshAll}
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                title="Refresh all data"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+              
+              {/* Health Status Indicator */}
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  health?.status === 'healthy' ? 'bg-green-500' : 'bg-red-500'
+                }`}></div>
+                <span className="text-sm text-gray-600">
+                  {health?.status || 'Unknown'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="border-b pb-4">
@@ -213,7 +361,7 @@ function App() {
                     </div>
                   ) : eventsError ? (
                     <div className="p-8 text-center text-red-600">
-                      <p>Failed to load events: {eventsError.message}</p>
+                      <p>Failed to load events: {String(eventsError)}</p>
                     </div>
                   ) : events && events.length > 0 ? (
                     <div className="divide-y">
@@ -311,7 +459,7 @@ function App() {
                     </div>
                   ) : sessionsError ? (
                     <div className="p-8 text-center text-red-600">
-                      <p>Failed to load sessions: {sessionsError.message}</p>
+                      <p>Failed to load sessions: {String(sessionsError)}</p>
                     </div>
                   ) : sessions?.results && sessions.results.length > 0 ? (
                     <div className="divide-y">
