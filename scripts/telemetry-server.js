@@ -360,18 +360,22 @@ function setupEventBroadcasting() {
   // Broadcast individual telemetry events
   telemetryService.on('new:start', (data) => {
     io.to('events').emit('update:event', { type: 'start', data });
+    console.log('Emitting event:', 'start', data);
   });
   
   telemetryService.on('new:stream', (data) => {
     io.to('events').emit('update:event', { type: 'stream', data });
+    console.log('Emitting event:', 'stream', data);
   });
   
   telemetryService.on('new:end', (data) => {
     io.to('events').emit('update:event', { type: 'end', data });
+    console.log('Emitting event:', 'end', data);
   });
   
   telemetryService.on('new:error', (data) => {
     io.to('events').emit('update:event', { type: 'error', data });
+    console.log('Emitting event:', 'error', data);
   });
   
   // Broadcast metrics and health updates

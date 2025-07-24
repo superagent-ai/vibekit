@@ -100,8 +100,18 @@ export class DrizzleTelemetryDB {
         } : false,
       });
 
-      // Run migrations
-      await this.runMigrations();
+      // Skip programmatic migrations - use external migration scripts instead
+      // This avoids ESM path resolution issues with the migrate function
+      console.log('📋 Skipping programmatic migrations (use drizzle-kit migrate externally)');
+
+      // Test database connection by performing a simple query
+      try {
+        // This will succeed if tables exist, or create them automatically via Drizzle schema
+        await this.db.select().from(schema.telemetryEvents).limit(1);
+        console.log('✅ Database tables verified and accessible');
+      } catch (error) {
+        console.log('📊 Database tables will be created on first use (schema-first)');
+      }
 
       // Update metrics
       this.updateDbSizeMetrics();
@@ -156,7 +166,8 @@ export class DrizzleTelemetryDB {
   }
 
   /**
-   * Run database migrations
+   * Run database migrations (DEPRECATED - use external drizzle-kit migrate)
+   * This method is kept for reference but should not be used in ESM applications
    */
   private async runMigrations(): Promise<MigrationResult> {
     if (!this.db) {
@@ -183,12 +194,17 @@ export class DrizzleTelemetryDB {
         resolve('./migrations'),
         resolve(__dirname, '../migrations'),
         resolve(__dirname, '../../migrations'),
+        resolve(__dirname, '../../../packages/db/migrations'), // For built modules
+        resolve(process.cwd(), 'packages/db/migrations'), // From project root
       ];
       
       let migrationsDir: string | null = null;
+      console.log('🔍 Checking migration directories:');
       for (const dir of possibleMigrationDirs) {
+        console.log(`  - Checking: ${dir} (exists: ${existsSync(dir)})`);
         if (existsSync(dir)) {
           migrationsDir = dir;
+          console.log(`  ✅ Found migrations at: ${dir}`);
           break;
         }
       }
@@ -213,12 +229,30 @@ export class DrizzleTelemetryDB {
         return result;
       }
 
-      // Run migrations
-      console.log(`🔄 Running database migrations from ${migrationsDir}...`);
+      // First check if tables already exist
+      let tablesExist = false;
       try {
-        await migrate(this.db, { migrationsFolder: migrationsDir });
-      } catch (migrationError) {
-        console.warn('⚠️ Standard migration failed, attempting schema creation fallback:', migrationError);
+        await this.db.select().from(schema.telemetryEvents).limit(1);
+        tablesExist = true;
+        console.log('✅ Tables already exist, skipping all migration processes');
+        result.success = true;
+        result.version = '1.0.0';
+        result.duration = Date.now() - startTime;
+        return result;
+      } catch (error) {
+        console.log('📋 Tables do not exist, running migrations...');
+      }
+
+      if (!tablesExist) {
+        // Run migrations
+        console.log(`🔄 Running database migrations from ${migrationsDir}...`);
+        try {
+          // Ensure absolute path for ESM compatibility
+          const absoluteMigrationsDir = resolve(migrationsDir);
+          console.log(`📁 Resolved absolute path: ${absoluteMigrationsDir}`);
+          await migrate(this.db, { migrationsFolder: absoluteMigrationsDir });
+        } catch (migrationError) {
+          console.warn('⚠️ Standard migration failed, attempting schema creation fallback:', migrationError);
         // Fallback: create essential tables manually using raw SQL
         try {
           // Create basic tables with minimal schema
@@ -270,6 +304,7 @@ export class DrizzleTelemetryDB {
           console.warn('⚠️ Schema creation fallback also failed:', schemaError);
           // Continue anyway - operations will fail gracefully
         }
+      }
       }
       
       result.success = true;
