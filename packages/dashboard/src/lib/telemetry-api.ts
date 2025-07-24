@@ -73,7 +73,6 @@ export class TelemetryAPI {
   async getEvents(): Promise<any[]> {
     try {
       // Since there's no events endpoint, we'll create events from session activity
-      const analytics = await this.getAnalytics().catch(() => null)
       const query = await this.querySessions().catch(() => ({ results: [] }))
       
       // Create synthetic events from session data and real-time metrics

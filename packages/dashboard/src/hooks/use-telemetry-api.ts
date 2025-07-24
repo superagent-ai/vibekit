@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { io, Socket } from 'socket.io-client'
 import { telemetryAPI } from '@/lib/telemetry-api'
@@ -157,7 +157,7 @@ function useSocketEventInvalidation() {
   const queryClient = useQueryClient()
   
   useEffect(() => {
-    const handleEventUpdate = (event: CustomEvent) => {
+    const handleEventUpdate = () => {
       console.log('📡 Invalidating queries due to socket event')
       // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events })
@@ -167,25 +167,25 @@ function useSocketEventInvalidation() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.health })
     }
 
-    const handleAnalyticsUpdate = (event: CustomEvent) => {
+    const handleAnalyticsUpdate = () => {
       console.log('📊 Invalidating analytics queries due to database change')
       queryClient.invalidateQueries({ queryKey: ['telemetry', 'analytics'] })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events })
     }
 
-    const handleSessionsUpdate = (event: CustomEvent) => {
+    const handleSessionsUpdate = () => {
       console.log('👥 Invalidating sessions queries due to database change')
       queryClient.invalidateQueries({ queryKey: ['telemetry', 'sessions'] })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metrics })
     }
 
-    const handleHealthUpdate = (event: CustomEvent) => {
+    const handleHealthUpdate = () => {
       console.log('💚 Invalidating health queries due to database change')
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.health })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metrics })
     }
 
-    const handleDatabaseChange = (event: CustomEvent) => {
+    const handleDatabaseChange = () => {
       console.log('💾 Comprehensive invalidation due to database change')
       // Invalidate everything for database changes
       queryClient.invalidateQueries({ queryKey: ['telemetry'] })
@@ -272,7 +272,7 @@ export function useApiInfo() {
 // Events hook with improved real-time handling
 export function useTelemetryEvents(onEvent?: (event: any) => void) {
   useSocketEventInvalidation()
-  const socket = initializeSocket() // Ensure socket is initialized
+  initializeSocket() // Ensure socket is initialized
   
   const eventsQuery = useQuery({
     queryKey: QUERY_KEYS.events,
