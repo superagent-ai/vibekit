@@ -107,6 +107,12 @@ export function initializeSocket() {
     window.dispatchEvent(new CustomEvent('telemetry-sessions-update', { detail: data }))
   })
 
+  globalSocket.on('update:health', (data: any) => {
+    console.log('💚 Health update received:', data)
+    // Trigger health-specific invalidation
+    window.dispatchEvent(new CustomEvent('telemetry-health-update', { detail: data }))
+  })
+
   globalSocket.on('database_change', (data: any) => {
     console.log('💾 Database change detected:', data)
     // Trigger comprehensive invalidation for database changes
@@ -173,6 +179,12 @@ function useSocketEventInvalidation() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metrics })
     }
 
+    const handleHealthUpdate = (event: CustomEvent) => {
+      console.log('💚 Invalidating health queries due to database change')
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.health })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metrics })
+    }
+
     const handleDatabaseChange = (event: CustomEvent) => {
       console.log('💾 Comprehensive invalidation due to database change')
       // Invalidate everything for database changes
@@ -182,12 +194,14 @@ function useSocketEventInvalidation() {
     window.addEventListener('telemetry-event-update', handleEventUpdate as EventListener)
     window.addEventListener('telemetry-analytics-update', handleAnalyticsUpdate as EventListener)
     window.addEventListener('telemetry-sessions-update', handleSessionsUpdate as EventListener)
+    window.addEventListener('telemetry-health-update', handleHealthUpdate as EventListener)
     window.addEventListener('telemetry-db-change', handleDatabaseChange as EventListener)
     
     return () => {
       window.removeEventListener('telemetry-event-update', handleEventUpdate as EventListener)
       window.removeEventListener('telemetry-analytics-update', handleAnalyticsUpdate as EventListener)
       window.removeEventListener('telemetry-sessions-update', handleSessionsUpdate as EventListener)
+      window.removeEventListener('telemetry-health-update', handleHealthUpdate as EventListener)
       window.removeEventListener('telemetry-db-change', handleDatabaseChange as EventListener)
     }
   }, [queryClient])

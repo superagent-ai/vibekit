@@ -268,6 +268,21 @@ const routes = {
           path: '/test-event',
           method: 'POST',
           description: 'Trigger a test event for real-time verification'
+        },
+        refreshStats: {
+          path: '/refresh-stats',
+          method: 'POST',
+          description: 'Refresh session statistics to fix event count discrepancies'
+        },
+        sessionEvents: {
+          path: '/sessions/{sessionId}/events',
+          method: 'GET',
+          description: 'Get all events for a specific session',
+          parameters: {
+            sessionId: 'session ID (required in path)',
+            limit: 'number (default: 100)',
+            offset: 'number (default: 0)'
+          }
         }
       },
       examples: [
@@ -338,6 +353,119 @@ const routes = {
     } catch (error) {
       sendJSON(res, 500, {
         error: 'Failed to trigger test event',
+        message: error.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  },
+
+  '/refresh-stats': async (req, res) => {
+    try {
+      if (req.method !== 'POST') {
+        return sendJSON(res, 405, {
+          error: 'Method Not Allowed',
+          message: 'This endpoint only accepts POST requests',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (!telemetryService) {
+        return sendJSON(res, 503, {
+          error: 'Service Unavailable',
+          message: 'TelemetryService not initialized',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      console.log('🔄 Refreshing session statistics...');
+      
+      // Call the refresh method on the database operations
+      const dbOps = telemetryService.getDBOperations();
+      if (!dbOps || !dbOps.refreshAllSessionStats) {
+        return sendJSON(res, 501, {
+          error: 'Not Implemented',
+          message: 'refreshAllSessionStats method not available',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const result = await dbOps.refreshAllSessionStats();
+      
+      console.log(`✅ Session stats refresh completed: ${result.updated} updated, ${result.errors} errors`);
+      
+      // Broadcast update to connected clients
+      io.to('events').emit('update:sessions', {
+        type: 'stats_refresh',
+        result,
+        timestamp: new Date().toISOString(),
+      });
+      
+      sendJSON(res, 200, {
+        success: true,
+        message: 'Session statistics refreshed successfully',
+        result,
+        timestamp: new Date().toISOString(),
+      });
+      
+    } catch (error) {
+      console.error('❌ Failed to refresh session statistics:', error);
+      sendJSON(res, 500, {
+        error: 'Failed to refresh session statistics',
+        message: error.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  },
+
+  '/sessions': async (req, res) => {
+    try {
+      if (!telemetryService) {
+        throw new Error('TelemetryService not initialized');
+      }
+      
+      const parsedUrl = url.parse(req.url, true);
+      const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+      
+      // Handle /sessions/{sessionId}/events
+      if (pathParts.length === 3 && pathParts[0] === 'sessions' && pathParts[2] === 'events') {
+        const sessionId = pathParts[1];
+        const { limit = '100', offset = '0' } = parsedUrl.query;
+        
+        const dbOps = telemetryService.getDBOperations();
+        if (!dbOps || !dbOps.queryEvents) {
+          return sendJSON(res, 501, {
+            error: 'Not Implemented',
+            message: 'queryEvents method not available',
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        const events = await dbOps.queryEvents({
+          sessionId,
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+          orderBy: 'timestamp_asc'
+        });
+
+        sendJSON(res, 200, {
+          sessionId,
+          events,
+          count: events.length,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+      
+      // Default: return 404 for unknown session paths
+      sendJSON(res, 404, {
+        error: 'Not Found',
+        message: `Session endpoint ${req.method} ${parsedUrl.pathname} not found`,
+        timestamp: new Date().toISOString(),
+      });
+      
+    } catch (error) {
+      sendJSON(res, 500, {
+        error: 'Failed to query session data',
         message: error.message,
         timestamp: new Date().toISOString(),
       });
@@ -472,8 +600,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Route request
-  const handler = routes[pathname];
-  if (handler && (req.method === 'GET' || (req.method === 'POST' && pathname === '/test-event'))) {
+  const handler = routes[pathname] || (pathname.startsWith('/sessions') ? routes['/sessions'] : null);
+  if (handler && (req.method === 'GET' || (req.method === 'POST' && (pathname === '/test-event' || pathname === '/refresh-stats')))) {
     try {
       await handler(req, res);
     } catch (error) {

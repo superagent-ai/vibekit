@@ -32,18 +32,22 @@ export class TelemetryAPI {
   }
 
   async getHealth(): Promise<HealthStatus> {
+    console.log('📊 Fetching health status...')
     return this.request<HealthStatus>('/health')
   }
 
   async getMetrics(): Promise<MetricsResponse> {
+    console.log('📈 Fetching metrics...')
     return this.request<MetricsResponse>('/metrics')
   }
 
   async getAnalytics(window: 'hour' | 'day' | 'week' = 'day'): Promise<AnalyticsDashboard> {
+    console.log(`📊 Fetching analytics (${window})...`)
     return this.request<AnalyticsDashboard>(`/analytics?window=${window}`)
   }
 
   async querySessions(filters: FilterOptions = {}): Promise<QueryResult> {
+    console.log('📋 Fetching sessions...', filters)
     const params = new URLSearchParams()
     
     if (filters.agentType) params.append('agent', filters.agentType)
@@ -67,15 +71,17 @@ export class TelemetryAPI {
 
   // Get recent events from metrics and analytics data
   async getEvents(): Promise<any[]> {
-    // Since there's no events endpoint, we'll create events from session activity
-    const analytics = await this.getAnalytics()
-    const query = await this.querySessions()
-    
-    // Create synthetic events from session data and real-time metrics
-    const events: any[] = []
-    
-    // Add recent session events
-    query.results.slice(0, 20).forEach((session) => {
+    try {
+      // Since there's no events endpoint, we'll create events from session activity
+      const analytics = await this.getAnalytics().catch(() => null)
+      const query = await this.querySessions().catch(() => ({ results: [] }))
+      
+      // Create synthetic events from session data and real-time metrics
+      const events: any[] = []
+      
+      // Add recent session events
+      const sessions = query.results || []
+      sessions.slice(0, 20).forEach((session) => {
       if (session.startTime) {
         events.push({
           event_type: 'session_start',
@@ -120,6 +126,10 @@ export class TelemetryAPI {
     
     // Sort by timestamp (newest first)
     return events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    } catch (error) {
+      console.warn('Failed to generate synthetic events:', error)
+      return []
+    }
   }
 }
 

@@ -340,6 +340,43 @@ export class DrizzleTelemetryOperations {
     );
   }
 
+  /**
+   * Refresh statistics for all existing sessions (useful for fixing data inconsistencies)
+   */
+  async refreshAllSessionStats(): Promise<{ updated: number; errors: number }> {
+    const db = await this.getDB();
+
+    return await this.dbManager.executeWithMetrics(
+      'REFRESH_ALL_SESSION_STATS',
+      async () => {
+        // Get all unique session IDs
+        const sessions = await db
+          .select({ id: telemetrySessions.id })
+          .from(telemetrySessions);
+
+        let updated = 0;
+        let errors = 0;
+
+        console.log(`🔄 Refreshing statistics for ${sessions.length} sessions...`);
+
+        // Update each session's statistics
+        for (const session of sessions) {
+          try {
+            await this.updateSessionStats(session.id);
+            updated++;
+          } catch (error) {
+            console.warn(`Failed to update stats for session ${session.id}:`, error);
+            errors++;
+          }
+        }
+
+        console.log(`✅ Completed session stats refresh: ${updated} updated, ${errors} errors`);
+        
+        return { updated, errors };
+      }
+    );
+  }
+
   // =============================================================================
   // EVENT OPERATIONS
   // =============================================================================
@@ -360,6 +397,10 @@ export class DrizzleTelemetryOperations {
             createdAt: Date.now(),
           })
           .returning();
+
+        // Update session statistics after inserting the event
+        await this.updateSessionStats(event.sessionId);
+
         return inserted;
       }
     );

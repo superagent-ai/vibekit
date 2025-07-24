@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Routes, Route, useNavigate } from 'react-router-dom'
 import { 
   useHealthStatus, 
   useMetrics, 
@@ -9,9 +10,11 @@ import {
   useConnectionStatus
 } from '@/hooks/use-telemetry-api'
 import { formatBytes, formatDuration, formatNumber, getStatusColor, formatDate } from './lib/utils'
+import { SessionDetail } from './components/SessionDetail'
 
-function App() {
+function Dashboard() {
   const [activeTab, setActiveTab] = useState('overview')
+  const navigate = useNavigate()
   
   console.log('🎯 App component rendering...')
   
@@ -478,7 +481,10 @@ function App() {
                         }
                         
                         return (
-                          <div key={session.id} className="p-4 hover:bg-gray-50">
+                          <div 
+                            key={session.id} 
+                            className="p-4 hover:bg-gray-50 cursor-pointer transition-colors" 
+                            onClick={() => navigate(`/session/${session.id}`)}>
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2">
@@ -757,6 +763,15 @@ function App() {
         </div>
       </div>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/session/:sessionId" element={<SessionDetail />} />
+    </Routes>
   )
 }
 

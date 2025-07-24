@@ -1694,4 +1694,11 @@ export class TelemetryService extends EventEmitter {
       return [];
     }
   }
+
+  /**
+   * Get database operations instance (for advanced operations like refreshAllSessionStats)
+   */
+  public getDBOperations(): any {
+    return this.dbOps;
+  }
 }
