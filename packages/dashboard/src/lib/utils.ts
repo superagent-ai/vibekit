@@ -74,4 +74,35 @@ export function getStatusBadgeColor(status: string): string {
     default:
       return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
   }
+}
+
+export function formatDate(timestamp: string | number | Date): string {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  
+  // Less than 1 minute ago
+  if (diffMs < 60000) {
+    return 'just now'
+  }
+  
+  // Less than 1 hour ago
+  if (diffMs < 3600000) {
+    const minutes = Math.floor(diffMs / 60000)
+    return `${minutes}m ago`
+  }
+  
+  // Less than 1 day ago
+  if (diffMs < 86400000) {
+    const hours = Math.floor(diffMs / 3600000)
+    return `${hours}h ago`
+  }
+  
+  // More than 1 day ago
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 } 

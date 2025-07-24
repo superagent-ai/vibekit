@@ -1,5 +1,3 @@
-'use client'
-
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { io, Socket } from 'socket.io-client'
@@ -12,6 +10,7 @@ export const QUERY_KEYS = {
   metrics: ['telemetry', 'metrics'] as const,
   analytics: (window: string) => ['telemetry', 'analytics', window] as const,
   sessions: (filters: FilterOptions) => ['telemetry', 'sessions', filters] as const,
+  events: ['telemetry', 'events'] as const,
   apiInfo: ['telemetry', 'info'] as const,
 }
 
@@ -25,7 +24,7 @@ export function useRealTimeSubscription<T>(
 
   useEffect(() => {
     // Connect to Socket.IO server
-    const socket: Socket = io(process.env.NEXT_PUBLIC_TELEMETRY_API_URL || 'http://localhost:3000')
+    const socket: Socket = io(import.meta.env.VITE_TELEMETRY_API_URL || 'http://localhost:3000')
     
     socket.on('connect', () => {
       console.log(`🔌 Connected to telemetry server, subscribing to channel: ${channel}`)
@@ -68,8 +67,8 @@ export function useHealthStatus() {
   return useQuery({
     queryKey: QUERY_KEYS.health,
     queryFn: () => telemetryAPI.getHealth(),
-    refetchInterval: false, // Disable polling - use WebSocket updates
-    staleTime: Infinity, // Data is always fresh via WebSocket
+    refetchInterval: 30000, // Fallback polling every 30 seconds
+    staleTime: 15000,
   })
 }
 
@@ -81,29 +80,28 @@ export function useMetrics() {
   return useQuery({
     queryKey: QUERY_KEYS.metrics,
     queryFn: () => telemetryAPI.getMetrics(),
-    refetchInterval: false, // Disable polling - use WebSocket updates
-    staleTime: Infinity, // Data is always fresh via WebSocket
+    refetchInterval: 15000, // Fallback polling every 15 seconds
+    staleTime: 10000,
   })
 }
 
 // Analytics dashboard hook with real-time updates  
 export function useAnalytics(window: 'hour' | 'day' | 'week' = 'day') {
-  // Note: Analytics updates less frequently, so we keep some polling as fallback
   return useQuery({
     queryKey: QUERY_KEYS.analytics(window),
     queryFn: () => telemetryAPI.getAnalytics(window),
-    refetchInterval: 60000, // Reduced polling to 1 minute (was 30 seconds)
-    staleTime: 30000, // Keep data fresh for 30 seconds
+    refetchInterval: 60000, // Refresh every minute
+    staleTime: 30000,
   })
 }
 
-// Sessions query hook with reduced polling (events will drive most updates)
+// Sessions query hook - now using the correct query endpoint
 export function useSessions(filters: FilterOptions = {}) {
   return useQuery({
     queryKey: QUERY_KEYS.sessions(filters),
     queryFn: () => telemetryAPI.querySessions(filters),
-    refetchInterval: 30000, // Reduced polling to 30 seconds (was 10 seconds)
-    staleTime: 15000, // Keep data fresh for 15 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
+    staleTime: 15000,
   })
 }
 
@@ -117,10 +115,18 @@ export function useApiInfo() {
   })
 }
 
-// Real-time telemetry events hook (for live activity feed)
+// Events hook - now creates synthetic events from available data
 export function useTelemetryEvents(onEvent?: (event: any) => void) {
+  const eventsQuery = useQuery({
+    queryKey: QUERY_KEYS.events,
+    queryFn: () => telemetryAPI.getEvents(),
+    refetchInterval: 10000, // Refresh every 10 seconds
+    staleTime: 5000,
+  })
+
+  // Set up real-time event listening
   useEffect(() => {
-    const socket: Socket = io(process.env.NEXT_PUBLIC_TELEMETRY_API_URL || 'http://localhost:3000')
+    const socket: Socket = io(import.meta.env.VITE_TELEMETRY_API_URL || 'http://localhost:3000')
     
     socket.on('connect', () => {
       console.log('🔌 Connected for telemetry events, subscribing to events channel')
@@ -143,6 +149,8 @@ export function useTelemetryEvents(onEvent?: (event: any) => void) {
       socket.disconnect()
     }
   }, [onEvent])
+
+  return eventsQuery
 }
 
 // Custom hook for manual refresh
@@ -177,11 +185,16 @@ export function useRefreshData() {
     }
   }
 
+  const refreshEvents = () => {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events })
+  }
+
   return {
     refreshAll,
     refreshHealth,
     refreshMetrics,
     refreshAnalytics,
     refreshSessions,
+    refreshEvents,
   }
 } 
