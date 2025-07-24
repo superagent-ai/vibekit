@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Routes, Route, useNavigate } from 'react-router-dom'
 import { 
   useHealthStatus, 
@@ -34,7 +34,7 @@ function Dashboard() {
   console.log('🔌 Connection status:', isConnected)
   
   // Refresh functions
-  const { refreshAll, refreshHealth, refreshMetrics, refreshAnalytics, refreshSessions, refreshEvents } = useRefreshData()
+  const { refreshAll } = useRefreshData()
 
   // Error handling
   if (healthError || metricsError || analyticsError || sessionsError || eventsError) {

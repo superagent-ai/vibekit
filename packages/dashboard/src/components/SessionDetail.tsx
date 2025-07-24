@@ -1,9 +1,16 @@
-import React from 'react'
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Calendar, Clock, User, AlertCircle, Activity } from 'lucide-react'
-import { formatDate, formatDuration, getStatusColor } from '../lib/utils'
+import { ArrowLeft, Clock, User, Activity, ChevronDown, ChevronRight } from 'lucide-react'
+import { formatDate, formatDuration } from '../lib/utils'
 import { telemetryAPI } from '../lib/telemetry-api'
+import { parseStreamData, groupEventsByPrompt, EventGroup } from '../lib/stream-parser'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Badge } from './ui/badge'
+import { Button } from './ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
+import { ScrollArea } from './ui/scroll-area'
+import { Separator } from './ui/separator'
 
 interface SessionEvent {
   id: number
@@ -29,10 +36,10 @@ interface SessionEventsResponse {
   timestamp: string
 }
 
-interface SessionDetailProps {}
-
-export function SessionDetail({}: SessionDetailProps) {
+export function SessionDetail() {
   const { sessionId } = useParams<{ sessionId: string }>()
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set())
+  const [expandedJsons, setExpandedJsons] = useState<Set<string>>(new Set())
   
   // Fetch session details
   const { data: sessionData, isLoading: sessionLoading, error: sessionError } = useQuery({
@@ -56,47 +63,53 @@ export function SessionDetail({}: SessionDetailProps) {
 
   if (!sessionId) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Session Not Found</h1>
-          <Link to="/" className="text-blue-600 hover:text-blue-800">
-            ← Back to Dashboard
-          </Link>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="text-destructive">Session Not Found</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Link to="/" className="text-primary hover:underline">
+              ← Back to Dashboard
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   if (sessionLoading || eventsLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-md">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 text-center">Loading session details...</p>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardContent className="flex flex-col items-center p-6">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+            <p className="text-muted-foreground">Loading session details...</p>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   if (sessionError || eventsError) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
-          <div className="flex items-center text-red-600 mb-4">
-            <AlertCircle className="w-6 h-6 mr-2" />
-            <h1 className="text-xl font-bold">Error Loading Session</h1>
-          </div>
-          <p className="text-gray-600 mb-4">
-            {sessionError ? String(sessionError) : String(eventsError)}
-          </p>
-          <Link 
-            to="/" 
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Dashboard
-          </Link>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="text-destructive">Error Loading Session</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">
+              {sessionError ? String(sessionError) : String(eventsError)}
+            </p>
+            <Link to="/">
+              <Button variant="outline">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -106,18 +119,21 @@ export function SessionDetail({}: SessionDetailProps) {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Session Not Found</h1>
-          <p className="text-gray-600 mb-4">Session "{sessionId}" does not exist.</p>
-          <Link 
-            to="/" 
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Dashboard
-          </Link>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>Session Not Found</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">Session "{sessionId}" does not exist.</p>
+            <Link to="/">
+              <Button variant="outline">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -129,214 +145,248 @@ export function SessionDetail({}: SessionDetailProps) {
     // Ignore parsing errors
   }
 
-  const getEventTypeIcon = (eventType: string) => {
-    switch (eventType) {
-      case 'start':
-        return '🚀'
-      case 'stream':
-        return '📡'
-      case 'end':
-        return '✅'
-      case 'error':
-        return '❌'
-      default:
-        return '📝'
+  // Group events by prompt
+  const eventGroups = groupEventsByPrompt(events)
+
+  const toggleGroupExpansion = (groupIndex: number) => {
+    const newExpanded = new Set(expandedGroups)
+    if (newExpanded.has(groupIndex)) {
+      newExpanded.delete(groupIndex)
+    } else {
+      newExpanded.add(groupIndex)
     }
+    setExpandedGroups(newExpanded)
   }
 
-  const getEventTypeColor = (eventType: string) => {
-    switch (eventType) {
-      case 'start':
-        return 'text-blue-600'
-      case 'stream':
-        return 'text-green-600'
-      case 'end':
-        return 'text-purple-600'
-      case 'error':
-        return 'text-red-600'
-      default:
-        return 'text-gray-600'
+  const toggleJsonExpansion = (eventId: string) => {
+    const newExpanded = new Set(expandedJsons)
+    if (newExpanded.has(eventId)) {
+      newExpanded.delete(eventId)
+    } else {
+      newExpanded.add(eventId)
     }
+    setExpandedJsons(newExpanded)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto p-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link 
-              to="/" 
-              className="inline-flex items-center text-gray-600 hover:text-gray-900"
-            >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              Back to Dashboard
-            </Link>
-            <div className="h-6 border-l border-gray-300"></div>
-            <h1 className="text-2xl font-bold text-gray-900">Session Details</h1>
-          </div>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            session.status === 'completed' ? 'bg-green-100 text-green-800' :
-            session.status === 'error' ? 'bg-red-100 text-red-800' :
-            session.status === 'active' ? 'bg-blue-100 text-blue-800' :
-            'bg-yellow-100 text-yellow-800'
-          }`}>
-            {session.status}
-          </span>
-        </div>
-
-        {/* Session Overview */}
-        <div className="bg-white rounded-lg shadow-sm border">
-          <div className="p-6 border-b">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Session Overview</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="min-h-screen bg-background">
+      {/* Compact Header */}
+      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Link to="/">
+                <Button variant="ghost" size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+              </Link>
+              <Separator orientation="vertical" className="h-6" />
               <div className="flex items-center space-x-3">
-                <User className="w-5 h-5 text-gray-400" />
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Agent</p>
-                  <p className="text-lg text-gray-900">{session.agentType}</p>
-                </div>
+                <h1 className="text-xl font-semibold">Session Details</h1>
+                <Badge variant={
+                  session.status === 'completed' ? 'default' :
+                  session.status === 'error' ? 'destructive' :
+                  session.status === 'active' ? 'secondary' : 'outline'
+                }>
+                  {session.status}
+                </Badge>
               </div>
-              
-              <div className="flex items-center space-x-3">
-                <Activity className="w-5 h-5 text-gray-400" />
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Mode</p>
-                  <p className="text-lg text-gray-900">{session.mode}</p>
-                </div>
+            </div>
+            
+            <div className="flex items-center space-x-6 text-sm text-muted-foreground">
+              <div className="flex items-center space-x-1">
+                <User className="w-4 h-4" />
+                <span>{session.agentType}</span>
               </div>
-
-              <div className="flex items-center space-x-3">
-                <Calendar className="w-5 h-5 text-gray-400" />
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Started</p>
-                  <p className="text-lg text-gray-900">{formatDate(session.startTime)}</p>
-                </div>
+              <div className="flex items-center space-x-1">
+                <Activity className="w-4 h-4" />
+                <span>{session.mode}</span>
               </div>
-
               {session.duration && (
-                <div className="flex items-center space-x-3">
-                  <Clock className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Duration</p>
-                    <p className="text-lg text-gray-900">{formatDuration(session.duration)}</p>
-                  </div>
+                <div className="flex items-center space-x-1">
+                  <Clock className="w-4 h-4" />
+                  <span>{formatDuration(session.duration)}</span>
                 </div>
               )}
+              <span>Started {formatDate(session.startTime)}</span>
             </div>
-          </div>
-
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-blue-600">{session.eventCount || 0}</p>
-                <p className="text-sm text-gray-600">Total Events</p>
-              </div>
-              
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-green-600">{session.streamEventCount || 0}</p>
-                <p className="text-sm text-gray-600">Stream Events</p>
-              </div>
-              
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-red-600">{session.errorCount || 0}</p>
-                <p className="text-sm text-gray-600">Error Events</p>
-              </div>
-            </div>
-
-            {session.repoUrl && (
-              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                <p className="text-sm font-medium text-blue-800">Repository</p>
-                <p className="text-blue-600">{session.repoUrl}</p>
-              </div>
-            )}
-
-            {parsedMetadata.model && (
-              <div className="mt-4 p-4 bg-purple-50 rounded-lg">
-                <p className="text-sm font-medium text-purple-800">Model</p>
-                <p className="text-purple-600">{parsedMetadata.model}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Session ID */}
-        <div className="bg-white rounded-lg shadow-sm border p-4">
-          <p className="text-sm font-medium text-gray-600 mb-1">Session ID</p>
-          <p className="font-mono text-sm text-gray-900 bg-gray-100 p-2 rounded">{session.id}</p>
-        </div>
-
-        {/* Events Timeline */}
-        <div className="bg-white rounded-lg shadow-sm border">
-          <div className="p-6 border-b">
-            <h2 className="text-lg font-semibold text-gray-900">Events Timeline</h2>
-            <p className="text-sm text-gray-600">
-              {events.length} events • Showing in chronological order
-            </p>
           </div>
           
-          <div className="max-h-96 overflow-y-auto">
-            {events.length > 0 ? (
-              <div className="divide-y">
-                {events.map((event, index) => {
-                  let parsedEventMetadata: any = {}
-                  try {
-                    parsedEventMetadata = JSON.parse(event.metadata || '{}')
-                  } catch (e) {
-                    // Ignore parsing errors
-                  }
-
-                  return (
-                    <div key={event.id} className="p-4 hover:bg-gray-50">
-                      <div className="flex items-start space-x-3">
-                        <div className="flex-shrink-0">
-                          <span className="text-lg">{getEventTypeIcon(event.eventType)}</span>
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className={`font-medium capitalize ${getEventTypeColor(event.eventType)}`}>
-                              {event.eventType} Event
-                            </p>
-                            <span className="text-xs text-gray-500">
-                              {formatDate(event.timestamp)}
-                            </span>
-                          </div>
-                          
-                          <div className="text-sm text-gray-600 space-y-2">
-                            <p><span className="font-medium">Prompt:</span> {event.prompt}</p>
-                            
-                            {event.streamData && (
-                              <div>
-                                <p className="font-medium">Stream Data:</p>
-                                <pre className="mt-1 text-xs bg-gray-100 p-2 rounded overflow-x-auto max-h-32">
-                                  {event.streamData}
-                                </pre>
-                              </div>
-                            )}
-
-                            {event.sandboxId && (
-                              <p><span className="font-medium">Sandbox:</span> {event.sandboxId}</p>
-                            )}
-
-                            {parsedEventMetadata.model && (
-                              <p><span className="font-medium">Model:</span> {parsedEventMetadata.model}</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="p-8 text-center text-gray-500">
-                <Activity className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>No events recorded for this session</p>
-              </div>
-            )}
+          {/* Quick Stats & Metadata */}
+          <div className="flex items-center justify-between mt-3 pt-3 border-t">
+            <div className="flex items-center space-x-6">
+              <Badge variant="outline">
+                {session.eventCount || 0} Total Events
+              </Badge>
+              <Badge variant="outline">
+                {session.streamEventCount || 0} Stream Events
+              </Badge>
+              {session.errorCount > 0 && (
+                <Badge variant="destructive">
+                  {session.errorCount} Errors
+                </Badge>
+              )}
+              {session.repoUrl && (
+                <span className="text-sm text-muted-foreground">
+                  📁 {session.repoUrl}
+                </span>
+              )}
+              {parsedMetadata.model && (
+                <span className="text-sm text-muted-foreground">
+                  🤖 {parsedMetadata.model}
+                </span>
+              )}
+            </div>
+            
+            <div className="text-xs text-muted-foreground font-mono">
+              {session.id}
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <ScrollArea className="h-[calc(100vh-200px)]">
+          <div className="space-y-6">
+            {eventGroups.length > 0 ? (
+              eventGroups.map((group: EventGroup, groupIndex: number) => (
+                <Card key={groupIndex} className="overflow-hidden">
+                  <Collapsible
+                    open={expandedGroups.has(groupIndex)}
+                    onOpenChange={() => toggleGroupExpansion(groupIndex)}
+                  >
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2 mb-2">
+                              {expandedGroups.has(groupIndex) ? (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              <CardTitle className="text-base font-medium leading-tight">
+                                {group.prompt}
+                              </CardTitle>
+                            </div>
+                            <div className="flex items-center space-x-4 text-sm text-muted-foreground ml-6">
+                              <span>📊 {group.summary.totalStreams} events</span>
+                              {group.summary.filesAffected.length > 0 && (
+                                <span>📁 {group.summary.filesAffected.slice(0, 2).join(', ')}
+                                  {group.summary.filesAffected.length > 2 && ` +${group.summary.filesAffected.length - 2} more`}
+                                </span>
+                              )}
+                              {group.duration && (
+                                <span>⏱️ {formatDuration(group.duration)}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2 ml-4">
+                            {group.startEvent && (
+                              <Badge variant="outline" className="text-xs">
+                                🚀 {formatDate(group.startEvent.timestamp)}
+                              </Badge>
+                            )}
+                            {group.endEvent && (
+                              <Badge variant="outline" className="text-xs">
+                                ✅ {formatDate(group.endEvent.timestamp)}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                  
+                                     <CollapsibleContent>
+                     <CardContent className="pt-0">
+                       <Separator className="mb-4" />
+                       
+                       {/* Events Table */}
+                       {group.streamEvents.length > 0 ? (
+                         <div className="overflow-x-auto">
+                           <table className="w-full table-fixed">
+                             <thead>
+                               <tr className="border-b text-sm text-muted-foreground">
+                                 <th className="text-left py-2 px-3 font-medium w-20">Type</th>
+                                 <th className="text-left py-2 px-3 font-medium">Stream Data (JSON)</th>
+                                 <th className="text-left py-2 px-3 font-medium w-24">Time</th>
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {group.streamEvents.map((event: SessionEvent) => {
+                                 const parsed = parseStreamData(event.streamData)
+                                 
+                                 return (
+                                   <tr key={event.id} className="border-b hover:bg-muted/20 align-top">
+                                     <td className="py-3 px-3 align-top">
+                                       <Badge variant="outline" className="text-xs">
+                                         {parsed?.type || 'unknown'}
+                                       </Badge>
+                                     </td>
+                                                                           <td className="py-3 px-3 align-top">
+                                        <div 
+                                          className="font-mono text-[11px] max-w-lg break-words whitespace-pre-wrap cursor-pointer hover:bg-muted/20 p-2 rounded transition-colors"
+                                          onClick={() => toggleJsonExpansion(`${groupIndex}-${event.id}`)}
+                                        >
+                                          {event.streamData ? (
+                                            (() => {
+                                              try {
+                                                const formatted = JSON.stringify(JSON.parse(event.streamData), null, 2)
+                                                const lines = formatted.split('\n')
+                                                const isExpanded = expandedJsons.has(`${groupIndex}-${event.id}`)
+                                                
+                                                if (lines.length > 4 && !isExpanded) {
+                                                  return lines.slice(0, 4).join('\n') + '\n  ...'
+                                                }
+                                                return formatted
+                                              } catch {
+                                                const text = event.streamData
+                                                const lines = text.split('\n')
+                                                const isExpanded = expandedJsons.has(`${groupIndex}-${event.id}`)
+                                                
+                                                if (lines.length > 4 && !isExpanded) {
+                                                  return lines.slice(0, 4).join('\n') + '\n...'
+                                                }
+                                                return text
+                                              }
+                                            })()
+                                          ) : 'No data'}
+                                        </div>
+                                      </td>
+                                     <td className="py-3 px-3 align-top">
+                                       <span className="text-xs text-muted-foreground font-mono">
+                                         {formatDate(event.timestamp)}
+                                       </span>
+                                     </td>
+                                   </tr>
+                                 )
+                               })}
+                             </tbody>
+                           </table>
+                         </div>
+                       ) : (
+                         <div className="text-center py-8 text-muted-foreground">
+                           <Activity className="w-8 h-8 mx-auto mb-2" />
+                           <p>No stream events in this group</p>
+                         </div>
+                       )}
+                     </CardContent>
+                   </CollapsibleContent>
+                 </Collapsible>
+                </Card>
+              ))
+            ) : (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Activity className="w-12 h-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No events recorded for this session</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </ScrollArea>
       </div>
     </div>
   )
