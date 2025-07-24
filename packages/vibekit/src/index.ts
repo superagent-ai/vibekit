@@ -38,6 +38,10 @@ export const createTelemetryService = async () => {
   return TelemetryService;
 };
 
+// Authentication exports
+export { ClaudeAuth } from "./auth";
+export type { OAuthToken } from "./auth";
+
 // Type-only exports for advanced usage
 export type { ClaudeConfig, ClaudeResponse } from "./types";
 export type { CodexConfig, CodexResponse } from "./types";

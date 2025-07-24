@@ -8,10 +8,14 @@ import {
   Conversation,
   ModelProvider,
 } from "../types";
+import { getValidToken } from "../auth/oauth";
 
 export class ClaudeAgent extends BaseAgent {
-  private anthropicApiKey: string;
+  private anthropicApiKey?: string;
+  private oauthToken?: string;
   private model?: string;
+  private useOAuth: boolean;
+  private tokenInitialized: boolean = false;
 
   private escapePrompt(prompt: string): string {
     // Escape backticks and other special characters
@@ -36,8 +40,39 @@ export class ClaudeAgent extends BaseAgent {
       throw new Error("Claude agent only supports 'anthropic' provider");
     }
 
+    // Store config values
+    const envOAuthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    this.oauthToken = config.oauthToken || envOAuthToken;
     this.anthropicApiKey = config.providerApiKey;
     this.model = config.model;
+    
+    // Initial auth check (will be updated in initializeToken)
+    this.useOAuth = !!(this.oauthToken && !this.anthropicApiKey);
+  }
+  
+  private async initializeToken(): Promise<void> {
+    if (this.tokenInitialized) return;
+    
+    // If no auth method provided yet, try to load from saved OAuth token
+    if (!this.anthropicApiKey && !this.oauthToken) {
+      const savedToken = await getValidToken();
+      if (savedToken) {
+        this.oauthToken = savedToken;
+        this.useOAuth = true;
+      }
+    }
+    
+    // Determine which auth method to use
+    this.useOAuth = !!(this.oauthToken && !this.anthropicApiKey);
+    
+    // Validate that at least one auth method is provided
+    if (!this.anthropicApiKey && !this.oauthToken) {
+      throw new Error(
+        "Claude agent requires either providerApiKey or oauthToken. Run 'vibekit auth claude' to authenticate."
+      );
+    }
+    
+    this.tokenInitialized = true;
   }
 
   protected getCommandConfig(
@@ -53,6 +88,11 @@ export class ClaudeAgent extends BaseAgent {
       instruction =
         "Do the necessary changes to the codebase based on the users input.\n" +
         "Don't ask any follow up questions.";
+    }
+    
+    // Add Claude Code system prompt when using OAuth
+    if (this.useOAuth) {
+      instruction = "You are Claude Code, Anthropic's official CLI for Claude. " + instruction;
     }
 
     const escapedPrompt = this.escapePrompt(prompt);
@@ -75,13 +115,22 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   protected getEnvironmentVariables(): Record<string, string> {
-    return {
-      ANTHROPIC_API_KEY: this.anthropicApiKey,
-    };
+    const envVars: Record<string, string> = {};
+    
+    if (this.useOAuth) {
+      // For OAuth, pass the token as CLAUDE_CODE_OAUTH_TOKEN
+      envVars.CLAUDE_CODE_OAUTH_TOKEN = this.oauthToken!;
+    } else {
+      // For API key authentication
+      envVars.ANTHROPIC_API_KEY = this.anthropicApiKey!;
+    }
+    
+    return envVars;
   }
 
   protected getApiKey(): string {
-    return this.anthropicApiKey;
+    // Return OAuth token if using OAuth, otherwise API key
+    return this.useOAuth ? this.oauthToken! : this.anthropicApiKey!;
   }
 
   protected getAgentType(): AgentType {
@@ -91,7 +140,7 @@ export class ClaudeAgent extends BaseAgent {
   protected getModelConfig(): ModelConfig {
     return {
       provider: "anthropic",
-      apiKey: this.anthropicApiKey,
+      apiKey: this.useOAuth ? this.oauthToken! : this.anthropicApiKey!,
       model: this.model,
     };
   }
@@ -105,6 +154,8 @@ export class ClaudeAgent extends BaseAgent {
     callbacks?: ClaudeStreamCallbacks,
     background?: boolean
   ): Promise<ClaudeResponse> {
+    // Ensure token is initialized
+    await this.initializeToken();
     let instruction: string;
     if (mode === "ask") {
       instruction =
@@ -120,6 +171,11 @@ export class ClaudeAgent extends BaseAgent {
       instruction += `\n\nConversation history: ${history
         .map((h) => `${h.role}\n ${h.content}`)
         .join("\n\n")}`;
+    }
+    
+    // Add Claude Code system prompt when using OAuth
+    if (this.useOAuth) {
+      instruction = "You are Claude Code, Anthropic's official CLI for Claude. " + instruction;
     }
 
     const escapedPrompt = this.escapePrompt(prompt);

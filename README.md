@@ -27,6 +27,119 @@ npx @vibe-kit/sdk init
 vibekit init
 ```
 
+## 🔐 Authentication
+
+### Claude OAuth Authentication (Recommended)
+
+Authenticate with your Claude Pro/Max account for better rate limits.
+
+> **Security Note**: OAuth tokens are stored locally at `~/.vibekit/claude-oauth-token.json` with restricted permissions (600). For production environments, consider using environment variables or a secrets manager.
+
+```bash
+# Authenticate with Claude
+vibekit auth login claude
+
+# Check authentication status
+vibekit auth status        # Show all providers
+vibekit auth status claude # Show specific provider
+
+# Verify authentication with test API call
+vibekit auth verify claude
+
+# Export token for other instances
+vibekit auth export claude              # Shows environment variable format
+vibekit auth export claude --format json # JSON format
+vibekit auth export claude --format full # Full token with refresh capability
+
+# Import token on another instance
+vibekit auth import claude --env                    # From environment variable
+vibekit auth import claude --token "your-token"     # Direct token
+vibekit auth import claude --file token.json        # From file
+
+# Logout
+vibekit auth logout claude
+```
+
+### Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run OAuth-specific tests
+npm test test/claude-oauth.test.ts
+```
+
+Once authenticated, you can use Claude without an API key:
+
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    // OAuth token will be used automatically
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(sandboxProvider);
+```
+
+### Using OAuth Token via Environment Variable
+
+You can also provide the OAuth token directly via environment variable:
+
+```bash
+export CLAUDE_CODE_OAUTH_TOKEN="your-oauth-token"
+```
+
+Or pass it in your code:
+
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    oauthToken: process.env.MY_OAUTH_TOKEN,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(sandboxProvider);
+```
+
+### Multi-Instance Usage
+
+For using OAuth tokens across multiple instances (CI/CD, containers, etc.):
+
+1. **Quick sharing**: Set `CLAUDE_CODE_OAUTH_TOKEN` environment variable
+2. **With auto-refresh**: Copy `~/.vibekit/claude-oauth-token.json` between instances
+3. **Production**: Use a secrets manager or API keys
+
+See [OAuth Multi-Instance Guide](./docs/oauth-multi-instance.md) for detailed instructions.
+
+### Library API Usage
+
+You can also use OAuth authentication programmatically:
+
+```typescript
+import { ClaudeAuth } from '@vibe-kit/sdk';
+
+// Authenticate and get token
+const token = await ClaudeAuth.authenticate();
+
+// Check if authenticated
+const isAuthenticated = await ClaudeAuth.isAuthenticated();
+
+// Get valid token (auto-refresh if needed)
+const accessToken = await ClaudeAuth.getValidToken();
+
+// Export token
+const exportedToken = await ClaudeAuth.exportToken('full');
+
+// Import token
+await ClaudeAuth.importToken({ refreshToken: 'your-refresh-token' });
+
+// Clear authentication
+await ClaudeAuth.logout();
+```
+
 ## ⚡️ Features
 
 🧠 Drop-in SDK for Claude Code, OpenAI Codex, Gemini CLI, and SST Opencode 

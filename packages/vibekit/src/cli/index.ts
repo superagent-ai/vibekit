@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
 import { createLocalCommand } from "./commands/local.js";
+import { createAuthCommand } from "./commands/auth.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -61,5 +62,8 @@ program
 
 // Add local command with subcommands
 program.addCommand(createLocalCommand());
+
+// Add auth command with subcommands
+program.addCommand(createAuthCommand());
 
 program.parse(process.argv);

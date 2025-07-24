@@ -154,7 +154,8 @@ export interface CodexResponse {
 
 // CLAUDE CONFIG
 export interface ClaudeConfig {
-  providerApiKey: string;
+  providerApiKey?: string; // Optional - can use OAuth token instead
+  oauthToken?: string; // OAuth token from CLAUDE_CODE_OAUTH_TOKEN
   provider?: ModelProvider;
   githubToken?: string;
   repoUrl?: string; // org/repo, e.g. "octocat/hello-world"

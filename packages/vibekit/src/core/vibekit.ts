@@ -20,7 +20,8 @@ export interface VibeKitOptions {
   agent: {
     type: AgentType;
     provider?: ModelProvider;
-    apiKey: string;
+    apiKey?: string; // Optional - can use OAuth token instead
+    oauthToken?: string; // OAuth token for Claude
     model?: string;
   };
   sandbox?: SandboxProvider;
@@ -49,7 +50,8 @@ export class VibeKit extends EventEmitter {
   withAgent(config: {
     type: AgentType;
     provider: ModelProvider;
-    apiKey: string;
+    apiKey?: string; // Optional - can use OAuth token instead
+    oauthToken?: string; // OAuth token for Claude
     model: string;
   }): this {
     this.options.agent = config;
@@ -91,7 +93,7 @@ export class VibeKit extends EventEmitter {
       throw new Error("Agent configuration is required");
     }
 
-    const { type, provider, apiKey, model } = this.options.agent;
+    const { type, provider, apiKey, oauthToken, model } = this.options.agent;
 
     // Dynamic imports for different agents
     let AgentClass;
@@ -126,6 +128,7 @@ export class VibeKit extends EventEmitter {
     // Initialize agent with configuration
     const agentConfig = {
       providerApiKey: apiKey,
+      oauthToken: oauthToken,
       provider,
       model,
       githubToken: this.options.github?.token,

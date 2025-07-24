@@ -42,6 +42,8 @@
     "dependencies": {
         "@dagger.io/dagger": "^0.18.14",
         "@octokit/rest": "^22.0.0",
-        "dotenv": "^17.2.0"
+        "chalk": "^5.4.1",
+        "dotenv": "^17.2.0",
+        "ora": "^8.2.0"
     }
 }

@@ -9,8 +9,10 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import enquirer from "enquirer";
-import { readFile, writeFile } from "fs/promises";
+import { readFile, writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
+import { homedir } from "os";
+import { dirname } from "path";
 import {
   LocalSandboxProvider,
   createLocalProvider,
@@ -127,12 +129,12 @@ function getStatusColor(status: EnvironmentRecord["status"]) {
 
 // Simple file-based storage for environments
 class SimpleEnvironmentStore {
-  private storePath = `${require("os").homedir()}/.vibekit/environments.json`;
+  private storePath = `${homedir()}/.vibekit/environments.json`;
 
   async ensureDir(): Promise<void> {
-    const dir = require("path").dirname(this.storePath);
+    const dir = dirname(this.storePath);
     if (!existsSync(dir)) {
-      await require("fs").promises.mkdir(dir, { recursive: true });
+      await mkdir(dir, { recursive: true });
     }
   }
 
