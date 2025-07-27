@@ -14,6 +14,7 @@ export default defineConfig([
       "auth/index": "src/auth/index.ts",
       "auth/oauth": "src/auth/oauth.ts",
       "auth/oauth-web": "src/auth/oauth-web.ts",
+      "mcp/types": "src/mcp/types.ts",
     },
     format: ["esm", "cjs"],
     dts: true,

@@ -79,6 +79,60 @@ export type TelemetryConfig = {
   resourceAttributes?: Record<string, string>;
 };
 
+// MCP Configuration Types
+export interface MCPServerConfig {
+  id: string;
+  name?: string;
+  type: 'local' | 'remote';
+  
+  // Local server config
+  command?: string; // 'node', 'python', custom binary
+  path?: string; // path to server script
+  args?: string[]; // additional arguments
+  env?: Record<string, string>; // environment variables
+  
+  // Remote server config  
+  url?: string; // HTTP+SSE endpoint
+  auth?: {
+    type: 'bearer' | 'basic' | 'custom';
+    token?: string;
+    username?: string;
+    password?: string;
+    headers?: Record<string, string>;
+  };
+  
+  // Common options
+  timeout?: number; // connection timeout
+  retries?: number; // reconnection attempts
+  autoStart?: boolean; // start with sandbox
+  autoRestart?: boolean; // restart on failure
+}
+
+export interface MCPConfig {
+  servers: MCPServerConfig[] | MCPServerConfig;
+  options?: {
+    timeout?: number;
+    retries?: number;
+    autoStart?: boolean;
+    cleanup?: boolean;
+    parallel?: boolean; // start servers in parallel
+  };
+}
+
+export interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: any;
+  serverId: string;
+  serverName?: string;
+}
+
+export interface MCPToolResult {
+  content: any;
+  isError: boolean;
+  toolUseId?: string;
+}
+
 export type VibeKitConfig = {
   agent: {
     type: AgentType;
@@ -91,6 +145,7 @@ export type VibeKitConfig = {
   sessionId?: string;
   /** Working directory inside the sandbox (defaults to "/var/vibe0") */
   workingDirectory?: string;
+  mcp?: MCPConfig;
 };
 
 // CONVERSATION HISTORY
@@ -144,6 +199,7 @@ export interface CodexConfig {
   sandboxId?: string;
   telemetry?: TelemetryConfig;
   workingDirectory?: string;
+  mcpConfig?: MCPConfig;
 }
 
 export interface CodexResponse {
@@ -170,6 +226,7 @@ export interface ClaudeConfig {
   sandboxId?: string;
   telemetry?: TelemetryConfig;
   workingDirectory?: string;
+  mcpConfig?: MCPConfig;
 }
 
 export interface ClaudeResponse {
@@ -195,6 +252,7 @@ export interface OpenCodeConfig {
   sandboxId?: string;
   telemetry?: TelemetryConfig;
   workingDirectory?: string;
+  mcpConfig?: MCPConfig;
 }
 
 export interface OpenCodeResponse {
@@ -220,6 +278,7 @@ export interface GeminiConfig {
   sandboxId?: string;
   telemetry?: TelemetryConfig;
   workingDirectory?: string;
+  mcpConfig?: MCPConfig;
 }
 
 export interface GeminiResponse {
@@ -252,6 +311,7 @@ export interface GrokConfig {
     serverType?: "stdio" | "transport";
     autoStart?: boolean;
   };
+  mcpConfig?: MCPConfig;
 }
 
 export interface GrokResponse {
