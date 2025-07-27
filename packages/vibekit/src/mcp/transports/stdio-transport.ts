@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
-import { MCPTransport, MCPServerConfig } from '../types.js';
-import { stdio_client, StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { MCPTransport } from '../types.js';
+import { MCPServerConfig } from '../../types.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 export class StdioMCPTransport implements MCPTransport {
   private process?: ChildProcess;
@@ -11,16 +12,20 @@ export class StdioMCPTransport implements MCPTransport {
       throw new Error('StdioTransport only supports local servers');
     }
 
-    const serverParams: StdioServerParameters = {
+    const serverParams = {
       command: config.command || 'node',
       args: config.path ? [config.path, ...(config.args || [])] : (config.args || []),
-      env: { ...process.env, ...config.env }
+      env: Object.fromEntries(
+        Object.entries({ ...process.env, ...config.env })
+          .filter(([, value]) => value !== undefined)
+          .map(([key, value]) => [key, String(value)])
+      )
     };
 
     try {
-      this.transport = await stdio_client(serverParams);
-      return this.transport;
-    } catch (error) {
+      this.transport = new StdioClientTransport(serverParams);
+      return { stdio: this.transport, write: this.transport };
+    } catch (error: any) {
       throw new Error(`Failed to connect to MCP server: ${error.message}`);
     }
   }

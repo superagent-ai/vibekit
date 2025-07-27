@@ -1,11 +1,8 @@
 import { MCPServerConfig, MCPTool, MCPToolResult } from '../types.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 
-// Placeholder for ClientSession - will be imported from MCP SDK in Phase 2
-export interface ClientSession {
-  initialize(): Promise<void>;
-  list_tools(): Promise<{ tools: any[] }>;
-  call_tool(name: string, args: any): Promise<any>;
-}
+// Use the real Client from MCP SDK
+export type ClientSession = Client;
 
 export interface MCPSession {
   id: string;

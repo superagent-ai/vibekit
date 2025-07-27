@@ -1,4 +1,5 @@
-import { MCPTransport, MCPServerConfig } from '../types.js';
+import { MCPTransport } from '../types.js';
+import { MCPServerConfig } from '../../types.js';
 import { StdioMCPTransport } from './stdio-transport.js';
 import { SSEMCPTransport } from './sse-transport.js';
 

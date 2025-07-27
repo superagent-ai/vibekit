@@ -8,7 +8,10 @@ import {
   SandboxInstance,
   SandboxProvider,
   LabelOptions,
+  MCPConfig,
+  MCPTool,
 } from "../types";
+import { VibeKitMCPManager } from '../mcp/manager.js';
 
 // StreamingBuffer class to handle chunked JSON data
 class StreamingBuffer {
@@ -110,6 +113,7 @@ export interface BaseAgentConfig {
     serverType?: "stdio" | "transport";
     autoStart?: boolean;
   };
+  mcpConfig?: MCPConfig;
 }
 
 export interface StreamCallbacks {
@@ -177,6 +181,7 @@ export abstract class BaseAgent {
   protected currentBranch?: string;
   protected readonly WORKING_DIR: string;
   protected mcpServerInstance?: any; // MCPServerInstance from local-mcp.ts
+  private mcpManager?: VibeKitMCPManager;
 
   constructor(config: BaseAgentConfig) {
     this.config = config;
@@ -219,6 +224,9 @@ export abstract class BaseAgent {
       await this.initializeLocalMCPServer();
       await this.createAgentSession();
     }
+
+    // Initialize MCP after sandbox is ready
+    await this.initializeMCP();
 
     return this.sandboxInstance;
   }
@@ -321,7 +329,13 @@ export abstract class BaseAgent {
   }
 
   public async killSandbox() {
-    // Clean up MCP server first
+    // Clean up MCP manager first
+    if (this.mcpManager) {
+      await this.mcpManager.cleanup();
+      this.mcpManager = undefined;
+    }
+
+    // Clean up local MCP server
     if (this.mcpServerInstance && this.sandboxInstance) {
       try {
         const { cleanupMCPForSandbox } = await import("./local-mcp");
@@ -927,5 +941,37 @@ export abstract class BaseAgent {
         `Failed to add label '${labelName}' to PR #${prNumber}: ${addLabelResponse.status} ${errorText}`
       );
     }
+  }
+
+  // MCP Integration Methods
+  protected async initializeMCP(): Promise<void> {
+    if (!this.config.mcpConfig) return;
+
+    this.mcpManager = new VibeKitMCPManager();
+    
+    const servers = Array.isArray(this.config.mcpConfig.servers)
+      ? this.config.mcpConfig.servers
+      : [this.config.mcpConfig.servers];
+
+    await this.mcpManager.initialize(servers);
+  }
+
+  // Add tool access methods
+  async getAvailableTools(): Promise<MCPTool[]> {
+    if (!this.mcpManager) return [];
+    return await this.mcpManager.listTools();
+  }
+
+  async executeMCPTool(toolName: string, args: any): Promise<any> {
+    if (!this.mcpManager) {
+      throw new Error('MCP not configured for this agent');
+    }
+    
+    const result = await this.mcpManager.executeTool(toolName, args);
+    if (result.isError) {
+      throw new Error(`MCP tool error: ${result.content}`);
+    }
+    
+    return result.content;
   }
 }

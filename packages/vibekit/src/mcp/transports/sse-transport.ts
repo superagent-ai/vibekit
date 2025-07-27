@@ -1,4 +1,5 @@
-import { MCPTransport, MCPServerConfig } from '../types.js';
+import { MCPTransport } from '../types.js';
+import { MCPServerConfig } from '../../types.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 
 export class SSEMCPTransport implements MCPTransport {
@@ -32,9 +33,9 @@ export class SSEMCPTransport implements MCPTransport {
     }
 
     try {
-      this.transport = new SSEClientTransport(config.url, { headers });
+      this.transport = new SSEClientTransport(new URL(config.url));
       return { stdio: this.transport, write: this.transport };
-    } catch (error) {
+    } catch (error: any) {
       throw new Error(`Failed to connect to remote MCP server: ${error.message}`);
     }
   }
@@ -46,6 +47,6 @@ export class SSEMCPTransport implements MCPTransport {
   }
 
   isConnected(): boolean {
-    return this.transport?.readyState === 1; // OPEN
+    return this.transport !== undefined;
   }
 } 
