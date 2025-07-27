@@ -3,6 +3,8 @@ import {
   ApiClientInMemoryContextProvider,
   GetServicePortsResult,
 } from "@northflank/js-client";
+import { VibeKitMCPManager } from "@vibe-kit/vibekit/mcp";
+import type { MCPConfig, MCPTool, MCPToolResult } from "@vibe-kit/vibekit/types";
 
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {
@@ -28,18 +30,27 @@ export interface SandboxCommands {
 export interface SandboxInstance {
   sandboxId: string;
   commands: SandboxCommands;
+  mcpManager?: VibeKitMCPManager;
   kill(): Promise<void>;
   pause(): Promise<void>;
   getHost(port: number): Promise<string>;
+  // MCP-related methods
+  initializeMCP?(mcpConfig: MCPConfig): Promise<void>;
+  getAvailableTools?(): Promise<MCPTool[]>;
+  executeMCPTool?(toolName: string, args: any): Promise<MCPToolResult>;
 }
 
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
     agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
-    workingDirectory?: string
+    workingDirectory?: string,
+    mcpConfig?: MCPConfig
   ): Promise<SandboxInstance>;
-  resume(sandboxId: string): Promise<SandboxInstance>;
+  resume(
+    sandboxId: string,
+    mcpConfig?: MCPConfig
+  ): Promise<SandboxInstance>;
 }
 
 export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
@@ -51,6 +62,7 @@ export interface NorthflankConfig {
   billingPlan?: string;
   persistentVolumeStorage?: number;
   workingDirectory?: string;
+  mcpConfig?: MCPConfig;
 }
 
 // Helper function to get Docker image based on agent type
@@ -70,12 +82,21 @@ const getDockerImageFromAgentType = (agentType?: AgentType) => {
 };
 
 export class NorthflankSandboxInstance implements SandboxInstance {
+  public mcpManager?: VibeKitMCPManager;
+  
   constructor(
     private apiClient: ApiClient,
     public sandboxId: string,
     private projectId: string,
-    private workingDirectory: string
-  ) {}
+    private workingDirectory: string,
+    mcpConfig?: MCPConfig
+  ) {
+    if (mcpConfig) {
+      this.initializeMCP(mcpConfig).catch(error => {
+        console.error('Failed to initialize MCP in Northflank sandbox:', error);
+      });
+    }
+  }
 
   get commands(): SandboxCommands {
     return {
@@ -147,6 +168,8 @@ export class NorthflankSandboxInstance implements SandboxInstance {
   }
 
   async kill(): Promise<void> {
+    // Cleanup MCP before killing sandbox
+    await this.cleanupMCP();
     if (this.apiClient && this.sandboxId) {
       await this.apiClient.delete.service({
         parameters: {
@@ -229,6 +252,36 @@ export class NorthflankSandboxInstance implements SandboxInstance {
       )?.dns || ""
     );
   }
+
+  async initializeMCP(mcpConfig: MCPConfig): Promise<void> {
+    if (!mcpConfig.servers || mcpConfig.servers.length === 0) {
+      return;
+    }
+
+    this.mcpManager = new VibeKitMCPManager();
+    await this.mcpManager.initialize(mcpConfig.servers);
+  }
+
+  async getAvailableTools(): Promise<MCPTool[]> {
+    if (!this.mcpManager) {
+      return [];
+    }
+    return await this.mcpManager.listTools();
+  }
+
+  async executeMCPTool(toolName: string, args: any): Promise<MCPToolResult> {
+    if (!this.mcpManager) {
+      throw new Error('MCP not initialized in Northflank sandbox');
+    }
+    return await this.mcpManager.executeTool(toolName, args);
+  }
+
+  private async cleanupMCP(): Promise<void> {
+    if (this.mcpManager) {
+      await this.mcpManager.cleanup();
+      this.mcpManager = undefined;
+    }
+  }
 }
 
 export class NorthflankSandboxProvider implements SandboxProvider {
@@ -302,7 +355,8 @@ export class NorthflankSandboxProvider implements SandboxProvider {
   async create(
     envs?: Record<string, string>,
     agentType?: AgentType,
-    workingDirectory?: string
+    workingDirectory?: string,
+    mcpConfig?: MCPConfig
   ): Promise<SandboxInstance> {
     if (!this.config.projectId || !this.config.apiKey) {
       throw new Error(
@@ -389,15 +443,21 @@ export class NorthflankSandboxProvider implements SandboxProvider {
 
     await this.waitForSandbox(apiClient, sandboxId, this.config.projectId);
 
+    // Use MCP config from parameters or fallback to provider config
+    const finalMCPConfig = mcpConfig || this.config.mcpConfig;
     return new NorthflankSandboxInstance(
       apiClient,
       sandboxId,
       this.config.projectId,
-      finalWorkingDirectory
+      finalWorkingDirectory,
+      finalMCPConfig
     );
   }
 
-  async resume(sandboxId: string): Promise<SandboxInstance> {
+  async resume(
+    sandboxId: string,
+    mcpConfig?: MCPConfig
+  ): Promise<SandboxInstance> {
     if (!this.config.projectId || !this.config.apiKey) {
       throw new Error(
         "Northflank sandbox configuration missing one of required parameters: projectId, apiKey"
@@ -421,12 +481,15 @@ export class NorthflankSandboxProvider implements SandboxProvider {
     // Wait for the service to be ready before returning the instance
     await this.waitForSandbox(apiClient, sandboxId, this.config.projectId);
 
+    // Use MCP config from parameters or fallback to provider config
+    const finalMCPConfig = mcpConfig || this.config.mcpConfig;
     return new NorthflankSandboxInstance(
       apiClient,
       sandboxId,
       this.config.projectId,
       this.config.workingDirectory ||
-        NorthflankSandboxProvider.DefaultPersistentVolume
+        NorthflankSandboxProvider.DefaultPersistentVolume,
+      finalMCPConfig
     );
   }
 }
