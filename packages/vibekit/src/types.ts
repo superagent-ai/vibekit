@@ -211,6 +211,7 @@ export interface CodexResponse {
   patchApplyScript?: string;
   branchName?: string;
   commitSha?: string;
+  mcpToolsUsed?: number;
 }
 
 // CLAUDE CONFIG
@@ -238,6 +239,7 @@ export interface ClaudeResponse {
   patchApplyScript?: string;
   branchName?: string;
   commitSha?: string;
+  mcpToolsUsed?: number;
 }
 
 // OPENCODE CONFIG
@@ -264,6 +266,7 @@ export interface OpenCodeResponse {
   patchApplyScript?: string;
   branchName?: string;
   commitSha?: string;
+  mcpToolsUsed?: number;
 }
 
 // GEMINI CONFIG
@@ -290,6 +293,7 @@ export interface GeminiResponse {
   patchApplyScript?: string;
   branchName?: string;
   commitSha?: string;
+  mcpToolsUsed?: number;
 }
 
 // GROK CONFIG
@@ -305,12 +309,6 @@ export interface GrokConfig {
   telemetry?: TelemetryConfig;
   workingDirectory?: string;
   baseUrl?: string; // for custom xAI API endpoints
-  localMCP?: {
-    enabled: boolean;
-    environment?: any;
-    serverType?: "stdio" | "transport";
-    autoStart?: boolean;
-  };
   mcpConfig?: MCPConfig;
 }
 
@@ -323,6 +321,7 @@ export interface GrokResponse {
   patchApplyScript?: string;
   branchName?: string;
   commitSha?: string;
+  mcpToolsUsed?: number;
 }
 
 // SANDBOX ABSTRACTION

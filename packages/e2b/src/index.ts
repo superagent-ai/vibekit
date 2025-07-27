@@ -1,6 +1,6 @@
 import { Sandbox as E2BSandbox } from "@e2b/code-interpreter";
-import { VibeKitMCPManager } from "@vibe-kit/vibekit/mcp";
-import type { MCPConfig, MCPTool, MCPToolResult } from "@vibe-kit/vibekit/types";
+import { VibeKitMCPManager } from "@vibe-kit/vibekit/mcp/manager";
+import type { MCPConfig, MCPTool, MCPToolResult } from "@vibe-kit/vibekit";
 
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {

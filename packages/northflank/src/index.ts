@@ -3,8 +3,8 @@ import {
   ApiClientInMemoryContextProvider,
   GetServicePortsResult,
 } from "@northflank/js-client";
-import { VibeKitMCPManager } from "@vibe-kit/vibekit/mcp";
-import type { MCPConfig, MCPTool, MCPToolResult } from "@vibe-kit/vibekit/types";
+import { VibeKitMCPManager } from "@vibe-kit/vibekit/mcp/manager";
+import type { MCPConfig, MCPTool, MCPToolResult } from "@vibe-kit/vibekit";
 
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {

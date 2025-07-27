@@ -1,8 +1,8 @@
 import { getSandbox, type LogEvent, parseSSEStream, type Sandbox, type SandboxEnv } from "@cloudflare/sandbox";
 
 // MCP integration imports
-import { VibeKitMCPManager } from '@vibe-kit/vibekit/mcp';
-import type { MCPConfig, MCPTool, MCPToolResult } from '@vibe-kit/vibekit/types';
+import { VibeKitMCPManager } from '@vibe-kit/vibekit/mcp/manager';
+import type { MCPConfig, MCPTool, MCPToolResult } from '@vibe-kit/vibekit';
 
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {

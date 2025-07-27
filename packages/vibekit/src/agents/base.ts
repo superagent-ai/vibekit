@@ -106,13 +106,7 @@ export interface BaseAgentConfig {
   sandboxId?: string;
   telemetry?: any;
   workingDirectory?: string;
-  // Local MCP server configuration
-  localMCP?: {
-    enabled: boolean;
-    environment?: any; // Environment from @vibe-kit/dagger
-    serverType?: "stdio" | "transport";
-    autoStart?: boolean;
-  };
+
   mcpConfig?: MCPConfig;
 }
 
@@ -180,7 +174,7 @@ export abstract class BaseAgent {
   protected lastPrompt?: string;
   protected currentBranch?: string;
   protected readonly WORKING_DIR: string;
-  protected mcpServerInstance?: any; // MCPServerInstance from local-mcp.ts
+
   private mcpManager?: VibeKitMCPManager;
 
   constructor(config: BaseAgentConfig) {
@@ -219,58 +213,15 @@ export abstract class BaseAgent {
       );
     }
 
-    // Initialize local MCP server if configured (after sandbox is created)
-    if (this.config.localMCP?.enabled && this.config.localMCP.autoStart) {
-      await this.initializeLocalMCPServer();
-      await this.createAgentSession();
-    }
-
     // Initialize MCP after sandbox is ready
     await this.initializeMCP();
 
     return this.sandboxInstance;
   }
 
-  /**
-   * Initialize local MCP server for this agent
-   */
-  protected async initializeLocalMCPServer(): Promise<void> {
-    if (!this.config.localMCP?.enabled || !this.sandboxInstance) {
-      return;
-    }
 
-    try {
-      // Dynamically import to avoid circular dependencies
-      const { initializeMCPForAgent } = await import("./local-mcp");
 
-      const agentType = this.getAgentType();
-      this.mcpServerInstance = await initializeMCPForAgent(
-        this.sandboxInstance,
-        agentType
-      );
 
-      console.log(`MCP server initialized for ${agentType} agent`);
-    } catch (error) {
-      console.warn(`Failed to initialize MCP server: ${error}`);
-      // Don't throw - MCP is optional
-    }
-  }
-
-  /**
-   * Get MCP server URL if available
-   */
-  protected getMCPServerURL(): string | undefined {
-    return this.mcpServerInstance?.serverUrl;
-  }
-
-  /**
-   * Check if local MCP is enabled and running
-   */
-  protected isLocalMCPEnabled(): boolean {
-    return !!(
-      this.config.localMCP?.enabled && this.mcpServerInstance?.isRunning
-    );
-  }
 
   /**
    * Create and register agent session
@@ -297,7 +248,7 @@ export abstract class BaseAgent {
       createAgentSession(
         this.getAgentType(),
         mockEnvironment,
-        this.mcpServerInstance,
+        undefined, // MCP server instance no longer needed
         this
       );
     } catch (error) {
@@ -309,14 +260,13 @@ export abstract class BaseAgent {
    * Update agent activity in session
    */
   protected updateActivity(metadata?: any): void {
-    if (this.config.localMCP?.enabled) {
-      try {
-        import("./session-manager").then(({ updateAgentActivity }) => {
-          updateAgentActivity(this, metadata);
-        });
-      } catch (error) {
-        // Silently ignore session tracking errors
-      }
+    // Session tracking is optional
+    try {
+      import("./session-manager").then(({ updateAgentActivity }) => {
+        updateAgentActivity(this, metadata);
+      });
+    } catch (error) {
+      // Silently ignore session tracking errors
     }
   }
 
@@ -333,17 +283,6 @@ export abstract class BaseAgent {
     if (this.mcpManager) {
       await this.mcpManager.cleanup();
       this.mcpManager = undefined;
-    }
-
-    // Clean up local MCP server
-    if (this.mcpServerInstance && this.sandboxInstance) {
-      try {
-        const { cleanupMCPForSandbox } = await import("./local-mcp");
-        await cleanupMCPForSandbox(this.sandboxInstance.sandboxId);
-        this.mcpServerInstance = undefined;
-      } catch (error) {
-        console.warn(`Failed to cleanup MCP server: ${error}`);
-      }
     }
 
     if (this.sandboxInstance) {

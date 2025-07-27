@@ -15,6 +15,7 @@ export default defineConfig([
       "auth/oauth": "src/auth/oauth.ts",
       "auth/oauth-web": "src/auth/oauth-web.ts",
       "mcp/types": "src/mcp/types.ts",
+      "mcp/manager": "src/mcp/manager.ts",
     },
     format: ["esm", "cjs"],
     dts: true,
