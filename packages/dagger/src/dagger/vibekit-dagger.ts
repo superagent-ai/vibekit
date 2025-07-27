@@ -16,8 +16,8 @@ import { join } from "path";
 import { EventEmitter } from "events";
 
 // MCP integration imports
-import { VibeKitMCPManager } from '@vibe-kit/vibekit/mcp/manager';
-import type { MCPConfig, MCPTool, MCPToolResult } from '@vibe-kit/vibekit';
+import { VibeKitMCPManager } from '@vibe-kit/sdk/mcp/manager';
+import type { MCPConfig, MCPTool, MCPToolResult } from '@vibe-kit/sdk';
 
 const execAsync = promisify(exec);
 
