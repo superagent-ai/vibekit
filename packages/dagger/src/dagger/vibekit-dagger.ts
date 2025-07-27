@@ -144,7 +144,7 @@ const getConfigurableRegistryImage = (
         registry === "docker.io" ? "" : `${registry}/`
       }${user}/vibekit-grok-cli:latest`;
     default:
-      return "ubuntu:24.04"; // fallback for unknown agent types
+      return "node:18"; // fallback for unknown agent types - includes git
   }
 };
 
@@ -174,7 +174,7 @@ const getRegistryImage = async (agentType?: AgentType): Promise<string> => {
     case "grok":
       return `${baseRegistry}/vibekit-grok-cli:latest`;
     default:
-      return "ubuntu:24.04"; // fallback for unknown agent types
+      return "node:18"; // fallback for unknown agent types - includes git
   }
 };
 
@@ -330,10 +330,8 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
                         setTimeout(resolve, 100 + index * 50)
                       ); // Progressive delay
                       const message = line; // Simple string as per docs
-                      this.emit(
-                        type === "stdout" ? "update" : "error",
-                        message
-                      );
+                      // Emit all output as update events - stderr is often just informational (e.g., git progress)
+                      this.emit("update", message);
                       if (callback) callback(line);
                     }
                   };
@@ -463,30 +461,47 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     dockerfilePath?: string,
     agentType?: AgentType
   ): Promise<Container> {
-    let container: Container;
+    if (!agentType) {
+      throw new Error(
+        "Agent type is required for container creation. Cannot proceed without agent type."
+      );
+    }
 
-    try {
-      // Priority 1: Always try public registry image first for agent types (fastest)
-      const registryImage = await getRegistryImage(agentType);
-      if (agentType && registryImage !== "ubuntu:24.04") {
-        console.log(`🚀 Trying public registry image: ${registryImage}`);
-        try {
-          container = client.container().from(registryImage);
-          console.log(`✅ Successfully loaded ${registryImage} from registry`);
-          // If we get here, registry worked - skip Dockerfile build
-        } catch (registryError) {
-          console.log(
-            `⚠️ Registry failed, falling back to Dockerfile: ${
-              registryError instanceof Error
-                ? registryError.message
-                : String(registryError)
-            }`
-          );
-          throw registryError; // This will trigger the catch block below
+    let container: Container;
+    let lastError: Error | null = null;
+
+    // Strategy 1: Try public registry image first (fastest)
+    const registryImage = await getRegistryImage(agentType);
+    if (registryImage !== "node:18") { // Only try if it's a real agent image
+      console.log(`🚀 Trying public registry image: ${registryImage}`);
+      try {
+        container = client.container().from(registryImage);
+        console.log(`✅ Successfully loaded ${registryImage} from registry`);
+        
+        // Add environment variables
+        if (this.envs) {
+          for (const [key, value] of Object.entries(this.envs)) {
+            container = container.withEnvVariable(key, value);
+          }
         }
-      } else if (dockerfilePath) {
-        // Priority 2: Build from Dockerfile (slower fallback)
-        console.log(`🏗️ Building from Dockerfile: ${dockerfilePath}`);
+        
+        return container;
+      } catch (registryError) {
+        console.log(
+          `⚠️ Registry image failed: ${
+            registryError instanceof Error
+              ? registryError.message
+              : String(registryError)
+          }`
+        );
+        lastError = registryError instanceof Error ? registryError : new Error(String(registryError));
+      }
+    }
+
+    // Strategy 2: Try Dockerfile build (slower but reliable)
+    if (dockerfilePath) {
+      console.log(`🏗️ Building from Dockerfile: ${dockerfilePath}`);
+      try {
         const context = client.host().directory(".");
         container = client
           .container()
@@ -508,51 +523,44 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
             }`
           );
         }
-      } else {
-        // Priority 3: Use fallback base image
-        console.log(`🔄 Using fallback base image: ${this.image}`);
-        container = client.container().from(this.image);
-      }
-    } catch (error) {
-      console.error(
-        `❌ Error with primary image strategy: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-
-      // Fallback chain: try Dockerfile -> base image
-      if (dockerfilePath) {
-        try {
-          console.log(`🔄 Falling back to Dockerfile build: ${dockerfilePath}`);
-          const context = client.host().directory(".");
-          container = client
-            .container()
-            .build(context, { dockerfile: dockerfilePath });
-        } catch (dockerfileError) {
-          console.error(
-            `❌ Dockerfile build failed: ${
-              dockerfileError instanceof Error
-                ? dockerfileError.message
-                : String(dockerfileError)
-            }`
-          );
-          console.log(`🔄 Using final fallback: ${this.image}`);
-          container = client.container().from(this.image);
+        console.log(`✅ Successfully built from Dockerfile: ${dockerfilePath}`);
+        
+        // Add environment variables
+        if (this.envs) {
+          for (const [key, value] of Object.entries(this.envs)) {
+            container = container.withEnvVariable(key, value);
+          }
         }
-      } else {
-        console.log(`🔄 Using fallback base image: ${this.image}`);
-        container = client.container().from(this.image);
+        
+        return container;
+      } catch (dockerfileError) {
+        console.error(
+          `❌ Dockerfile build failed: ${
+            dockerfileError instanceof Error
+              ? dockerfileError.message
+              : String(dockerfileError)
+          }`
+        );
+        lastError = dockerfileError instanceof Error ? dockerfileError : new Error(String(dockerfileError));
       }
     }
 
-    // Add environment variables
-    if (this.envs) {
-      for (const [key, value] of Object.entries(this.envs)) {
-        container = container.withEnvVariable(key, value);
-      }
-    }
+    // No fallback to base images - fail with clear error message
+    const errorMessage = [
+      `❌ Failed to create container for agent type '${agentType}':`,
+      `   • Registry image failed: ${registryImage}`,
+      dockerfilePath ? `   • Dockerfile build failed: ${dockerfilePath}` : "   • No Dockerfile provided",
+      `   • Last error: ${lastError?.message || 'Unknown error'}`,
+      "",
+      "💡 Suggestions:",
+      "   1. Check internet connection for registry image pull",
+      "   2. Ensure Docker daemon is running and accessible",
+      "   3. Verify agent type is supported: 'claude', 'codex', 'gemini', 'opencode', 'grok'",
+      dockerfilePath ? "   4. Check Dockerfile syntax and build context" : "   4. Provide a valid Dockerfile path for local builds",
+      "   5. Run 'vibekit setup' to ensure proper configuration"
+    ].join("\n");
 
-    return container;
+    throw new Error(errorMessage);
   }
 
   // File operations for git workflow
@@ -636,7 +644,7 @@ export class LocalSandboxProvider implements SandboxProvider {
     // Create sandbox instance with Dockerfile if available and not preferring registry, otherwise use registry/base image
     const instance = new LocalSandboxInstance(
       sandboxId,
-      "ubuntu:24.04", // fallback image
+      "node:18", // fallback image with git and development tools
       envs,
       workDir,
       dockerfilePath,
@@ -714,7 +722,7 @@ export async function prebuildAgentImages(): Promise<{
       }
 
       // Try to pull from public registry first (fastest)
-      if (registryImage !== "ubuntu:24.04") {
+      if (registryImage !== "node:18") {
         try {
           console.log(`📥 Pulling ${registryImage} from registry...`);
           await execAsync(`docker pull ${registryImage}`);

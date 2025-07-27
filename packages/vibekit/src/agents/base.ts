@@ -432,16 +432,26 @@ export abstract class BaseAgent {
           callbacks?.onUpdate?.(
             `{"type": "git", "output": "Cloning repository: ${this.config.repoUrl}"}`
           );
-          // Clone directly into the working directory, not into a subdirectory
-          await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git clone https://x-access-token:${this.config.githubToken}@github.com/${this.config.repoUrl}.git .`,
-            { timeoutMs: 3600000, background: background || false }
-          );
+          try {
+            // Clone directly into the working directory, not into a subdirectory
+            await sbx.commands.run(
+              `cd ${this.WORKING_DIR} && git clone https://x-access-token:${this.config.githubToken}@github.com/${this.config.repoUrl}.git .`,
+              { timeoutMs: 3600000, background: background || false }
+            );
 
-          await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git config user.name "github-actions[bot]" && git config user.email "github-actions[bot]@users.noreply.github.com"`,
-            { timeoutMs: 60000, background: background || false }
-          );
+            await sbx.commands.run(
+              `cd ${this.WORKING_DIR} && git config user.name "github-actions[bot]" && git config user.email "github-actions[bot]@users.noreply.github.com"`,
+              { timeoutMs: 60000, background: background || false }
+            );
+          } catch (gitError) {
+            const errorMessage = `Git clone failed: ${gitError instanceof Error ? gitError.message : String(gitError)}`;
+            console.error(errorMessage);
+            callbacks?.onUpdate?.(
+              `{"type": "git", "output": "${errorMessage}", "error": true}`
+            );
+            callbacks?.onError?.(errorMessage);
+            // Continue execution instead of throwing - allow code generation to proceed without git repository
+          }
         }
       } else if (this.config.sandboxId) {
         callbacks?.onUpdate?.(
@@ -709,20 +719,27 @@ export abstract class BaseAgent {
     // Escape any quotes in the commit message to prevent shell parsing issues
     const escapedCommitMessage = commitMessage.replace(/"/g, '\\"');
 
-    const checkout = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git checkout -b ${_branchName} && git add -A && git commit -m "${escapedCommitMessage}"`,
-      {
-        timeoutMs: 3600000,
-      }
-    );
+    let checkout;
+    try {
+      checkout = await sbx.commands.run(
+        `cd ${this.WORKING_DIR} && git checkout -b ${_branchName} && git add -A && git commit -m "${escapedCommitMessage}"`,
+        {
+          timeoutMs: 3600000,
+        }
+      );
 
-    // Push the branch to GitHub
-    await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git push origin ${_branchName}`,
-      {
-        timeoutMs: 3600000,
-      }
-    );
+      // Push the branch to GitHub
+      await sbx.commands.run(
+        `cd ${this.WORKING_DIR} && git push origin ${_branchName}`,
+        {
+          timeoutMs: 3600000,
+        }
+      );
+    } catch (gitError) {
+      const errorMessage = `Git operations failed during PR creation: ${gitError instanceof Error ? gitError.message : String(gitError)}`;
+      console.error(errorMessage);
+      throw new Error(errorMessage);
+    }
 
     // Extract commit SHA from checkout output
     const commitMatch = checkout?.stdout.match(/\[[\w-]+ ([a-f0-9]+)\]/);
