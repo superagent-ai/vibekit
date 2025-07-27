@@ -15,6 +15,10 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { EventEmitter } from "events";
 
+// MCP integration imports
+import { VibeKitMCPManager } from '@vibe-kit/vibekit/mcp';
+import type { MCPConfig, MCPTool, MCPToolResult } from '@vibe-kit/vibekit/types';
+
 const execAsync = promisify(exec);
 
 // Environment interface for provider methods
@@ -57,21 +61,27 @@ export interface SandboxCommands {
 export interface SandboxInstance {
   sandboxId: string;
   commands: SandboxCommands;
+  mcpManager?: VibeKitMCPManager;
   kill(): Promise<void>;
   pause(): Promise<void>;
   getHost(port: number): Promise<string>;
   // EventEmitter methods for VibeKit streaming compatibility
   on(event: string, listener: (...args: any[]) => void): this;
   emit(event: string, ...args: any[]): boolean;
+  // MCP integration methods
+  initializeMCP?(mcpConfig: MCPConfig): Promise<void>;
+  getAvailableTools?(): Promise<MCPTool[]>;
+  executeMCPTool?(toolName: string, args: any): Promise<MCPToolResult>;
 }
 
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
     agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
-    workingDirectory?: string
+    workingDirectory?: string,
+    mcpConfig?: MCPConfig
   ): Promise<SandboxInstance>;
-  resume(sandboxId: string): Promise<SandboxInstance>;
+  resume(sandboxId: string, mcpConfig?: MCPConfig): Promise<SandboxInstance>;
 }
 
 export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
@@ -83,6 +93,7 @@ export interface LocalConfig {
   pushImages?: boolean; // Whether to push images during setup
   privateRegistry?: string; // Alternative registry (ghcr.io, etc.)
   autoInstall?: boolean; // Whether to automatically install Dagger CLI if not found
+  mcpConfig?: MCPConfig;
 }
 
 export interface GitConfig {
@@ -192,6 +203,7 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
   private workspaceDirectory: Directory | null = null;
   private baseContainer: Container | null = null;
   private initializationPromise: Promise<void> | null = null;
+  public mcpManager?: VibeKitMCPManager;
 
   constructor(
     public sandboxId: string,
@@ -200,12 +212,48 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     private workDir?: string,
     private githubToken?: string,
     private dockerfilePath?: string, // Path to Dockerfile if building from source
-    private agentType?: AgentType
+    private agentType?: AgentType,
+    mcpConfig?: MCPConfig
   ) {
     super(); // Call EventEmitter constructor
     if (githubToken) {
       this.octokit = new Octokit({ auth: githubToken });
     }
+    
+    // Initialize MCP manager if config is provided
+    if (mcpConfig) {
+      this.initializeMCP(mcpConfig).catch(error => {
+        console.error('Failed to initialize MCP in Dagger sandbox:', error);
+      });
+    }
+  }
+
+  async initializeMCP(mcpConfig: MCPConfig): Promise<void> {
+    if (!mcpConfig) return;
+    
+    try {
+      this.mcpManager = new VibeKitMCPManager();
+      const servers = Array.isArray(mcpConfig.servers) ? mcpConfig.servers : [mcpConfig.servers];
+      await this.mcpManager.initialize(servers);
+      console.log('MCP initialized successfully in Dagger sandbox');
+    } catch (error) {
+      console.error('Failed to initialize MCP in Dagger sandbox:', error);
+      throw error;
+    }
+  }
+
+  async getAvailableTools(): Promise<MCPTool[]> {
+    if (!this.mcpManager) {
+      return [];
+    }
+    return await this.mcpManager.listTools();
+  }
+
+  async executeMCPTool(toolName: string, args: any): Promise<MCPToolResult> {
+    if (!this.mcpManager) {
+      throw new Error('MCP manager not initialized. Call initializeMCP() first.');
+    }
+    return await this.mcpManager.executeTool(toolName, args);
   }
 
   private async ensureInitialized(): Promise<void> {
@@ -800,6 +848,15 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
   }
 
   async kill(): Promise<void> {
+    // Clean up MCP manager before destroying sandbox
+    if (this.mcpManager) {
+      try {
+        await this.mcpManager.cleanup();
+      } catch (error) {
+        console.error('Error cleaning up MCP manager:', error);
+      }
+    }
+    
     this.isRunning = false;
     this.workspaceDirectory = null;
     this.baseContainer = null;
@@ -823,8 +880,10 @@ export class LocalSandboxProvider implements SandboxProvider {
   async create(
     envs?: Record<string, string>,
     agentType?: AgentType,
-    workingDirectory?: string
+    workingDirectory?: string,
+    mcpConfig?: MCPConfig
   ): Promise<SandboxInstance> {
+    const finalMcpConfig = mcpConfig || this.config.mcpConfig;
     const sandboxId = `dagger-${agentType || "default"}-${Date.now().toString(
       36
     )}`;
@@ -843,16 +902,18 @@ export class LocalSandboxProvider implements SandboxProvider {
       workDir,
       this.config.githubToken,
       dockerfilePath,
-      agentType
+      agentType,
+      finalMcpConfig
     );
 
     return instance;
   }
 
-  async resume(sandboxId: string): Promise<SandboxInstance> {
+  async resume(sandboxId: string, mcpConfig?: MCPConfig): Promise<SandboxInstance> {
     // For Dagger, resume is the same as create since containers are ephemeral
     // The workspace state is maintained through the Directory persistence
-    return await this.create();
+    const finalMcpConfig = mcpConfig || this.config.mcpConfig;
+    return await this.create(undefined, undefined, undefined, finalMcpConfig);
   }
 
   async listEnvironments(): Promise<Environment[]> {
