@@ -7,7 +7,6 @@
 
 import { connect } from "@dagger.io/dagger";
 import type { Client, Container, Directory } from "@dagger.io/dagger";
-import { Octokit } from "@octokit/rest";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { readFile, writeFile } from "fs/promises";
@@ -87,7 +86,6 @@ export interface SandboxProvider {
 export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
 
 export interface LocalConfig {
-  githubToken?: string;
   preferRegistryImages?: boolean; // If true, use registry images instead of building from Dockerfiles
   dockerHubUser?: string; // User's Docker Hub username for custom images
   pushImages?: boolean; // Whether to push images during setup
@@ -96,18 +94,7 @@ export interface LocalConfig {
   mcpConfig?: MCPConfig;
 }
 
-export interface GitConfig {
-  repoUrl: string;
-  branch?: string;
-  commitMessage?: string;
-}
 
-export interface PRConfig {
-  title: string;
-  body: string;
-  headBranch: string;
-  baseBranch?: string;
-}
 
 // Helper function to get Dockerfile path based on agent type
 const getDockerfilePathFromAgentType = (
@@ -199,7 +186,6 @@ const getImageTag = (agentType?: AgentType): string => {
 // Local Dagger implementation with proper workspace state persistence and VibeKit streaming compatibility
 class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
   private isRunning = true;
-  private octokit?: Octokit;
   private workspaceDirectory: Directory | null = null;
   private baseContainer: Container | null = null;
   private initializationPromise: Promise<void> | null = null;
@@ -210,15 +196,11 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     private image: string, // Fallback image if no Dockerfile
     private envs?: Record<string, string>,
     private workDir?: string,
-    private githubToken?: string,
     private dockerfilePath?: string, // Path to Dockerfile if building from source
     private agentType?: AgentType,
     mcpConfig?: MCPConfig
   ) {
     super(); // Call EventEmitter constructor
-    if (githubToken) {
-      this.octokit = new Octokit({ auth: githubToken });
-    }
     
     // Initialize MCP manager if config is provided
     if (mcpConfig) {
@@ -570,11 +552,6 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
       }
     }
 
-    // Add GitHub token for git operations (if provided via config)
-    if (this.githubToken) {
-      container = container.withEnvVariable("GITHUB_TOKEN", this.githubToken);
-    }
-
     return container;
   }
 
@@ -607,244 +584,6 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
       // CRITICAL: Export the workspace directory to persist the file write
       this.workspaceDirectory = container.directory(this.workDir || "/vibe0");
     });
-  }
-
-  async createBranch(branchName: string): Promise<SandboxExecutionResult> {
-    return await this.commands.run(`git checkout -b ${branchName}`);
-  }
-
-  async commitChanges(message: string): Promise<SandboxExecutionResult> {
-    await this.commands.run("git add .");
-    return await this.commands.run(`git commit -m "${message}"`);
-  }
-
-  async pushChanges(branchName: string): Promise<SandboxExecutionResult> {
-    return await this.commands.run(`git push origin ${branchName}`);
-  }
-
-  // GitHub API integration for PR creation
-  async createPullRequest(
-    prConfig: PRConfig
-  ): Promise<{ success: boolean; prUrl?: string; error?: string }> {
-    if (!this.octokit || !this.githubToken) {
-      return { success: false, error: "GitHub token not configured" };
-    }
-
-    try {
-      // Extract owner/repo from current git remote
-      const remoteResult = await this.commands.run("git remote get-url origin");
-      const repoMatch = remoteResult.stdout.match(
-        /github\.com[/:]([\w-]+)\/([\w-]+)(?:\.git)?/
-      );
-
-      if (!repoMatch) {
-        return {
-          success: false,
-          error: "Could not determine GitHub repository from git remote",
-        };
-      }
-
-      const [, owner, repo] = repoMatch;
-
-      const response = await this.octokit.pulls.create({
-        owner,
-        repo,
-        title: prConfig.title,
-        body: prConfig.body,
-        head: prConfig.headBranch,
-        base: prConfig.baseBranch || "main",
-      });
-
-      return {
-        success: true,
-        prUrl: response.data.html_url,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  async cloneRepository(gitConfig: GitConfig): Promise<SandboxExecutionResult> {
-    await this.ensureInitialized();
-
-    let cloneResult: SandboxExecutionResult = {
-      exitCode: 1,
-      stdout: "",
-      stderr: "Clone failed",
-    };
-
-    await connect(async (client) => {
-      // Set basic global git config
-      await this.commands.run("git config --global init.defaultBranch main");
-
-      // If we have a GitHub token, modify the URL to include authentication
-      let cloneUrl = gitConfig.repoUrl;
-      if (this.githubToken && gitConfig.repoUrl.includes("github.com")) {
-        // Convert github.com URLs to include token authentication
-        if (gitConfig.repoUrl.startsWith("https://github.com/")) {
-          // Handle HTTPS URLs
-          cloneUrl = gitConfig.repoUrl.replace(
-            "https://github.com/",
-            `https://x-access-token:${this.githubToken}@github.com/`
-          );
-        } else if (gitConfig.repoUrl.startsWith("git@github.com:")) {
-          // Handle SSH URLs by converting to HTTPS with token
-          cloneUrl = gitConfig.repoUrl.replace(
-            "git@github.com:",
-            `https://x-access-token:${this.githubToken}@github.com/`
-          );
-        } else if (
-          gitConfig.repoUrl.includes("github.com/") &&
-          !gitConfig.repoUrl.includes("@")
-        ) {
-          // Handle plain github.com URLs (add https and token)
-          cloneUrl = gitConfig.repoUrl.replace(
-            "github.com/",
-            `x-access-token:${this.githubToken}@github.com/`
-          );
-          if (!cloneUrl.startsWith("https://")) {
-            cloneUrl = "https://" + cloneUrl;
-          }
-        }
-
-        // Ensure it has .git extension for push operations
-        if (!cloneUrl.endsWith(".git")) {
-          cloneUrl += ".git";
-        }
-      }
-
-      // Clone the repository with authentication
-      const cloneCommand = gitConfig.branch
-        ? `git clone --branch ${gitConfig.branch} ${cloneUrl} .`
-        : `git clone ${cloneUrl} .`;
-
-      cloneResult = await this.commands.run(cloneCommand);
-
-      // IMPORTANT: Set user config in repository context after cloning
-      if (cloneResult.exitCode === 0) {
-        await this.commands.run('git config user.name "VibeKit Agent"');
-        await this.commands.run('git config user.email "agent@vibekit.ai"');
-      }
-    });
-
-    return cloneResult;
-  }
-
-  async executeWorkflow(
-    gitConfig: GitConfig,
-    agentCommand: string,
-    prConfig: PRConfig
-  ): Promise<{
-    success: boolean;
-    prUrl?: string;
-    error?: string;
-    logs: string[];
-  }> {
-    const logs: string[] = [];
-
-    try {
-      // Step 1: Clone repository
-      logs.push("🔄 Cloning repository...");
-      const cloneResult = await this.cloneRepository(gitConfig);
-      if (cloneResult.exitCode !== 0) {
-        return {
-          success: false,
-          error: `Clone failed: ${cloneResult.stderr}`,
-          logs,
-        };
-      }
-      logs.push("✅ Repository cloned successfully");
-
-      // Step 2: Create feature branch
-      logs.push("🔄 Creating feature branch...");
-      const branchResult = await this.createBranch(prConfig.headBranch);
-      if (branchResult.exitCode !== 0) {
-        return {
-          success: false,
-          error: `Branch creation failed: ${branchResult.stderr}`,
-          logs,
-        };
-      }
-      logs.push(`✅ Branch '${prConfig.headBranch}' created`);
-
-      // Step 3: Execute agent command
-      logs.push("🔄 Executing agent command...");
-      const execResult = await this.commands.run(agentCommand);
-      if (execResult.exitCode !== 0) {
-        return {
-          success: false,
-          error: `Agent execution failed: ${execResult.stderr}`,
-          logs,
-        };
-      }
-      logs.push("✅ Agent command executed successfully");
-
-      // Step 4: Check for changes
-      logs.push("🔄 Checking for changes...");
-      const statusResult = await this.commands.run("git status --porcelain");
-      if (!statusResult.stdout.trim()) {
-        logs.push("ℹ️ No changes detected, skipping commit and PR creation");
-        return { success: true, logs };
-      }
-      logs.push(
-        `📝 Found ${
-          statusResult.stdout.trim().split("\n").length
-        } changed files`
-      );
-
-      // Step 5: Commit changes
-      logs.push("🔄 Committing changes...");
-      const commitResult = await this.commitChanges(
-        gitConfig.commitMessage || "VibeKit agent changes"
-      );
-      if (commitResult.exitCode !== 0) {
-        return {
-          success: false,
-          error: `Commit failed: ${commitResult.stderr}`,
-          logs,
-        };
-      }
-      logs.push("✅ Changes committed");
-
-      // Step 6: Push changes
-      logs.push("🔄 Pushing changes...");
-      const pushResult = await this.pushChanges(prConfig.headBranch);
-      if (pushResult.exitCode !== 0) {
-        return {
-          success: false,
-          error: `Push failed: ${pushResult.stderr}`,
-          logs,
-        };
-      }
-      logs.push("✅ Changes pushed to remote");
-
-      // Step 7: Create Pull Request
-      logs.push("🔄 Creating Pull Request...");
-      const prResult = await this.createPullRequest(prConfig);
-      if (!prResult.success) {
-        return {
-          success: false,
-          error: `PR creation failed: ${prResult.error}`,
-          logs,
-        };
-      }
-      logs.push(`✅ Pull Request created: ${prResult.prUrl}`);
-
-      return {
-        success: true,
-        prUrl: prResult.prUrl,
-        logs,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-        logs,
-      };
-    }
   }
 
   async kill(): Promise<void> {
@@ -900,7 +639,6 @@ export class LocalSandboxProvider implements SandboxProvider {
       "ubuntu:24.04", // fallback image
       envs,
       workDir,
-      this.config.githubToken,
       dockerfilePath,
       agentType,
       finalMcpConfig

@@ -372,9 +372,7 @@ export async function installLocal(
     console.log(
       `  • Fast startup: ${chalk.cyan("Registry or locally cached images")}`
     );
-    console.log(
-      `  • Git integration: ${chalk.cyan("Built-in GitHub operations")}`
-    );
+
     console.log(`  • Isolation: ${chalk.cyan("Containerized environments")}`);
 
     console.log(chalk.yellow("\n💡 Quick start:"));
@@ -394,7 +392,7 @@ export async function installLocal(
     console.log(chalk.blue("\n🔧 Benefits:"));
     console.log(chalk.gray("  • ⚡ Fast startup with optimized images"));
     console.log(chalk.gray("  • 🔒 Isolated containerized environments"));
-    console.log(chalk.gray("  • 🔄 Built-in git operations and PR creation"));
+
     console.log(chalk.gray("  • 🌐 Cross-platform compatibility"));
     console.log(chalk.gray("  • 📦 Automatic dependency management"));
     console.log(chalk.gray("  • 🐳 Docker Hub integration (if configured)"));
