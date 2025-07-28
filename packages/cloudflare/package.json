@@ -27,7 +27,8 @@
   },
   "dependencies": {
     "@cloudflare/sandbox": "^0.1.3",
-    "patch-package": "^8.0.0"
+    "patch-package": "^8.0.0",
+    "unicorn-magic": "^0.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.18",
