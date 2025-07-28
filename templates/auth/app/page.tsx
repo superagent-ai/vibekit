@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Copy, Check } from "lucide-react";
 import { ClaudeWebAuth, LocalStorageTokenStorage } from "@vibe-kit/auth";
+import { completeAuthentication } from "./actions/auth";
 
 export default function AuthExample() {
   const [authUrl, setAuthUrl] = useState("");
@@ -50,18 +51,28 @@ export default function AuthExample() {
 
     setLoading(true);
     try {
-      // Import the auth package dynamically
+      // Call the server action to complete authentication (avoids CORS issues)
+      const result = await completeAuthentication(
+        authCode,
+        codeVerifier,
+        authState
+      );
 
-      // Create storage and auth instance
-      const storage = new LocalStorageTokenStorage("claude_oauth_demo");
-      const auth = new ClaudeWebAuth(storage);
+      if (result.success && result.token) {
+        // Store the token in localStorage on the client side
+        const storage = new LocalStorageTokenStorage("claude_oauth_demo");
+        await storage.set({
+          access_token: result.token,
+          token_type: "bearer",
+          expires_in: 3600, // Default expiration
+          refresh_token: "", // We'll handle refresh separately if needed
+          created_at: Date.now(), // Required property for OAuthToken
+        });
 
-      // Authenticate with the pasted code
-      await auth.authenticate(authCode, codeVerifier, authState);
-
-      // Get the access token
-      const token = await auth.getValidToken();
-      setAccessToken(token || "");
+        setAccessToken(result.token);
+      } else {
+        alert(`Authentication failed: ${result.error || "Unknown error"}`);
+      }
     } catch (error) {
       if (error instanceof Error) {
         alert(`Authentication failed: ${error.message}`);
@@ -229,6 +240,7 @@ export default function AuthExample() {
                     value={accessToken}
                     readOnly
                     className="font-mono text-xs"
+                    type="password"
                   />
                   <Button variant="outline" size="icon" onClick={copyToken}>
                     {copied ? (

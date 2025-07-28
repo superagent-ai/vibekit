@@ -1,4 +1,4 @@
-FROM docker.io/ghostwriternr/cloudflare-sandbox:0.1.0
+FROM docker.io/cloudflare/sandbox:0.1.3
 
 # Set up Bun environment
 ENV BUN_INSTALL="/home/.bun"

@@ -448,7 +448,7 @@ For local development with `wrangler dev`, only ports explicitly exposed in the 
 To test multiple ports locally, create a custom Dockerfile:
 
 ```dockerfile
-FROM docker.io/ghostwriternr/cloudflare-sandbox:latest
+FROM docker.io/cloudflare/sandbox:0.1.3
 
 EXPOSE 3000
 EXPOSE 8080

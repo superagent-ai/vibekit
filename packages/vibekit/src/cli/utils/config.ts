@@ -186,10 +186,12 @@ export function loadConfig(): CLIConfig {
   }
 
   const googleKey = getEnv("GOOGLE_API_KEY");
-  if (googleKey) {
+  const geminiKey = getEnv("GEMINI_API_KEY");
+  if (googleKey || geminiKey) {
     config.agents.google = {
-      apiKey: googleKey,
-      model: getEnv("GOOGLE_MODEL") || getEnv("VIBEKIT_DEFAULT_MODEL"),
+      apiKey: googleKey || geminiKey || "",
+      model: getEnv("GOOGLE_MODEL") || getEnv("GEMINI_MODEL") ||
+  getEnv("VIBEKIT_DEFAULT_MODEL"),
     };
   }
 
