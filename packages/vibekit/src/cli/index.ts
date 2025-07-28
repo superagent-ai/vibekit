@@ -27,7 +27,7 @@ program
   )
   .option(
     "-a, --agents <agents>",
-    "Comma-separated list of agent templates to install (e.g., claude,codex,gemini)"
+    "Comma-separated list of agent templates to install (e.g., claude,codex,gemini,grok,opencode,qwen)"
   )
   .option(
     "-c, --cpu <cores>",

@@ -24,8 +24,18 @@ export const AGENT_TEMPLATES = [
     message: "Gemini - Google's Gemini CLI agent",
   },
   {
+    name: "grok",
+    display: "Grok",
+    message: "Grok - xAI's Grok agent with advanced reasoning",
+  },
+  {
     name: "opencode",
     display: "OpenCode",
     message: "OpenCode - Open source coding agent",
+  },
+  {
+    name: "qwen",
+    display: "Qwen",
+    message: "Qwen - Alibaba's Qwen Code agent",
   },
 ];

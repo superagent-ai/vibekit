@@ -1666,8 +1666,10 @@ export async function helpCommand() {
   console.log(chalk.green("Agent Types:"));
   console.log("  claude     Claude-optimized environment");
   console.log("  codex      OpenAI Codex environment");
+  console.log("  gemini     Google Gemini environment");
+  console.log("  grok       xAI Grok environment");
   console.log("  opencode   Open source model environment");
-  console.log("  gemini     Google Gemini environment\n");
+  console.log("  qwen       Alibaba Qwen Code environment\n");
 
   console.log(chalk.green("Examples:"));
   console.log("  vibekit local create --agent claude --name my-claude-env");
@@ -1701,7 +1703,7 @@ export function createLocalCommand(): Command {
     .command("create")
     .description("Create a new sandbox environment")
     .option("--name <name>", "Environment name")
-    .option("--agent <type>", "Agent type (claude, codex, opencode, gemini)")
+    .option("--agent <type>", "Agent type (claude, codex, gemini, grok, opencode, qwen)")
     .option(
       "--working-directory <path>",
       "Working directory in sandbox",

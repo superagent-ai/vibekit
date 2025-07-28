@@ -68,7 +68,7 @@ export async function getStoppedEnvironmentNames(): Promise<string[]> {
  * Get available agent types for completion
  */
 export function getAgentTypes(): string[] {
-  return ["grok", "claude", "codex", "gemini"];
+  return ["claude", "codex", "gemini", "grok", "opencode", "qwen"];
 }
 
 /**
@@ -106,7 +106,7 @@ _vibekit_local_completion() {
 
     case $prev in
         --agent|-a)
-            COMPREPLY=($(compgen -W "grok claude codex gemini" -- "$cur"))
+            COMPREPLY=($(compgen -W "claude codex gemini grok opencode qwen" -- "$cur"))
             return 0
             ;;
         --base-image|-i)
@@ -198,7 +198,7 @@ _vibekit_local() {
                 create)
                     _arguments \
                         '--name[Environment name]:name:' \
-                        '--agent[Agent type]:agent:(grok claude codex gemini)' \
+                        '--agent[Agent type]:agent:(claude codex gemini grok opencode qwen)' \
                         '--base-image[Base Docker image]:image:(ubuntu:24.04 ubuntu:22.04 node:20 node:18 python:3.11 python:3.10 alpine:latest debian:bookworm)' \
                         '--working-directory[Working directory]:path:_directories' \
                         '--env[Environment variables]:vars:' \
@@ -207,7 +207,7 @@ _vibekit_local() {
                 list|ls)
                     _arguments \
                         '--status[Filter by status]:status:(running stopped starting stopping error)' \
-                        '--agent[Filter by agent]:agent:(grok claude codex gemini)' \
+                        '--agent[Filter by agent]:agent:(claude codex gemini grok opencode qwen)' \
                         '--branch[Filter by branch]:branch:' \
                         '--json[JSON output]'
                     ;;
