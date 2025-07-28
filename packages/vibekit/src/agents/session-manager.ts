@@ -8,10 +8,11 @@
 import { Environment } from "@vibe-kit/dagger";
 import { MCPServerInstance } from "./local-mcp";
 import { BaseAgent } from "./base";
+import { AgentType } from "../types";
 
 export interface AgentSession {
   id: string;
-  agentType: "claude" | "codex" | "opencode" | "gemini" | "grok";
+  agentType: AgentType;
   environment: Environment;
   mcpServer?: MCPServerInstance;
   agent?: BaseAgent;

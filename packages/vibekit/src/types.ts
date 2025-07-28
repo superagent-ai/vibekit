@@ -340,7 +340,7 @@ export interface SandboxConfig {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
+    agentType?: AgentType,
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;

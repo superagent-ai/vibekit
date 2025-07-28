@@ -8,6 +8,7 @@ import {
   SandboxInstance,
   SandboxProvider,
   LabelOptions,
+  AgentType,
 } from "../types";
 
 // StreamingBuffer class to handle chunked JSON data
@@ -847,7 +848,7 @@ export abstract class BaseAgent {
   }
 
   protected abstract getApiKey(): string;
-  protected abstract getAgentType(): "codex" | "claude" | "opencode" | "gemini" | "grok";
+  protected abstract getAgentType(): AgentType;
   protected abstract getModelConfig(): ModelConfig;
 
   private async handlePRLabeling(
