@@ -33,6 +33,11 @@ export const createGeminiAgent = async () => {
   return GeminiAgent;
 };
 
+export const createQwenAgent = async () => {
+  const { QwenAgent } = await import("./agents/qwen");
+  return QwenAgent;
+};
+
 export const createTelemetryService = async () => {
   const { TelemetryService } = await import("./services/telemetry");
   return TelemetryService;
@@ -46,5 +51,6 @@ export type { ClaudeConfig, ClaudeResponse } from "./types";
 export type { CodexConfig, CodexResponse } from "./types";
 export type { OpenCodeConfig, OpenCodeResponse } from "./types";
 export type { GeminiConfig } from "./types";
+export type { QwenConfig, QwenResponse } from "./types";
 export type { TelemetryData } from "./services/telemetry";
 export type { BaseAgentConfig, PullRequestResult } from "./agents/base";

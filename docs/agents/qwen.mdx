@@ -1,0 +1,123 @@
+---
+title: 'Qwen Code'
+description: 'Run Qwen Code in a secure and private sandbox'
+---
+
+<img
+  src="/images/qwen.png"
+  alt="Qwen Code"
+/>
+
+## How it works
+
+VibeKit runs Qwen Code in headless mode with the `--yolo` flag enabled. This means that the agent will automatically create, edit and delete files if it's in `code` mode.
+
+The Qwen Code CLI is ran in the configured environment and has access to the network, which means it could be used to connect to the outside world. This is a powerful feature that can be used to build powerful applications and should be used with caution.
+
+[Read more about Qwen Code](https://github.com/QwenLM/qwen-code)
+
+## Available Models
+
+Qwen Code supports various models through different providers:
+
+- `qwen3-coder-plus` (default) - Latest coding model with enhanced capabilities
+- `qwen-coder-turbo` - Fast response model optimized for speed
+- `qwen-max` - Most capable model for complex tasks
+- `qwen-plus` - Balanced model for general use
+
+The model can be specified in your configuration regardless of the authentication method used.
+
+## Authentication
+
+Qwen Code uses OpenAI-compatible API authentication through Alibaba Cloud's services. The specific endpoint and model depend on your location and preferred platform.
+
+### Platform Options
+
+Choose the appropriate platform based on your location:
+
+#### For Mainland China Users
+
+**Option 1: Alibaba Cloud Bailian Platform**
+- Get API key at: [https://bailian.console.aliyun.com/](https://bailian.console.aliyun.com/)
+- Recommended for production use
+
+```bash
+export OPENAI_API_KEY="your_bailian_api_key"
+export OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+export OPENAI_MODEL="qwen3-coder-plus"
+```
+
+**Option 2: ModelScope Platform**
+- Get API key at: [https://modelscope.cn/docs/model-service/API-Inference/intro](https://modelscope.cn/docs/model-service/API-Inference/intro)
+- Offers 2,000 free API calls per day
+- Great for development and testing
+
+```bash
+export OPENAI_API_KEY="your_modelscope_api_key"
+export OPENAI_BASE_URL="https://api-inference.modelscope.cn/v1"
+export OPENAI_MODEL="Qwen/Qwen3-Coder-480B-A35B-Instruct"
+```
+
+#### For International Users
+
+**Alibaba Cloud ModelStudio**
+- Get API key at: [https://modelstudio.console.alibabacloud.com/](https://modelstudio.console.alibabacloud.com/)
+
+```bash
+export OPENAI_API_KEY="your_modelstudio_api_key"
+export OPENAI_BASE_URL="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+export OPENAI_MODEL="qwen3-coder-plus"
+```
+
+### VibeKit Integration
+
+Once you have your API key and endpoint configured, use Qwen with VibeKit:
+
+```typescript
+import { VibeKit } from '@vibe-kit/sdk';
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "qwen",
+    provider: "openai", // Always use "openai" for Qwen (OpenAI-compatible)
+    providerApiKey: process.env.OPENAI_API_KEY,
+    model: process.env.OPENAI_MODEL || "qwen3-coder-plus",
+  })
+  .withSandbox("local")
+  .withWorkingDirectory("/workspace");
+
+// Initialize and use
+const agent = await vibeKit.initialize();
+const result = await agent.generateCode("Create a simple web server in Node.js", "code");
+```
+
+### Configuration File
+
+Create a `.env` file in your project root with your chosen platform configuration:
+
+```bash
+# .env file - Choose one platform configuration
+
+# For Mainland China - Bailian Platform (Recommended)
+OPENAI_API_KEY=your_bailian_api_key
+OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+OPENAI_MODEL=qwen3-coder-plus
+
+# For Mainland China - ModelScope Platform (Free tier)
+# OPENAI_API_KEY=your_modelscope_api_key
+# OPENAI_BASE_URL=https://api-inference.modelscope.cn/v1
+# OPENAI_MODEL=Qwen/Qwen3-Coder-480B-A35B-Instruct
+
+# For International Users - ModelStudio
+# OPENAI_API_KEY=your_modelstudio_api_key
+# OPENAI_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+# OPENAI_MODEL=qwen3-coder-plus
+```
+
+### Getting Your API Key
+
+1. **Choose your platform** based on your location (see Platform Options above)
+2. **Register an account** on the chosen platform
+3. **Navigate to the API section** and create a new API key
+4. **Set the environment variables** as shown in the configuration examples
+5. **Verify your setup** by running a simple test with VibeKit

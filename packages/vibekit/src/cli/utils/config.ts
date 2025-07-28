@@ -260,6 +260,18 @@ export function getAgentConfig(
         "No API key configured for OpenCode agent. Set GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY."
       );
 
+    case "qwen":
+      // Qwen uses OpenAI-compatible API through Alibaba Cloud platforms
+      if (!config.agents.openai) {
+        throw new Error(
+          "OpenAI API key not configured for Qwen agent. Set OPENAI_API_KEY environment variable.\n" +
+          "Supported platforms:\n" +
+          "  - Mainland China: Bailian (https://bailian.console.aliyun.com/) or ModelScope\n" +
+          "  - International: ModelStudio (https://modelstudio.console.alibabacloud.com/)"
+        );
+      }
+      return config.agents.openai;
+
     default:
       throw new Error(`Unknown agent type: ${agentType}`);
   }
@@ -276,9 +288,9 @@ export function validateConfig(config: CLIConfig): string[] {
   if (!hasAnyAgent) {
     errors.push(
       "No AI agent API keys configured. Please set at least one of:\n" +
-        "  - OPENAI_API_KEY (for Codex agent)\n" +
+        "  - OPENAI_API_KEY (for Codex or Qwen agent)\n" +
         "  - ANTHROPIC_API_KEY (for Claude agent)\n" +
-        "  - GOOGLE_API_KEY (for Gemini agent)\n" +
+        "  - GOOGLE_API_KEY or GEMINI_API_KEY (for Gemini agent)\n" +
         "  - GROQ_API_KEY (for OpenCode agent)"
     );
   }
@@ -319,6 +331,8 @@ export function getDefaultModel(agentType: AgentType): string {
       return "gemini-1.5-pro";
     case "opencode":
       return "llama-3.1-70b-versatile"; // Groq model
+    case "qwen":
+      return "qwen3-coder-plus";
     default:
       return "gpt-4o";
   }

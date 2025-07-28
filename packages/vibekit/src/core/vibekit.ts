@@ -118,6 +118,10 @@ export class VibeKit extends EventEmitter {
         const { GrokAgent } = await import("../agents/grok");
         AgentClass = GrokAgent;
         break;
+      case "qwen":
+        const { QwenAgent } = await import("../agents/qwen");
+        AgentClass = QwenAgent;
+        break;
       default:
         throw new Error(`Unsupported agent type: ${type}`);
     }

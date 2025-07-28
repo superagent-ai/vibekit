@@ -1,5 +1,5 @@
 // AGENTS
-export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
+export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok" | "qwen";
 
 export type AgentMode = "ask" | "code";
 
@@ -263,6 +263,36 @@ export interface GrokResponse {
   patchApplyScript?: string;
   branchName?: string;
   commitSha?: string;
+}
+
+// QWEN CONFIG
+export interface QwenConfig {
+  providerApiKey?: string;
+  provider?: ModelProvider;
+  githubToken?: string;
+  repoUrl?: string; // org/repo, e.g. "octocat/hello-world"
+  sandboxProvider?: SandboxProvider;
+  secrets?: SecretsConfig;
+  model?: string;
+  sandboxId?: string;
+  telemetry?: TelemetryConfig;
+  workingDirectory?: string;
+}
+
+export interface QwenResponse {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  sandboxId: string;
+  patch?: string;
+  patchApplyScript?: string;
+  branchName?: string;
+  commitSha?: string;
+}
+
+export interface QwenStreamCallbacks {
+  onUpdate?: (message: string) => void;
+  onError?: (error: string) => void;
 }
 
 // SANDBOX ABSTRACTION
