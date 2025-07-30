@@ -36,13 +36,13 @@ export interface SandboxInstance {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
+    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok" | "qwen",
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
 
-export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
+export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok" | "qwen";
 
 export interface NorthflankConfig {
   apiKey: string;
@@ -65,6 +65,8 @@ const getDockerImageFromAgentType = (agentType?: AgentType) => {
     return "superagentai/vibekit-gemini:1.0";
   } else if (agentType === "grok") {
     return "superagentai/vibekit-grok-cli:1.0";
+  } else if (agentType === "qwen") {
+    return "superagentai/vibekit-qwen:1.0";
   }
   return "ubuntu:22.04";
 };

@@ -32,13 +32,13 @@ export interface SandboxInstance {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini",
+    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok" | "qwen",
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
 
-export type AgentType = "codex" | "claude" | "opencode" | "gemini";
+export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok" | "qwen";
 
 export interface CloudflareConfig {
   env: SandboxEnv;
