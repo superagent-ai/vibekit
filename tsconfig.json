@@ -7,7 +7,17 @@
       "outDir": "dist",
       "strict": true,
       "esModuleInterop": true,
-      "skipLibCheck": true
+      "skipLibCheck": true,
+      "baseUrl": ".",
+      "paths": {
+        "@vibe-kit/sdk": ["./packages/vibekit/src/index.ts"],
+        "@vibe-kit/dagger": ["./packages/dagger/src/index.ts"],
+        "@vibe-kit/auth": ["./packages/auth/src/index.ts"],
+        "@vibe-kit/cloudflare": ["./packages/cloudflare/src/index.ts"],
+        "@vibe-kit/daytona": ["./packages/daytona/src/index.ts"],
+        "@vibe-kit/e2b": ["./packages/e2b/src/index.ts"],
+        "@vibe-kit/northflank": ["./packages/northflank/src/index.ts"]
+      }
     },
     "include": ["packages/vibekit", "test/codex.test.ts"]
   }

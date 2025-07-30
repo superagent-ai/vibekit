@@ -308,7 +308,7 @@ export async function installLocal(
 
         if (setupResult.success) {
           const preBuildResults = setupResult.preBuildResults || [];
-          const successCount = preBuildResults.filter((r) => r.success).length;
+          const successCount = preBuildResults.filter((r: { agentType: string; success: boolean; error?: string }) => r.success).length;
 
           if (successCount > 0) {
             spinner.text = `Pre-built ${successCount}/${preBuildResults.length} agent images`;
@@ -319,8 +319,8 @@ export async function installLocal(
             );
 
             const successfulAgents = preBuildResults
-              .filter((r) => r.success)
-              .map((r) => r.agentType);
+              .filter((r: { agentType: string; success: boolean; error?: string }) => r.success)
+              .map((r: { agentType: string; success: boolean; error?: string }) => r.agentType);
 
             if (successfulAgents.length > 0) {
               console.log(
@@ -329,8 +329,8 @@ export async function installLocal(
             }
 
             const failedAgents = preBuildResults
-              .filter((r) => !r.success)
-              .map((r) => r.agentType);
+              .filter((r: { agentType: string; success: boolean; error?: string }) => !r.success)
+              .map((r: { agentType: string; success: boolean; error?: string }) => r.agentType);
 
             if (failedAgents.length > 0) {
               console.log(

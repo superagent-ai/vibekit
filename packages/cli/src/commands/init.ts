@@ -20,8 +20,8 @@ const { prompt } = enquirer;
 // Generate agent templates from AGENT_CONFIGS
 const AGENT_TEMPLATES = Object.entries(AGENT_CONFIGS).map(([key, config]) => ({
   name: key as AgentType,
-  display: config.display,
-  message: `${config.display} - ${config.description}`,
+  display: (config as typeof AGENT_CONFIGS[AgentType]).display,
+  message: `${(config as typeof AGENT_CONFIGS[AgentType]).display} - ${(config as typeof AGENT_CONFIGS[AgentType]).description}`,
 }));
 
 // Add this type and registry after imports

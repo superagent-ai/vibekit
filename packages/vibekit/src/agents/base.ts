@@ -804,7 +804,7 @@ export abstract class BaseAgent {
       throw new Error(`Failed to create PR: ${prResponse.status} ${errorText}`);
     }
 
-    const prData = await prResponse.json();
+    const prData = await prResponse.json() as PullRequestResult;
 
     // Handle label creation and assignment
     const labelConfig = labelOptions || {

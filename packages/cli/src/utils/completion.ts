@@ -4,7 +4,7 @@
  * Provides auto-completion support for vibekit local commands
  */
 
-import { LocalSandboxProvider, createLocalProvider } from "@vibe-kit/dagger";
+import { LocalSandboxProvider, createLocalProvider, type Environment } from "@vibe-kit/dagger";
 
 let cachedProvider: LocalSandboxProvider | null = null;
 
@@ -25,7 +25,7 @@ export async function getEnvironmentNames(): Promise<string[]> {
   try {
     const provider = getProvider();
     const environments = await provider.listEnvironments();
-    return environments.map((env) => env.name);
+    return environments.map((env: Environment) => env.name);
   } catch (error) {
     // Silently fail for completion
     return [];
@@ -42,8 +42,8 @@ export async function getEnvironmentNamesByStatus(
     const provider = getProvider();
     const environments = await provider.listEnvironments();
     return environments
-      .filter((env) => env.status === status)
-      .map((env) => env.name);
+      .filter((env: Environment) => env.status === status)
+      .map((env: Environment) => env.name);
   } catch (error) {
     // Silently fail for completion
     return [];
