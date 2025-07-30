@@ -6,10 +6,18 @@ import { installE2B } from "./providers/e2b.js";
 import { installDaytona } from "./providers/daytona.js";
 import { installNorthflank } from "./providers/northflank.js";
 import { installLocal, isDaggerCliInstalled } from "./providers/dagger.js";
+import { installCloudflare } from "./providers/cloudflare.js";
 import { authenticate, checkAuth, isCliInstalled } from "../utils/auth.js";
-import { AGENT_TEMPLATES, SANDBOX_PROVIDERS } from "../constants/enums.js";
+import { AGENT_CONFIGS, AgentType, SANDBOX_PROVIDERS } from "@vibe-kit/sdk";
 
 const { prompt } = enquirer;
+
+// Generate agent templates from AGENT_CONFIGS
+const AGENT_TEMPLATES = Object.entries(AGENT_CONFIGS).map(([name, config]) => ({
+  name: name as AgentType,
+  display: config.display,
+  message: `${config.display} - ${config.description}`,
+}));
 
 // Add this type and registry after imports
 type InstallConfig = {
@@ -69,6 +77,14 @@ const installers: Record<SANDBOX_PROVIDERS, ProviderInstaller> = {
       templates: string[],
       uploadImages?: boolean
     ) => installLocal(config, templates, uploadImages),
+  },
+  [SANDBOX_PROVIDERS.CLOUDFLARE]: {
+    isInstalled: async () => await isCliInstalled("wrangler"),
+    configTransform: (config: InstallConfig) => config,
+    install: (
+      config: InstallConfig,
+      templates: string[]
+    ) => installCloudflare(config, templates),
   },
 };
 
@@ -143,6 +159,7 @@ export async function initCommand(
         daytona: SANDBOX_PROVIDERS.DAYTONA,
         northflank: SANDBOX_PROVIDERS.NORTHFLANK,
         dagger: SANDBOX_PROVIDERS.DAGGER,
+        cloudflare: SANDBOX_PROVIDERS.CLOUDFLARE,
       };
 
       for (const provider of providersInput) {

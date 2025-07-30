@@ -14,6 +14,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { EventEmitter } from "events";
 import { homedir } from "os";
+import { AgentType, AGENT_CONFIGS } from "@vibe-kit/sdk";
 
 const execAsync = promisify(exec);
 
@@ -152,13 +153,11 @@ export interface SandboxInstance {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
+    agentType?: AgentType,
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
-
-export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok" | "qwen";
 
 export interface LocalConfig {
   preferRegistryImages?: boolean;

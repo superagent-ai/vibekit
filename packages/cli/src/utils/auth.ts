@@ -3,7 +3,7 @@ import enquirer from "enquirer";
 import ora from "ora";
 import chalk from "chalk";
 
-import { SANDBOX_PROVIDERS } from "../constants/enums.js";
+import { SANDBOX_PROVIDERS } from "@vibe-kit/sdk";
 
 export interface AuthStatus {
   isAuthenticated: boolean;
@@ -104,6 +104,33 @@ const authConfigs: Record<SANDBOX_PROVIDERS, ProviderAuthConfig> = {
         if (emailMatch) username = emailMatch[0];
       }
 
+      return { isAuthenticated, username };
+    },
+    loginCommand: ["login"],
+    needsBrowserOpen: true,
+  },
+  [SANDBOX_PROVIDERS.CLOUDFLARE]: {
+    cliName: "wrangler",
+    installInstructions: "npm install -g wrangler",
+    checkAuthCommand: ["whoami"],
+    parseAuthOutput: (stdout, stderr) => {
+      // Cloudflare uses wrangler CLI
+      // When authenticated, shows email/account info
+      // When not authenticated, shows error
+      const isAuthenticated = 
+        stdout && 
+        !stdout.includes("not logged in") &&
+        !stdout.includes("You are not authenticated") &&
+        !stderr.includes("Error");
+      
+      let username = "Cloudflare User";
+      if (stdout && isAuthenticated) {
+        const emailMatch = stdout.match(
+          /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
+        );
+        if (emailMatch) username = emailMatch[0];
+      }
+      
       return { isAuthenticated, username };
     },
     loginCommand: ["login"],
@@ -305,6 +332,8 @@ async function installCli(provider: SANDBOX_PROVIDERS): Promise<boolean> {
       } else {
         await execa("brew", ["install", "daytonaio/cli/daytona"]);
       }
+    } else if (provider === SANDBOX_PROVIDERS.CLOUDFLARE) {
+      await execa("npm", ["install", "-g", "wrangler"]);
     }
     spinner.succeed(`${provider} CLI installed successfully`);
     return true;

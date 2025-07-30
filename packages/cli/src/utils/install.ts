@@ -1,7 +1,14 @@
 import { execa } from "execa";
 import ora from "ora";
 import chalk from "chalk";
-import { AGENT_TEMPLATES } from "../constants/enums.js";
+import { AGENT_CONFIGS, AgentType } from "@vibe-kit/sdk";
+
+// Generate agent templates from AGENT_CONFIGS
+const AGENT_TEMPLATES = Object.entries(AGENT_CONFIGS).map(([name, config]) => ({
+  name: name as AgentType,
+  display: config.display,
+  message: `${config.display} - ${config.description}`,
+}));
 
 export type InstallConfig = {
   cpu: number;

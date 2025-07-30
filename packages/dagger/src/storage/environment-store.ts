@@ -9,7 +9,7 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
-import type { AgentType } from '../dagger/vibekit-dagger';
+import type { AgentType } from '@vibe-kit/sdk';
 
 export interface EnvironmentRecord {
   id: string;

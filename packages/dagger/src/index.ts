@@ -33,7 +33,6 @@ export {
   getVibeKitConfig,
   saveVibeKitConfig,
   type LocalConfig,
-  type AgentType,
   type SandboxInstance,
   type SandboxProvider,
   type SandboxCommands,

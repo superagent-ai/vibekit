@@ -8,7 +8,8 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { prebuildAgentImages, type AgentType } from '../dagger/vibekit-dagger';
+import { prebuildAgentImages } from '../dagger/vibekit-dagger';
+import type { AgentType } from '@vibe-kit/sdk';
 
 const execAsync = promisify(exec);
 

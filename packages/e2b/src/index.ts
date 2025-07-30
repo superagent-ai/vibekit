@@ -1,4 +1,5 @@
 import { Sandbox as E2BSandbox } from "@e2b/code-interpreter";
+import { AgentType, getE2BTemplateForAgent } from "@vibe-kit/sdk";
 
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {
@@ -32,13 +33,11 @@ export interface SandboxInstance {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
+    agentType?: AgentType,
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
-
-export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
 
 export interface E2BConfig {
   apiKey: string;
@@ -106,20 +105,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     workingDirectory?: string
   ): Promise<SandboxInstance> {
     // Determine default template based on agent type if not specified in config
-    let templateId = this.config.templateId;
-    if (!templateId) {
-      if (agentType === "claude") {
-        templateId = "vibekit-claude";
-      } else if (agentType === "opencode") {
-        templateId = "vibekit-opencode";
-      } else if (agentType === "gemini") {
-        templateId = "vibekit-gemini";
-      } else if (agentType === "grok") {
-        templateId = "vibekit-grok";
-      } else {
-        templateId = "vibekit-codex";
-      }
-    }
+    const templateId = this.config.templateId || getE2BTemplateForAgent(agentType);
 
     const sandbox = await E2BSandbox.create(templateId, {
       envs,

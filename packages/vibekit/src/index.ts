@@ -12,6 +12,24 @@ export type {
   Conversation,
 } from "./types";
 
+// Agent constants and helpers
+export {
+  AGENT_CONFIGS,
+  AGENT_TYPES,
+  getDockerImageForAgent,
+  getE2BTemplateForAgent,
+  type AgentMetadata
+} from "./constants/agents";
+
+// Sandbox provider constants
+export {
+  SANDBOX_PROVIDERS,
+  SANDBOX_PROVIDER_CONFIGS,
+  SANDBOX_PROVIDER_TYPES,
+  type SandboxProviderType,
+  type SandboxProviderMetadata
+} from "./constants/providers";
+
 // Optional exports with dynamic imports
 export const createClaudeAgent = async () => {
   const { ClaudeAgent } = await import("./agents/claude");

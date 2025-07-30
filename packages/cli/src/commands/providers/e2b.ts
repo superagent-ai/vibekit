@@ -2,7 +2,6 @@ import { execa } from "execa";
 import ora from "ora";
 import chalk from "chalk";
 import path from "path";
-import { AGENT_TEMPLATES } from "../../constants/enums.js";
 
 import { isCliInstalled } from "../../utils/auth.js";
 

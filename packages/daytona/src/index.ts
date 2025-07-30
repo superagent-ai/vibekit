@@ -3,6 +3,7 @@ import {
   DaytonaConfig as DaytonaSDKConfig,
   Sandbox,
 } from "@daytonaio/sdk";
+import { AgentType, getDockerImageForAgent } from "@vibe-kit/sdk";
 
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {
@@ -36,13 +37,11 @@ export interface SandboxInstance {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
+    agentType?: AgentType,
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
-
-export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
 
 export interface DaytonaConfig {
   apiKey: string;
@@ -50,21 +49,6 @@ export interface DaytonaConfig {
   serverUrl?: string;
 }
 
-// Helper function to get Docker image based on agent type
-const getDockerImageFromAgentType = (agentType?: AgentType) => {
-  if (agentType === "codex") {
-    return "superagentai/vibekit-codex:1.0";
-  } else if (agentType === "claude") {
-    return "superagentai/vibekit-claude:1.0";
-  } else if (agentType === "opencode") {
-    return "superagentai/vibekit-opencode:1.0";
-  } else if (agentType === "gemini") {
-    return "superagentai/vibekit-gemini:1.1";
-  } else if (agentType === "grok") {
-    return "superagentai/vibekit-grok-cli:1.0";
-  }
-  return "ubuntu:22.04";
-};
 
 // Daytona implementation
 class DaytonaSandboxInstance implements SandboxInstance {
@@ -192,7 +176,7 @@ export class DaytonaSandboxProvider implements SandboxProvider {
       const daytona = new Daytona(daytonaConfig);
 
       // Determine default image based on agent type if not specified in config
-      let image = this.config.image || getDockerImageFromAgentType(agentType);
+      let image = this.config.image || getDockerImageForAgent(agentType);
 
       // Create workspace with specified image or default and environment variables
       const workspace = await daytona.create({

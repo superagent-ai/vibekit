@@ -1,4 +1,5 @@
 import { getSandbox, type LogEvent, parseSSEStream, type Sandbox, type SandboxEnv } from "@cloudflare/sandbox";
+import { AgentType } from "@vibe-kit/sdk";
 
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {
@@ -32,13 +33,11 @@ export interface SandboxInstance {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini",
+    agentType?: AgentType,
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
-
-export type AgentType = "codex" | "claude" | "opencode" | "gemini";
 
 export interface CloudflareConfig {
   env: SandboxEnv;

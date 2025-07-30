@@ -3,6 +3,7 @@ import {
   ApiClientInMemoryContextProvider,
   GetServicePortsResult,
 } from "@northflank/js-client";
+import { AgentType, getDockerImageForAgent } from "@vibe-kit/sdk";
 
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {
@@ -36,13 +37,11 @@ export interface SandboxInstance {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
+    agentType?: AgentType,
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
-
-export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
 
 export interface NorthflankConfig {
   apiKey: string;
@@ -53,21 +52,6 @@ export interface NorthflankConfig {
   workingDirectory?: string;
 }
 
-// Helper function to get Docker image based on agent type
-const getDockerImageFromAgentType = (agentType?: AgentType) => {
-  if (agentType === "codex") {
-    return "superagentai/vibekit-codex:1.0";
-  } else if (agentType === "claude") {
-    return "superagentai/vibekit-claude:1.0";
-  } else if (agentType === "opencode") {
-    return "superagentai/vibekit-opencode:1.0";
-  } else if (agentType === "gemini") {
-    return "superagentai/vibekit-gemini:1.0";
-  } else if (agentType === "grok") {
-    return "superagentai/vibekit-grok-cli:1.0";
-  }
-  return "ubuntu:22.04";
-};
 
 export class NorthflankSandboxInstance implements SandboxInstance {
   constructor(
@@ -338,7 +322,7 @@ export class NorthflankSandboxProvider implements SandboxProvider {
           instances: 0,
           external: {
             imagePath:
-              this.config.image || getDockerImageFromAgentType(agentType),
+              this.config.image || getDockerImageForAgent(agentType),
           },
           storage: {
             ephemeralStorage: {
