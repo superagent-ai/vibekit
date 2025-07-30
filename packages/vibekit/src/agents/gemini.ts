@@ -27,6 +27,7 @@ export class GeminiAgent extends BaseAgent {
       sandboxId: config.sandboxId,
       telemetry: config.telemetry,
       workingDirectory: config.workingDirectory,
+      baseUrl: config.baseUrl,
     };
 
     super(baseConfig);
@@ -95,6 +96,7 @@ export class GeminiAgent extends BaseAgent {
       provider: "gemini",
       apiKey: this.geminiApiKey,
       model: this.model,
+      baseUrl: this.baseUrl,
     };
   }
 

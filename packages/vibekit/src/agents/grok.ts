@@ -12,7 +12,6 @@ import {
 export class GrokAgent extends BaseAgent {
   private grokApiKey: string;
   private model?: string;
-  private baseUrl?: string;
 
   private escapePrompt(prompt: string): string {
     // Escape backticks and other special characters
@@ -28,6 +27,7 @@ export class GrokAgent extends BaseAgent {
       sandboxId: config.sandboxId,
       telemetry: config.telemetry,
       workingDirectory: config.workingDirectory,
+      baseUrl: config.baseUrl,
       localMCP: config.localMCP,
     };
 
@@ -50,7 +50,6 @@ export class GrokAgent extends BaseAgent {
     
     this.grokApiKey = apiKey;
     this.model = config.model;
-    this.baseUrl = config.baseUrl;
   }
 
   protected getCommandConfig(

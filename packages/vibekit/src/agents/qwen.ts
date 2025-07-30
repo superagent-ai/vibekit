@@ -12,7 +12,6 @@ import {
 export class QwenAgent extends BaseAgent {
   private qwenApiKey: string;
   private model?: string;
-  private provider?: ModelProvider;
 
   private escapePrompt(prompt: string): string {
     // Escape backticks and other special characters
@@ -28,6 +27,7 @@ export class QwenAgent extends BaseAgent {
       sandboxId: config.sandboxId,
       telemetry: config.telemetry,
       workingDirectory: config.workingDirectory,
+      baseUrl: config.baseUrl,
     };
 
     super(baseConfig);
@@ -41,7 +41,6 @@ export class QwenAgent extends BaseAgent {
 
     this.qwenApiKey = config.providerApiKey || "";
     this.model = config.model;
-    this.provider = config.provider;
   }
 
   protected getCommandConfig(
@@ -61,7 +60,9 @@ export class QwenAgent extends BaseAgent {
 
     const escapedPrompt = this.escapePrompt(prompt);
     const escapedInstruction = this.escapePrompt(instruction);
-    const modelFlag = this.model ? `--model ${this.model}` : "--model qwen3-coder-plus";
+    const modelFlag = this.model
+      ? `--model ${this.model}`
+      : "--model qwen3-coder-plus";
 
     // Qwen CLI doesn't support piping, so we need to use the prompt directly
     // The --yolo flag enables automatic code changes without confirmation
@@ -83,8 +84,8 @@ export class QwenAgent extends BaseAgent {
     // The specific endpoint is configured via OPENAI_BASE_URL environment variable
     return {
       OPENAI_API_KEY: this.qwenApiKey,
-      OPENAI_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1", // Default endpoint
-      OPENAI_MODEL: this.model || "qwen3-coder-plus",
+      OPENAI_BASE_URL: this.baseUrl || "https://openrouter.ai/api/v1", // Default endpoint
+      OPENAI_MODEL: this.model || "qwen/qwen3-coder",
     };
   }
 
@@ -101,6 +102,7 @@ export class QwenAgent extends BaseAgent {
       provider: "openai", // Qwen always uses OpenAI-compatible API
       apiKey: this.qwenApiKey,
       model: this.model,
+      baseUrl: this.baseUrl,
     };
   }
 
@@ -132,7 +134,9 @@ export class QwenAgent extends BaseAgent {
 
     const escapedPrompt = this.escapePrompt(prompt);
     const escapedInstruction = this.escapePrompt(instruction);
-    const modelFlag = this.model ? `--model ${this.model}` : "--model qwen3-coder-plus";
+    const modelFlag = this.model
+      ? `--model ${this.model}`
+      : "--model qwen3-coder-plus";
 
     // Override the command config with history-aware instruction
     const originalGetCommandConfig = this.getCommandConfig.bind(this);

@@ -32,13 +32,13 @@ export interface SandboxInstance {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
+    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok" | "qwen",
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
 
-export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
+export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok" | "qwen";
 
 export interface E2BConfig {
   apiKey: string;
@@ -116,6 +116,8 @@ export class E2BSandboxProvider implements SandboxProvider {
         templateId = "vibekit-gemini";
       } else if (agentType === "grok") {
         templateId = "vibekit-grok";
+      } else if (agentType === "qwen") {
+        templateId = "vibekit-qwen";
       } else {
         templateId = "vibekit-codex";
       }

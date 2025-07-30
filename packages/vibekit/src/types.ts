@@ -144,6 +144,7 @@ export interface CodexConfig {
   sandboxId?: string;
   telemetry?: TelemetryConfig;
   workingDirectory?: string;
+  baseUrl?: string;
 }
 
 export interface CodexResponse {
@@ -170,6 +171,7 @@ export interface ClaudeConfig {
   sandboxId?: string;
   telemetry?: TelemetryConfig;
   workingDirectory?: string;
+  baseUrl?: string;
 }
 
 export interface ClaudeResponse {
@@ -195,6 +197,7 @@ export interface OpenCodeConfig {
   sandboxId?: string;
   telemetry?: TelemetryConfig;
   workingDirectory?: string;
+  baseUrl?: string;
 }
 
 export interface OpenCodeResponse {
@@ -220,6 +223,7 @@ export interface GeminiConfig {
   sandboxId?: string;
   telemetry?: TelemetryConfig;
   workingDirectory?: string;
+  baseUrl?: string;
 }
 
 export interface GeminiResponse {
@@ -277,6 +281,7 @@ export interface QwenConfig {
   sandboxId?: string;
   telemetry?: TelemetryConfig;
   workingDirectory?: string;
+  baseUrl?: string;
 }
 
 export interface QwenResponse {

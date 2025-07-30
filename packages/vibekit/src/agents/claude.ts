@@ -30,6 +30,7 @@ export class ClaudeAgent extends BaseAgent {
       sandboxId: config.sandboxId,
       telemetry: config.telemetry,
       workingDirectory: config.workingDirectory,
+      baseUrl: config.baseUrl,
     };
 
     super(baseConfig);
@@ -151,6 +152,7 @@ export class ClaudeAgent extends BaseAgent {
       provider: "anthropic",
       apiKey: this.useOAuth ? this.oauthToken! : this.anthropicApiKey!,
       model: this.model,
+      baseUrl: this.baseUrl,
     };
   }
 
