@@ -3,7 +3,7 @@ import enquirer from "enquirer";
 import ora from "ora";
 import chalk from "chalk";
 
-import { SANDBOX_PROVIDERS } from "../../constants/enums.js";
+import { SANDBOX_PROVIDERS } from "../constants/enums.js";
 
 export interface AuthStatus {
   isAuthenticated: boolean;

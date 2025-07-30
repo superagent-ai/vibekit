@@ -7,7 +7,7 @@ import { installDaytona } from "./providers/daytona.js";
 import { installNorthflank } from "./providers/northflank.js";
 import { installLocal, isDaggerCliInstalled } from "./providers/dagger.js";
 import { authenticate, checkAuth, isCliInstalled } from "../utils/auth.js";
-import { AGENT_TEMPLATES, SANDBOX_PROVIDERS } from "../../constants/enums.js";
+import { AGENT_TEMPLATES, SANDBOX_PROVIDERS } from "../constants/enums.js";
 
 const { prompt } = enquirer;
 

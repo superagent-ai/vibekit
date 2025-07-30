@@ -17,7 +17,7 @@ import type { CLIConfig } from "./config.js";
 
 // Import types and classes from local package
 import type { EnvironmentRecord } from "@vibe-kit/dagger";
-import type { AgentType } from "../../types.js";
+import type { AgentType } from "@vibe-kit/sdk";
 
 // Define EnvironmentStore interface locally to avoid import issues
 interface EnvironmentStore {
@@ -111,7 +111,7 @@ export async function createVibeKitFromEnvironment(
   const cliConfig = config || loadConfig();
 
   // Import VibeKit dynamically to avoid circular dependencies
-  const { VibeKit } = await import("../../core/vibekit.js");
+  const { VibeKit } = await import("@vibe-kit/sdk");
 
   // Validate and cast agentType
   const agentType = (env.agentType as AgentType) || cliConfig.defaults.agent;

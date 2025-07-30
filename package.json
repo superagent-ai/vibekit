@@ -1,11 +1,10 @@
 {
-    "name": "@vibe-kit/sdk",
+    "name": "vibekit-workspace",
+    "private": true,
     "type": "module",
-    "main": "packages/vibekit/dist/index.js",
-    "types": "packages/vibekit/dist/index.d.ts",
-    "version": "0.0.48-rc.1",
+    "version": "1.0.0",
     "bin": {
-        "vibekit": "./packages/vibekit/dist/cli/index.js"
+        "vibekit": "./packages/cli/dist/index.js"
     },
     "engines": {
         "node": ">=18.0.0"
@@ -13,21 +12,9 @@
     "workspaces": [
         "packages/*"
     ],
-    "exports": {
-        ".": {
-            "types": "./packages/vibekit/dist/index.d.ts",
-            "import": "./packages/vibekit/dist/index.js",
-            "require": "./packages/vibekit/dist/index.cjs"
-        },
-        "./agents/*": {
-            "types": "./packages/vibekit/dist/agents/*.d.ts",
-            "import": "./packages/vibekit/dist/agents/*.js",
-            "require": "./packages/vibekit/dist/agents/*.cjs"
-        }
-    },
     "scripts": {
         "build": "npm run build --workspaces",
-        "build:packages": "npm run build --workspace=packages/e2b && npm run build --workspace=packages/daytona && npm run build --workspace=packages/northflank && npm run build --workspace=packages/cloudflare && npm run build --workspace=packages/dagger && npm run build --workspace=packages/auth && npm run build --workspace=packages/vibekit",
+        "build:packages": "npm run build --workspace=packages/e2b && npm run build --workspace=packages/daytona && npm run build --workspace=packages/northflank && npm run build --workspace=packages/cloudflare && npm run build --workspace=packages/dagger && npm run build --workspace=packages/auth && npm run build --workspace=packages/vibekit && npm run build --workspace=packages/cli",
         "dev": "npm run dev --workspace=packages/vibekit",
         "type-check": "npm run build:types --workspace=packages/dagger && npm run type-check --workspaces",
         "test": "vitest"
@@ -40,10 +27,6 @@
         "vitest": "^3.1.3"
     },
     "dependencies": {
-        "@dagger.io/dagger": "^0.18.14",
-        "@octokit/rest": "^22.0.0",
-        "chalk": "^5.4.1",
-        "dotenv": "^17.2.0",
-        "ora": "^8.2.0"
+        "dotenv": "^17.2.0"
     }
 }

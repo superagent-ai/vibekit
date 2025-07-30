@@ -588,7 +588,7 @@ export async function generateCommand(options: {
 
     // Import VibeKit dynamically and create with builder pattern
     spinner.text = "Initializing VibeKit...";
-    const { VibeKit } = await import("../../core/vibekit.js");
+    const { VibeKit } = await import("@vibe-kit/sdk");
     const { createLocalProvider } = await import("@vibe-kit/dagger");
 
     // Get the correct model provider for the agent type
@@ -972,7 +972,7 @@ export async function createPullRequestCommand(options: {
 
     // Import VibeKit dynamically and create with builder pattern
     spinner.text = "Initializing VibeKit...";
-    const { VibeKit } = await import("../../core/vibekit.js");
+    const { VibeKit } = await import("@vibe-kit/sdk");
     const { createLocalProvider } = await import("@vibe-kit/dagger");
 
     // Get the correct model provider for the agent type

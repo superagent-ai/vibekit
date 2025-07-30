@@ -1,0 +1,33 @@
+{
+  "name": "@vibe-kit/cli",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "vibekit": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/index.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vibe-kit/dagger": "0.0.2",
+    "@vibe-kit/sdk": "0.0.54",
+    "cfonts": "^3.3.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "enquirer": "^2.4.1",
+    "execa": "^9.5.1",
+    "open": "^10.2.0",
+    "ora": "^8.2.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.18",
+    "tsup": "^8.4.0",
+    "tsx": "^4.7.1",
+    "typescript": "^5.8.3"
+  }
+} 
