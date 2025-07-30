@@ -60,12 +60,13 @@ export class QwenAgent extends BaseAgent {
     }
 
     const escapedPrompt = this.escapePrompt(prompt);
-    let _prompt = `${instruction}\n\nUser: ${escapedPrompt}`;
+    const escapedInstruction = this.escapePrompt(instruction);
+    const modelFlag = this.model ? `--model ${this.model}` : "--model qwen3-coder-plus";
 
+    // Qwen CLI doesn't support piping, so we need to use the prompt directly
+    // The --yolo flag enables automatic code changes without confirmation
     return {
-      command: `echo "${_prompt}" | qwen --model ${
-        this.model || "qwen3-coder-plus"
-      } --yolo`,
+      command: `qwen "${escapedPrompt}" --yolo ${modelFlag} --prompt "${escapedInstruction}"`,
       errorPrefix: "Qwen",
       labelName: "qwen",
       labelColor: "FF6B35",
@@ -130,16 +131,14 @@ export class QwenAgent extends BaseAgent {
     }
 
     const escapedPrompt = this.escapePrompt(prompt);
-
-    let _prompt = `${instruction}\n\nUser: ${escapedPrompt}`;
+    const escapedInstruction = this.escapePrompt(instruction);
+    const modelFlag = this.model ? `--model ${this.model}` : "--model qwen3-coder-plus";
 
     // Override the command config with history-aware instruction
     const originalGetCommandConfig = this.getCommandConfig.bind(this);
     this.getCommandConfig = (p: string, m?: "ask" | "code") => ({
       ...originalGetCommandConfig(p, m),
-      command: `echo "${_prompt}" | qwen --model ${
-        this.model || "qwen3-coder-plus"
-      } --yolo`,
+      command: `qwen "${escapedPrompt}" --yolo ${modelFlag} --prompt "${escapedInstruction}"`,
     });
 
     const result = await super.generateCode(
