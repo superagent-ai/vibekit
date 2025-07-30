@@ -9,7 +9,9 @@ import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import type { AgentType } from "@vibe-kit/dagger";
+import { AGENT_CONFIGS, type AgentType } from "@vibe-kit/sdk";
+
+
 
 export interface CLIConfig {
   agents: {

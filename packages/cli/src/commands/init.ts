@@ -8,13 +8,18 @@ import { installNorthflank } from "./providers/northflank.js";
 import { installLocal, isDaggerCliInstalled } from "./providers/dagger.js";
 import { installCloudflare } from "./providers/cloudflare.js";
 import { authenticate, checkAuth, isCliInstalled } from "../utils/auth.js";
-import { AGENT_CONFIGS, AgentType, SANDBOX_PROVIDERS } from "@vibe-kit/sdk";
+import { AGENT_CONFIGS, SANDBOX_PROVIDERS, type AgentType } from "@vibe-kit/sdk";
+
+// Use the values of SANDBOX_PROVIDERS as the type
+type SandboxProvider = typeof SANDBOX_PROVIDERS[keyof typeof SANDBOX_PROVIDERS];
+
+
 
 const { prompt } = enquirer;
 
 // Generate agent templates from AGENT_CONFIGS
-const AGENT_TEMPLATES = Object.entries(AGENT_CONFIGS).map(([name, config]) => ({
-  name: name as AgentType,
+const AGENT_TEMPLATES = Object.entries(AGENT_CONFIGS).map(([key, config]) => ({
+  name: key as AgentType,
   display: config.display,
   message: `${config.display} - ${config.description}`,
 }));
@@ -38,7 +43,8 @@ type ProviderInstaller = {
   ) => Promise<boolean>;
 };
 
-const installers: Record<SANDBOX_PROVIDERS, ProviderInstaller> = {
+// Provider installers registry
+const installers: Record<SandboxProvider, ProviderInstaller> = {
   [SANDBOX_PROVIDERS.E2B]: {
     isInstalled: async () => await isCliInstalled("e2b"),
     configTransform: (config) => config,
@@ -81,10 +87,13 @@ const installers: Record<SANDBOX_PROVIDERS, ProviderInstaller> = {
   [SANDBOX_PROVIDERS.CLOUDFLARE]: {
     isInstalled: async () => await isCliInstalled("wrangler"),
     configTransform: (config: InstallConfig) => config,
-    install: (
+    install: async (
       config: InstallConfig,
       templates: string[]
-    ) => installCloudflare(config, templates),
+    ) => {
+      await installCloudflare(config, templates);
+      return true;
+    },
   },
 };
 
@@ -145,7 +154,7 @@ export async function initCommand(
     console.log(chalk.gray("  • Account on at least one sandbox provider\n"));
 
     // Parse CLI options
-    let providers: SANDBOX_PROVIDERS[] = [];
+    let providers: SandboxProvider[] = [];
     let templates: string[] = [];
 
     // Handle providers from CLI flag
@@ -154,7 +163,7 @@ export async function initCommand(
       const validProviders = Object.values(SANDBOX_PROVIDERS);
 
       // Create mapping for case-insensitive lookup
-      const providerMapping: Record<string, SANDBOX_PROVIDERS> = {
+      const providerMapping: Record<string, SandboxProvider> = {
         e2b: SANDBOX_PROVIDERS.E2B,
         daytona: SANDBOX_PROVIDERS.DAYTONA,
         northflank: SANDBOX_PROVIDERS.NORTHFLANK,
@@ -165,7 +174,7 @@ export async function initCommand(
       for (const provider of providersInput) {
         const lowerProvider = provider.toLowerCase();
         const mappedProvider =
-          providerMapping[lowerProvider] || (provider as SANDBOX_PROVIDERS);
+          providerMapping[lowerProvider] || (provider as SandboxProvider);
 
         if (validProviders.includes(mappedProvider)) {
           providers.push(mappedProvider);
@@ -187,11 +196,11 @@ export async function initCommand(
         chalk.gray("↑/↓: Navigate • Space: Select • Enter: Confirm\n")
       );
 
-      const result = await prompt<{ providers: SANDBOX_PROVIDERS[] }>({
+      const result = await prompt<{ providers: SandboxProvider[] }>({
         type: "multiselect",
         name: "providers",
         message: "Which providers would you like to set up?",
-        choices: Object.entries(SANDBOX_PROVIDERS).map(([key, value]) => ({
+        choices: (Object.entries(SANDBOX_PROVIDERS) as [string,string][]).map(([, value]) => ({
           name: value,
           message: value,
         })),
@@ -207,7 +216,7 @@ export async function initCommand(
     // Handle agents from CLI flag
     if (options.agents) {
       const agentsInput = options.agents.split(",").map((a) => a.trim());
-      const validAgents = AGENT_TEMPLATES.map((t) => t.name);
+      const validAgents = AGENT_TEMPLATES.map((t) => t.name as string);
 
       for (const agent of agentsInput) {
         const lowerAgent = agent.toLowerCase();
@@ -247,7 +256,7 @@ export async function initCommand(
     }
 
     // Add this function before the prompts
-    function getResourcePrompts(providers: SANDBOX_PROVIDERS[]) {
+    function getResourcePrompts(providers: SandboxProvider[]) {
       const prompts = [
         {
           type: "input",

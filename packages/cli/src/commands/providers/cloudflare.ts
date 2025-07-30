@@ -2,11 +2,11 @@ import chalk from "chalk";
 import enquirer from "enquirer";
 import ora from "ora";
 import { execa } from "execa";
-import { checkAuth, installProviderCli } from "../../utils/auth.js";
+import { checkAuth } from "../../utils/auth.js";
 import { SANDBOX_PROVIDERS } from "@vibe-kit/sdk";
 
 export interface CloudflareConfig {
-  provider: typeof SANDBOX_PROVIDERS.CLOUDFLARE;
+  provider: string;
   projectName?: string;
   templates: string[];
 }
@@ -35,7 +35,15 @@ export async function installCloudflare(
     });
 
     if (shouldInstall) {
-      isInstalled = await installProviderCli(SANDBOX_PROVIDERS.CLOUDFLARE);
+      const spinner = ora("Installing wrangler CLI...").start();
+      try {
+        await execa("npm", ["install", "-g", "wrangler"]);
+        spinner.succeed("Wrangler CLI installed successfully!");
+        isInstalled = true;
+      } catch (error) {
+        spinner.fail("Failed to install wrangler CLI");
+        console.log(chalk.red(error));
+      }
     }
   }
 

@@ -18,7 +18,10 @@
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "npm run clean && npm run build:js && npm run build:types",
+    "build:js": "tsup",
+    "build:types": "tsc --emitDeclarationOnly --declaration --outDir dist",
+    "clean": "rm -rf dist",
     "dev": "tsup src/index.ts --watch",
     "type-check": "tsc --noEmit"
   },

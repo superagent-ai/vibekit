@@ -5,10 +5,13 @@ import chalk from "chalk";
 
 import { SANDBOX_PROVIDERS } from "@vibe-kit/sdk";
 
+// Use the values of SANDBOX_PROVIDERS as the type
+type SandboxProvider = typeof SANDBOX_PROVIDERS[keyof typeof SANDBOX_PROVIDERS];
+
 export interface AuthStatus {
   isAuthenticated: boolean;
   username?: string;
-  provider: SANDBOX_PROVIDERS;
+  provider: string;
   needsInstall?: boolean;
 }
 
@@ -24,7 +27,7 @@ type ProviderAuthConfig = {
   needsBrowserOpen?: boolean;
 };
 
-const authConfigs: Record<SANDBOX_PROVIDERS, ProviderAuthConfig> = {
+const authConfigs: Record<SandboxProvider, ProviderAuthConfig> = {
   [SANDBOX_PROVIDERS.E2B]: {
     cliName: "e2b",
     installInstructions: "npm install -g @e2b/cli",
@@ -68,8 +71,10 @@ const authConfigs: Record<SANDBOX_PROVIDERS, ProviderAuthConfig> = {
       "curl -fsSL https://dl.dagger.io/dagger/install.sh | sh",
     checkAuthCommand: ["version"],
     parseAuthOutput: (stdout) => ({
-      isAuthenticated:
-        stdout.includes("dagger") && !stdout.includes("command not found"),
+      isAuthenticated: Boolean(
+        stdout &&
+        !stdout.includes("dagger") && !stdout.includes("command not found")
+      ),
       username: "Local User",
     }),
     loginCommand: [], // No login required for local Dagger
@@ -117,11 +122,12 @@ const authConfigs: Record<SANDBOX_PROVIDERS, ProviderAuthConfig> = {
       // Cloudflare uses wrangler CLI
       // When authenticated, shows email/account info
       // When not authenticated, shows error
-      const isAuthenticated = 
-        stdout && 
+      const isAuthenticated = Boolean(
+        stdout &&
         !stdout.includes("not logged in") &&
         !stdout.includes("You are not authenticated") &&
-        !stderr.includes("Error");
+        !stderr.includes("Error")
+      );
       
       let username = "Cloudflare User";
       if (stdout && isAuthenticated) {
@@ -148,7 +154,7 @@ export async function isCliInstalled(command: string): Promise<boolean> {
 }
 
 export async function checkAuth(
-  provider: SANDBOX_PROVIDERS
+  provider: SandboxProvider
 ): Promise<AuthStatus> {
   const config = authConfigs[provider];
   const isInstalled = await isCliInstalled(config.cliName);
@@ -240,7 +246,7 @@ async function installDaytonaCli(): Promise<boolean> {
 }
 
 export async function authenticate(
-  provider: SANDBOX_PROVIDERS
+  provider: SandboxProvider
 ): Promise<boolean> {
   const config = authConfigs[provider];
   const spinner = ora(
@@ -308,7 +314,7 @@ export async function authenticate(
   }
 }
 
-async function installCli(provider: SANDBOX_PROVIDERS): Promise<boolean> {
+async function installCli(provider: SandboxProvider): Promise<boolean> {
   const config = authConfigs[provider];
   const spinner = ora(`Installing ${provider} CLI...`).start();
   try {

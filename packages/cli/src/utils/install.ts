@@ -1,11 +1,11 @@
 import { execa } from "execa";
 import ora from "ora";
 import chalk from "chalk";
-import { AGENT_CONFIGS, AgentType } from "@vibe-kit/sdk";
+import { AGENT_CONFIGS, type AgentType } from "@vibe-kit/sdk";
 
 // Generate agent templates from AGENT_CONFIGS
-const AGENT_TEMPLATES = Object.entries(AGENT_CONFIGS).map(([name, config]) => ({
-  name: name as AgentType,
+const AGENT_TEMPLATES = (Object.values(AGENT_CONFIGS) as Array<(typeof AGENT_CONFIGS)[AgentType]>).map((config) => ({
+  name: config.name as AgentType,
   display: config.display,
   message: `${config.display} - ${config.description}`,
 }));
@@ -88,7 +88,7 @@ export async function installTemplates(options: {
     const templatesToInstall =
       options.selectedTemplates && options.selectedTemplates.length > 0
         ? AGENT_TEMPLATES.filter((template) =>
-            options.selectedTemplates!.includes(template.name)
+            options.selectedTemplates!.includes(template.name as string)
           )
         : AGENT_TEMPLATES;
 
@@ -118,14 +118,14 @@ export async function installTemplates(options: {
         const dockerfilePath = path.join(
           projectRoot,
           options.dockerfilePathPrefix,
-          `Dockerfile.${template.name}`
+          `Dockerfile.${template.name as string}`
         );
         try {
           await fs.access(dockerfilePath);
         } catch (error) {
           // Add more debugging info
           const cwd = process.cwd();
-          const relativePath = `${options.dockerfilePathPrefix}${template.name}`;
+          const relativePath = `${options.dockerfilePathPrefix}${template.name as string}`;
           console.error(chalk.gray(`   Debug: CWD: ${cwd}`));
           console.error(chalk.gray(`   Debug: Project root: ${projectRoot}`));
           console.error(chalk.gray(`   Debug: Looking for: ${dockerfilePath}`));
@@ -136,7 +136,7 @@ export async function installTemplates(options: {
         if (options.needsTempFile) {
           tempDockerfile = path.join(
             process.cwd(),
-            `Dockerfile.${template.name}.tmp`
+            `Dockerfile.${template.name as string}.tmp`
           );
           await fs.copyFile(dockerfilePath, tempDockerfile);
           tempFileCreated = true;
@@ -147,7 +147,7 @@ export async function installTemplates(options: {
         // Run setup with provided configuration
         await execa(
           options.cliCommand,
-          options.buildArgs(template.name, options.config, tempDockerfile)
+          options.buildArgs(template.name as string, options.config, tempDockerfile)
         );
 
         spinner.succeed(

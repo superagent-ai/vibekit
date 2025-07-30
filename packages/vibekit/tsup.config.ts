@@ -12,9 +12,10 @@ export default defineConfig({
     "agents/utils": "src/agents/utils.ts",
   },
   format: ["esm", "cjs"],
-  dts: true,
+  dts: false, // Disable tsup's type generation - using tsc instead
   clean: true,
   splitting: false,
   sourcemap: true,
   outDir: "dist",
+  external: [],
 });

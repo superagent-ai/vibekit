@@ -16,8 +16,8 @@ import {
   LocalSandboxProvider,
   createLocalProvider,
   type LocalConfig,
-  type AgentType,
 } from "@vibe-kit/dagger";
+import type { AgentType } from "../types";
 import {
   initializeMCPForAgent,
   cleanupMCPForSandbox,

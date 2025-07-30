@@ -111,7 +111,9 @@ export async function createVibeKitFromEnvironment(
   const cliConfig = config || loadConfig();
 
   // Import VibeKit dynamically to avoid circular dependencies
-  const { VibeKit } = await import("@vibe-kit/sdk");
+  // Dynamic import with fallback for default export typings
+  const sdk: any = await import("@vibe-kit/sdk");
+  const VibeKit = sdk.VibeKit ?? sdk.default?.VibeKit;
 
   // Validate and cast agentType
   const agentType = (env.agentType as AgentType) || cliConfig.defaults.agent;

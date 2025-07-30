@@ -58,7 +58,7 @@ export class CloudflareSandboxInstance implements SandboxInstance {
     (async () => {
       try {
         const logStream = await this.sandbox.streamProcessLogs(response.id);
-        for await (const log of parseSSEStream<LogEvent>(logStream)) {
+        for await (const log of parseSSEStream(logStream)) {
           if (log.type === 'stdout') {
             options?.onStdout?.(log.data);
           } else if (log.type === 'stderr') {
@@ -86,7 +86,7 @@ export class CloudflareSandboxInstance implements SandboxInstance {
   private async handleForegroundCommand(command: string, options?: SandboxCommandOptions) {
     const response = await this.sandbox.exec(command, {
       stream: true,
-      onOutput(stream, data) {
+      onOutput(stream: 'stdout' | 'stderr', data: string) {
         if (stream === 'stdout') {
           options?.onStdout?.(data);
         } else if (stream === 'stderr') {

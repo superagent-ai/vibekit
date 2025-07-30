@@ -17,8 +17,8 @@ import {
   LocalSandboxProvider,
   createLocalProvider,
   type LocalConfig,
-  type AgentType,
 } from "@vibe-kit/dagger";
+import type { AgentType } from "@vibe-kit/sdk";
 
 const { prompt } = enquirer;
 
@@ -587,7 +587,8 @@ export async function generateCommand(options: {
 
     // Import VibeKit dynamically and create with builder pattern
     spinner.text = "Initializing VibeKit...";
-    const { VibeKit } = await import("@vibe-kit/sdk");
+    const sdk: any = await import("@vibe-kit/sdk");
+    const VibeKit = sdk.VibeKit ?? sdk.default?.VibeKit;
     const { createLocalProvider } = await import("@vibe-kit/dagger");
 
     // Get the correct model provider for the agent type
@@ -969,7 +970,8 @@ export async function createPullRequestCommand(options: {
 
     // Import VibeKit dynamically and create with builder pattern
     spinner.text = "Initializing VibeKit...";
-    const { VibeKit } = await import("@vibe-kit/sdk");
+    const sdk: any = await import("@vibe-kit/sdk");
+    const VibeKit = sdk.VibeKit ?? sdk.default?.VibeKit;
     const { createLocalProvider } = await import("@vibe-kit/dagger");
 
     // Get the correct model provider for the agent type
