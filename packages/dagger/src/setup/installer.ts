@@ -231,7 +231,7 @@ export async function checkSetupStatus(): Promise<{ isSetup: boolean; issues: st
 
   // Check if any agent images are pre-built
   try {
-    const agentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini"];
+    const agentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini", "grok", "qwen"];
     let hasPreBuiltImages = false;
 
     for (const agentType of agentTypes) {
@@ -266,7 +266,7 @@ export async function checkSetupStatus(): Promise<{ isSetup: boolean; issues: st
 export async function cleanupPreBuiltImages(): Promise<{ success: boolean; removed: string[]; errors: string[] }> {
   const removed: string[] = [];
   const errors: string[] = [];
-  const agentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini"];
+  const agentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini", "grok", "qwen"];
 
   for (const agentType of agentTypes) {
     const imageTag = `vibekit-${agentType}:latest`;

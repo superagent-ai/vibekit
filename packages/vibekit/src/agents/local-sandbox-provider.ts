@@ -172,6 +172,12 @@ export const AgentProviderConfigs = {
     mcpServerType: "stdio" as const,
     workingDirectory: "/workspace",
   },
+
+  qwen: {
+    enableMCP: true,
+    mcpServerType: "stdio" as const,
+    workingDirectory: "/workspace",
+  },
 };
 
 /**

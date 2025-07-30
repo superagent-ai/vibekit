@@ -158,7 +158,7 @@ export interface SandboxProvider {
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
 
-export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
+export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok" | "qwen";
 
 export interface LocalConfig {
   preferRegistryImages?: boolean;
@@ -373,7 +373,8 @@ const getDockerfilePathFromAgentType = (
     codex: "assets/dockerfiles/Dockerfile.codex",
     opencode: "assets/dockerfiles/Dockerfile.opencode",
     gemini: "assets/dockerfiles/Dockerfile.gemini",
-    grok: "assets/dockerfiles/Dockerfile.grok"
+    grok: "assets/dockerfiles/Dockerfile.grok",
+    qwen: "assets/dockerfiles/Dockerfile.qwen"
   };
   
   return agentType ? dockerfileMap[agentType] : undefined;
@@ -807,7 +808,7 @@ export async function prebuildAgentImages(
   const logger = Configuration.getInstance().getLogger();
   const imageResolver = new ImageResolver(config, logger);
 
-  const allAgentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini", "grok"];
+  const allAgentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini", "grok", "qwen"];
   const agentTypes = selectedAgents?.length ? selectedAgents : allAgentTypes;
   const results: Array<{
     agentType: AgentType;
