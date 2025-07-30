@@ -144,39 +144,27 @@ export function createLocalAgentProvider(
  */
 export const AgentProviderConfigs = {
   claude: {
-    enableMCP: true,
-    mcpServerType: "stdio" as const,
-    workingDirectory: "/workspace",
+    workingDirectory: "/vibe0",
   },
 
   codex: {
-    enableMCP: true,
-    mcpServerType: "stdio" as const,
-    workingDirectory: "/workspace",
+    workingDirectory: "/vibe0",
   },
 
   opencode: {
-    enableMCP: true,
-    mcpServerType: "stdio" as const,
-    workingDirectory: "/workspace",
+    workingDirectory: "/vibe0",
   },
 
   gemini: {
-    enableMCP: true,
-    mcpServerType: "stdio" as const,
-    workingDirectory: "/workspace",
+    workingDirectory: "/vibe0",
   },
 
   grok: {
-    enableMCP: true,
-    mcpServerType: "stdio" as const,
-    workingDirectory: "/workspace",
+    workingDirectory: "/vibe0",
   },
 
   qwen: {
-    enableMCP: true,
-    mcpServerType: "stdio" as const,
-    workingDirectory: "/workspace",
+    workingDirectory: "/vibe0",
   },
 };
 

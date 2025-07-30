@@ -84,7 +84,7 @@ const vibeKit = new VibeKit()
     model: process.env.OPENAI_MODEL || "qwen3-coder-plus",
   })
   .withSandbox("local")
-  .withWorkingDirectory("/workspace");
+  .withWorkingDirectory("/vibe0");
 
 // Initialize and use
 const agent = await vibeKit.initialize();
