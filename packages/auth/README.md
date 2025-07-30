@@ -91,25 +91,10 @@ if (!accessToken) {
   accessToken = await ClaudeAuth.getValidToken();
 }
 
-// Use token with Claude API
-const response = await fetch('https://api.anthropic.com/v1/messages', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'anthropic-version': '2023-06-01',
-    'anthropic-beta': 'oauth-2025-04-20',
-    'Authorization': `Bearer ${accessToken}`,
-    'X-API-Key': '', // Empty for OAuth
-  },
-  body: JSON.stringify({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1000,
-    messages: [{
-      role: 'user',
-      content: 'Hello, Claude!'
-    }]
-  })
-});
+// Use with Claude Code CLI
+// First, export the token as an environment variable:
+// export CLAUDE_CODE_OAUTH_TOKEN=${accessToken}
+// claude -p 'Hello, Claude!'
 ```
 
 For browser applications:
@@ -126,22 +111,10 @@ if (!accessToken) {
   // Handle authentication flow...
 }
 
-// Use with Claude API
-const response = await fetch('https://api.anthropic.com/v1/messages', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${accessToken}`,
-    'Content-Type': 'application/json',
-    'anthropic-version': '2023-06-01',
-    'anthropic-beta': 'oauth-2025-04-20',
-    'X-API-Key': '',
-  },
-  body: JSON.stringify({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1000,
-    messages: [{ role: 'user', content: 'Hello!' }]
-  })
-});
+// Use with Claude Code CLI
+// First, export the token as an environment variable:
+// export CLAUDE_CODE_OAUTH_TOKEN=${accessToken}
+// claude -p 'Hello!'
 ```
 
 ### Token Import/Export (Node.js only)
