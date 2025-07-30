@@ -49,7 +49,6 @@ export interface DaytonaConfig {
   serverUrl?: string;
 }
 
-
 // Daytona implementation
 class DaytonaSandboxInstance implements SandboxInstance {
   constructor(

@@ -38,7 +38,6 @@ export interface SandboxProvider {
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
-
 export interface E2BConfig {
   apiKey: string;
   templateId?: string;

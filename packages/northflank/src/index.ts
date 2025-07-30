@@ -52,7 +52,6 @@ export interface NorthflankConfig {
   workingDirectory?: string;
 }
 
-
 export class NorthflankSandboxInstance implements SandboxInstance {
   constructor(
     private apiClient: ApiClient,

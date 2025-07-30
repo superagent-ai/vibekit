@@ -28,6 +28,7 @@ export class CodexAgent extends BaseAgent {
       sandboxId: config.sandboxId,
       telemetry: config.telemetry,
       workingDirectory: config.workingDirectory,
+      baseUrl: config.baseUrl,
     };
 
     super(baseConfig);
@@ -99,6 +100,7 @@ export class CodexAgent extends BaseAgent {
       provider: this.provider,
       apiKey: this.providerApiKey,
       model: this.model,
+      baseUrl: this.baseUrl,
     };
   }
 

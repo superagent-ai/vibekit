@@ -8,6 +8,7 @@ RUN bun add -g @openai/codex@latest
 RUN bun add -g @google/gemini-cli@latest
 RUN bun add -g opencode-ai@latest
 RUN bun add -g @vibe-kit/grok-cli@latest
+RUN bun add -g @qwen-code/qwen-code@latest
 
 # Expose common local development ports
 # https://developers.cloudflare.com/containers/local-dev/#exposing-ports

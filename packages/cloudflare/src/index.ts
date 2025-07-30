@@ -38,7 +38,6 @@ export interface SandboxProvider {
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
-
 export interface CloudflareConfig {
   env: SandboxEnv;
   hostname: string;

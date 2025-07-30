@@ -18,60 +18,30 @@ The Qwen Code CLI is ran in the configured environment and has access to the net
 
 ## Available Models
 
-Qwen Code supports various models through different providers:
+Qwen Code supports various models through different providers. The model names vary depending on the platform you choose:
 
-- `qwen3-coder-plus` (default) - Latest coding model with enhanced capabilities
+### OpenRouter (Recommended)
+- `qwen/qwen3-coder` (default) - Latest coding model with enhanced capabilities
+- `qwen/qwen2.5-coder-instruct` - Versatile coding model
+- `qwen/qwen2-coder-instruct` - Previous generation coding model
+
+### Alibaba Cloud Platforms
+- `qwen3-coder-plus` - Latest coding model with enhanced capabilities
 - `qwen-coder-turbo` - Fast response model optimized for speed
 - `qwen-max` - Most capable model for complex tasks
 - `qwen-plus` - Balanced model for general use
 
-The model can be specified in your configuration regardless of the authentication method used.
+The model can be specified in your configuration along with the appropriate `baseUrl` for your chosen platform.
 
-## Authentication
+## Authentication & Configuration
 
-Qwen Code uses OpenAI-compatible API authentication through Alibaba Cloud's services. The specific endpoint and model depend on your location and preferred platform.
+### Option 1: OpenRouter (Recommended for International Users)
 
-### Platform Options
+OpenRouter provides easy access to Qwen models with a simple API key:
 
-Choose the appropriate platform based on your location:
-
-#### For Mainland China Users
-
-**Option 1: Alibaba Cloud Bailian Platform**
-- Get API key at: [https://bailian.console.aliyun.com/](https://bailian.console.aliyun.com/)
-- Recommended for production use
-
-```bash
-export OPENAI_API_KEY="your_bailian_api_key"
-export OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
-export OPENAI_MODEL="qwen3-coder-plus"
-```
-
-**Option 2: ModelScope Platform**
-- Get API key at: [https://modelscope.cn/docs/model-service/API-Inference/intro](https://modelscope.cn/docs/model-service/API-Inference/intro)
-- Offers 2,000 free API calls per day
-- Great for development and testing
-
-```bash
-export OPENAI_API_KEY="your_modelscope_api_key"
-export OPENAI_BASE_URL="https://api-inference.modelscope.cn/v1"
-export OPENAI_MODEL="Qwen/Qwen3-Coder-480B-A35B-Instruct"
-```
-
-#### For International Users
-
-**Alibaba Cloud ModelStudio**
-- Get API key at: [https://modelstudio.console.alibabacloud.com/](https://modelstudio.console.alibabacloud.com/)
-
-```bash
-export OPENAI_API_KEY="your_modelstudio_api_key"
-export OPENAI_BASE_URL="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-export OPENAI_MODEL="qwen3-coder-plus"
-```
-
-### VibeKit Integration
-
-Once you have your API key and endpoint configured, use Qwen with VibeKit:
+- Get API key at: [https://openrouter.ai/](https://openrouter.ai/)
+- No geographical restrictions
+- Pay-per-use pricing
 
 ```typescript
 import { VibeKit } from '@vibe-kit/sdk';
@@ -79,9 +49,10 @@ import { VibeKit } from '@vibe-kit/sdk';
 const vibeKit = new VibeKit()
   .withAgent({
     type: "qwen",
-    provider: "openai", // Always use "openai" for Qwen (OpenAI-compatible)
-    providerApiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_MODEL || "qwen3-coder-plus",
+    provider: "openai", // OpenAI-compatible API
+    apiKey: process.env.OPENROUTER_API_KEY,
+    model: "qwen/qwen3-coder",
+    baseUrl: "https://openrouter.ai/api/v1", // OpenRouter endpoint
   })
   .withSandbox("local")
   .withWorkingDirectory("/vibe0");
@@ -91,33 +62,113 @@ const agent = await vibeKit.initialize();
 const result = await agent.generateCode("Create a simple web server in Node.js", "code");
 ```
 
-### Configuration File
+### Option 2: Alibaba Cloud Platforms
+
+Choose the appropriate platform based on your location:
+
+#### For Mainland China Users
+
+**Bailian Platform**
+- Get API key at: [https://bailian.console.aliyun.com/](https://bailian.console.aliyun.com/)
+- Recommended for production use
+
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "qwen",
+    provider: "openai",
+    apiKey: process.env.ALIBABA_API_KEY,
+    model: "qwen3-coder-plus",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  })
+  .withSandbox("local");
+```
+
+**ModelScope Platform**
+- Get API key at: [https://modelscope.cn/docs/model-service/API-Inference/intro](https://modelscope.cn/docs/model-service/API-Inference/intro)
+- Offers 2,000 free API calls per day
+
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "qwen",
+    provider: "openai",
+    apiKey: process.env.MODELSCOPE_API_KEY,
+    model: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
+    baseUrl: "https://api-inference.modelscope.cn/v1",
+  })
+  .withSandbox("local");
+```
+
+#### For International Users
+
+**Alibaba Cloud ModelStudio**
+- Get API key at: [https://modelstudio.console.alibabacloud.com/](https://modelstudio.console.alibabacloud.com/)
+
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "qwen",
+    provider: "openai",
+    apiKey: process.env.MODELSTUDIO_API_KEY,
+    model: "qwen3-coder-plus",
+    baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+  })
+  .withSandbox("local");
+```
+
+## Configuration Options
+
+The Qwen agent supports the following configuration parameters:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `type` | `"qwen"` | ✅ | Agent type identifier |
+| `provider` | `"openai"` | ✅ | Always use "openai" (OpenAI-compatible API) |
+| `apiKey` | `string` | ✅ | API key for your chosen platform |
+| `model` | `string` | ❌ | Model name (defaults to platform-specific default) |
+| `baseUrl` | `string` | ❌ | API endpoint URL (defaults to OpenRouter) |
+| `githubToken` | `string` | ❌ | GitHub token for repository access |
+| `repoUrl` | `string` | ❌ | Repository URL in format "owner/repo" |
+| `secrets` | `object` | ❌ | Environment variables for the sandbox |
+| `workingDirectory` | `string` | ❌ | Working directory path (defaults to "/vibe0") |
+
+## Environment Variables
 
 Create a `.env` file in your project root with your chosen platform configuration:
 
 ```bash
-# .env file - Choose one platform configuration
+# OpenRouter (Recommended)
+OPENROUTER_API_KEY=your_openrouter_api_key
 
-# For Mainland China - Bailian Platform (Recommended)
-OPENAI_API_KEY=your_bailian_api_key
-OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-OPENAI_MODEL=qwen3-coder-plus
-
-# For Mainland China - ModelScope Platform (Free tier)
-# OPENAI_API_KEY=your_modelscope_api_key
-# OPENAI_BASE_URL=https://api-inference.modelscope.cn/v1
-# OPENAI_MODEL=Qwen/Qwen3-Coder-480B-A35B-Instruct
-
-# For International Users - ModelStudio
-# OPENAI_API_KEY=your_modelstudio_api_key
-# OPENAI_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
-# OPENAI_MODEL=qwen3-coder-plus
+# Or for Alibaba Cloud platforms:
+# ALIBABA_API_KEY=your_alibaba_api_key
+# MODELSCOPE_API_KEY=your_modelscope_api_key
+# MODELSTUDIO_API_KEY=your_modelstudio_api_key
 ```
 
-### Getting Your API Key
+## Custom Endpoints
 
-1. **Choose your platform** based on your location (see Platform Options above)
-2. **Register an account** on the chosen platform
-3. **Navigate to the API section** and create a new API key
-4. **Set the environment variables** as shown in the configuration examples
-5. **Verify your setup** by running a simple test with VibeKit
+You can use any OpenAI-compatible endpoint by specifying the `baseUrl` parameter:
+
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "qwen",
+    provider: "openai",
+    apiKey: "your-api-key",
+    model: "qwen/qwen3-coder",
+    baseUrl: "https://your-custom-endpoint.com/v1", // Custom endpoint
+  })
+  .withSandbox("local");
+```
+
+## Getting Started
+
+1. **Choose your platform** (OpenRouter recommended for international users)
+2. **Register an account** and get your API key
+3. **Set your environment variables**
+4. **Initialize VibeKit** with the appropriate `baseUrl` for your platform
+5. **Start coding** with Qwen's powerful AI assistance
+
+The `baseUrl` parameter gives you the flexibility to switch between different Qwen providers or use custom endpoints without changing your core application logic.

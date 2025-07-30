@@ -24,6 +24,7 @@ export const skipIfNoCodexKeys = () => skipIfNoAPIKeys(['E2B_API_KEY', 'OPENAI_A
 export const skipIfNoGeminiKeys = () => skipIfNoAPIKeys(['E2B_API_KEY', 'GEMINI_API_KEY']);
 export const skipIfNoGrokKeys = () => skipIfNoAPIKeys(['E2B_API_KEY', 'GROK_API_KEY']);
 export const skipIfNoOpenCodeKeys = () => skipIfNoAPIKeys(['E2B_API_KEY', 'ANTHROPIC_API_KEY']);
+export const skipIfNoQwenKeys = () => skipIfNoAPIKeys(['E2B_API_KEY', 'OPENAI_API_KEY']);
 export const skipIfNoDaytonaKeys = () => skipIfNoAPIKeys(['DAYTONA_SERVER_URL', 'DAYTONA_SERVER_API_KEY', 'DAYTONA_TARGET_ID', 'ANTHROPIC_API_KEY']);
 export const skipIfNoVibeKitKeys = () => skipIfNoAPIKeys(['E2B_API_KEY', 'ANTHROPIC_API_KEY', 'GH_TOKEN']);
 

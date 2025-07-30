@@ -239,8 +239,8 @@ export default function AuthExample() {
                   <Input
                     value={accessToken}
                     readOnly
-                    className="font-mono text-xs"
                     type="password"
+                    className="font-mono text-xs"
                   />
                   <Button variant="outline" size="icon" onClick={copyToken}>
                     {copied ? (
@@ -270,24 +270,11 @@ export default function AuthExample() {
 
               <div className="border-t pt-4">
                 <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Use with your MAX subscription:
+                  Use with Claude Code CLI:
                 </h4>
                 <pre className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg text-xs overflow-x-auto">
-                  {`const response = await fetch('https://api.anthropic.com/v1/messages', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer ${accessToken.substring(0, 20)}...',
-    'Content-Type': 'application/json',
-    'anthropic-version': '2023-06-01',
-    'anthropic-beta': 'oauth-2025-04-20',
-    'X-API-Key': '',
-  },
-  body: JSON.stringify({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1000,
-    messages: [{ role: 'user', content: 'Hello!' }]
-  })
-});`}
+                  {`export CLAUDE_CODE_OAUTH_TOKEN=${accessToken}
+claude -p 'hi'`}
                 </pre>
               </div>
 

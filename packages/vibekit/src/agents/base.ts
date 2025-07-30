@@ -104,6 +104,7 @@ export interface BaseAgentConfig {
   sandboxId?: string;
   telemetry?: any;
   workingDirectory?: string;
+  baseUrl?: string;
   // Local MCP server configuration
   localMCP?: {
     enabled: boolean;
@@ -178,10 +179,12 @@ export abstract class BaseAgent {
   protected currentBranch?: string;
   protected readonly WORKING_DIR: string;
   protected mcpServerInstance?: any; // MCPServerInstance from local-mcp.ts
+  protected baseUrl?: string;
 
   constructor(config: BaseAgentConfig) {
     this.config = config;
     this.WORKING_DIR = config.workingDirectory || "/vibe0";
+    this.baseUrl = config.baseUrl;
   }
 
   protected abstract getCommandConfig(
