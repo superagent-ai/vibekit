@@ -219,7 +219,6 @@ function getLocalProvider(): LocalSandboxProvider {
     loadDotEnv();
 
     const config: LocalConfig = {
-      githubToken: getEnv("GITHUB_TOKEN"),
       preferRegistryImages: getEnv("VIBEKIT_PREFER_REGISTRY_IMAGES") === "true",
       dockerHubUser: getEnv("DOCKER_USERNAME"),
     };
@@ -624,9 +623,7 @@ export async function generateCommand(options: {
     };
 
     // Create local sandbox provider
-    const sandboxProvider = createLocalProvider({
-      githubToken: env.githubToken,
-    });
+    const sandboxProvider = createLocalProvider();
 
     // Create VibeKit instance using builder pattern
     const vibekit = new VibeKit()
@@ -1008,9 +1005,7 @@ export async function createPullRequestCommand(options: {
     };
 
     // Create local sandbox provider
-    const sandboxProvider = createLocalProvider({
-      githubToken: env.githubToken,
-    });
+    const sandboxProvider = createLocalProvider();
 
     // Create VibeKit instance using builder pattern
     const vibekit = new VibeKit()

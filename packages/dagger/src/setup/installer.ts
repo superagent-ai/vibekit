@@ -120,7 +120,7 @@ export async function setupLocalProvider(options: SetupOptions = {}): Promise<Se
       }
 
       try {
-        const buildResult = await prebuildAgentImages();
+        const buildResult = await prebuildAgentImages(selectedAgents);
         preBuildResults = buildResult.results;
 
         if (buildResult.success) {

@@ -163,7 +163,12 @@ export async function installLocal(
           ).start();
 
           try {
-            const setupResult = await setupUserDockerRegistry();
+            // Convert selectedTemplates to AgentType[] for the dagger package
+            const selectedAgents = selectedTemplates?.length ? selectedTemplates.filter(t => 
+              ['claude', 'codex', 'opencode', 'gemini', 'grok'].includes(t)
+            ) as any[] : undefined;
+            
+            const setupResult = await setupUserDockerRegistry(selectedAgents);
 
             if (setupResult.success) {
               registrySpinner.succeed("Docker registry setup completed");
