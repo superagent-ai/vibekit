@@ -1,0 +1,257 @@
+---
+title: 'Configuration'
+description: 'VibeKit configuration reference'
+---
+
+## Overview
+
+VibeKit provides a fluent interface for configuration. You can chain methods to configure the agent, sandbox provider, GitHub integration, telemetry, and other options.
+
+## Basic configuration
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+  templateId: "vibekit-claude",
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider)
+  .withGithub({
+    token: process.env.GITHUB_TOKEN!,
+    repository: "your-org/your-repo",
+  })
+  .withTelemetry({
+    enabled: true,
+    sessionId: "unique-session-identifier",
+  });
+```
+
+## Configuration reference
+
+### Agent Configuration
+
+Use the `withAgent()` method to configure which AI model to use.
+
+```typescript
+.withAgent({
+  type: "claude",
+  provider: "anthropic",
+  apiKey: "your-api-key",
+  model: "claude-sonnet-4-20250514",
+})
+```
+
+#### Agent Configuration Options
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `type` | `AgentType` | Yes | The type of AI agent to use |
+| `provider` | `ModelProvider` | Yes | The AI provider service |
+| `apiKey` | `string` | Yes | API key for the chosen agent provider |
+| `model` | `string` | Yes | Specific model to use |
+
+**Available agent types:**
+- `"claude"` - Anthropic Claude agent
+- `"codex"` - OpenAI Codex agent
+- `"opencode"` - Opencode agent
+- `"gemini"` - Google Gemini agent
+
+**Available providers:**
+- `"anthropic"` - Anthropic
+- `"openai"` - OpenAI
+- `"openrouter"` - OpenRouter
+- `"azure"` - Azure
+- `"gemini"` - Google Gemini
+- `"ollama"` - Ollama
+- `"mistral"` - Mistral AI
+- `"deepseek"` - DeepSeek
+- `"xai"` - xAI
+- `"groq"` - Groq
+
+### Sandbox Configuration
+
+Use the `withSandbox()` method to configure the sandbox environment where code execution happens. You'll need to install and import the specific provider package.
+
+#### E2B Configuration
+
+```typescript
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: "e2b_****",
+  templateId: "custom-template-id" // optional
+});
+
+.withSandbox(e2bProvider)
+```
+
+#### Northflank Configuration
+
+```typescript
+import { createNorthflankProvider } from "@vibe-kit/northflank";
+
+const northflankProvider = createNorthflankProvider({
+  apiKey: "nf_****",
+  image: "your-custom-image", // optional
+  projectId: "your-project-id", // optional
+  billingPlan: "nf-compute-200", // optional
+  persistentVolumeStorage: 10240 // optional
+});
+
+.withSandbox(northflankProvider)
+```
+
+#### Daytona Configuration
+
+```typescript
+import { createDaytonaProvider } from "@vibe-kit/daytona";
+
+const daytonaProvider = createDaytonaProvider({
+  apiKey: "daytona_****",
+  image: "my-codex-image", // optional
+  serverUrl: "https://app.daytona.io/api" // optional
+});
+
+.withSandbox(daytonaProvider)
+```
+
+#### Cloudflare Configuration
+
+```typescript
+import { createCloudflareProvider } from "@vibe-kit/cloudflare";
+
+// Must be used within a Cloudflare Worker
+const cloudflareProvider = createCloudflareProvider({
+  env: env, // Worker env object with Sandbox binding
+  hostname: "your-worker.domain.workers.dev"
+});
+
+.withSandbox(cloudflareProvider)
+```
+
+For detailed configuration options for each provider, see the [Supported Sandboxes](/supported-sandboxes) section.
+
+### GitHub Integration
+
+Use the `withGithub()` method to configure repository integration for pull request creation and code management.
+
+```typescript
+.withGithub({
+  token: "ghp_****",
+  repository: "superagent-ai/vibekit"
+})
+```
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `token` | `string` | Yes | GitHub personal access token with repository permissions |
+| `repository` | `string` | Yes | Repository in the format "owner/repo-name" |
+
+### Telemetry Configuration (Optional)
+
+Use the `withTelemetry()` method to enable telemetry for monitoring and debugging.
+
+```typescript
+.withTelemetry({
+  enabled: true,
+  sessionId: "unique-session-identifier" // optional
+})
+```
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `enabled` | `boolean` | Yes | Enable or disable telemetry collection |
+| `sessionId` | `string` | No | Unique identifier for grouping related requests |
+
+### Session Management (Optional)
+
+Use the `withSession()` method to specify a sandbox session to reuse.
+
+```typescript
+.withSession("existing-sandbox-id")
+```
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `sandboxId` | `string` | Yes | Existing sandbox ID to reuse |
+
+### Working Directory
+
+Use the `withWorkingDirectory()` method to specify the directory where the agent should execute commands and work with files.
+
+```typescript
+.withWorkingDirectory("/path/to/your/project")
+```
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `path` | `string` | Yes | - | The directory path where the agent will execute commands and access files |
+
+### Secrets Management
+
+Use the `withSecrets()` method to provide environment variables and secrets to the sandbox.
+
+```typescript
+.withSecrets({
+  "DATABASE_URL": "postgresql://...",
+  "API_KEY": "secret-key",
+  "NODE_ENV": "production"
+})
+```
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `secrets` | `Record<string, string>` | Yes | Key-value pairs of environment variables to set in the sandbox |
+
+## Complete Example
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+  templateId: "vibekit-claude",
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider)
+  .withGithub({
+    token: process.env.GITHUB_TOKEN!,
+    repository: "your-org/your-repo",
+  })
+  .withTelemetry({
+    enabled: true,
+    sessionId: "unique-session-id",
+  })
+  .withWorkingDirectory("/app")
+  .withSecrets({
+    "DATABASE_URL": process.env.DATABASE_URL!,
+    "API_KEY": process.env.API_KEY!,
+  });
+
+// Use the configured VibeKit instance
+const result = await vibeKit.generateCode({
+  prompt: "Create a web server",
+  mode: "ask"
+});
+```
+
+
+

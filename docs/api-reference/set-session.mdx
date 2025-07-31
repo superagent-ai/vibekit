@@ -1,0 +1,298 @@
+---
+title: 'setSession'
+description: 'Sets the session ID for the sandbox environment. This method allows you to restore or switch between existing sandbox sessions.'
+---
+
+## Method signature
+
+```typescript
+async setSession(sessionId: string): Promise<void>
+```
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sessionId` | `string` | Yes | The session ID to set for the sandbox environment. Must be a valid session identifier from a previously created session. |
+
+## Return value
+
+| Type | Description |
+|------|-------------|
+| `Promise<void>` | This method doesn't return a value but resolves when the session is successfully set |
+
+## Examples
+
+### Basic Usage
+
+```typescript
+const vibeKit = new VibeKit({
+  agent: {
+    type: "codex", // or "claude"
+    model: {
+      apiKey: "sk-proj-****"
+    },
+    mode: "code"
+  },
+  environment: {
+    e2b: {
+      apiKey: "e2b_****"
+    }
+  }
+});
+
+// Set a specific session ID
+await vibeKit.setSession("session-abc123");
+
+// Verify the session was set
+const currentSession = await vibeKit.getSession();
+console.log("Active session:", currentSession); // "session-abc123"
+```
+
+### Session Switching
+
+```typescript
+// Get the current session
+const originalSession = await vibeKit.getSession();
+console.log("Original session:", originalSession);
+
+// Switch to a different session
+await vibeKit.setSession("session-xyz789");
+
+// Work in the new session
+await vibeKit.generateCode("print('Working in new session')");
+
+// Switch back to the original session
+if (originalSession) {
+  await vibeKit.setSession(originalSession);
+  console.log("Switched back to original session");
+}
+```
+
+### Session Restoration
+
+```typescript
+// Restore a session from storage
+const savedSessionId = localStorage.getItem('vibekit-session');
+
+if (savedSessionId) {
+  try {
+    await vibeKit.setSession(savedSessionId);
+    console.log("Session restored successfully");
+    
+    // Continue work in the restored session
+    await vibeKit.generateCode("# Continuing previous work");
+  } catch (error) {
+    console.error("Failed to restore session:", error);
+    // Handle invalid or expired session
+  }
+}
+```
+
+### Multi-Project Workflow
+
+```typescript
+// Define session IDs for different projects
+const sessions = {
+  projectA: "session-project-a-123",
+  projectB: "session-project-b-456",
+  projectC: "session-project-c-789"
+};
+
+// Switch between projects
+async function switchToProject(projectName: keyof typeof sessions) {
+  const sessionId = sessions[projectName];
+  
+  await vibeKit.setSession(sessionId);
+  console.log(`Switched to ${projectName} (${sessionId})`);
+  
+  // Generate project-specific code
+  await vibeKit.generateCode(`# Working on ${projectName}`);
+}
+
+// Usage
+await switchToProject('projectA');
+await switchToProject('projectB');
+```
+
+## Error handling
+
+The method throws errors in the following cases:
+
+### Initialization Error  
+- **Condition:** When the agent is not properly initialized
+- **Error Message:** "Agent not initialized"
+- **Solution:** Verify your configuration includes valid credentials and the agent is properly set up
+
+### Invalid Session Error
+- **Condition:** When the provided session ID is invalid or expired
+- **Behavior:** May throw sandbox-specific errors or fail silently depending on the underlying implementation
+
+```typescript
+try {
+  await vibeKit.setSession("invalid-session-id");
+} catch (error) {
+  if (error.message.includes('not initialized')) {
+    console.error("Agent is not properly initialized");
+  } else {
+    console.error("Failed to set session:", error.message);
+    // Handle invalid session ID
+  }
+}
+```
+
+## Configuration requirements
+
+```typescript
+// Correct configuration for session management
+const config = {
+  agent: {
+    type: "codex", // or "claude"
+    model: {
+      apiKey: "your-api-key"
+    },
+    mode: "code"
+  },
+  environment: {
+    e2b: {
+      apiKey: "your-e2b-api-key" // For Codex agent
+    }
+    // Claude agent may have different environment requirements
+  }
+};
+```
+
+## Use cases
+
+### Session Persistence Across App Restarts
+
+```typescript
+class SessionManager {
+  private vibeKit: VibeKit;
+  
+  constructor(vibeKit: VibeKit) {
+    this.vibeKit = vibeKit;
+  }
+  
+  async saveCurrentSession(): Promise<void> {
+    const sessionId = await this.vibeKit.getSession();
+    if (sessionId) {
+      localStorage.setItem('vibekit-session', sessionId);
+    }
+  }
+  
+  async restoreSession(): Promise<boolean> {
+    const savedSession = localStorage.getItem('vibekit-session');
+    if (savedSession) {
+      try {
+        await this.vibeKit.setSession(savedSession);
+        return true;
+      } catch (error) {
+        console.error('Failed to restore session:', error);
+        // Clean up invalid session
+        localStorage.removeItem('vibekit-session');
+      }
+    }
+    return false;
+  }
+}
+```
+
+### Multi-User Session Management
+
+```typescript
+class MultiUserSessionManager {
+  private vibeKit: VibeKit;
+  private userSessions = new Map<string, string>();
+  
+  constructor(vibeKit: VibeKit) {
+    this.vibeKit = vibeKit;
+  }
+  
+  async switchUser(userId: string): Promise<void> {
+    const userSessionId = this.userSessions.get(userId);
+    
+    if (userSessionId) {
+      // User has an existing session
+      await this.vibeKit.setSession(userSessionId);
+    } else {
+      // Create new session for user
+      await this.vibeKit.generateCode("# Starting new session");
+      const newSessionId = await this.vibeKit.getSession();
+      if (newSessionId) {
+        this.userSessions.set(userId, newSessionId);
+      }
+    }
+  }
+  
+  async getCurrentUserSession(): Promise<string | null> {
+    return await this.vibeKit.getSession();
+  }
+}
+```
+
+### Project-Based Session Isolation
+
+```typescript
+interface ProjectSession {
+  id: string;
+  name: string;
+  sessionId: string;
+  lastAccessed: Date;
+}
+
+class ProjectManager {
+  private vibeKit: VibeKit;
+  private projects: ProjectSession[] = [];
+  
+  constructor(vibeKit: VibeKit) {
+    this.vibeKit = vibeKit;
+  }
+  
+  async switchToProject(projectId: string): Promise<void> {
+    const project = this.projects.find(p => p.id === projectId);
+    
+    if (project) {
+      await this.vibeKit.setSession(project.sessionId);
+      project.lastAccessed = new Date();
+      console.log(`Switched to project: ${project.name}`);
+    } else {
+      throw new Error(`Project ${projectId} not found`);
+    }
+  }
+  
+  async createProject(name: string): Promise<string> {
+    // Create a new session for the project
+    await this.vibeKit.generateCode(`# Project: ${name}`);
+    const sessionId = await this.vibeKit.getSession();
+    
+    if (!sessionId) {
+      throw new Error("Failed to create session for project");
+    }
+    
+    const project: ProjectSession = {
+      id: crypto.randomUUID(),
+      name,
+      sessionId,
+      lastAccessed: new Date()
+    };
+    
+    this.projects.push(project);
+    return project.id;
+  }
+}
+```
+
+## Related methods
+
+- [`getSession`](./get-session) - Retrieve the current session ID
+- [`generateCode`](./generate-code) - Generate code (creates a session if none exists)
+
+## Notes
+
+- **Session Validation:** The method doesn't validate if the session ID exists or is accessible until subsequent operations
+- **Session Switching:** You can switch between sessions at any time using this method
+- **State Isolation:** Each session maintains its own sandbox state and file system
+- **Cross-Agent Support:** This functionality works with both Codex and Claude agents
+- **No Return Value:** The method resolves with `void` when successful
+- **Immediate Effect:** The session change takes effect immediately for subsequent operations 

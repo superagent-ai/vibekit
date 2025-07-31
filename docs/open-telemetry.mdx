@@ -1,0 +1,130 @@
+---
+title: 'OpenTelemetry Integration'
+description: 'Learn how to configure OpenTelemetry observability with VibeKit'
+---
+
+VibeKit provides built-in support for [OpenTelemetry](https://opentelemetry.io/), the industry-standard observability framework. This integration allows you to collect traces, metrics, and logs from your VibeKit operations for monitoring and debugging purposes.
+
+## What is OpenTelemetry?
+
+[OpenTelemetry](https://opentelemetry.io/) is a collection of APIs, libraries, agents, and instrumentation to provide observability for cloud-native software. It enables you to:
+
+- **Trace requests** across distributed systems
+- **Collect metrics** about application performance
+- **Generate logs** with structured data
+- **Export data** to various observability backends
+
+## Configuration
+
+### Using withTelemetry
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider)
+  .withTelemetry({
+    isEnabled: true,
+    endpoint: "https://test-otel-endpoint.com/v1/traces",
+    serviceName: "test-vibekit",
+    serviceVersion: "1.0.0",
+    headers: {
+      Authorization: "Bearer test-token",
+    },
+    timeout: 5000,
+    samplingRatio: 1.0,
+    resourceAttributes: {
+      environment: "test",
+    },
+  });
+```
+
+### Configuration Object Method
+
+To enable OpenTelemetry in VibeKit, add the `telemetry` configuration to your `VibeConfig`:
+
+```typescript
+import { VibeKit, VibeConfig } from "@vibe-kit/sdk";
+
+const config: VibeConfig = {
+  agent: {
+    type: "codex",
+    model: {
+      apiKey: "sk-proj-****",
+    },
+  },
+  environment: {
+    e2b: {
+      apiKey: "e2b_****",
+    },
+  },
+  github: {
+    token: "ghp_****",
+    repository: "superagent-ai/vibekit",
+  },
+  telemetry: {
+    isEnabled: true,
+    endpoint: "https://test-otel-endpoint.com/v1/traces",
+    serviceName: "test-vibekit",
+    serviceVersion: "1.0.0",
+    headers: {
+      Authorization: "Bearer test-token",
+    },
+    timeout: 5000,
+    samplingRatio: 1.0,
+    resourceAttributes: {
+      environment: "test",
+    },
+  },
+};
+
+const vibeKit = new VibeKit(config);
+```
+
+## Configuration Options
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `isEnabled` | `boolean` | Enable/disable telemetry collection | `false` |
+| `endpoint` | `string` | OTLP endpoint URL for trace export | - |
+| `serviceName` | `string` | Name of your service for identification | `"vibekit"` |
+| `serviceVersion` | `string` | Version of your service | `"1.0.0"` |
+| `headers` | `object` | Custom headers for the OTLP exporter | `{}` |
+| `timeout` | `number` | Timeout for trace export in milliseconds | `30000` |
+| `samplingRatio` | `number` | Sampling ratio (0.0 to 1.0) | `1.0` |
+| `resourceAttributes` | `object` | Additional resource attributes | `{}` |
+
+## Supported Backends
+
+VibeKit's OpenTelemetry integration works with any OTLP-compatible observability backend, including:
+
+- [Jaeger](https://www.jaegertracing.io/)
+- [Zipkin](https://zipkin.io/)
+- [DataDog](https://www.datadoghq.com/)
+- [New Relic](https://newrelic.com/)
+- [Honeycomb](https://www.honeycomb.io/)
+- [Grafana Tempo](https://grafana.com/oss/tempo/)
+- [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/)
+
+## What Gets Traced
+
+When telemetry is enabled, VibeKit automatically traces:
+
+- Code generation requests and responses
+- Agent interactions and decision making
+- Environment setup and teardown
+- GitHub operations
+- Error conditions and exceptions
+
+Each trace includes relevant metadata such as:
+- Request/response payloads (sanitized)
+- Execution duration
+- Success/failure status
+- Agent model information
+- Environment details

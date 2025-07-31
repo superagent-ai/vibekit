@@ -1,6 +1,6 @@
 {
   "name": "@vibe-kit/dagger",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Local sandbox provider for Vibekit using Dagger",
   "type": "module",
   "main": "dist/index.js",
@@ -26,7 +26,7 @@
   "author": "Vibekit Team",
   "license": "MIT",
   "dependencies": {
-    "@dagger.io/dagger": "^0.13.6",
+    "@dagger.io/dagger": "^0.18.14",
     "@octokit/rest": "^22.0.0",
     "execa": "^9.0.0",
     "fs-extra": "^11.2.0",

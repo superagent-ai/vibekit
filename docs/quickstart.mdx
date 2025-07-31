@@ -1,0 +1,94 @@
+---
+title: 'Quickstart'
+description: 'Below is an example on how to get started with VibeKit'
+---
+Follow these steps to install and run Vibekit:
+
+## Quick Start with CLI
+
+**Option 1**: Initialize a new project with VibeKit CLI:
+
+<CodeGroup>
+
+```bash npx
+npx @vibe-kit/sdk init
+```
+
+```bash global
+# Install globally first
+npm install -g @vibe-kit/sdk
+
+# Then initialize
+vibekit init
+```
+
+</CodeGroup>
+
+This command will set up a new VibeKit project with all necessary dependencies and configuration files.
+
+## Basic setup
+
+**Step 1**: Install VibeKit Typescript SDK:
+
+<CodeGroup>
+
+  ```bash npm
+  npm i @vibe-kit/sdk
+  ```
+
+```bash yarn
+yarn add @vibe-kit/sdk
+```
+
+</CodeGroup>
+
+**Step 2**: Configure your VibeKit client:
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+  templateId: "vibekit-claude",
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider);
+
+```
+
+**Step 3**: Add event listeners and generate code:
+
+```typescript
+// Add event listeners
+vibeKit.on("update", (update) => {
+  console.log("Update:", update);
+});
+
+vibeKit.on("error", (error) => {
+  console.error("Error:", error);
+});
+
+// Generate code
+const result = await vibeKit.generateCode({
+  prompt: "Create a simple web app that displays a list of users",
+  mode: "code",
+});
+
+// Get host URL (optional)
+const host = await vibeKit.getHost(3000);
+
+// Clean up when done
+await vibeKit.kill();
+
+console.log("Result:", result);
+console.log("Host:", host);
+
+```

@@ -11,7 +11,7 @@ import { BaseAgent } from "./base";
 
 export interface AgentSession {
   id: string;
-  agentType: "claude" | "codex" | "opencode" | "gemini" | "cursor";
+  agentType: "claude" | "codex" | "opencode" | "gemini" | "grok";
   environment: Environment;
   mcpServer?: MCPServerInstance;
   agent?: BaseAgent;

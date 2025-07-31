@@ -1,0 +1,184 @@
+---
+title: "runTests"
+description: "Execute tests in the sandbox environment with automatic test runner detection"
+---
+
+## Overview
+
+The `runTests` method executes tests in the sandbox environment and automatically detects the appropriate test runner (e.g., npm test, pytest, cargo test, etc.). This method supports both streaming and non-streaming execution modes.
+
+## Method Signature
+
+```typescript
+async runTests({
+  branch,
+  history,
+  callbacks,
+}: {
+  branch?: string;
+  history?: Conversation[];
+  callbacks?: VibeKitStreamCallbacks;
+}): Promise<AgentResponse>
+```
+
+## Parameters
+
+<ParamField path="branch" type="string" optional>
+  The Git branch to run tests on. If not specified, tests will run on the current branch.
+</ParamField>
+
+<ParamField path="history" type="Conversation[]" optional>
+  Optional conversation history to provide context for the test execution. This can help the agent understand previous interactions and make more informed decisions about test execution.
+</ParamField>
+
+<ParamField path="callbacks" type="VibeKitStreamCallbacks" optional>
+  Optional callbacks for streaming updates during test execution.
+  
+  <Expandable title="VibeKitStreamCallbacks">
+    <ParamField path="onUpdate" type="(message: string) => void" optional>
+      Callback function that receives streaming updates during test execution.
+    </ParamField>
+    
+    <ParamField path="onError" type="(error: string) => void" optional>
+      Callback function that receives error messages during test execution.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Return Value
+
+Returns a `Promise<AgentResponse>` containing the test execution results:
+
+<ResponseField name="sandboxId" type="string">
+  The ID of the sandbox where tests were executed
+</ResponseField>
+
+<ResponseField name="stdout" type="string">
+  Standard output from the test execution
+</ResponseField>
+
+<ResponseField name="stderr" type="string">
+  Standard error output from the test execution
+</ResponseField>
+
+<ResponseField name="exitCode" type="number">
+  Exit code from the test execution (0 indicates success)
+</ResponseField>
+
+## Examples
+
+### Basic Test Execution
+
+```typescript
+import { VibeKit } from 'vibekit';
+
+const vibekit = new VibeKit({
+  agent: {
+    type: 'codex',
+    model: {
+      provider: 'openai',
+      name: 'gpt-4',
+      apiKey: process.env.OPENAI_API_KEY
+    }
+  },
+  environment: 'e2b',
+  sessionId: 'test-session'
+});
+
+// Run tests on current branch
+const result = await vibekit.runTests({});
+
+console.log('Tests completed with exit code:', result.exitCode);
+console.log('Test output:', result.stdout);
+```
+
+### Run Tests on Specific Branch
+
+```typescript
+// Run tests on a specific branch
+const result = await vibekit.runTests({
+  branch: 'feature/new-functionality'
+});
+
+if (result.exitCode === 0) {
+  console.log('All tests passed!');
+} else {
+  console.log('Some tests failed:', result.stderr);
+}
+```
+
+### Streaming Test Execution
+
+```typescript
+// Run tests with streaming updates
+const result = await vibekit.runTests({
+  callbacks: {
+    onUpdate: (message) => {
+      console.log('Test update:', message);
+    },
+    onError: (error) => {
+      console.error('Test error:', error);
+    }
+  }
+});
+```
+
+### Run Tests with Context
+
+```typescript
+// Run tests with conversation history for context
+const history = [
+  {
+    role: 'user',
+    content: 'I just added a new authentication feature'
+  },
+  {
+    role: 'assistant', 
+    content: 'I understand. Let me run the tests to ensure everything works correctly.'
+  }
+];
+
+const result = await vibekit.runTests({
+  branch: 'feature/auth',
+  history: history,
+  callbacks: {
+    onUpdate: (message) => {
+      console.log(message);
+    }
+  }
+});
+```
+
+## Test Runner Detection
+
+The `runTests` method automatically detects and uses the appropriate test runner based on the project structure:
+
+- **Node.js**: Runs `npm test` or `yarn test`
+- **Python**: Runs `pytest`, `python -m unittest`, or `python -m pytest`
+- **Rust**: Runs `cargo test`
+- **Go**: Runs `go test`
+- **And more**: Supports various other testing frameworks
+
+## Error Handling
+
+```typescript
+try {
+  const result = await vibekit.runTests({
+    branch: 'main'
+  });
+  
+  if (result.exitCode !== 0) {
+    console.log('Tests failed with errors:', result.stderr);
+  }
+} catch (error) {
+  console.error('Failed to run tests:', error.message);
+}
+```
+
+## Notes
+
+- The method requires an active sandbox environment
+- Test execution is performed within the sandbox, ensuring a clean and isolated environment
+- The agent will attempt to install dependencies if they're missing
+- Streaming callbacks provide real-time feedback during test execution
+- The method works with both Codex and Claude agents 

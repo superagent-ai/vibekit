@@ -1,0 +1,179 @@
+---
+title: 'executeCommand'
+description: 'Run arbitrary shell commands in the sandbox environment.'
+---
+
+## Method signature
+
+```typescript
+public async executeCommand(
+  command: string,
+  options: {
+    timeoutMs?: number;
+    background?: boolean;
+    callbacks?: StreamCallbacks;
+  } = {}
+): Promise<AgentResponse>
+```
+
+## Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `command` | `string` | Yes | - | The shell command to execute in the sandbox environment |
+| `options` | `object` | No | `{}` | Configuration options for command execution |
+
+### Options Object
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `timeoutMs` | `number` | No | - | Maximum time in milliseconds to wait for command completion |
+| `background` | `boolean` | No | `false` | Whether to run the command in the background (non-blocking) |
+| `callbacks` | `StreamCallbacks` | No | - | Streaming callbacks for real-time command output |
+
+### StreamCallbacks Interface
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `onUpdate` | `(message: string) => void` | No | Called with streaming updates from command output |
+| `onError` | `(error: string) => void` | No | Called when errors occur during command execution |
+
+## Return value
+
+| Type | Description |
+|------|-------------|
+| `Promise<AgentResponse>` | Promise that resolves to the command execution results |
+
+### AgentResponse Interface
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `sandboxId` | `string` | Unique identifier for the sandbox environment |
+| `stdout` | `string` | Standard output from the command execution |
+| `stderr` | `string` | Standard error from the command execution |
+| `exitCode` | `number` | Exit code from the command execution (0 indicates success) |
+
+## Examples
+
+### Basic Command Execution
+
+```typescript
+import { VibeKit } from 'vibekit';
+
+const vibekit = new VibeKit(config);
+
+// Execute a simple command
+const result = await vibekit.executeCommand('ls -la');
+
+console.log('Command output:', result.stdout);
+console.log('Exit code:', result.exitCode);
+```
+
+### Command with Timeout
+
+```typescript
+// Execute command with a timeout
+const result = await vibekit.executeCommand('npm install', {
+  timeoutMs: 30000 // 30 seconds timeout
+});
+
+if (result.exitCode === 0) {
+  console.log('Installation completed successfully');
+} else {
+  console.log('Installation failed:', result.stderr);
+}
+```
+
+### Background Command Execution
+
+```typescript
+// Run a long-running command in the background
+const result = await vibekit.executeCommand('npm run dev', {
+  background: true
+});
+
+console.log('Background process started with sandbox ID:', result.sandboxId);
+```
+
+
+### Streaming Command Output
+
+```typescript
+// Execute command with streaming output
+const result = await vibekit.executeCommand('npm test', {
+  callbacks: {
+    onUpdate: (message) => {
+      console.log('Test output:', message);
+    },
+    onError: (error) => {
+      console.error('Test error:', error);
+    }
+  }
+});
+
+console.log('Final test result:', result.exitCode === 0 ? 'PASSED' : 'FAILED');
+```
+
+### Complex Command with All Options
+
+```typescript
+// Execute a complex command with multiple options
+const result = await vibekit.executeCommand('python -m pytest tests/', {
+  timeoutMs: 60000,
+  background: false,
+  callbacks: {
+    onUpdate: (output) => {
+      console.log('pytest:', output);
+    },
+    onError: (error) => {
+      console.error('pytest error:', error);
+    }
+  }
+});
+
+console.log(`Tests completed with exit code: ${result.exitCode}`);
+```
+
+## Error handling
+
+The method throws errors in the following cases:
+
+- **Sandbox not available:** When no active sandbox environment exists
+- **Command timeout:** When the command exceeds the specified timeout
+- **Invalid command:** When the command syntax is invalid or command not found
+- **Permission errors:** When the command requires elevated permissions not available in the sandbox
+- **Resource limitations:** When the command exceeds sandbox resource limits
+
+```typescript
+try {
+  const result = await vibekit.executeCommand('sudo rm -rf /', {
+    timeoutMs: 5000
+  });
+} catch (error) {
+  if (error.message.includes('timeout')) {
+    console.error('Command timed out');
+  } else if (error.message.includes('permission')) {
+    console.error('Permission denied');
+  } else {
+    console.error('Command execution failed:', error.message);
+  }
+}
+```
+
+## Security considerations
+
+- Commands are executed within a sandboxed environment for security
+- Elevated privileges (sudo) may not be available depending on sandbox configuration
+- File system access is limited to the sandbox environment
+- Network access may be restricted based on sandbox configuration
+
+## Notes
+
+- **Sandbox Environment:** Commands are executed within the active sandbox environment
+- **Working Directory:** Commands execute in the sandbox's default working directory
+- **Environment Variables:** Sandbox environment variables are available to executed commands
+- **Resource Limits:** Commands are subject to sandbox CPU, memory, and time limitations
+- **Background Execution:** Background commands continue running after the method returns
+- **Streaming Support:** Real-time output streaming is available through callbacks
+- **Exit Codes:** Standard Unix exit codes apply (0 = success, non-zero = error)
+

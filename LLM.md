@@ -11,6 +11,7 @@ VibeKit is a TypeScript SDK for running AI coding agents (Claude, Codex, Gemini,
 - `@vibe-kit/e2b` - E2B cloud execution environment
 - `@vibe-kit/daytona` - Daytona development platform  
 - `@vibe-kit/northflank` - Northflank container platform
+- `@vibe-kit/cloudflare` - Cloudflare edge sandboxes (Workers only)
 
 ## Installation
 ```bash
@@ -21,6 +22,7 @@ npm install @vibe-kit/vibekit
 npm install @vibe-kit/e2b        # E2B sandbox provider
 npm install @vibe-kit/daytona    # Daytona sandbox provider  
 npm install @vibe-kit/northflank # Northflank sandbox provider
+npm install @vibe-kit/cloudflare # Cloudflare sandbox provider (Workers only)
 ```
 
 ## Quick Start
@@ -132,6 +134,7 @@ import { VibeKit } from '@vibe-kit/vibekit';
 import { createE2BProvider } from '@vibe-kit/e2b';
 import { createDaytonaProvider } from '@vibe-kit/daytona';
 import { createNorthflankProvider } from '@vibe-kit/northflank';
+import { createCloudflareProvider } from '@vibe-kit/cloudflare';
 
 // Using E2B
 const e2bProvider = createE2BProvider({
@@ -151,6 +154,12 @@ const northflankProvider = createNorthflankProvider({
   projectId: process.env.NORTHFLANK_PROJECT_ID
 });
 
+// Using Cloudflare (Workers only)
+const cloudflareProvider = createCloudflareProvider({
+  env: env, // Worker env object with Sandbox binding
+  hostname: "your-worker.domain.workers.dev"
+});
+
 // Create VibeKit with any provider
 const vibekit = new VibeKit()
   .withAgent({
@@ -159,7 +168,7 @@ const vibekit = new VibeKit()
     apiKey: process.env.OPENAI_API_KEY,
     model: 'codex-mini-latest'
   })
-  .withSandbox(e2bProvider) // or daytonaProvider, northflankProvider
+  .withSandbox(e2bProvider) // or daytonaProvider, northflankProvider, cloudflareProvider
   .withGithub({
     token: process.env.GITHUB_TOKEN,
     repository: 'owner/repo'
@@ -278,11 +287,239 @@ await vibekit.resume();
 await vibekit.kill();
 ```
 
+### Cloudflare Workers Integration (Complete Setup)
+
+**IMPORTANT**: Cloudflare sandboxes ONLY work within Cloudflare Workers - they cannot be used in regular Node.js applications, serverless functions, or any other environment.
+
+#### 1. Required Project Structure
+```
+my-vibekit-worker/
+├── src/
+│   └── index.ts          # Your Worker code
+├── wrangler.json         # Cloudflare configuration
+├── package.json
+└── node_modules/
+    └── @cloudflare/
+        └── sandbox/
+            └── Dockerfile  # Container configuration
+```
+
+#### 2. wrangler.json Configuration
+```jsonc
+{
+  "name": "my-vibekit-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-01-01",
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./node_modules/@cloudflare/sandbox/Dockerfile",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "Sandbox", 
+        "name": "Sandbox"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["Sandbox"],
+      "tag": "v1"
+    }
+  ],
+  "vars": {
+    "ANTHROPIC_API_KEY": "your-key-here"
+  }
+}
+```
+
+#### 3. Complete Worker Implementation
+```typescript
+import { VibeKit } from '@vibe-kit/vibekit';
+import { createCloudflareProvider, proxyToSandbox } from '@vibe-kit/cloudflare';
+
+// REQUIRED: Export Sandbox class for Durable Objects
+export { Sandbox } from "@cloudflare/sandbox";
+
+interface Env {
+  ANTHROPIC_API_KEY: string;
+  OPENAI_API_KEY?: string;
+  GITHUB_TOKEN?: string;
+  Sandbox: DurableObjectNamespace; // The Durable Object binding
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    
+    // REQUIRED: Handle preview URL routing for sandbox services
+    const proxyResponse = await proxyToSandbox(request, env);
+    if (proxyResponse) return proxyResponse;
+
+    // Handle VibeKit requests
+    if (url.pathname === '/vibekit' || url.pathname.startsWith('/api/')) {
+      try {
+        // Create Cloudflare provider - MUST be inside Worker
+        const provider = createCloudflareProvider({
+          env: env, // Worker env with Sandbox binding
+          hostname: request.headers.get("host") || "localhost"
+        });
+
+        // Create VibeKit instance
+        const vibekit = new VibeKit()
+          .withAgent({
+            type: 'claude',
+            provider: 'anthropic', 
+            apiKey: env.ANTHROPIC_API_KEY,
+            model: 'claude-sonnet-4-20250514'
+          })
+          .withSandbox(provider)
+          .withGithub({
+            token: env.GITHUB_TOKEN,
+            repository: 'your-org/your-repo'
+          });
+
+        // Handle different endpoints
+        if (url.pathname === '/vibekit/generate') {
+          const body = await request.json() as { prompt: string; mode: string };
+          
+          const result = await vibekit.generateCode({
+            prompt: body.prompt,
+            mode: body.mode as 'code' | 'ask'
+          });
+
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (url.pathname === '/vibekit/host') {
+          const body = await request.json() as { port: number };
+          const host = await vibekit.getHost(body.port);
+          
+          return new Response(JSON.stringify({ url: host }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        return new Response('VibeKit Worker ready', { status: 200 });
+
+      } catch (error) {
+        return new Response(JSON.stringify({ 
+          error: error.message 
+        }), { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    return new Response('Not found', { status: 404 });
+  }
+};
+```
+
+#### 4. Preview URLs and Service Exposure
+
+When your sandbox creates a service (like a web server), Cloudflare automatically generates preview URLs:
+
+```typescript
+// In your VibeKit code generation:
+const result = await vibekit.generateCode({
+  prompt: "Create a Node.js web server on port 3000",
+  mode: "code"
+});
+
+// Get the preview URL
+const previewUrl = await vibekit.getHost(3000);
+// Returns: https://3000-sandbox-id.your-worker.domain.workers.dev
+
+// This URL is automatically routed by proxyToSandbox()
+```
+
+#### 5. Local Development Port Configuration
+
+For local development with `wrangler dev`, only ports explicitly exposed in the Dockerfile are available for port forwarding. This is not an issue in production.
+
+To test multiple ports locally, create a custom Dockerfile:
+
+```dockerfile
+FROM docker.io/cloudflare/sandbox:0.1.3
+
+EXPOSE 3000
+EXPOSE 8080
+EXPOSE 3001
+
+# Always end with the same command as the base image
+CMD ["bun", "index.ts"]
+```
+
+Then update your wrangler.json to use the custom Dockerfile:
+
+```jsonc
+{
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./Dockerfile",  // Point to your custom Dockerfile
+      "max_instances": 1
+    }
+  ]
+}
+```
+
+#### 6. Deployment Commands
+```bash
+# Install dependencies
+npm install @vibe-kit/vibekit @vibe-kit/cloudflare
+
+# Deploy to Cloudflare
+wrangler deploy
+
+# For local development
+wrangler dev
+```
+
+#### 7. Environment Variables in Worker
+Set these in wrangler.json `vars` section or via Cloudflare dashboard:
+```jsonc
+{
+  "vars": {
+    "ANTHROPIC_API_KEY": "your-anthropic-key",
+    "OPENAI_API_KEY": "your-openai-key", 
+    "GITHUB_TOKEN": "your-github-token"
+  }
+}
+```
+
+#### 8. Key Differences from Other Providers
+
+- **Worker-Only**: Cannot run outside Cloudflare Workers
+- **No API Keys**: Uses Durable Object bindings instead of API keys
+- **Automatic Preview URLs**: Services are automatically exposed with public URLs
+- **Edge Distribution**: Sandboxes run on Cloudflare's global edge network
+- **Container Platform**: Built on Cloudflare's container technology
+- **Routing Required**: Must implement proxyToSandbox for preview URLs
+- **Export Required**: Must export the Sandbox class from your Worker
+
+#### 9. Troubleshooting
+
+**"Sandbox binding not found"**: Ensure your wrangler.json has proper Durable Object configuration and you're passing the correct `env` object.
+
+**Preview URLs not working**: Make sure you're calling `proxyToSandbox()` at the beginning of your fetch handler.
+
+**Container errors**: The Dockerfile is provided by @cloudflare/sandbox package - don't create your own unless customizing.
+
 ## Supported Sandbox Runtimes
 
 - **E2B**: Cloud-based code execution environment
 - **Daytona**: Development environment platform
 - **Northflank**: Container-based sandbox platform
+- **Cloudflare**: Edge-native sandboxes on Cloudflare Workers (Workers only)
 
 ## Error Handling
 
@@ -313,6 +550,8 @@ Common environment variables:
 - `NORTHFLANK_API_KEY` - Northflank API key
 - `GITHUB_TOKEN` - GitHub personal access token
 
+**Note**: Cloudflare sandboxes don't require separate API keys - they use your Worker's environment and Durable Object bindings.
+
 ## TypeScript Support
 
 Fully typed with TypeScript definitions included. Import types:
@@ -336,4 +575,8 @@ import type {
 import type {
   NorthflankConfig
 } from '@vibe-kit/northflank';
+
+import type {
+  CloudflareConfig
+} from '@vibe-kit/cloudflare';
 ```

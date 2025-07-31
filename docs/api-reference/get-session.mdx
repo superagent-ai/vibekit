@@ -1,0 +1,159 @@
+---
+title: 'getSession'
+description: 'Retrieves the current session ID for the sandbox environment.'
+---
+
+## Method signature
+
+```typescript
+async getSession(): Promise<string | null>
+```
+
+## Parameters
+
+This method takes no parameters.
+
+## Return value
+
+| Type | Description |
+|------|-------------|
+| `Promise<string \| null>` | The current session ID if one is set, or `null` if no session is active |
+
+## Examples
+
+### Basic Usage
+
+```typescript
+const vibeKit = new VibeKit({
+  agent: {
+    type: "codex", // or "claude"
+    model: {
+      apiKey: "sk-proj-****"
+    },
+    mode: "code"
+  },
+  environment: {
+    e2b: {
+      apiKey: "e2b_****"
+    }
+  }
+});
+
+// Get the current session ID
+const sessionId = await vibeKit.getSession();
+
+if (sessionId) {
+  console.log("Current session:", sessionId);
+} else {
+  console.log("No active session");
+}
+```
+
+### Session Management Workflow
+
+```typescript
+// Check if there's an existing session
+let sessionId = await vibeKit.getSession();
+
+if (!sessionId) {
+  // No session exists, generate some code to create one
+  await vibeKit.generateCode("console.log('Hello World')");
+  
+  // Now get the new session ID
+  sessionId = await vibeKit.getSession();
+  console.log("New session created:", sessionId);
+}
+
+// Store the session ID for later use
+localStorage.setItem('vibekit-session', sessionId);
+```
+
+### Error handling
+
+```typescript
+try {
+  const sessionId = await vibeKit.getSession();
+  console.log("Session ID:", sessionId);
+} catch (error) {
+  if (error.message.includes('not initialized')) {
+    console.error("Agent is not properly initialized");
+  } else {
+    console.error("Unexpected error:", error.message);
+  }
+}
+```
+
+## Error handling
+
+The method throws errors in the following cases:
+
+### Initialization Error  
+- **Condition:** When the agent is not properly initialized
+- **Error Message:** "Agent not initialized"
+- **Solution:** Verify your configuration includes valid credentials and the agent is properly set up
+
+```typescript
+// Correct configuration for session management
+const config = {
+  agent: {
+    type: "codex", // or "claude"
+    model: {
+      apiKey: "your-api-key"
+    },
+    mode: "code"
+  },
+  environment: {
+    e2b: {
+      apiKey: "your-e2b-api-key" // For Codex agent
+    }
+    // Claude agent may have different environment requirements
+  }
+};
+```
+
+## Use cases
+
+### Session Persistence
+Store and retrieve session IDs to maintain continuity across application restarts:
+
+```typescript
+// On app startup, try to restore previous session
+const storedSessionId = localStorage.getItem('vibekit-session');
+if (storedSessionId) {
+  await vibeKit.setSession(storedSessionId);
+}
+
+// Verify the session is active
+const currentSession = await vibeKit.getSession();
+if (currentSession === storedSessionId) {
+  console.log("Session restored successfully");
+}
+```
+
+### Multi-User Applications
+Track different user sessions in multi-user environments:
+
+```typescript
+async function getUserSession(userId: string) {
+  const currentSession = await vibeKit.getSession();
+  
+  // Store session mapping
+  if (currentSession) {
+    await database.saveUserSession(userId, currentSession);
+  }
+  
+  return currentSession;
+}
+```
+
+## Related methods
+
+- [`setSession`](./set-session) - Set a specific session ID for the sandbox
+- [`generateCode`](./generate-code) - Generate code (creates a session if none exists)
+
+## Notes
+
+- **Session Auto-Creation:** Sessions are automatically created when you first use `generateCode()` with either agent
+- **Session Persistence:** Sessions persist across multiple `generateCode()` calls until explicitly changed or the sandbox is terminated
+- **Null Return:** Returns `null` when no session has been established yet
+- **Cross-Agent Support:** This functionality works with both Codex and Claude agents

@@ -1,0 +1,145 @@
+---
+title: 'Daytona'
+description: 'Configure VibeKit with a Daytona Sandbox'
+---
+
+Daytona is an open-source runtime for executing AI-generated code in secure cloud sandboxes. Made for agentic & AI use cases. You can read more about it [here](https://daytona.io).
+
+## Installation
+
+First, install the Daytona provider package:
+
+```bash
+npm install @vibe-kit/daytona
+```
+
+## How to use
+
+To use Daytona with VibeKit, you need to create an image in the Daytona dashboard using the following DockerFile:
+
+**Claude Codex Dockerfile**
+```dockerfile
+# Use Ubuntu 22.04 as the base image
+FROM ubuntu:22.04
+
+# Install curl and git, update package list
+RUN apt-get update && apt-get install -y curl git ripgrep
+
+# Install Node.js 24.x
+RUN curl -sL https://deb.nodesource.com/setup_24.x | bash - && apt-get install -y nodejs
+
+# Confirm installations
+RUN node -v && npm -v && git --version
+
+# Install Claude Code globalliy
+RUN npm install -g @anthropic-ai/claude-code
+```                                                  
+
+**OpenAI Codex Dockerfile**
+```dockerfile
+# Use Ubuntu 22.04 as the base image
+FROM ubuntu:22.04
+
+# Install curl and git, update package list
+RUN apt-get update && apt-get install -y curl git
+
+# Install Node.js 24.x
+RUN curl -sL https://deb.nodesource.com/setup_24.x | bash - && apt-get install -y nodejs
+
+# Confirm installations
+RUN node -v && npm -v && git --version
+
+# Install OpenAI Codex globally
+RUN npm install -g @openai/codex@latest
+```    
+
+**Opencode Dockerfile**
+```dockerfile
+# Use Ubuntu 22.04 as the base image
+FROM ubuntu:22.04
+
+# Install curl and git, update package list
+RUN apt-get update && apt-get install -y curl git
+
+# Install Node.js 24.x
+RUN curl -sL https://deb.nodesource.com/setup_24.x | bash - && apt-get install -y nodejs
+
+# Confirm installations
+RUN node -v && npm -v && git --version
+
+# Install OpenAI Codex globally
+RUN npm i -g opencode-ai@latest
+```   
+
+
+## Configuration
+
+### Using the provider directly
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createDaytonaProvider } from "@vibe-kit/daytona";
+
+const daytonaProvider = createDaytonaProvider({
+  apiKey: process.env.DAYTONA_API_KEY!,
+  image: "codex-image",
+  serverUrl: "https://app.daytona.io/api",
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(daytonaProvider);
+
+// Generate code
+const result = await vibeKit.generateCode({ 
+  prompt: "Build a Python FastAPI application", 
+  mode: "ask" 
+});
+
+// Get host URL (if applicable)
+const host = await vibeKit.getHost(8000);
+
+// Clean up
+await vibeKit.kill();
+```
+
+### Using configuration object
+
+```typescript
+import { VibeKit, VibeConfig } from "@vibe-kit/sdk";
+
+const config: VibeConfig = {
+  ...,
+  environment: {
+    daytona: {
+      // Required Daytona API key
+      apiKey: "****",
+      image: "codex-image",
+      serverUrl: "https://app.daytona.io/api"
+    },
+  },
+};
+```
+
+## ENV variables and secrets
+
+You can use environment variables for your Daytona configuration:
+
+```bash
+DAYTONA_API_KEY=your_daytona_api_key_here
+```
+
+Then reference them in your code:
+
+```typescript
+const daytonaProvider = createDaytonaProvider({
+  apiKey: process.env.DAYTONA_API_KEY!,
+  image: "codex-image",
+  serverUrl: "https://app.daytona.io/api",
+});
+```

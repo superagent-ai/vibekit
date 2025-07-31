@@ -1,0 +1,98 @@
+---
+title: Streaming
+description: "VibeKit supports streaming responses, allowing you to receive data from the API in real-time as it is generated."
+---
+
+VibeKit supports streaming responses, allowing you to receive data from the API in real-time as it is generated. This is particularly useful for applications that require immediate feedback or want to display results incrementally.
+
+## Overview
+
+Streaming enables your application to process and display data as soon as it is available, rather than waiting for the entire response. This can improve user experience and reduce perceived latency.
+
+## How to Use Streaming
+
+To enable streaming with the `generateCode` method, use the event-driven approach with `.on()` listeners. The API will emit events as data is generated.
+
+### Example Usage
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+  templateId: "vibekit-claude",
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider);
+
+// Set up event listeners for streaming
+vibeKit.on("update", (message) => {
+  // Handle streaming updates
+  console.log('Streaming update:', message);
+  // Update your UI with the new content
+  updateUI(message);
+});
+
+vibeKit.on("error", (error) => {
+  // Handle streaming errors
+  console.error('Streaming error:', error);
+});
+
+// Generate code
+const response = await vibeKit.generateCode({
+  prompt: "Create a React component for a todo list",
+  mode: "code",
+});
+
+// The final response is still available
+console.log('Final response:', response);
+```
+
+### With Conversation History
+
+```typescript
+// Event listeners are already set up from previous example
+vibeKit.on("update", (message) => {
+  // Display incremental updates to the user
+  appendToOutput(message);
+});
+
+const response = await vibeKit.generateCode({
+  prompt: "Now add error handling to the component",
+  mode: "code",
+  history: previousConversation,
+});
+```
+
+## When to Use Streaming
+
+- When you want to display results to users as soon as they are available
+- For long-running code generation tasks where incremental updates improve UX
+- For interactive coding sessions where immediate feedback is valuable
+- For chatbots or Q&A mode where responses can be shown progressively
+
+## Streaming Events
+
+VibeKit uses an event-driven approach for streaming with the following events:
+
+| Event | Type | Description |
+|----------|------|-------------|
+| `update` | `(message: string) => void` | Emitted with streaming content updates as they are generated |
+| `error` | `(error: string) => void` | Emitted when errors occur during streaming |
+
+## Notes
+
+- Streaming is available for both "ask" and "code" modes
+- The final response is still returned as a Promise, even when using streaming events
+- Event listeners are optional - you can use the method without them for non-streaming behavior
+- Handle errors appropriately in your `error` event listener to provide good user experience
+
+For more details, refer to the [Generate Code API Reference](/api-reference/generate-code) or contact support. 

@@ -1,0 +1,275 @@
+---
+title: 'pause'
+description: 'Pauses the active sandbox.'
+---
+
+## Method signature
+
+```typescript
+async pause(): Promise<void>
+```
+
+## Parameters
+
+This method takes no parameters.
+
+## Return value
+
+| Type | Description |
+|------|-------------|
+| `Promise<void>` | The method completes successfully when the sandbox is paused |
+
+## Behavior
+
+The `pause()` method performs the following actions:
+
+1. **Agent Type Validation**: Verifies that the current agent is of type "codex"
+2. **Initialization Check**: Ensures the CodexAgent instance is properly initialized
+3. **Sandbox Pausing**: Calls the underlying `pauseSandbox()` method to pause the active sandbox
+
+## Examples
+
+### Basic Usage
+
+```typescript
+const vibeKit = new VibeKit({
+  agent: {
+    type: "codex",
+    // ... other config
+  }
+});
+
+// Generate some code first to create a sandbox
+await vibeKit.generateCode("console.log('Hello World')", "code");
+
+// Pause the sandbox to save resources
+await vibeKit.pause();
+console.log("Sandbox paused successfully");
+
+// Later, resume the sandbox
+await vibeKit.resume();
+```
+
+### With Error Handling
+
+```typescript
+try {
+  await vibeKit.pause();
+  console.log("Sandbox paused");
+} catch (error) {
+  if (error.message.includes("only supported for the Codex agent")) {
+    console.error("Pause operation requires Codex agent");
+  } else if (error.message.includes("not initialized")) {
+    console.error("CodexAgent not properly initialized");
+  } else {
+    console.error("Failed to pause sandbox:", error.message);
+  }
+}
+```
+
+### Resource Management Pattern
+
+```typescript
+class SandboxManager {
+  private vibeKit: VibeKit;
+  private isPaused: boolean = false;
+
+  constructor(config: VibeKitConfig) {
+    this.vibeKit = new VibeKit(config);
+  }
+
+  async pauseForBreak() {
+    if (!this.isPaused) {
+      await this.vibeKit.pause();
+      this.isPaused = true;
+      console.log("Sandbox paused for break");
+    }
+  }
+
+  async resumeFromBreak() {
+    if (this.isPaused) {
+      await this.vibeKit.resume();
+      this.isPaused = false;
+      console.log("Sandbox resumed from break");
+    }
+  }
+
+  async generateCode(prompt: string) {
+    // Resume if paused
+    if (this.isPaused) {
+      await this.resumeFromBreak();
+    }
+    
+    return await this.vibeKit.generateCode(prompt, "code");
+  }
+}
+```
+
+### Auto-Pause on Inactivity
+
+```typescript
+class AutoPausingSandbox {
+  private vibeKit: VibeKit;
+  private inactivityTimer: NodeJS.Timeout | null = null;
+  private readonly INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+  constructor(config: VibeKitConfig) {
+    this.vibeKit = new VibeKit(config);
+  }
+
+  async generateCode(prompt: string) {
+    // Clear existing timer
+    this.clearInactivityTimer();
+    
+    // Generate code
+    const response = await this.vibeKit.generateCode(prompt, "code");
+    
+    // Start new inactivity timer
+    this.startInactivityTimer();
+    
+    return response;
+  }
+
+  private startInactivityTimer() {
+    this.inactivityTimer = setTimeout(async () => {
+      try {
+        await this.vibeKit.pause();
+        console.log("Sandbox auto-paused due to inactivity");
+      } catch (error) {
+        console.error("Failed to auto-pause sandbox:", error);
+      }
+    }, this.INACTIVITY_TIMEOUT);
+  }
+
+  private clearInactivityTimer() {
+    if (this.inactivityTimer) {
+      clearTimeout(this.inactivityTimer);
+      this.inactivityTimer = null;
+    }
+  }
+}
+```
+
+## Error handling
+
+The method throws errors in the following cases:
+
+### Agent Type Error
+```typescript
+// When using non-Codex agent
+throw new Error("Sandbox management is only supported for the Codex agent");
+```
+
+### Initialization Error
+```typescript
+// When CodexAgent is not initialized
+throw new Error("CodexAgent not initialized");
+```
+
+### Example Error Handling
+```typescript
+try {
+  await vibeKit.pause();
+} catch (error) {
+  switch (true) {
+    case error.message.includes("only supported for the Codex agent"):
+      // Handle agent type mismatch
+      console.error("This operation requires a Codex agent");
+      break;
+    
+    case error.message.includes("not initialized"):
+      // Handle initialization error
+      console.error("Agent not properly initialized");
+      break;
+    
+    default:
+      // Handle other sandbox-related errors
+      console.error("Sandbox pause failed:", error.message);
+  }
+}
+```
+
+## Use cases
+
+### Cost Optimization
+Pause sandboxes during periods of inactivity to reduce resource costs:
+
+```typescript
+// During lunch break or after hours
+await vibeKit.pause();
+console.log("Sandbox paused - resources saved");
+```
+
+### Batch Processing with Breaks
+Pause between processing batches to manage resource usage:
+
+```typescript
+const batches = [batch1, batch2, batch3];
+
+for (let i = 0; i < batches.length; i++) {
+  const batch = batches[i];
+  
+  // Process batch
+  for (const prompt of batch) {
+    await vibeKit.generateCode(prompt, "code");
+  }
+  
+  // Pause between batches (except for the last one)
+  if (i < batches.length - 1) {
+    await vibeKit.pause();
+    console.log(`Batch ${i + 1} completed. Sandbox paused.`);
+    
+    // Simulate break time
+    await new Promise(resolve => setTimeout(resolve, 30000)); // 30 seconds
+    
+    await vibeKit.resume();
+    console.log(`Resuming for batch ${i + 2}`);
+  }
+}
+```
+
+### Conditional Resource Management
+Pause based on system conditions:
+
+```typescript
+class ResourceAwareSandbox {
+  private vibeKit: VibeKit;
+
+  constructor(config: VibeKitConfig) {
+    this.vibeKit = new VibeKit(config);
+  }
+
+  async smartPause() {
+    const memoryUsage = process.memoryUsage();
+    const highMemoryUsage = memoryUsage.heapUsed > 100 * 1024 * 1024; // 100MB
+    
+    if (highMemoryUsage) {
+      await this.vibeKit.pause();
+      console.log("Sandbox paused due to high memory usage");
+      
+      // Force garbage collection if available
+      if (global.gc) {
+        global.gc();
+      }
+    }
+  }
+}
+```
+
+## State preservation
+
+<Info>
+When a sandbox is paused, its state is preserved including:
+- File system contents
+- Environment variables
+- Running processes (suspended)
+- Network connections (may timeout)
+</Info>
+
+## Notes
+
+- **State Preservation**: Pausing preserves the sandbox state, unlike `kill()` which destroys it
+- **Resource Savings**: Paused sandboxes consume significantly fewer resources
+- **Resumable**: Use `resume()` to continue from exactly where you left off
+- **Best Practice**: Pause during periods of inactivity to optimize resource usage and costs
+- **Automatic Cleanup**: Consider implementing auto-pause mechanisms for long-running applications 

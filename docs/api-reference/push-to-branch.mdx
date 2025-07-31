@@ -1,0 +1,73 @@
+---
+title: "pushToBranch"
+description: "Push code changes to a branch."
+---
+
+## Method signature
+
+```typescript
+async pushToBranch(branch?: string): Promise<void>
+```
+
+## Description
+
+Pushes the current code changes from the sandbox environment to a specified Git branch. This method is useful when you want to save your generated code changes to a branch without creating a pull request.
+
+## Parameters
+
+<ParamField path="branch" type="string" optional>
+  The name of the branch to push changes to. If not provided, pushes to the current active branch or the default branch configured in the agent.
+</ParamField>
+
+## Return value
+
+Returns a `Promise<void>` that resolves when the push operation completes successfully.
+
+## Usage example
+
+```typescript
+import { VibeKit } from "vibekit";
+
+const vibekit = new VibeKit({
+  agent: {
+    type: "claude",
+    model: {
+      name: "claude-3-5-sonnet-20241022",
+      provider: "anthropic",
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    },
+  },
+  github: {
+    token: process.env.GITHUB_TOKEN,
+    repository: "https://github.com/your-org/your-repo",
+  },
+  environment: {
+    e2b: {
+      apiKey: process.env.E2B_API_KEY,
+    },
+  },
+  sessionId: "unique-session-id",
+});
+
+// Generate some code changes
+await vibekit.generateCode({
+  prompt: "Add a new React component for user profiles",
+  mode: "code",
+  branch: "feature/user-profiles",
+});
+
+// Or push to the current/default branch
+await vibekit.pushToBranch();
+```
+
+## Notes
+
+- This method requires that the VibeKit instance is configured with GitHub credentials
+- The branch must exist in the repository, or the agent must have permissions to create it
+- Changes are pushed directly without creating a pull request - use `createPullRequest()` if you want to create a PR instead
+- This operation is available for both Codex and Claude agents
+
+## Related methods
+
+- [`createPullRequest()`](/api-reference/create-pull-request) - Create a pull request with the current changes
+- [`generateCode()`](/api-reference/generate-code) - Generate code changes before pushing

@@ -36,13 +36,13 @@ export interface SandboxInstance {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini",
+    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
 
-export type AgentType = "codex" | "claude" | "opencode" | "gemini";
+export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
 
 export interface NorthflankConfig {
   apiKey: string;
@@ -63,6 +63,8 @@ const getDockerImageFromAgentType = (agentType?: AgentType) => {
     return "superagentai/vibekit-opencode:1.0";
   } else if (agentType === "gemini") {
     return "superagentai/vibekit-gemini:1.0";
+  } else if (agentType === "grok") {
+    return "superagentai/vibekit-grok-cli:1.0";
   }
   return "ubuntu:22.04";
 };
@@ -314,9 +316,12 @@ export class NorthflankSandboxProvider implements SandboxProvider {
     );
 
     const sandboxId = this.generateSandboxId();
-    
+
     // Use the working directory from the method parameter or config
-    const finalWorkingDirectory = workingDirectory || this.config.workingDirectory || NorthflankSandboxProvider.DefaultPersistentVolume;
+    const finalWorkingDirectory =
+      workingDirectory ||
+      this.config.workingDirectory ||
+      NorthflankSandboxProvider.DefaultPersistentVolume;
 
     await apiClient.create.service.deployment({
       parameters: {
@@ -326,12 +331,14 @@ export class NorthflankSandboxProvider implements SandboxProvider {
         name: sandboxId,
         billing: {
           deploymentPlan:
-            this.config.billingPlan || NorthflankSandboxProvider.DefaultBillingPlan,
+            this.config.billingPlan ||
+            NorthflankSandboxProvider.DefaultBillingPlan,
         },
         deployment: {
           instances: 0,
           external: {
-            imagePath: this.config.image || getDockerImageFromAgentType(agentType),
+            imagePath:
+              this.config.image || getDockerImageFromAgentType(agentType),
           },
           storage: {
             ephemeralStorage: {
@@ -424,6 +431,8 @@ export class NorthflankSandboxProvider implements SandboxProvider {
   }
 }
 
-export function createNorthflankProvider(config: NorthflankConfig): NorthflankSandboxProvider {
+export function createNorthflankProvider(
+  config: NorthflankConfig
+): NorthflankSandboxProvider {
   return new NorthflankSandboxProvider(config);
 }

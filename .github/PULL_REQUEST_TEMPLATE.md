@@ -4,3 +4,6 @@
 ## Related Issue
 Fixes #<issue number>
 
+## Checklist
+- [ ] I tested my changes
+- [ ] I reviewed my own code

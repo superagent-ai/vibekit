@@ -1,0 +1,192 @@
+---
+title: 'Dagger (Local)'
+description: 'Configure VibeKit with local Dagger sandboxes for fast, offline development'
+---
+
+Dagger provides containerized sandboxes that run locally on your machine using Docker and the Dagger engine. This enables fast, offline development with complete isolation and control. Perfect for local development, testing, and when you need the speed of local execution with the isolation of containers. Learn more about Dagger [here](https://dagger.io).
+
+## Installation
+
+First, install the Dagger CLI on your system:
+
+**macOS:**
+```bash
+brew install dagger/tap/dagger
+```
+
+**Linux:**
+```bash
+curl -fsSL https://dl.dagger.io/dagger/install.sh | BIN_DIR=$HOME/.local/bin sh
+```
+
+**Windows:**
+```bash
+winget install Dagger.Cli
+```
+
+Then install the Dagger provider package:
+
+```bash
+npm install @vibe-kit/dagger
+```
+
+**Verify installation:**
+```bash
+dagger version
+docker --version
+```
+
+## Configuration
+
+### Using the provider directly
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createLocalProvider } from "@vibe-kit/dagger";
+
+const provider = createLocalProvider({
+  githubToken: process.env.GITHUB_TOKEN, // Optional for Git operations
+  preferRegistryImages: true,             // Use optimized images when available
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(provider);
+
+// Generate code
+const result = await vibeKit.generateCode({ 
+  prompt: "Create a REST API with Express.js", 
+  mode: "ask" 
+});
+
+// Run development server in background
+await vibeKit.executeCommand("npm run dev", { background: true });
+
+// Get local host URL
+const host = await vibeKit.getHost(3000);
+console.log(`Server running at: ${host}`);
+
+// Clean up
+await vibeKit.kill();
+```
+
+### Using configuration object
+
+```typescript
+import { VibeKit, VibeConfig } from "@vibe-kit/sdk";
+
+const config: VibeConfig = {
+  agent: {
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  },
+  environment: {
+    type: "dagger",
+    config: {
+      githubToken: process.env.GITHUB_TOKEN,
+      preferRegistryImages: true,
+      dockerHubUser: "your-username", // For custom images
+    },
+  },
+};
+
+const vibeKit = new VibeKit(config);
+```
+
+## Quick Setup
+
+Initialize with automatic dependency installation:
+
+```bash
+# Interactive setup with agent selection
+vibekit init --providers dagger --agents claude,codex
+
+# With Docker Hub image optimization
+docker login
+vibekit init --providers dagger --agents claude,codex --upload-images
+```
+
+The setup will:
+- Install Docker and Dagger CLI if needed
+- Pre-build agent images for faster startup
+- Optionally upload optimized images to your Docker Hub
+
+
+
+## ENV variables and secrets
+
+Configure your Dagger provider using environment variables:
+
+```bash
+# GitHub integration (optional)
+GITHUB_TOKEN=your_github_token_here
+
+# Agent API keys
+ANTHROPIC_API_KEY=your_anthropic_key
+OPENAI_API_KEY=your_openai_key
+GOOGLE_API_KEY=your_google_key
+```
+
+Reference them in your code:
+
+```typescript
+const provider = createLocalProvider({
+  githubToken: process.env.GITHUB_TOKEN,
+});
+```
+
+## Configuration Options
+
+The `createLocalProvider` function accepts these configuration options:
+
+- **`githubToken`** (optional): GitHub personal access token for Git operations and PR creation
+- **`preferRegistryImages`** (optional): Use pre-built registry images for faster startup (default: `true`)
+- **`dockerHubUser`** (optional): Your Docker Hub username for custom optimized images
+- **`privateRegistry`** (optional): Alternative registry URL (e.g., `"ghcr.io"`)
+
+## Unique Features
+
+### Local Execution
+- **No internet required** - Everything runs on your machine
+- **Zero usage fees** - No per-minute or per-execution costs
+- **Offline development** - Work without network connectivity
+
+### Performance Optimization
+- **Local execution** - No network latency for container operations
+- **Docker Hub integration** - Share optimized images across machines and teams
+
+## System Requirements
+
+- **Docker** - Container runtime (automatically installed during setup)
+- **Dagger CLI** - Container orchestration engine (automatically installed during setup)  
+- **Node.js 18+** - Runtime environment
+- **8GB RAM recommended** - For running multiple containers
+
+## Troubleshooting
+
+**Docker not running:**
+```bash
+# Check Docker status
+docker ps
+```
+
+**Dagger CLI not found:**
+```bash
+# Reinstall Dagger
+curl -fsSL https://dl.dagger.io/install.sh | bash
+dagger version
+```
+
+**Permission errors (Linux):**
+```bash
+# Add user to docker group
+sudo usermod -aG docker $USER
+# Then log out and back in
+``` 

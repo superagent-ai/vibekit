@@ -20,11 +20,28 @@ VibeKit is an SDK for running powerful coding agents like **Claude Code**, **Ope
 One SDK. Any coding agent. Any sandbox.
 
 ## 🚀 Quick Start
- 
- ```bash
-npx @vibe-kit/sdk init
-# or after global install
-vibekit init
+
+```bash
+npm i @vibe-kit/sdk
+```
+
+```javascript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+  templateId: "vibekit-claude",
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider);
 ```
 
 ## ⚡️ Features
@@ -41,7 +58,7 @@ vibekit init
 
 ## 📦 Supported Sandbox Runtimes
 
-Currently supports E2B with Daytona, Modal, Fly.io, and other providers coming soon.
+Currently supports E2B, Daytona, Northflank, Cloudflare and Dagger, with other providers coming soon.
 
 ## 🧪 Use Cases
 

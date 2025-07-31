@@ -1,0 +1,203 @@
+---
+title: 'Cloudflare'
+description: 'Configure VibeKit with Cloudflare Sandboxes'
+---
+
+Cloudflare Sandboxes provide edge-native sandboxed code environments built on Cloudflare's container platform and Durable Objects. Unlike other VibeKit providers, Cloudflare sandboxes run exclusively within Cloudflare Workers for agentic & AI use cases. Learn more about Cloudflare Workers [here](https://workers.cloudflare.com/).
+
+## Installation
+
+```bash
+npm install @vibe-kit/cloudflare
+```
+
+## Configuration
+
+### Using the provider directly
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createCloudflareProvider } from "@vibe-kit/cloudflare";
+
+// This must be called within a Cloudflare Worker
+const provider = createCloudflareProvider({
+  env: env, // Your Worker's env object containing the Sandbox binding
+  hostname: "your-worker.domain.workers.dev", // Your Worker's hostname
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(provider);
+
+// Generate and run code
+const result = await vibeKit.generateCode({
+  prompt: "Create a simple web server using Node.js on port 3000",
+  mode: "code",
+});
+
+// Get the preview URL for the running server
+const previewUrl = await vibeKit.getHost(3000);
+console.log(`Server running at: ${previewUrl}`);
+
+// Clean up
+await vibeKit.kill();
+```
+
+## Worker Setup
+
+Cloudflare sandboxes require specific Worker configuration:
+
+### 1. Configure wrangler.json
+
+```jsonc
+{
+  "name": "my-vibekit-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-01-01",
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./node_modules/@cloudflare/sandbox/Dockerfile",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "Sandbox",
+        "name": "Sandbox"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["Sandbox"],
+      "tag": "v1"
+    }
+  ]
+}
+```
+
+### 2. Create your Worker
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createCloudflareProvider, proxyToSandbox } from "@vibe-kit/cloudflare";
+
+// Export the Sandbox class for Durable Objects
+export { Sandbox } from "@cloudflare/sandbox";
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Handle preview URL routing for exposed ports
+    const proxyResponse = await proxyToSandbox(request, env);
+    if (proxyResponse) return proxyResponse;
+
+    // Handle VibeKit requests
+    const provider = createCloudflareProvider({
+      env,
+      hostname: request.headers.get("host") || "localhost",
+    });
+
+    const vibeKit = new VibeKit()
+      .withAgent({
+        type: "claude",
+        provider: "anthropic",
+        apiKey: process.env.ANTHROPIC_API_KEY!,
+        model: "claude-sonnet-4-20250514",
+      })
+      .withSandbox(provider);
+
+    const result = await vibeKit.generateCode({
+      prompt: "Create a Node.js web server",
+      mode: "code",
+    });
+
+    return new Response(JSON.stringify(result), {
+      headers: { "Content-Type": "application/json" },
+    });
+  },
+};
+```
+
+## ENV variables and secrets
+
+```bash
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here  # If using OpenAI models
+GOOGLE_API_KEY=your_google_api_key_here  # If using Gemini models
+```
+
+In your Worker code:
+
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(provider);
+```
+
+## Configuration Options
+
+The `createCloudflareProvider` function accepts these configuration options:
+
+- **`env`** (required): Your Cloudflare Worker's environment object containing the `Sandbox` Durable Object binding
+- **`hostname`** (required): Your Worker's hostname used for generating preview URLs when exposing ports
+
+## Unique Features
+
+### Preview URLs
+Cloudflare sandboxes can generate public preview URLs when services are exposed on specific ports, making them accessible from anywhere on the internet.
+
+### Edge-Native Execution
+Sandboxes run on Cloudflare's global edge network, providing low-latency execution closest to your users.
+
+### Durable Objects Integration
+Built on Cloudflare's Durable Objects platform for strong consistency, automatic geographic distribution, and seamless Workers platform integration.
+
+## Local Development
+
+For local development with `wrangler dev`, only ports explicitly exposed in the Dockerfile are available for port forwarding. This is not an issue in production.
+
+To test multiple ports locally, create a custom Dockerfile:
+
+```dockerfile
+FROM docker.io/cloudflare/sandbox:0.1.3
+
+EXPOSE 3000
+EXPOSE 8080
+EXPOSE 3001
+
+# Always end with the same command as the base image
+CMD ["bun", "index.ts"]
+```
+
+Then update your wrangler.json to use the custom Dockerfile:
+
+```jsonc
+{
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./Dockerfile",  // Point to your custom Dockerfile
+      "max_instances": 1
+    }
+  ]
+}
+```
+
+## Requirements
+
+- **Cloudflare Workers**: Must run within a Cloudflare Worker environment
+- **Wrangler**: For local development and deployment
+- **Docker**: For building sandboxes locally and deploying to Cloudflare
+- **Node.js 18+**: For development tooling

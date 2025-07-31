@@ -1,0 +1,379 @@
+---
+title: 'resume'
+description: 'Resumes the paused sandbox.'
+---
+
+## Method signature
+
+```typescript
+async resume(): Promise<void>
+```
+
+## Parameters
+
+This method takes no parameters.
+
+## Return value
+
+| Type | Description |
+|------|-------------|
+| `Promise<void>` | The method completes successfully when the sandbox is resumed |
+
+## Behavior
+
+The `resume()` method performs the following actions:
+
+1. **Agent Type Validation**: Verifies that the current agent is of type "codex"
+2. **Initialization Check**: Ensures the CodexAgent instance is properly initialized
+3. **Sandbox Resumption**: Calls the underlying `resumeSandbox()` method to resume the paused sandbox
+
+## Examples
+
+### Basic Usage
+
+```typescript
+const vibeKit = new VibeKit({
+  agent: {
+    type: "codex",
+    // ... other config
+  }
+});
+
+// Generate some code first to create a sandbox
+await vibeKit.generateCode("console.log('Hello World')", "code");
+
+// Pause the sandbox
+await vibeKit.pause();
+console.log("Sandbox paused");
+
+// Resume the sandbox
+await vibeKit.resume();
+console.log("Sandbox resumed - ready for more operations");
+
+// Continue generating code
+await vibeKit.generateCode("console.log('Back online!')", "code");
+```
+
+### With Error Handling
+
+```typescript
+try {
+  await vibeKit.resume();
+  console.log("Sandbox resumed successfully");
+} catch (error) {
+  if (error.message.includes("only supported for the Codex agent")) {
+    console.error("Resume operation requires Codex agent");
+  } else if (error.message.includes("not initialized")) {
+    console.error("CodexAgent not properly initialized");
+  } else {
+    console.error("Failed to resume sandbox:", error.message);
+  }
+}
+```
+
+### State Management Pattern
+
+```typescript
+class SandboxStateManager {
+  private vibeKit: VibeKit;
+  private state: 'active' | 'paused' | 'killed' = 'active';
+
+  constructor(config: VibeKitConfig) {
+    this.vibeKit = new VibeKit(config);
+  }
+
+  async pause() {
+    if (this.state === 'active') {
+      await this.vibeKit.pause();
+      this.state = 'paused';
+      console.log("Sandbox paused");
+    }
+  }
+
+  async resume() {
+    if (this.state === 'paused') {
+      await this.vibeKit.resume();
+      this.state = 'active';
+      console.log("Sandbox resumed");
+    }
+  }
+
+  async generateCode(prompt: string) {
+    // Auto-resume if paused
+    if (this.state === 'paused') {
+      await this.resume();
+    }
+    
+    if (this.state === 'killed') {
+      throw new Error("Cannot generate code: sandbox has been killed");
+    }
+    
+    return await this.vibeKit.generateCode(prompt, "code");
+  }
+
+  getState() {
+    return this.state;
+  }
+}
+```
+
+### Auto-Resume on Activity
+
+```typescript
+class SmartSandbox {
+  private vibeKit: VibeKit;
+  private isPaused: boolean = false;
+
+  constructor(config: VibeKitConfig) {
+    this.vibeKit = new VibeKit(config);
+  }
+
+  async ensureActive() {
+    if (this.isPaused) {
+      await this.vibeKit.resume();
+      this.isPaused = false;
+      console.log("Sandbox auto-resumed");
+    }
+  }
+
+  async generateCode(prompt: string) {
+    // Auto-resume before generating code
+    await this.ensureActive();
+    return await this.vibeKit.generateCode(prompt, "code");
+  }
+
+  async pauseManually() {
+    if (!this.isPaused) {
+      await this.vibeKit.pause();
+      this.isPaused = true;
+      console.log("Sandbox paused manually");
+    }
+  }
+}
+```
+
+### Scheduled Resume
+
+```typescript
+class ScheduledSandbox {
+  private vibeKit: VibeKit;
+  private resumeTimer: NodeJS.Timeout | null = null;
+
+  constructor(config: VibeKitConfig) {
+    this.vibeKit = new VibeKit(config);
+  }
+
+  async pauseWithScheduledResume(resumeInMinutes: number) {
+    // Pause sandbox
+    await this.vibeKit.pause();
+    console.log(`Sandbox paused. Will resume in ${resumeInMinutes} minutes.`);
+
+    // Schedule resume
+    this.resumeTimer = setTimeout(async () => {
+      try {
+        await this.vibeKit.resume();
+        console.log("Sandbox automatically resumed");
+      } catch (error) {
+        console.error("Failed to auto-resume sandbox:", error);
+      }
+    }, resumeInMinutes * 60 * 1000);
+  }
+
+  async resumeNow() {
+    // Clear scheduled resume
+    if (this.resumeTimer) {
+      clearTimeout(this.resumeTimer);
+      this.resumeTimer = null;
+    }
+
+    // Resume immediately
+    await this.vibeKit.resume();
+    console.log("Sandbox resumed immediately");
+  }
+
+  async cleanup() {
+    if (this.resumeTimer) {
+      clearTimeout(this.resumeTimer);
+    }
+    await this.vibeKit.kill();
+  }
+}
+```
+
+## Error handling
+
+The method throws errors in the following cases:
+
+### Agent Type Error
+```typescript
+// When using non-Codex agent
+throw new Error("Sandbox management is only supported for the Codex agent");
+```
+
+### Initialization Error
+```typescript
+// When CodexAgent is not initialized
+throw new Error("CodexAgent not initialized");
+```
+
+### Example Error Handling
+```typescript
+try {
+  await vibeKit.resume();
+} catch (error) {
+  switch (true) {
+    case error.message.includes("only supported for the Codex agent"):
+      // Handle agent type mismatch
+      console.error("This operation requires a Codex agent");
+      break;
+    
+    case error.message.includes("not initialized"):
+      // Handle initialization error
+      console.error("Agent not properly initialized");
+      break;
+    
+    default:
+      // Handle other sandbox-related errors
+      console.error("Sandbox resume failed:", error.message);
+  }
+}
+```
+
+## Use Cases
+
+### Morning Startup Routine
+Resume sandboxes at the start of the workday:
+
+```typescript
+class DailySandboxManager {
+  private vibeKit: VibeKit;
+
+  constructor(config: VibeKitConfig) {
+    this.vibeKit = new VibeKit(config);
+  }
+
+  async morningStartup() {
+    console.log("Starting daily sandbox routine...");
+    
+    try {
+      await this.vibeKit.resume();
+      console.log("✅ Sandbox resumed for the day");
+      
+      // Run any initialization code
+      await this.vibeKit.generateCode("echo 'Good morning! Sandbox is ready.'", "code");
+      
+    } catch (error) {
+      console.error("❌ Failed to start sandbox:", error);
+      throw error;
+    }
+  }
+
+  async eveningShutdown() {
+    console.log("Ending daily sandbox routine...");
+    await this.vibeKit.pause();
+    console.log("✅ Sandbox paused for the night");
+  }
+}
+```
+
+### On-Demand Resumption
+Resume only when needed to save resources:
+
+```typescript
+class OnDemandSandbox {
+  private vibeKit: VibeKit;
+  private isActive: boolean = false;
+
+  constructor(config: VibeKitConfig) {
+    this.vibeKit = new VibeKit(config);
+  }
+
+  async processRequest(prompt: string) {
+    if (!this.isActive) {
+      console.log("Resuming sandbox for request...");
+      await this.vibeKit.resume();
+      this.isActive = true;
+    }
+
+    const response = await this.vibeKit.generateCode(prompt, "code");
+    
+    // Auto-pause after 30 seconds of inactivity
+    setTimeout(async () => {
+      if (this.isActive) {
+        await this.vibeKit.pause();
+        this.isActive = false;
+        console.log("Sandbox auto-paused after inactivity");
+      }
+    }, 30000);
+
+    return response;
+  }
+}
+```
+
+### Recovery from Breaks
+Resume after planned breaks or maintenance:
+
+```typescript
+class MaintenanceAwareSandbox {
+  private vibeKit: VibeKit;
+  
+  constructor(config: VibeKitConfig) {
+    this.vibeKit = new VibeKit(config);
+  }
+
+  async pauseForMaintenance(durationMinutes: number) {
+    await this.vibeKit.pause();
+    console.log(`Sandbox paused for ${durationMinutes} minute maintenance window`);
+    
+    return new Promise((resolve) => {
+      setTimeout(async () => {
+        await this.vibeKit.resume();
+        console.log("Maintenance complete. Sandbox resumed.");
+        resolve(void 0);
+      }, durationMinutes * 60 * 1000);
+    });
+  }
+
+  async emergencyResume() {
+    console.log("Emergency resume initiated...");
+    await this.vibeKit.resume();
+    console.log("Sandbox resumed for emergency operation");
+  }
+}
+```
+
+## State Restoration
+
+<Info>
+When a sandbox is resumed, all previously saved state is restored including:
+- File system contents (exactly as they were when paused)
+- Environment variables
+- Working directory
+- Previously installed packages
+</Info>
+
+## Performance Considerations
+
+### Resume Time
+- **Cold Resume**: First resume after a long pause may take 10-30 seconds
+- **Warm Resume**: Subsequent resumes are typically faster (5-15 seconds)
+- **State Check**: The sandbox performs internal state validation during resume
+
+### Resource Usage
+```typescript
+// Monitor resume performance
+const startTime = Date.now();
+await vibeKit.resume();
+const resumeTime = Date.now() - startTime;
+console.log(`Sandbox resumed in ${resumeTime}ms`);
+```
+
+## Notes
+
+- **State Continuity**: All sandbox state is preserved and restored exactly as it was when paused
+- **Process Restoration**: Running processes are resumed from their paused state
+- **Network Connections**: Some network connections may need to be re-established
+- **File System**: All files and directories remain exactly as they were
+- **Best Practice**: Always resume before attempting to generate new code on a paused sandbox
+- **Automatic Resume**: Consider implementing automatic resume logic in your application flow 

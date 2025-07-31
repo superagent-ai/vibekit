@@ -1,0 +1,171 @@
+---
+title: 'kill'
+description: 'Terminates the active sandbox.'
+---
+
+## Method signature
+
+```typescript
+async kill(): Promise<void>
+```
+
+## Parameters
+
+This method takes no parameters.
+
+## Return value
+
+| Type | Description |
+|------|-------------|
+| `Promise<void>` | The method completes successfully when the sandbox is terminated |
+
+## Behavior
+
+The `kill()` method performs the following actions:
+
+1. **Agent Type Validation**: Verifies that the current agent is of type "codex"
+2. **Initialization Check**: Ensures the CodexAgent instance is properly initialized
+3. **Sandbox Termination**: Calls the underlying `killSandbox()` method to terminate the active sandbox
+
+## Examples
+
+### Basic Usage
+
+```typescript
+const vibeKit = new VibeKit({
+  agent: {
+    type: "codex",
+    // ... other config
+  }
+});
+
+// Generate some code first to create a sandbox
+await vibeKit.generateCode("console.log('Hello World')", "code");
+
+// Kill the sandbox when done
+await vibeKit.kill();
+console.log("Sandbox terminated successfully");
+```
+
+### With Error Handling
+
+```typescript
+try {
+  await vibeKit.kill();
+  console.log("Sandbox terminated");
+} catch (error) {
+  if (error.message.includes("only supported for the Codex agent")) {
+    console.error("Kill operation requires Codex agent");
+  } else if (error.message.includes("not initialized")) {
+    console.error("CodexAgent not properly initialized");
+  } else {
+    console.error("Failed to kill sandbox:", error.message);
+  }
+}
+```
+
+### Cleanup Pattern
+
+```typescript
+class CodeGenerator {
+  private vibeKit: VibeKit;
+
+  constructor(config: VibeKitConfig) {
+    this.vibeKit = new VibeKit(config);
+  }
+
+  async generateAndCleanup(prompt: string) {
+    try {
+      // Generate code
+      const response = await this.vibeKit.generateCode(prompt, "code");
+      
+      // Process the response
+      console.log("Generated code:", response);
+      
+      return response;
+    } finally {
+      // Always cleanup the sandbox
+      await this.vibeKit.kill();
+    }
+  }
+}
+```
+
+## Error handling
+
+The method throws errors in the following cases:
+
+### Agent Type Error
+```typescript
+// When using non-Codex agent
+throw new Error("Sandbox management is only supported for the Codex agent");
+```
+
+### Initialization Error
+```typescript
+// When CodexAgent is not initialized
+throw new Error("CodexAgent not initialized");
+```
+
+### Example Error Handling
+```typescript
+try {
+  await vibeKit.kill();
+} catch (error) {
+  switch (true) {
+    case error.message.includes("only supported for the Codex agent"):
+      // Handle agent type mismatch
+      console.error("This operation requires a Codex agent");
+      break;
+    
+    case error.message.includes("not initialized"):
+      // Handle initialization error
+      console.error("Agent not properly initialized");
+      break;
+    
+    default:
+      // Handle other sandbox-related errors
+      console.error("Sandbox termination failed:", error.message);
+  }
+}
+```
+
+## Use cases
+
+### Resource Management
+Perfect for cleaning up sandbox resources when your application is done with code generation:
+
+```typescript
+// After batch processing
+const prompts = ["task1", "task2", "task3"];
+
+for (const prompt of prompts) {
+  await vibeKit.generateCode(prompt, "code");
+}
+
+// Cleanup when done
+await vibeKit.kill();
+```
+
+### Error Recovery
+Use in error handling to ensure sandbox cleanup:
+
+```typescript
+try {
+  await vibeKit.generateCode(complexPrompt, "code");
+} catch (generationError) {
+  console.error("Generation failed:", generationError);
+  
+  // Cleanup potentially corrupted sandbox
+  await vibeKit.kill();
+  
+  throw generationError;
+}
+```
+
+## Notes
+
+- **Resource Cleanup**: Always call `kill()` when you're done with sandbox operations to free up resources
+- **State Reset**: Killing a sandbox destroys all its state and files
+- **Irreversible**: Once killed, the sandbox cannot be resumed - you'll need to generate new code to create a fresh sandbox
+- **Best Practice**: Use in cleanup routines and error handlers to prevent resource leaks 

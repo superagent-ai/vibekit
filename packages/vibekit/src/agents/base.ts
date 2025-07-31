@@ -117,6 +117,12 @@ export interface StreamCallbacks {
   onError?: (error: string) => void;
 }
 
+export interface ExecuteCommandOptions {
+  timeoutMs?: number;
+  background?: boolean;
+  callbacks?: StreamCallbacks;
+}
+
 export interface AgentResponse {
   sandboxId: string;
   exitCode: number;
@@ -393,11 +399,7 @@ export abstract class BaseAgent {
 
   public async executeCommand(
     command: string,
-    options: {
-      timeoutMs?: number;
-      background?: boolean;
-      callbacks?: StreamCallbacks;
-    } = {}
+    options: ExecuteCommandOptions = {}
   ): Promise<AgentResponse> {
     const { timeoutMs = 3600000, background = false, callbacks } = options;
 
@@ -862,7 +864,7 @@ export abstract class BaseAgent {
   }
 
   protected abstract getApiKey(): string;
-  protected abstract getAgentType(): "codex" | "claude" | "opencode" | "gemini";
+  protected abstract getAgentType(): "codex" | "claude" | "opencode" | "gemini" | "grok";
   protected abstract getModelConfig(): ModelConfig;
 
   private async handlePRLabeling(

@@ -1,9 +1,10 @@
 {
   "name": "@vibe-kit/sdk",
-  "version": "0.0.48-rc.5",
+  "version": "0.0.55",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -19,8 +20,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup src/index.ts --watch",
-    "type-check": "tsc --noEmit",
-    "cli": "tsx src/cli/index.ts"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",

@@ -1,0 +1,102 @@
+---
+title: 'Northflank'
+description: 'Configure VibeKit with Northflank persistent sandboxes'
+---
+
+Northflank is a PaaS that allows you to run persistent sandboxes either on the Northflank infrastructure or your GCP/AWS. You can read more about it [here](https://northflank.com).
+
+## Installation
+
+First, install the Northflank provider package:
+
+```bash
+npm install @vibe-kit/northflank
+```
+
+## How to use
+
+To use Northflank with VibeKit, you need to configure Northflank when creating a new VibeKit instance. Note that you must create a new project and API key in the Northflank dashboard.
+
+### Using the provider directly
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createNorthflankProvider } from "@vibe-kit/northflank";
+
+const northflankProvider = createNorthflankProvider({
+  apiKey: process.env.NORTHFLANK_API_KEY!,
+  projectId: "your-project-id",
+  billingPlan: "nf-compute-200", // Optional: 2 vCPU & 4096GB RAM
+  persistentVolumeStorage: 10240, // Optional: 10GiB
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(northflankProvider);
+
+// Generate code
+const result = await vibeKit.generateCode({ 
+  prompt: "Create a React application", 
+  mode: "ask" 
+});
+
+// Get host URL (if applicable)
+const host = await vibeKit.getHost(3000);
+
+// Clean up
+await vibeKit.kill();
+```
+
+### Using configuration object
+
+```typescript
+import { VibeKit, VibeConfig } from "@vibe-kit/sdk";
+
+const config: VibeConfig = {
+  ...,
+  environment: {
+    northflank: {
+      // Required Northflank API key
+      apiKey: "nf_****",
+      // Optional custom image to override the inferred agent sandbox image
+      image: "your-custom-image",
+      // Optional project ID corresponding to the project you created
+      projectId: "your-project-id",
+      // Optional billing plan determining CPU & RAM (default: nf-compute-200 - 2 vCPU & 4096GB RAM)
+      billingPlan: "nf-compute-200",
+      // Optional persistent volume size in MB (default: 10240 - 10GiB)
+      persistentVolumeStorage: 10240
+    },
+  },
+};
+```
+
+## Configuration Options
+
+- **`apiKey`** (required): The API token you generated in the Northflank dashboard for authentication
+- **`image`** (optional): Override the inferred agent sandbox image with a custom image
+- **`projectId`** (optional): The project name you created in the Northflank dashboard
+- **`billingPlan`** (optional): Determines the CPU & RAM of the sandboxes (default: `nf-compute-200` which has 2 vCPU & 4096GB RAM)
+- **`persistentVolumeStorage`** (optional): The persistent volume size in MB (default: `10240` for 10GiB)
+
+## ENV variables and secrets
+
+You can use environment variables for your Northflank configuration:
+
+```bash
+NORTHFLANK_API_KEY=your_northflank_api_key_here
+```
+
+Then reference them in your code:
+
+```typescript
+const northflankProvider = createNorthflankProvider({
+  apiKey: process.env.NORTHFLANK_API_KEY!,
+  projectId: "your-project-id",
+});
+```

@@ -1,0 +1,88 @@
+---
+title: 'GitHub Integration'
+description: 'Create branches, open pull requests, and more.'
+---
+
+VibeKit integrates with GitHub to allow you to create branches, open pull requests, and more. This is particularly powerful for conversational UIs where users can iteratively request changes and see them reflected in real-time through GitHub.
+
+## Setup
+
+First, configure your VibeKit instance with GitHub credentials:
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+  templateId: "vibekit-claude",
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider)
+  .withGitHub({
+    token: process.env.GITHUB_TOKEN!, // GitHub Personal Access Token
+    repository: "your-org/your-repo", // Repository in format "owner/repo"
+  });
+```
+
+<Tip>
+Your GitHub token needs the following permissions:
+- `repo` (Full control of private repositories)
+- `workflow` (Update GitHub Action workflows)
+</Tip>
+
+## Creating a PR
+
+### The basic way
+
+The simplest way to create a pull request is to generate code and then create a PR:
+
+```typescript
+// Add event listeners
+vibeKit.on("update", (update) => {
+  console.log("Update:", update);
+});
+
+vibeKit.on("error", (error) => {
+  console.error("Error:", error);
+});
+
+// Generate initial code
+const response = await vibeKit.generateCode({
+  prompt: "Create a React component for user authentication with email and password fields",
+  mode: "code",
+});
+
+// Create pull request with the generated changes
+const pullRequest = await vibeKit.createPullRequest();
+
+console.log("Pull Request created!");
+console.log(`URL: ${pullRequest.html_url}`);
+console.log(`PR Number: ${pullRequest.number}`);
+console.log(`Branch: ${pullRequest.branchName}`);
+console.log(`Commit SHA: ${pullRequest.commitSha}`);
+```
+
+## Iterative changes with pushToBranch
+
+For conversational UIs, users often want to make multiple iterations on the same feature. Use `pushToBranch` to continuously update the same branch without creating multiple pull requests:
+
+```typescript
+const result = await vibeKit.generateCode({
+  prompt: "Add validation to the login form",
+  mode: "code",
+  branch: pullRequest.branchName, // or an existing branch
+});
+
+await vibeKit.pushToBranch();
+
+```
+
+This comprehensive GitHub integration allows you to build powerful conversational UIs where users can iteratively request code changes, see them applied in real-time, and create pull requests when they're satisfied with the results.

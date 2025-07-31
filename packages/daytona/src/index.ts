@@ -36,13 +36,13 @@ export interface SandboxInstance {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini",
+    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
 }
 
-export type AgentType = "codex" | "claude" | "opencode" | "gemini";
+export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
 
 export interface DaytonaConfig {
   apiKey: string;
@@ -60,6 +60,8 @@ const getDockerImageFromAgentType = (agentType?: AgentType) => {
     return "superagentai/vibekit-opencode:1.0";
   } else if (agentType === "gemini") {
     return "superagentai/vibekit-gemini:1.1";
+  } else if (agentType === "grok") {
+    return "superagentai/vibekit-grok-cli:1.0";
   }
   return "ubuntu:22.04";
 };

@@ -1,0 +1,121 @@
+---
+title: 'getHost'
+description: 'Get the host URL for a specific port in the sandbox environment.'
+---
+
+## Method signature
+
+```typescript
+public getHost(port: number): string
+```
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `port` | `number` | Yes | The port number to get the host URL for |
+
+## Return value
+
+| Type | Description |
+|------|-------------|
+| `string` | The host URL that can be used to access the specified port in the sandbox |
+
+## Examples
+
+### Get Host for Web Server
+
+```typescript
+import { VibeKit } from 'vibekit';
+
+const vibekit = new VibeKit(config);
+
+// Start a web server on port 3000
+await vibekit.executeCommand('npm run dev -- --port 3000', {
+  background: true
+});
+
+// Get the host URL for the web server
+const hostUrl = vibekit.getHost(3000);
+console.log('Web server accessible at:', hostUrl);
+// Output: https://3000-sandbox-id.e2b.dev
+```
+
+### Get Host for API Server
+
+```typescript
+// Start an API server
+await vibekit.executeCommand('python -m http.server 8080', {
+  background: true
+});
+
+// Get the host URL for the API
+const apiUrl = vibekit.getHost(8080);
+console.log('API server accessible at:', apiUrl);
+// Output: https://8080-sandbox-id.e2b.dev
+```
+
+### Get Host for Database Connection
+
+```typescript
+// Start a database server
+await vibekit.executeCommand('mongod --port 27017', {
+  background: true
+});
+
+// Get the host URL for database access
+const dbHost = vibekit.getHost(27017);
+console.log('Database accessible at:', dbHost);
+// Output: https://27017-sandbox-id.e2b.dev
+```
+
+## Error handling
+
+The method throws errors in the following cases:
+
+- **Sandbox not active:** When called without an active sandbox environment
+- **Unsupported sandbox:** When called with unsupported sandbox environments (FlyIO, Modal)
+- **Invalid port:** When the port number is invalid or out of range
+
+```typescript
+try {
+  const hostUrl = vibekit.getHost(3000);
+  console.log('Host URL:', hostUrl);
+} catch (error) {
+  if (error.message.includes('sandbox')) {
+    console.error('Active sandbox required for getHost functionality');
+  } else if (error.message.includes('port')) {
+    console.error('Invalid port number provided');
+  } else {
+    console.error('Failed to get host URL:', error.message);
+  }
+}
+```
+
+## Sandbox compatibility
+
+| Sandbox Type | Supported | Notes |
+|--------------|-----------|-------|
+| **E2B** | ✅ Yes | Full support with automatic URL generation |
+| **Daytona** | ✅ Yes | Full support with automatic URL generation |
+| **Cloudflare** | ✅ Yes | Full support with automatic URL generation |
+| **Northflank** | ✅ Yes | Full support with automatic URL generation |
+| **FlyIO** | ❌ No | Port forwarding not yet implemented |
+| **Modal** | ❌ No | Port forwarding not yet implemented |
+
+## Use cases
+
+- **Web Development:** Access development servers running in the sandbox
+- **API Testing:** Get URLs for API servers to test endpoints
+- **Database Access:** Connect to databases running in the sandbox
+- **Microservices:** Access multiple services running on different ports
+- **Live Previews:** Generate URLs for real-time preview of web applications
+
+## Notes
+
+- **Multi-Sandbox Support:** This method is available for E2B, Daytona, Cloudflare and Northflank sandbox environments
+- **Automatic URL Generation:** Supported sandboxes automatically generate secure HTTPS URLs for exposed ports
+- **Real-time Access:** URLs are immediately accessible once the service starts on the specified port
+- **Security:** All generated URLs use HTTPS and are scoped to the specific sandbox instance
+- **Port Range:** Standard port ranges (1-65535) are supported
+- **No Port Validation:** The method doesn't validate if a service is actually running on the specified port

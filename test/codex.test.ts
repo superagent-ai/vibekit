@@ -1,12 +1,17 @@
 import { describe, it, expect, vi } from "vitest";
 import { VibeKit } from "../packages/vibekit/src/index.js";
 import { createE2BProvider } from "../packages/e2b/dist/index.js";
+import { skipIfNoCodexKeys, skipTest } from "./helpers/test-utils.js";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 describe("Codex CLI", () => {
   it("should generate code with codex cli", async () => {
+    if (skipIfNoCodexKeys()) {
+      return skipTest();
+    }
+
     const prompt = "Hi there";
 
     const e2bProvider = createE2BProvider({

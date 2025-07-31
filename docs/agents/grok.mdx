@@ -1,0 +1,149 @@
+---
+title: 'Grok CLI'
+description: 'Run Grok CLI in a secure and private sandbox'
+---
+
+<img
+  src="/images/grok.png"
+  alt="Grok"
+/>
+
+## How it works
+
+VibeKit runs the Grok CLI in headless mode. This means that the agent will automatically create, edit and delete files if it's in `code` mode.
+
+The Grok CLI runs in the configured environment and has access to the network, which means it could be used to connect to the outside world. This is a powerful feature that can be used to build powerful applications and should be used with caution.
+
+[Read more about Grok CLI](https://github.com/superagent-ai/grok-cli)
+
+## Authentication
+
+Grok CLI requires an API key from xAI (X.AI). You can obtain one from the [xAI Console](https://console.x.ai/).
+
+### Environment Variable Authentication
+
+Set your xAI API key as an environment variable:
+
+```bash
+export GROK_API_KEY="your-xai-api-key-here"
+# or alternatively
+export XAI_API_KEY="your-xai-api-key-here"
+```
+
+### Using in Code
+
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "grok",
+    provider: "xai",
+    apiKey: process.env.GROK_API_KEY,
+    model: "grok-beta", // or "grok-2-latest", "grok-2-mini"
+  })
+  .withSandbox(sandboxProvider);
+```
+
+## Configuration Options
+
+### Available Models
+
+- `grok-beta` - Latest Grok model (default)
+- `grok-2-latest` - Grok-2 latest version
+- `grok-2-mini` - Grok-2 mini version for faster responses
+
+### Custom Base URL
+
+If you're using a custom xAI API endpoint:
+
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "grok",
+    provider: "xai",
+    apiKey: process.env.GROK_API_KEY,
+    model: "grok-beta",
+    baseUrl: "https://your-custom-api-url.com", // optional
+  })
+  .withSandbox(sandboxProvider);
+```
+
+## Example Usage
+
+### Basic Code Generation
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+  templateId: "vibekit-grok",
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "grok",
+    provider: "xai",
+    apiKey: process.env.GROK_API_KEY!,
+    model: "grok-beta",
+  })
+  .withSandbox(e2bProvider);
+
+// Generate code
+const result = await vibeKit.generateCode({
+  prompt: "Create a simple React component that displays a hello world message",
+  mode: "code"
+});
+
+console.log(result.stdout);
+```
+
+### Ask Mode (Research Only)
+
+```typescript
+// Ask questions without modifying files
+const result = await vibeKit.generateCode({
+  prompt: "What is the current project structure?",
+  mode: "ask"
+});
+
+console.log(result.stdout);
+```
+
+## Environment Variables
+
+The Grok agent supports the following environment variables:
+
+- `GROK_API_KEY` - Your xAI API key (required)
+- `XAI_API_KEY` - Alternative name for your xAI API key
+- `GROK_BASE_URL` - Custom API base URL (optional)
+
+## Security Considerations
+
+- API keys are passed to the sandbox environment and should be treated as sensitive information
+- The Grok CLI has network access and can make external API calls
+- Always use proper secrets management in production environments
+- Consider using environment-specific API keys with appropriate rate limits
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"grok command not found"**: Ensure the Grok CLI is installed in your sandbox template
+2. **Authentication errors**: Verify your API key is correct and has sufficient credits
+3. **Rate limiting**: xAI has rate limits; consider implementing retry logic for production use
+4. **Model not available**: Check that the specified model is available in your xAI account
+
+### Debug Mode
+
+To see detailed output from the Grok CLI, you can enable streaming callbacks:
+
+```typescript
+vibeKit.on("update", (message) => {
+  console.log("Grok output:", message);
+});
+
+vibeKit.on("error", (error) => {
+  console.error("Grok error:", error);
+});
+```

@@ -1,0 +1,87 @@
+---
+title: 'E2B'
+description: 'Configure VibeKit with an E2B sandbox'
+---
+
+E2B is an open-source runtime for executing AI-generated code in secure cloud sandboxes. Made for agentic & AI use cases. You can read more about it [here](https://e2b.dev).
+
+## Installation
+
+First, install the E2B provider package:
+
+```bash
+npm install @vibe-kit/e2b
+```
+
+## How to use
+
+To use E2B with VibeKit, you need to configure E2B when creating a new VibeKit instance. You can get your API key from the E2B dashboard.
+
+### Using the provider directly
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+  templateId: "vibekit-claude", // Optional custom template
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider);
+
+// Generate code
+const result = await vibeKit.generateCode({ 
+  prompt: "Create a simple web server", 
+  mode: "ask" 
+});
+
+// Get host URL (if applicable)
+const host = await vibeKit.getHost(3000);
+
+// Clean up
+await vibeKit.kill();
+```
+
+### Using configuration object
+
+```typescript
+import { VibeKit, VibeConfig } from "@vibe-kit/sdk";
+
+const config: VibeConfig = {
+  ...,
+  environment: {
+    e2b: {
+      // Required E2B API key
+      apiKey: "e2b_****",
+      // Optional custom E2B template you want to use 
+      // that has the codex CLI and Git installed.
+      templateId: "super-codex" 
+    },
+  },
+};
+```
+
+## ENV variables and secrets
+
+You can use environment variables for your E2B configuration:
+
+```bash
+E2B_API_KEY=your_e2b_api_key_here
+```
+
+Then reference them in your code:
+
+```typescript
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+  templateId: "vibekit-claude",
+});
+```

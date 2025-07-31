@@ -1,0 +1,172 @@
+---
+title: 'generateCode'
+description: 'Generates code using the configured AI agent (Codex or Claude) with optional streaming callbacks and conversation history.'
+---
+
+## Method signature
+
+```typescript
+async generateCode({
+  prompt,
+  mode,
+  branch,
+  history,
+  callbacks,
+}: {
+  prompt: string;
+  mode: "ask" | "code";
+  branch?: string;
+  history?: Conversation[];
+  callbacks?: VibeKitStreamCallbacks;
+}): Promise<AgentResponse>
+```
+
+## Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `prompt` | `string` | Yes | - | The text prompt describing what code to generate or question to ask |
+| `mode` | `"ask" \| "code"` | Yes | - | Interactive Q&A mode (`"ask"`) or code generation mode (`"code"`) |
+| `branch` | `string` | No | - | Branch identifier for version control or environment context |
+| `history` | `Conversation[]` | No | - | Previous conversation history to provide context for the generation |
+| `callbacks` | `VibeKitStreamCallbacks` | No | - | Streaming callbacks for real-time updates |
+
+### VibeKitStreamCallbacks Interface
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `onUpdate` | `(message: string) => void` | No | Called with streaming updates |
+| `onError` | `(error: string) => void` | No | Called when errors occur |
+
+## Return value
+
+| Type | Description |
+|------|-------------|
+| `Promise<AgentResponse>` | Promise that resolves to either a CodexResponse or ClaudeResponse depending on the configured agent |
+
+### CodexResponse (for Codex Agent)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `sandboxId` | `string` | Unique identifier for the sandbox environment |
+| `stdout` | `string` | Standard output from code execution |
+| `stderr` | `string` | Standard error from code execution |
+| `exitCode` | `number` | Exit code from code execution |
+
+### ClaudeResponse (for Claude Agent)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `code` | `string` | Generated code response |
+
+## Agent-specific behavior
+
+### Codex Agent
+- **Streaming Support:** Full streaming support with real-time updates
+- **Sandbox Environment:** Executes code in isolated E2B sandbox
+- **Telemetry:** Comprehensive tracking of generation, streaming, and errors
+- **Mode Support:** Both "ask" and "code" modes fully supported
+
+### Claude Agent
+- **Streaming Support:** Limited - provides start/end notifications only
+- **Execution:** Direct API calls without sandbox environment
+- **Telemetry:** Basic tracking of generation start/end and errors
+- **Mode Support:** Both modes supported with fallback behavior
+
+## Examples
+
+### Basic Code Generation
+
+```typescript
+const vibeKit = new VibeKit(config);
+
+const response = await vibeKit.generateCode({
+  prompt: "Create a React component for a todo list",
+  mode: "code"
+});
+
+console.log(response);
+```
+
+### With Streaming Callbacks
+
+```typescript
+const response = await vibeKit.generateCode({
+  prompt: "Explain how React hooks work",
+  mode: "ask",
+  callbacks: {
+    onUpdate: (message) => {
+      console.log("Update:", message);
+    },
+    onError: (error) => {
+      console.error("Error:", error);
+    }
+  }
+});
+```
+
+### With Conversation History and Branch
+
+```typescript
+const history = [
+  {
+    role: "user",
+    content: "What is React?"
+  },
+  {
+    role: "assistant", 
+    content: "React is a JavaScript library..."
+  }
+];
+
+const response = await vibeKit.generateCode({
+  prompt: "Now show me a React component example",
+  mode: "code",
+  branch: "feature-react-components",
+  history
+});
+```
+
+## Error handling
+
+The method throws errors in the following cases:
+
+- **Agent not initialized:** When the configured agent type doesn't match the initialized agent
+- **Agent-specific errors:** 
+  - Codex: Sandbox creation/execution failures, API errors
+  - Claude: API authentication issues, rate limits
+- **Configuration errors:** Missing required API keys or invalid setup
+
+```typescript
+try {
+  const response = await vibeKit.generateCode({
+    prompt,
+    mode: "code"
+  });
+} catch (error) {
+  if (error.message.includes('not initialized')) {
+    // Handle initialization error
+  } else {
+    // Handle generation error
+  }
+}
+```
+
+## Telemetry
+
+When telemetry is enabled, the method automatically tracks:
+
+- **Generation start/end events**
+- **Streaming data** (for supported agents)
+- **Error events** with context
+- **Performance metrics** like response times and data sizes
+
+## Notes
+
+- **Required Mode:** The `mode` parameter is now required and must be specified
+- **Object Parameters:** All parameters are now passed as a destructured object for better API consistency
+- **Branch Support:** The optional `branch` parameter allows for version control or environment context
+- **Streaming Differences:** Codex provides real-time streaming, while Claude only provides start/end notifications
+- **Environment Support:** Daytona environment is not yet supported and will throw an error
+- **Conversation Context:** History is preserved across calls to maintain conversation context
+

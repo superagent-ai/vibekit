@@ -8,7 +8,7 @@ import type {
   LabelOptions,
   TelemetryConfig,
 } from "../types";
-import { AgentResponse } from "../agents/base";
+import { AgentResponse, ExecuteCommandOptions } from "../agents/base";
 import { TelemetryService } from "../services/telemetry";
 
 export interface VibeKitEvents {
@@ -22,7 +22,8 @@ export interface VibeKitOptions {
   agent: {
     type: AgentType;
     provider?: ModelProvider;
-    apiKey: string;
+    apiKey?: string; // Optional - can use OAuth token instead
+    oauthToken?: string; // OAuth token for Claude
     model?: string;
   };
   sandbox?: SandboxProvider;
@@ -59,7 +60,8 @@ export class VibeKit extends EventEmitter {
   withAgent(config: {
     type: AgentType;
     provider: ModelProvider;
-    apiKey: string;
+    apiKey?: string; // Optional - can use OAuth token instead
+    oauthToken?: string; // OAuth token for Claude
     model: string;
   }): this {
     this.options.agent = config;
@@ -112,7 +114,7 @@ export class VibeKit extends EventEmitter {
       throw new Error("Agent configuration is required");
     }
 
-    const { type, provider, apiKey, model } = this.options.agent;
+    const { type, provider, apiKey, oauthToken, model } = this.options.agent;
 
     // Dynamic imports for different agents
     let AgentClass;
@@ -132,6 +134,10 @@ export class VibeKit extends EventEmitter {
       case "gemini":
         const { GeminiAgent } = await import("../agents/gemini");
         AgentClass = GeminiAgent;
+        break;
+      case "grok":
+        const { GrokAgent } = await import("../agents/grok");
+        AgentClass = GrokAgent;
         break;
       default:
         throw new Error(`Unsupported agent type: ${type}`);
@@ -170,6 +176,7 @@ export class VibeKit extends EventEmitter {
     // Initialize agent with configuration
     const agentConfig = {
       providerApiKey: apiKey,
+      oauthToken: oauthToken,
       provider,
       model,
       githubToken: this.options.github?.token,
@@ -438,7 +445,10 @@ export class VibeKit extends EventEmitter {
     }
   }
 
-  async executeCommand(command: string): Promise<any> {
+  async executeCommand(
+    command: string,
+    options: Omit<ExecuteCommandOptions, "callbacks"> = {},
+  ): Promise<any> {
     if (!this.agent) {
       await this.initializeAgent();
     }
@@ -497,7 +507,7 @@ export class VibeKit extends EventEmitter {
     };
 
     try {
-      const result = await this.agent.executeCommand(command, { callbacks });
+      const result = await this.agent.executeCommand(command, { ...options, callbacks });
 
       // Track telemetry end event
       if (this.telemetryService) {

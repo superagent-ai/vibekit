@@ -15,7 +15,7 @@ const createDaggerMock = () => {
     withExec: vi.fn().mockImplementation(function(this: any, command: string[]) {
       // Check if this is a command that should fail for error testing
       const fullCommand = Array.isArray(command) ? command.join(' ') : String(command);
-      
+
       if (fullCommand.includes('nonexistent-command-xyz')) {
         // Mock container that will throw on stdout/stderr
         return {
@@ -31,7 +31,7 @@ const createDaggerMock = () => {
           stderr: vi.fn().mockResolvedValue(''),
         };
       }
-      
+
       return this;
     }),
     withNewFile: vi.fn().mockReturnThis(),
@@ -85,10 +85,10 @@ vi.mock("child_process", async () => {
         callback = options;
         options = {};
       }
-      
+
       let stdout = "";
       let stderr = "";
-      
+
       if (command.includes("docker images")) {
         // Mock existing images to simulate cached state
         stdout = "abc123def456"; // Mock image ID
@@ -98,7 +98,7 @@ vi.mock("child_process", async () => {
       } else if (command.includes("docker info")) {
         stdout = "Docker info output";
       }
-      
+
       // Simulate async execution
       setTimeout(() => {
         if (callback) {
@@ -132,3 +132,102 @@ vi.mock("util", async () => {
     }),
   };
 });
+
+// Create mock factory functions for Cloudflare Sandbox
+const createCloudflareSandboxMock = () => {
+  // Mock SSE log events for background processes
+  const mockLogEvents = [
+    { type: 'stdout', data: 'Command output line 1' },
+    { type: 'stdout', data: 'Command output line 2' },
+    { type: 'exit', code: 0 }
+  ];
+
+  // Mock SSE stream parser
+  const mockParseSSEStream = vi.fn().mockImplementation(async function* (stream: any) {
+    // Simulate streaming log events
+    for (const event of mockLogEvents) {
+      yield event;
+    }
+  });
+
+  // Mock sandbox instance with realistic behavior
+  const mockSandbox = {
+    // Foreground command execution
+    exec: vi.fn().mockImplementation(async (command: string, options?: any) => {
+      // Check for error-inducing commands
+      if (command.includes('nonexistent-command-xyz')) {
+        throw new Error('Command not found: nonexistent-command-xyz');
+      } else if (command.includes('exit 42')) {
+        return {
+          exitCode: 42,
+          stdout: '',
+          stderr: 'Process exited with code 42'
+        };
+      }
+
+      // Handle streaming output
+      if (options?.stream && options.onOutput) {
+        // Simulate streaming output
+        setTimeout(() => {
+          options.onOutput('stdout', 'Mock command output line 1\n');
+          options.onOutput('stdout', 'Mock command output line 2\n');
+        }, 0);
+      }
+
+      return {
+        exitCode: 0,
+        stdout: 'Mock command output',
+        stderr: ''
+      };
+    }),
+
+    // Background process management
+    startProcess: vi.fn().mockResolvedValue({
+      id: 'mock-process-id-123'
+    }),
+
+    streamProcessLogs: vi.fn().mockImplementation(async (processId: string) => {
+      // Return a mock stream that parseSSEStream can consume
+      return {
+        [Symbol.asyncIterator]: async function* () {
+          for (const event of mockLogEvents) {
+            yield JSON.stringify(event);
+          }
+        }
+      };
+    }),
+
+    killProcess: vi.fn().mockResolvedValue(undefined),
+
+    // Port exposure for preview URLs
+    exposePort: vi.fn().mockImplementation(async (port: number, options?: any) => {
+      const hostname = options?.hostname || 'localhost';
+      return {
+        url: `https://${port}-sandbox-mock.${hostname}`
+      };
+    }),
+
+    // Environment and configuration
+    setEnvVars: vi.fn().mockResolvedValue(undefined),
+
+    // Lifecycle management
+    destroy: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined)
+  };
+
+  // Mock getSandbox function
+  const mockGetSandbox = vi.fn().mockImplementation((namespace: any, sandboxId: string) => {
+    return mockSandbox;
+  });
+
+  return {
+    getSandbox: mockGetSandbox,
+    parseSSEStream: mockParseSSEStream,
+    // Export mock types for TypeScript compatibility
+    Sandbox: vi.fn(),
+    LogEvent: vi.fn(),
+  };
+};
+
+// Mock the @cloudflare/sandbox module entirely
+vi.mock("@cloudflare/sandbox", () => createCloudflareSandboxMock());

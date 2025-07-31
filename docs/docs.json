@@ -1,0 +1,134 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "VibeKit",
+  "colors": {
+    "primary": "#000000",
+    "light": "#FFFFFF",
+    "dark": "#000000"
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs",
+    "codeblocks": "dark"
+  },
+  "background": {
+    "color": {
+      "light": "#FFFFFF",
+      "dark": "#000000"
+    }
+  },
+  "appearance": {
+    "default": "light",
+    "strict": false
+  },
+  "favicon": "/favicon.png",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "index",
+              "quickstart",
+              "ask-mode",
+              "github-integration",
+              "streaming",
+              "session-management",
+              "secrets",
+              "open-telemetry"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "agents/codex",
+              "agents/claude-code",
+              "agents/gemini",
+              "agents/grok",
+              "agents/opencode"
+            ]
+          },
+          {
+            "group": "Supported Sandboxes",
+            "pages": [
+              "supported-sandboxes/dagger",
+              "supported-sandboxes/cloudflare",
+              "supported-sandboxes/daytona",
+              "supported-sandboxes/e2b",
+              "supported-sandboxes/flyio",
+              "supported-sandboxes/modal",
+              "supported-sandboxes/northflank"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "VibeKit",
+            "pages": [
+              "api-reference/configuration",
+              "api-reference/generate-code",
+              "api-reference/execute-command",
+              "api-reference/create-pull-request",
+              "api-reference/push-to-branch",
+              "api-reference/run-tests",
+              "api-reference/kill-sandbox",
+              "api-reference/get-host",
+              "api-reference/pause-sandbox",
+              "api-reference/resume-sandbox",
+              "api-reference/get-session",
+              "api-reference/set-session"
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "href": "https://github.com/superagent-ai/vibekit",
+          "icon": "github"
+        },
+        {
+          "anchor": "Community",
+          "href": "https://discord.gg/spZ7MnqFT4",
+          "icon": "discord"
+        },
+        {
+          "anchor": "Blog",
+          "href": "https://www.superagent.sh/blog",
+          "icon": "newspaper"
+        }
+      ]
+    }
+  },
+  "logo": {
+    "light": "/logo/logo.png",
+    "dark": "/logo/logo.png"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Support",
+        "href": "mailto:ismail@superagent.sh"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "GitHub",
+      "href": "https://github.com/superagent-ai/vibekit"
+    }
+  },
+  "footer": {
+    "socials": {
+      "x": "https://x.com/superagent_ai",
+      "github": "https://github.com/superagent-ai/vibekit",
+      "linkedin": "https://www.linkedin.com/company/superagent-sh"
+    }
+  }
+}

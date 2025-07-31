@@ -166,6 +166,12 @@ export const AgentProviderConfigs = {
     mcpServerType: "stdio" as const,
     workingDirectory: "/workspace",
   },
+
+  grok: {
+    enableMCP: true,
+    mcpServerType: "stdio" as const,
+    workingDirectory: "/workspace",
+  },
 };
 
 /**
