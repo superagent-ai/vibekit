@@ -2,6 +2,7 @@
   "name": "@vibe-kit/auth",
   "version": "0.0.3",
   "type": "module",
+  "description": "Authentication package for VibeKit",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -26,12 +27,22 @@
     "dev": "tsup src/index.ts --watch",
     "type-check": "tsc --noEmit"
   },
+  "author": "Superagent-AI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/superagent-ai/vibekit.git",
+    "directory": "packages/auth"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "oauth4webapi": "^3.6.0"
+  },
   "devDependencies": {
     "@types/node": "^22.15.18",
     "tsup": "^8.4.0",
     "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "oauth4webapi": "^3.6.0"
   }
 }

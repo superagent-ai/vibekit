@@ -2,9 +2,9 @@
   "name": "@vibe-kit/sdk",
   "version": "0.0.55",
   "type": "module",
+  "description": "Core SDK for VibeKit - AI-powered code generation platform",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -21,6 +21,16 @@
     "build": "tsup",
     "dev": "tsup src/index.ts --watch",
     "type-check": "tsc --noEmit"
+  },
+  "author": "Superagent-AI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/superagent-ai/vibekit.git",
+    "directory": "packages/vibekit"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",
@@ -52,13 +62,13 @@
     "uuid": "^11.1.0",
     "zod": "^3.25.76"
   },
-  "peerDependencies": {
-    "@vibe-kit/db": "*"
-  },
   "devDependencies": {
     "@types/node": "^22.15.18",
     "@types/sqlite3": "^3.1.11",
     "tsup": "^8.4.0",
     "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "@vibe-kit/db": "*"
   }
 }

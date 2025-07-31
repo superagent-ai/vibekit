@@ -1,6 +1,7 @@
 {
   "name": "@vibe-kit/db",
   "version": "0.0.1",
+  "type": "module",
   "description": "VibeKit database layer with Drizzle ORM and telemetry operations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,40 +10,6 @@
     "src/**/*",
     "migrations/**/*"
   ],
-  "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio",
-    "migrate": "tsx scripts/migrate.ts",
-    "migrate:generate": "tsx scripts/generate-migration.ts",
-    "migrate:push": "drizzle-kit push",
-    "migrate:drop": "drizzle-kit drop"
-  },
-  "keywords": [
-    "vibekit",
-    "database",
-    "drizzle",
-    "sqlite",
-    "telemetry",
-    "orm"
-  ],
-  "author": "VibeKit Team",
-  "license": "MIT",
-  "dependencies": {
-    "better-sqlite3": "^9.2.2",
-    "drizzle-orm": "^0.44.4"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.8",
-    "drizzle-kit": "^0.31.4",
-    "tsup": "^8.0.1",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -69,5 +36,48 @@
       "import": "./dist/types.js",
       "require": "./dist/types.cjs"
     }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup src/index.ts --watch",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "migrate": "tsx scripts/migrate.ts",
+    "migrate:generate": "tsx scripts/generate-migration.ts",
+    "migrate:push": "drizzle-kit push",
+    "migrate:drop": "drizzle-kit drop"
+  },
+  "keywords": [
+    "vibekit",
+    "database",
+    "drizzle",
+    "sqlite",
+    "telemetry",
+    "orm"
+  ],
+  "author": "Superagent-AI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/superagent-ai/vibekit.git",
+    "directory": "packages/db"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.2.2",
+    "drizzle-orm": "^0.44.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "drizzle-kit": "^0.31.4",
+    "tsup": "^8.4.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.8.3",
+    "@types/node": "^22.15.18"
   }
-} 
+}
