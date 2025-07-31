@@ -9,7 +9,7 @@ import type {
   TelemetryConfig,
 } from "../types";
 import { AgentResponse, ExecuteCommandOptions } from "../agents/base";
-import { TelemetryService } from "../services/telemetry";
+import { VibeKitTelemetryAdapter } from "../adapters/TelemetryAdapter.js";
 
 export interface VibeKitEvents {
   stdout: (chunk: string) => void;
@@ -51,7 +51,7 @@ export interface VibeKitOptions {
 export class VibeKit extends EventEmitter {
   private options: Partial<VibeKitOptions> = {};
   private agent?: any;
-  private telemetryService?: TelemetryService;
+  private telemetryService?: VibeKitTelemetryAdapter;
 
   constructor() {
     super();
@@ -166,10 +166,10 @@ export class VibeKit extends EventEmitter {
         serviceVersion: '1.0.0',
       };
 
-      this.telemetryService = new TelemetryService(
-        telemetryConfig, 
-        this.options.telemetry.sessionId
-      );
+      this.telemetryService = new VibeKitTelemetryAdapter({
+        ...telemetryConfig,
+        serviceVersion: '1.0.0', // TODO: Get from package.json
+      });
       await this.telemetryService.initialize();
     }
 
