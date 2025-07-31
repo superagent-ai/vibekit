@@ -10,6 +10,8 @@ import type {
 } from "../types";
 import { AgentResponse, ExecuteCommandOptions } from "../agents/base";
 import { VibeKitTelemetryAdapter } from "../adapters/TelemetryAdapter.js";
+import { VibeKitError, AgentError, ValidationError } from "../errors/VibeKitError.js";
+import { ErrorHandler } from "../errors/ErrorHandler.js";
 
 export interface VibeKitEvents {
   stdout: (chunk: string) => void;
@@ -52,9 +54,19 @@ export class VibeKit extends EventEmitter {
   private options: Partial<VibeKitOptions> = {};
   private agent?: any;
   private telemetryService?: VibeKitTelemetryAdapter;
+  private errorHandler: ErrorHandler;
 
   constructor() {
     super();
+    
+    // Initialize error handler
+    this.errorHandler = new ErrorHandler({
+      onError: (error) => this.emit('error', error),
+      onCriticalError: (error) => {
+        console.error('Critical error in VibeKit:', error.toJSON());
+        this.emit('critical-error', error);
+      }
+    });
   }
 
   withAgent(config: {
@@ -111,7 +123,7 @@ export class VibeKit extends EventEmitter {
 
   private async initializeAgent(): Promise<void> {
     if (!this.options.agent) {
-      throw new Error("Agent configuration is required");
+      throw new ValidationError("Agent configuration is required", "agent");
     }
 
     const { type, provider, apiKey, oauthToken, model } = this.options.agent;
@@ -140,13 +152,14 @@ export class VibeKit extends EventEmitter {
         AgentClass = GrokAgent;
         break;
       default:
-        throw new Error(`Unsupported agent type: ${type}`);
+        throw new AgentError(`Unsupported agent type: ${type}`, type);
     }
 
     // Check if sandbox provider is configured
     if (!this.options.sandbox) {
-      throw new Error(
-        "Sandbox provider is required. Use withSandbox() to configure a provider."
+      throw new ValidationError(
+        "Sandbox provider is required. Use withSandbox() to configure a provider.",
+        "sandbox"
       );
     }
 
@@ -222,7 +235,13 @@ export class VibeKit extends EventEmitter {
           model: this.options.agent!.model,
         });
       } catch (error) {
-        console.warn('Failed to track telemetry start:', error);
+        // Handle telemetry errors gracefully - don't let them break the main flow
+        const telemetryError = this.errorHandler.handle(error as Error, {
+          category: 'telemetry',
+          severity: 'low',
+          retryable: false
+        });
+        console.warn('Failed to track telemetry start:', telemetryError.message);
       }
     }
 
@@ -238,11 +257,21 @@ export class VibeKit extends EventEmitter {
                 branch,
                 timestamp: Date.now(),
               }).catch(error => {
-                console.warn('Failed to track telemetry stream:', error);
+                const telemetryError = this.errorHandler.handle(error as Error, {
+                  category: 'telemetry',
+                  severity: 'low',
+                  retryable: false
+                });
+                console.warn('Failed to track telemetry stream:', telemetryError.message);
               });
             }
           } catch (error) {
-            console.warn('Failed to track telemetry stream:', error);
+            const telemetryError = this.errorHandler.handle(error as Error, {
+              category: 'telemetry',
+              severity: 'low',
+              retryable: false
+            });
+            console.warn('Failed to track telemetry stream:', telemetryError.message);
           }
         }
       },
@@ -261,7 +290,12 @@ export class VibeKit extends EventEmitter {
                 repoUrl: this.options.github?.repository,
                 timestamp: Date.now(),
               }).catch(err => {
-                console.warn('Failed to track telemetry error:', err);
+                const telemetryError = this.errorHandler.handle(err as Error, {
+                  category: 'telemetry',
+                  severity: 'low',
+                  retryable: false
+                });
+                console.warn('Failed to track telemetry error:', telemetryError.message);
               });
             }
           } catch (err) {

@@ -299,7 +299,10 @@ function Dashboard() {
                       let parsedMetadata: any = {}
                       try {
                         parsedMetadata = JSON.parse(session.metadata || '{}')
-                      } catch (e) {}
+                      } catch (e) {
+                        console.error('Failed to parse session metadata:', e)
+                        parsedMetadata = {}
+                      }
 
                       return (
                         <div

@@ -32,6 +32,14 @@ import {
   SessionStatus,
   DrizzleTelemetryConfig,
 } from './types';
+import { withDatabaseErrorHandling, ValidationError } from './errors';
+import { 
+  validateNewEvent, 
+  validateNewSession, 
+  validateQueryFilter, 
+  validatePagination,
+  validateSessionQueryFilter 
+} from './validation';
 
 export class DrizzleTelemetryOperations {
   private dbManager: DrizzleTelemetryDB;
@@ -77,42 +85,50 @@ export class DrizzleTelemetryOperations {
    * Create or update a telemetry session
    */
   async upsertSession(session: NewTelemetrySession): Promise<TelemetrySession> {
-    const db = await this.getDB();
-
-    return await this.dbManager.executeWithMetrics(
-      'UPSERT_SESSION',
+    // Validate input
+    validateNewSession(session);
+    
+    return await withDatabaseErrorHandling(
       async () => {
-        // Check if session exists
-        const existing = await db
-          .select()
-          .from(telemetrySessions)
-          .where(eq(telemetrySessions.id, session.id))
-          .limit(1);
+        const db = await this.getDB();
 
-        if (existing.length > 0) {
-          // Update existing session
-          const [updated] = await db
-            .update(telemetrySessions)
-            .set({
-              ...session,
-              updatedAt: Date.now(),
-            })
-            .where(eq(telemetrySessions.id, session.id))
-            .returning();
-          return updated;
-        } else {
-          // Create new session
-          const [created] = await db
-            .insert(telemetrySessions)
-            .values({
-              ...session,
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            })
-            .returning();
-          return created;
-        }
-      }
+        return await this.dbManager.executeWithMetrics(
+          'UPSERT_SESSION',
+          async () => {
+            // Check if session exists
+            const existing = await db
+              .select()
+              .from(telemetrySessions)
+              .where(eq(telemetrySessions.id, session.id))
+              .limit(1);
+
+            if (existing.length > 0) {
+              // Update existing session
+              const [updated] = await db
+                .update(telemetrySessions)
+                .set({
+                  ...session,
+                  updatedAt: Date.now(),
+                })
+                .where(eq(telemetrySessions.id, session.id))
+                .returning();
+              return updated;
+            } else {
+              // Create new session
+              const [created] = await db
+                .insert(telemetrySessions)
+                .values({
+                  ...session,
+                  createdAt: Date.now(),
+                  updatedAt: Date.now(),
+                })
+                .returning();
+              return created;
+            }
+          }
+        );
+      },
+      'upsertSession'
     );
   }
 
@@ -156,12 +172,17 @@ export class DrizzleTelemetryOperations {
    * Query sessions with filters
    */
   async querySessions(filter: SessionQueryFilter = {}): Promise<TelemetrySession[]> {
-    const db = await this.getDB();
-
-    return await this.dbManager.executeWithMetrics(
-      'QUERY_SESSIONS',
+    // Validate filter
+    validateSessionQueryFilter(filter);
+    
+    return await withDatabaseErrorHandling(
       async () => {
-        let query = db.select().from(telemetrySessions);
+        const db = await this.getDB();
+
+        return await this.dbManager.executeWithMetrics(
+          'QUERY_SESSIONS',
+          async () => {
+            let query = db.select().from(telemetrySessions);
 
         // Build WHERE conditions
         const conditions = [];
@@ -247,8 +268,11 @@ export class DrizzleTelemetryOperations {
           }
         }
 
-        return await query.execute();
-      }
+            return await query.execute();
+          }
+        );
+      },
+      'querySessions'
     );
   }
 
@@ -256,16 +280,25 @@ export class DrizzleTelemetryOperations {
    * Update session record with new data
    */
   async updateSession(sessionId: string, updates: Partial<NewTelemetrySession>): Promise<void> {
-    const db = await this.getDB();
+    if (!sessionId || sessionId.trim().length === 0) {
+      throw new ValidationError('Session ID is required', 'sessionId', sessionId);
+    }
     
-    await this.dbManager.executeWithMetrics(
-      'UPDATE_SESSION',
+    return await withDatabaseErrorHandling(
       async () => {
-        await db
-          .update(telemetrySessions)
-          .set(updates)
-          .where(eq(telemetrySessions.id, sessionId));
-      }
+        const db = await this.getDB();
+        
+        await this.dbManager.executeWithMetrics(
+          'UPDATE_SESSION',
+          async () => {
+            await db
+              .update(telemetrySessions)
+              .set(updates)
+              .where(eq(telemetrySessions.id, sessionId));
+          }
+        );
+      },
+      'updateSession'
     );
   }
 
@@ -385,24 +418,32 @@ export class DrizzleTelemetryOperations {
    * Insert a single telemetry event
    */
   async insertEvent(event: NewTelemetryEvent): Promise<TelemetryEvent> {
-    const db = await this.getDB();
-
-    return await this.dbManager.executeWithMetrics(
-      'INSERT_EVENT',
+    // Validate input
+    validateNewEvent(event);
+    
+    return await withDatabaseErrorHandling(
       async () => {
-        const [inserted] = await db
-          .insert(telemetryEvents)
-          .values({
-            ...event,
-            createdAt: Date.now(),
-          })
-          .returning();
+        const db = await this.getDB();
 
-        // Update session statistics after inserting the event
-        await this.updateSessionStats(event.sessionId);
+        return await this.dbManager.executeWithMetrics(
+          'INSERT_EVENT',
+          async () => {
+            const [inserted] = await db
+              .insert(telemetryEvents)
+              .values({
+                ...event,
+                createdAt: Date.now(),
+              })
+              .returning();
 
-        return inserted;
-      }
+            // Update session statistics after inserting the event
+            await this.updateSessionStats(event.sessionId);
+
+            return inserted;
+          }
+        );
+      },
+      'insertEvent'
     );
   }
 
@@ -420,38 +461,46 @@ export class DrizzleTelemetryOperations {
       };
     }
 
-    const db = await this.getDB();
-    const startTime = Date.now();
+    // Validate all events
+    events.forEach(event => validateNewEvent(event));
 
-    return await this.dbManager.executeWithMetrics(
-      'INSERT_EVENT_BATCH',
+    return await withDatabaseErrorHandling(
       async () => {
-        const result = db.transaction((tx) => {
-          // Insert all events
-          const eventsWithTimestamp = events.map(event => ({
-            ...event,
-            createdAt: Date.now(),
-          }));
+        const db = await this.getDB();
+        const startTime = Date.now();
 
-          tx.insert(telemetryEvents).values(eventsWithTimestamp).run();
+        return await this.dbManager.executeWithMetrics(
+          'INSERT_EVENT_BATCH',
+          async () => {
+            const result = db.transaction((tx) => {
+              // Insert all events
+              const eventsWithTimestamp = events.map(event => ({
+                ...event,
+                createdAt: Date.now(),
+              }));
 
-          // Update session statistics for affected sessions
-          const sessionIds = [...new Set(events.map(e => e.sessionId))];
-          for (const sessionId of sessionIds) {
-            this.updateSessionStatsInTransactionSync(tx, sessionId);
+              tx.insert(telemetryEvents).values(eventsWithTimestamp).run();
+
+              // Update session statistics for affected sessions
+              const sessionIds = [...new Set(events.map(e => e.sessionId))];
+              for (const sessionId of sessionIds) {
+                this.updateSessionStatsInTransactionSync(tx, sessionId);
+              }
+
+              return {
+                eventsInserted: events.length,
+                sessionsUpserted: sessionIds.length,
+                buffersProcessed: 0,
+                errorsLogged: 0,
+                processingTime: Date.now() - startTime,
+              };
+            })();
+
+            return result;
           }
-
-          return {
-            eventsInserted: events.length,
-            sessionsUpserted: sessionIds.length,
-            buffersProcessed: 0,
-            errorsLogged: 0,
-            processingTime: Date.now() - startTime,
-          };
-        })();
-
-        return result;
-      }
+        );
+      },
+      'insertEventBatch'
     );
   }
 
@@ -533,81 +582,90 @@ export class DrizzleTelemetryOperations {
    * Query events with filters
    */
   async queryEvents(filter: TelemetryQueryFilter = {}): Promise<TelemetryEvent[]> {
-    const db = await this.getDB();
-
-    return await this.dbManager.executeWithMetrics(
-      'QUERY_EVENTS',
+    // Validate filter
+    validateQueryFilter(filter);
+    validatePagination(filter.limit, filter.offset);
+    
+    return await withDatabaseErrorHandling(
       async () => {
-        let query = db.select().from(telemetryEvents);
+        const db = await this.getDB();
 
-        // Build WHERE conditions
-        const conditions = [];
-        
-        if (filter.from !== undefined) {
-          conditions.push(gte(telemetryEvents.timestamp, filter.from));
-        }
-        
-        if (filter.to !== undefined) {
-          conditions.push(lte(telemetryEvents.timestamp, filter.to));
-        }
-        
-        if (filter.sessionId) {
-          conditions.push(eq(telemetryEvents.sessionId, filter.sessionId));
-        }
-        
-        if (filter.eventType) {
-          conditions.push(eq(telemetryEvents.eventType, filter.eventType));
-        }
-        
-        if (filter.agentType) {
-          conditions.push(eq(telemetryEvents.agentType, filter.agentType));
-        }
-        
-        if (filter.mode) {
-          conditions.push(eq(telemetryEvents.mode, filter.mode));
-        }
-        
-        if (filter.sandboxId) {
-          conditions.push(eq(telemetryEvents.sandboxId, filter.sandboxId));
-        }
+        return await this.dbManager.executeWithMetrics(
+          'QUERY_EVENTS',
+          async () => {
+            let query = db.select().from(telemetryEvents);
 
-        if (conditions.length > 0) {
-          query = query.where(and(...conditions));
-        }
+            // Build WHERE conditions
+            const conditions = [];
+            
+            if (filter.from !== undefined) {
+              conditions.push(gte(telemetryEvents.timestamp, filter.from));
+            }
+            
+            if (filter.to !== undefined) {
+              conditions.push(lte(telemetryEvents.timestamp, filter.to));
+            }
+            
+            if (filter.sessionId) {
+              conditions.push(eq(telemetryEvents.sessionId, filter.sessionId));
+            }
+            
+            if (filter.eventType) {
+              conditions.push(eq(telemetryEvents.eventType, filter.eventType));
+            }
+            
+            if (filter.agentType) {
+              conditions.push(eq(telemetryEvents.agentType, filter.agentType));
+            }
+            
+            if (filter.mode) {
+              conditions.push(eq(telemetryEvents.mode, filter.mode));
+            }
+            
+            if (filter.sandboxId) {
+              conditions.push(eq(telemetryEvents.sandboxId, filter.sandboxId));
+            }
 
-        // Add ordering
-        if (filter.orderBy) {
-          switch (filter.orderBy) {
-            case 'timestamp_asc':
-              query = query.orderBy(asc(telemetryEvents.timestamp));
-              break;
-            case 'timestamp_desc':
+            if (conditions.length > 0) {
+              query = query.where(and(...conditions));
+            }
+
+            // Add ordering
+            if (filter.orderBy) {
+              switch (filter.orderBy) {
+                case 'timestamp_asc':
+                  query = query.orderBy(asc(telemetryEvents.timestamp));
+                  break;
+                case 'timestamp_desc':
+                  query = query.orderBy(desc(telemetryEvents.timestamp));
+                  break;
+                case 'created_at_asc':
+                  query = query.orderBy(asc(telemetryEvents.createdAt));
+                  break;
+                case 'created_at_desc':
+                  query = query.orderBy(desc(telemetryEvents.createdAt));
+                  break;
+                default:
+                  query = query.orderBy(desc(telemetryEvents.timestamp));
+              }
+            } else {
               query = query.orderBy(desc(telemetryEvents.timestamp));
-              break;
-            case 'created_at_asc':
-              query = query.orderBy(asc(telemetryEvents.createdAt));
-              break;
-            case 'created_at_desc':
-              query = query.orderBy(desc(telemetryEvents.createdAt));
-              break;
-            default:
-              query = query.orderBy(desc(telemetryEvents.timestamp));
-          }
-        } else {
-          query = query.orderBy(desc(telemetryEvents.timestamp));
-        }
+            }
 
-        // Add pagination
-        if (filter.limit !== undefined) {
-          query = query.limit(filter.limit);
-          
-          if (filter.offset !== undefined) {
-            query = query.offset(filter.offset);
-          }
-        }
+            // Add pagination
+            if (filter.limit !== undefined) {
+              query = query.limit(filter.limit);
+              
+              if (filter.offset !== undefined) {
+                query = query.offset(filter.offset);
+              }
+            }
 
-        return await query.execute();
-      }
+            return await query.execute();
+          }
+        );
+      },
+      'queryEvents'
     );
   }
 
@@ -662,12 +720,18 @@ export class DrizzleTelemetryOperations {
    * Flush a buffer and insert its events
    */
   async flushBuffer(sessionId: string): Promise<number> {
-    const db = await this.getDB();
-
-    return await this.dbManager.executeWithMetrics(
-      'FLUSH_BUFFER',
+    if (!sessionId || sessionId.trim().length === 0) {
+      throw new ValidationError('Session ID is required', 'sessionId', sessionId);
+    }
+    
+    return await withDatabaseErrorHandling(
       async () => {
-        return await db.transaction(async (tx) => {
+        const db = await this.getDB();
+
+        return await this.dbManager.executeWithMetrics(
+          'FLUSH_BUFFER',
+          async () => {
+            return await db.transaction(async (tx) => {
           // Get pending buffers for this session
           const buffers = await tx
             .select()
@@ -727,9 +791,12 @@ export class DrizzleTelemetryOperations {
             await this.updateSessionStatsInTransaction(tx, sessionId);
           }
 
-          return totalFlushed;
-        });
-      }
+              return totalFlushed;
+            });
+          }
+        );
+      },
+      'flushBuffer'
     );
   }
 
@@ -788,11 +855,13 @@ export class DrizzleTelemetryOperations {
    * Get comprehensive telemetry statistics
    */
   async getStatistics(): Promise<TelemetryStatsSummary> {
-    const db = await this.getDB();
-
-    return await this.dbManager.executeWithMetrics(
-      'GET_STATISTICS',
+    return await withDatabaseErrorHandling(
       async () => {
+        const db = await this.getDB();
+
+        return await this.dbManager.executeWithMetrics(
+          'GET_STATISTICS',
+          async () => {
         // Get event counts by type
         const eventStats = await db
           .select({
@@ -876,9 +945,12 @@ export class DrizzleTelemetryOperations {
             latest: overall?.maxTimestamp || 0,
           },
           avgSessionDuration: avgDuration,
-          dbSizeBytes: this.dbManager.getMetrics().dbSizeBytes,
-        };
-      }
+            dbSizeBytes: this.dbManager.getMetrics().dbSizeBytes,
+          };
+        }
+      );
+    },
+    'getStatistics'
     );
   }
 

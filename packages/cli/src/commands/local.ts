@@ -19,6 +19,13 @@ import {
   type LocalConfig,
   type AgentType,
 } from "@vibe-kit/dagger";
+import { 
+  CLIValidationError, 
+  CLIEnvironmentError,
+  CLIConfigError,
+  withErrorHandling,
+  retryOperation 
+} from "../utils/error-handler.js";
 
 const { prompt } = enquirer;
 
@@ -62,7 +69,7 @@ function loadDotEnv(): void {
         }
       }
     } catch (error) {
-      // Ignore .env file parsing errors
+      console.warn(chalk.yellow(`⚠️  Warning: Could not parse .env file: ${error instanceof Error ? error.message : 'Unknown error'}`));
     }
   }
 }
@@ -101,12 +108,27 @@ function validateEnvironmentName(name: string): boolean | string {
     return "Environment name cannot be empty";
   }
 
+  if (name.length < 2) {
+    return "Environment name must be at least 2 characters long";
+  }
+
   if (name.length > 50) {
     return "Environment name must be 50 characters or less";
   }
 
   if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
     return "Environment name can only contain letters, numbers, hyphens, and underscores";
+  }
+
+  // Check for reserved names
+  const reservedNames = ['local', 'test', 'prod', 'production', 'dev', 'development', 'system', 'default'];
+  if (reservedNames.includes(name.toLowerCase())) {
+    return `Environment name '${name}' is reserved. Please choose a different name.`;
+  }
+
+  // Check if name starts with a number (can cause issues with some systems)
+  if (/^[0-9]/.test(name)) {
+    return "Environment name cannot start with a number";
   }
 
   return true;
@@ -154,6 +176,7 @@ class SimpleEnvironmentStore {
         lastUsed: new Date(env.lastUsed),
       }));
     } catch (error) {
+      console.warn(chalk.yellow(`⚠️  Warning: Could not read environments file: ${error instanceof Error ? error.message : 'Unknown error'}`));
       return [];
     }
   }
@@ -262,8 +285,15 @@ export async function createCommand(options: {
     // Check if name already exists
     const existing = await store.findByName(envName);
     if (existing) {
-      spinner.fail(`Environment '${envName}' already exists`);
-      return;
+      spinner.fail();
+      throw new CLIEnvironmentError(
+        `Environment '${envName}' already exists`,
+        [
+          `Use 'vibekit local list' to see all environments`,
+          `Use 'vibekit local start ${envName}' to start the existing environment`,
+          `Use a different name for your new environment`
+        ]
+      );
     }
 
     const provider = getLocalProvider();
