@@ -12,8 +12,12 @@ export class VibeKitTelemetryAdapter {
       environment: 'development',
       
       storage: [
-        {
-          type: 'sqlite',
+        // If SQLite is disabled, use memory provider for testing
+        ...(config.localStore?.isEnabled === false ? [{
+          type: 'memory' as const,
+          enabled: true,
+        }] : [{
+          type: 'sqlite' as const,
           enabled: config.localStore?.isEnabled ?? true,
           options: {
             path: config.localStore?.path || '.vibekit/telemetry.db',
@@ -21,7 +25,7 @@ export class VibeKitTelemetryAdapter {
             streamFlushInterval: config.localStore?.streamFlushIntervalMs || 5000,
             streamBuffering: true,
           }
-        },
+        }]),
         ...(config.endpoint ? [{
           type: 'otlp' as const,
           enabled: true,

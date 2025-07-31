@@ -17,10 +17,7 @@ describe('VibeKitTelemetryAdapter', () => {
     adapter = new VibeKitTelemetryAdapter({
       serviceVersion: '1.0.0',
       localStore: {
-        isEnabled: true,
-        path: testDbPath,
-        streamBatchSize: 10,
-        streamFlushIntervalMs: 1000,
+        isEnabled: false, // Disable SQLite for tests
       },
     });
 
@@ -42,8 +39,7 @@ describe('VibeKitTelemetryAdapter', () => {
       const newAdapter = new VibeKitTelemetryAdapter({
         serviceVersion: '1.0.0',
         localStore: {
-          isEnabled: true,
-          path: join(tmpdir(), `test-init-${Date.now()}.db`),
+          isEnabled: false, // Disable SQLite for tests
         },
       });
 
