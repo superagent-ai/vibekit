@@ -73,12 +73,19 @@ class TelemetryCliLogger {
 
 async function createTelemetryService(dbPath?: string): Promise<TelemetryService> {
   const config: TelemetryConfig = {
-    isEnabled: true,
-    localStore: {
-      isEnabled: true,
-      path: dbPath || '.vibekit/telemetry.db',
-      streamBatchSize: 50,
-      streamFlushIntervalMs: 1000,
+    serviceName: 'vibekit-cli',
+    serviceVersion: '1.0.0',
+    storage: [{
+      type: 'sqlite',
+      enabled: true,
+      options: {
+        path: dbPath || '.vibekit/telemetry.db',
+        streamBatchSize: 50,
+        streamFlushInterval: 1000,
+      }
+    }],
+    analytics: {
+      enabled: true
     }
   };
 
@@ -112,8 +119,42 @@ async function queryCommand(options: TelemetryCliOptions): Promise<void> {
     if (options.since) filterOptions.fromTime = new Date(options.since).getTime();
     if (options.until) filterOptions.toTime = new Date(options.until).getTime();
 
-    // Get session summaries instead of raw events for better overview
-    const sessions = await service.getSessionSummaries(filterOptions);
+    // Query events and group by session
+    const events = await service.query(filterOptions);
+    
+    // Group events by session to create summaries
+    const sessionMap = new Map<string, SessionSummary>();
+    
+    events.forEach(event => {
+      if (!sessionMap.has(event.sessionId)) {
+        sessionMap.set(event.sessionId, {
+          sessionId: event.sessionId,
+          agentType: event.category,
+          eventCount: 0,
+          firstEvent: new Date(event.timestamp).toISOString(),
+          lastEvent: new Date(event.timestamp).toISOString(),
+          duration: 0,
+          errorCount: 0,
+          streamCount: 0
+        });
+      }
+      
+      const session = sessionMap.get(event.sessionId)!;
+      session.eventCount++;
+      if (event.eventType === 'error') session.errorCount++;
+      if (event.eventType === 'stream') session.streamCount++;
+      
+      const eventTime = new Date(event.timestamp).toISOString();
+      if (eventTime < session.firstEvent) session.firstEvent = eventTime;
+      if (eventTime > session.lastEvent) session.lastEvent = eventTime;
+    });
+    
+    // Calculate durations
+    sessionMap.forEach(session => {
+      session.duration = new Date(session.lastEvent).getTime() - new Date(session.firstEvent).getTime();
+    });
+    
+    const sessions = Array.from(sessionMap.values());
 
     if (sessions.length === 0) {
       TelemetryCliLogger.info("No telemetry sessions found");
@@ -165,19 +206,19 @@ async function statsCommand(options: TelemetryCliOptions): Promise<void> {
 
     const service = await createTelemetryService(dbPath);
     
-    // Get real-time metrics for stats
-    const metrics = await service.getRealTimeMetrics();
-    const analytics = service.getAnalyticsInfo();
-    const exportInfo = service.getExportInfo();
+    // Get metrics and insights for stats
+    const metrics = await service.getMetrics();
+    const insights = await service.getInsights();
+    const healthStatus = service.getHealthStatus();
 
     const stats = {
       database: {
         path: dbPath,
         status: 'connected'
       },
-      analytics: analytics,
-      export: exportInfo,
-      realTimeMetrics: metrics
+      metrics: metrics,
+      insights: insights,
+      health: healthStatus
     };
 
     if (options.format === 'json') {
@@ -186,10 +227,15 @@ async function statsCommand(options: TelemetryCliOptions): Promise<void> {
       console.log('\n📊 Telemetry Database Statistics\n');
       console.log(`Database: ${stats.database.path}`);
       console.log(`Status: ${stats.database.status}`);
-      console.log(`Analytics: ${stats.analytics.status}`);
-      console.log(`Export: ${stats.export.status}`);
-      console.log('\n📈 Real-time Metrics:');
-      console.table(stats.realTimeMetrics);
+      console.log(`Health: ${stats.health.status}`);
+      console.log('\n📈 Metrics:');
+      console.log(`Total Events: ${stats.metrics?.events?.total || 0}`);
+      console.log(`Error Rate: ${stats.metrics?.performance?.errorRate || 0}%`);
+      console.log(`\n📊 Insights:`);
+      if (stats.insights?.metrics) {
+        console.log(`Active Sessions: ${stats.insights.metrics.sessions?.active || 0}`);
+        console.log(`Completed Sessions: ${stats.insights.metrics.sessions?.completed || 0}`);
+      }
     }
 
     await service.shutdown();
@@ -209,8 +255,47 @@ async function analyticsCommand(options: TelemetryCliOptions): Promise<void> {
 
     const service = await createTelemetryService(dbPath);
     
-    // Get comprehensive analytics dashboard
-    const dashboard = await service.getAnalyticsDashboard('day');
+    // Get metrics and insights for analytics dashboard
+    const metrics = await service.getMetrics();
+    const insights = await service.getInsights();
+    const recentEvents = await service.query({ limit: 100 });
+    
+    // Create dashboard data structure
+    const dashboard = {
+      metrics: metrics,
+      insights: insights,
+      recentSessions: new Map<string, any>(),
+      performance: [],
+      anomalies: []
+    };
+    
+    // Group recent events by session
+    recentEvents.forEach(event => {
+      if (!dashboard.recentSessions.has(event.sessionId)) {
+        dashboard.recentSessions.set(event.sessionId, {
+          sessionId: event.sessionId,
+          agentType: event.category,
+          eventCount: 0,
+          firstEvent: event.timestamp,
+          lastEvent: event.timestamp,
+          errorCount: 0
+        });
+      }
+      const session = dashboard.recentSessions.get(event.sessionId)!;
+      session.eventCount++;
+      if (event.eventType === 'error') session.errorCount++;
+      if (event.timestamp > session.lastEvent) session.lastEvent = event.timestamp;
+      if (event.timestamp < session.firstEvent) session.firstEvent = event.timestamp;
+    });
+    
+    const sessionSummaries = Array.from(dashboard.recentSessions.values())
+      .map(s => ({
+        ...s,
+        duration: s.lastEvent - s.firstEvent,
+        firstEvent: new Date(s.firstEvent).toISOString(),
+        lastEvent: new Date(s.lastEvent).toISOString()
+      }))
+      .slice(0, 10);
 
     if (options.format === 'json') {
       if (options.output) {
@@ -222,26 +307,26 @@ async function analyticsCommand(options: TelemetryCliOptions): Promise<void> {
     } else {
       console.log('\n📊 Analytics Dashboard (Last 24 Hours)\n');
       
-      console.log('🔍 Real-time Metrics:');
-      console.table(dashboard.realTime);
+      console.log('🔍 Metrics:');
+      console.log(`Total Events: ${dashboard.metrics?.events?.total || 0}`);
+      console.log(`Error Rate: ${dashboard.metrics?.performance?.errorRate || 0}%`);
+      console.log(`Average Duration: ${dashboard.metrics?.performance?.avgDuration || 0}ms`);
       
-      console.log('\n📈 Performance Metrics:');
-      if (dashboard.performance.length > 0) {
-        console.table(dashboard.performance);
-      } else {
-        console.log('No performance data available');
+      console.log('\n📈 Insights:');
+      if (dashboard.insights?.metrics) {
+        console.log(`Active Sessions: ${dashboard.insights.metrics.sessions?.active || 0}`);
+        console.log(`Completed Sessions: ${dashboard.insights.metrics.sessions?.completed || 0}`);
+        if (dashboard.metrics?.events?.byType) {
+          console.log('\nEvent Type Distribution:');
+          console.table(dashboard.metrics.events.byType);
+        }
       }
       
       console.log('\n📋 Recent Sessions:');
-      if (dashboard.sessionSummaries.length > 0) {
-        console.table(dashboard.sessionSummaries.slice(0, 10));
+      if (sessionSummaries.length > 0) {
+        console.table(sessionSummaries);
       } else {
         console.log('No recent sessions');
-      }
-
-      if (dashboard.anomalies.length > 0) {
-        console.log('\n⚠️  Detected Anomalies:');
-        console.table(dashboard.anomalies);
       }
     }
 
@@ -262,10 +347,7 @@ async function exportCommand(options: TelemetryCliOptions): Promise<void> {
 
     const service = await createTelemetryService(dbPath);
     
-    if (!service.getExportService()) {
-      TelemetryCliLogger.error('Export service not available - local store must be enabled');
-      return;
-    }
+    // Export functionality is always available through TelemetryService
 
     const filter: any = {};
     if (options.sessionId) filter.sessionId = options.sessionId;
@@ -273,19 +355,19 @@ async function exportCommand(options: TelemetryCliOptions): Promise<void> {
     if (options.since) filter.fromTime = new Date(options.since).getTime();
     if (options.until) filter.toTime = new Date(options.until).getTime();
 
-         const exportConfig = {
-       format: (options.format || 'json') as 'json' | 'csv' | 'otlp',
-       outputPath: options.output || `./telemetry-export-${Date.now()}`,
-       includeMetadata: true,
-       compression: 'gzip' as const
-     };
+    const format = (options.format || 'json') as 'json' | 'csv' | 'otlp';
+    const outputPath = options.output || `./telemetry-export-${Date.now()}.${format}`;
 
-     TelemetryCliLogger.info(`Exporting telemetry data...`);
-     const metadata = await service.exportData(filter, exportConfig);
-     
-     TelemetryCliLogger.success(`Export completed: ${metadata.config.outputPath}`);
-     TelemetryCliLogger.info(`Records exported: ${metadata.stats.totalRecords}`);
-     TelemetryCliLogger.info(`File size: ${metadata.stats.size} bytes`);
+    TelemetryCliLogger.info(`Exporting telemetry data as ${format}...`);
+    
+    // Export using the TelemetryService export method
+    const exportData = await service.export({ type: format }, filter);
+    
+    // Write to file
+    writeFileSync(outputPath, exportData);
+    
+    TelemetryCliLogger.success(`Export completed: ${outputPath}`);
+    TelemetryCliLogger.info(`File size: ${Buffer.byteLength(exportData)} bytes`);
 
     await service.shutdown();
   } catch (error) {

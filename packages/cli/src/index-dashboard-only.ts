@@ -137,7 +137,7 @@ program
           spawn('open', [dashboardUrl], { stdio: 'ignore' }); // macOS-specific
           console.log('✅ Browser launched successfully');
         } catch (error) {
-          console.warn(`⚠️  Failed to open browser automatically: ${error.message}`);
+          console.warn(`⚠️  Failed to open browser automatically: ${error instanceof Error ? error.message : String(error)}`);
           console.log(`   Please visit manually: ${dashboardUrl}`);
         }
       } else {
@@ -170,7 +170,7 @@ program
       process.on('SIGTERM', gracefulShutdown);
       
     } catch (error) {
-      console.error('❌ Dashboard command failed:', error.message);
+      console.error('❌ Dashboard command failed:', error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   });
