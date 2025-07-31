@@ -3,8 +3,7 @@
 /**
  * VibeKit Dashboard Launcher
  * 
- * Standalone script to start telemetry server and dashboard without CLI dependencies.
- * Use this if you encounter CLI build issues.
+ * Standalone script to start telemetry API server and dashboard.
  * 
  * Usage: node scripts/dashboard.js [--no-open] [--port 3000] [--dashboard-port 3001]
  */
@@ -41,7 +40,7 @@ VibeKit Dashboard Launcher
 Usage: node scripts/dashboard.js [options]
 
 Options:
-  -p, --port <port>        Telemetry server port (default: 3000)
+  -p, --port <port>        Telemetry API server port (default: 3000)
   --dashboard-port <port>  Dashboard port (default: 3001)
   --no-open                Skip opening browser automatically
   -h, --help               Show this help message
@@ -61,7 +60,8 @@ async function startDashboard() {
     
     // Define paths
     const dashboardDir = join(process.cwd(), 'packages', 'dashboard');
-    const serverScript = join(process.cwd(), 'scripts', 'telemetry-server.js');
+    const telemetryDir = join(process.cwd(), 'packages', 'telemetry');
+    const telemetryCli = join(telemetryDir, 'dist', 'cli', 'TelemetryCLI.js');
     
     // Check if directories exist
     if (!existsSync(dashboardDir)) {
@@ -69,86 +69,90 @@ async function startDashboard() {
       process.exit(1);
     }
     
-    if (!existsSync(serverScript)) {
-      console.error('❌ Error: Telemetry server script not found at scripts/telemetry-server.js');
+    if (!existsSync(telemetryDir)) {
+      console.error('❌ Error: Telemetry package not found at packages/telemetry/');
       process.exit(1);
+    }
+    
+    // Check if telemetry is built
+    if (!existsSync(telemetryCli)) {
+      console.log('📦 Building telemetry package...');
+      execSync('npm run build', { 
+        cwd: telemetryDir, 
+        stdio: 'inherit' 
+      });
     }
     
     console.log('📦 Dashboard will run in development mode (no build needed).');
     
-    // Start telemetry server
-    console.log(`🔧 Starting telemetry server on port ${options.port}...`);
-    const telemetryProcess = spawn('node', [serverScript], {
-      cwd: process.cwd(),
+    // Start telemetry API server
+    console.log(`🔧 Starting telemetry API server on port ${options.port}...`);
+    const telemetryProcess = spawn('node', [telemetryCli, 'api', '--port', options.port], {
+      cwd: telemetryDir,
       detached: true,
       stdio: 'ignore',
       env: { 
         ...process.env, 
-        PORT: options.port, 
         HOST: 'localhost' 
       }
     });
     telemetryProcess.unref();
-    console.log(`✅ Telemetry server started (PID: ${telemetryProcess.pid})`);
+    console.log(`✅ Telemetry API server started (PID: ${telemetryProcess.pid})`);
+    
+    // Wait a moment for the server to start
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Start dashboard server
     console.log(`📊 Starting dashboard in development mode on port ${options.dashboardPort}...`);
     const dashboardProcess = spawn('npm', ['run', 'dev', '--', '-p', options.dashboardPort], {
       cwd: dashboardDir,
       detached: true,
-      stdio: 'ignore'
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        VITE_TELEMETRY_API_URL: `http://localhost:${options.port}`
+      }
     });
     dashboardProcess.unref();
     console.log(`✅ Dashboard started (PID: ${dashboardProcess.pid})`);
     
-    // Wait for servers to initialize
-    console.log('⏳ Waiting for servers to initialize...');
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Display access URLs
+    console.log('\n🎉 Dashboard is running!\n');
+    console.log(`📊 Dashboard:     http://localhost:${options.dashboardPort}`);
+    console.log(`🔧 Telemetry API: http://localhost:${options.port}`);
+    console.log(`🛑 To stop:       Kill processes ${telemetryProcess.pid} and ${dashboardProcess.pid}`);
     
-    // Open browser (unless --no-open flag is used)
-    const dashboardUrl = `http://localhost:${options.dashboardPort}`;
+    // Open browser if not disabled
     if (!options.noOpen) {
-      console.log(`🌐 Opening dashboard in browser: ${dashboardUrl}`);
-      try {
-        spawn('open', [dashboardUrl], { stdio: 'ignore' }); // macOS-specific
-        console.log('✅ Browser launched successfully');
-      } catch (error) {
-        console.warn(`⚠️  Failed to open browser automatically: ${error.message}`);
-        console.log(`   Please visit manually: ${dashboardUrl}`);
-      }
-    } else {
-      console.log(`🌐 Dashboard ready at: ${dashboardUrl}`);
-      console.log('   (Browser launch skipped due to --no-open flag)');
+      const openCommand = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+      setTimeout(() => {
+        execSync(`${openCommand} http://localhost:${options.dashboardPort}`, { stdio: 'ignore' });
+      }, 3000);
     }
     
-    // Success message
-    console.log('\n🎉 VibeKit Dashboard is running!');
-    console.log('📊 Services:');
-    console.log(`   • Telemetry Server: http://localhost:${options.port}`);
-    console.log(`   • Dashboard UI: ${dashboardUrl}`);
-    console.log(`\n💡 Tips:`);
-    console.log('   • Press Ctrl+C to stop this script (servers will continue running)');
-    console.log('   • Servers are running in background and will persist after script exit');
-    console.log(`   • To stop servers manually, use: kill ${telemetryProcess.pid} ${dashboardProcess.pid}`);
-    
-    // Graceful shutdown handler
-    let shutdownHandled = false;
-    const gracefulShutdown = () => {
-      if (shutdownHandled) return;
-      shutdownHandled = true;
-      console.log('\n🛑 Received shutdown signal...');
-      console.log('📝 Note: Background servers will continue running');
-      console.log('   Use the kill commands above to stop them if needed');
+    // Store PIDs for cleanup
+    const cleanup = () => {
+      console.log('\n🛑 Shutting down...');
+      try {
+        process.kill(telemetryProcess.pid);
+        process.kill(dashboardProcess.pid);
+      } catch (e) {
+        // Processes might already be dead
+      }
       process.exit(0);
     };
     
-    process.on('SIGINT', gracefulShutdown);
-    process.on('SIGTERM', gracefulShutdown);
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+    
+    // Keep the script running
+    await new Promise(() => {});
     
   } catch (error) {
-    console.error('❌ Dashboard startup failed:', error.message);
+    console.error('\n❌ Error starting dashboard:', error.message);
     process.exit(1);
   }
 }
 
-startDashboard(); 
+// Run the dashboard launcher
+startDashboard();

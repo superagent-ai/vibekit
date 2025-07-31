@@ -3,11 +3,11 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   entry: {
     index: "src/index.ts",
-    "dashboard/index": "src/dashboard/server/DashboardServer.ts",
+    "api/TelemetryAPIServer": "src/api/TelemetryAPIServer.ts",
     "cli/TelemetryCLI": "src/cli/TelemetryCLI.ts",
   },
   format: ["esm", "cjs"],
-  dts: false, // Disable for now to fix build issues
+  dts: true, // Re-enable after fixes
   clean: true,
   splitting: false,
   sourcemap: true,

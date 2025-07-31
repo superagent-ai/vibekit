@@ -46,11 +46,14 @@ export { AnalyticsEngine } from './analytics/AnalyticsEngine.js';
 export { JSONExporter } from './export/formats/JSONExporter.js';
 export { CSVExporter } from './export/formats/CSVExporter.js';
 
-// Dashboard
-export { DashboardServer } from './dashboard/server/DashboardServer.js';
+// API
+export { TelemetryAPIServer } from './api/TelemetryAPIServer.js';
 
 // Plugin system
 export { PluginManager } from './plugins/PluginManager.js';
 
 // Constants
 export { DEFAULT_CONFIG, EVENT_TYPES, STORAGE_TYPES, STREAMING_TYPES } from './core/constants.js';
+
+// Initialization helpers
+export { createTelemetryService, initializeTelemetry } from './init.js';

@@ -42,8 +42,8 @@ export interface TelemetryConfig {
   // Analytics configuration
   analytics?: AnalyticsConfig;
   
-  // Dashboard configuration
-  dashboard?: DashboardConfig;
+  // API server configuration
+  api?: APIConfig;
   
   // Plugin configuration
   plugins?: Plugin[];
@@ -63,6 +63,7 @@ export interface StreamingConfig {
 }
 
 export interface SecurityConfig {
+  enabled?: boolean;
   pii?: {
     enabled: boolean;
     patterns?: Record<string, RegExp>;
@@ -78,6 +79,7 @@ export interface SecurityConfig {
 }
 
 export interface ReliabilityConfig {
+  enabled?: boolean;
   circuitBreaker?: {
     enabled: boolean;
     threshold?: number;
@@ -109,6 +111,12 @@ export interface AnalyticsConfig {
     enabled: boolean;
     webhooks?: string[];
   };
+}
+
+export interface APIConfig {
+  enabled: boolean;
+  port?: number;
+  host?: string;
 }
 
 export interface DashboardConfig {

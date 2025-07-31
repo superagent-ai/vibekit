@@ -32,7 +32,7 @@ export class PIIDetector {
     const sanitized = { ...event };
     
     // Sanitize string fields
-    if (sanitized.label) {
+    if (sanitized.label && typeof sanitized.label === 'string') {
       sanitized.label = this.sanitizeString(sanitized.label);
     }
     

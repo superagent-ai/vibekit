@@ -98,10 +98,15 @@ The dashboard connects to the VibeKit telemetry server using the following endpo
 
 ### Development Workflow
 
-1. **Start telemetry server:**
+1. **Start telemetry API server:**
    ```bash
-   # From project root
-   PORT=8080 HOST=0.0.0.0 node scripts/telemetry-server.js
+   # From project root, after building telemetry package
+   cd packages/telemetry
+   npm run build
+   npx telemetry api --port 3000
+   
+   # Or if installed globally
+   telemetry api --port 3000
    ```
 
 2. **Start dashboard:**
@@ -112,7 +117,7 @@ The dashboard connects to the VibeKit telemetry server using the following endpo
 
 3. **View in browser:**
    - Dashboard: http://localhost:3001
-   - Telemetry API: http://localhost:8080
+   - Telemetry API: http://localhost:3000
 
 ### Adding New Features
 

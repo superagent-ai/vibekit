@@ -3,9 +3,14 @@ import { EventEmitter as NodeEventEmitter } from 'events';
 export interface TelemetryEventMap {
   'initialized': () => void;
   'event:tracked': (event: any) => void;
-  'event:error': (error: Error) => void;
+  'event:error': (error: Error | any) => void;
   'storage:error': (error: Error) => void;
-  'streaming:error': (error: Error) => void;
+  'storage:critical': (data: any) => void;
+  'storage:degraded': (data: any) => void;
+  'streaming:error': (data: any) => void;
+  'analytics:error': (data: any) => void;
+  'security:warning': (data: any) => void;
+  'plugin:warning': (data: any) => void;
   'shutdown': () => void;
 }
 

@@ -1,4 +1,4 @@
-import { createCipher, createDecipher, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import type { TelemetryEvent } from '../core/types.js';
 
 export interface EncryptionConfig {
@@ -66,13 +66,15 @@ export class DataEncryption {
     }
     
     // Decrypt metadata if it was encrypted
-    if (decrypted.metadata && decrypted.metadata._encrypted) {
+    if (decrypted.metadata && typeof decrypted.metadata === 'object' && 
+        '_encrypted' in decrypted.metadata && '_data' in decrypted.metadata) {
       try {
-        const decryptedData = this.decryptString(decrypted.metadata._data);
+        const encryptedData = decrypted.metadata._data as string;
+        const decryptedData = this.decryptString(encryptedData);
         decrypted.metadata = JSON.parse(decryptedData);
       } catch {
         // If decryption fails, remove encryption markers but keep data
-        const { _encrypted, _data, ...rest } = decrypted.metadata;
+        const { _encrypted, _data, ...rest } = decrypted.metadata as any;
         decrypted.metadata = rest;
       }
     }
@@ -84,7 +86,7 @@ export class DataEncryption {
     if (!this.key) throw new Error('Encryption key not available');
     
     const iv = randomBytes(16);
-    const cipher = createCipher(this.config.algorithm!, this.key);
+    const cipher = createCipheriv(this.config.algorithm!, Buffer.from(this.key, 'hex'), iv);
     
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
@@ -107,7 +109,7 @@ export class DataEncryption {
     const iv = Buffer.from(parts[1], 'hex');
     const encrypted = parts[2];
     
-    const decipher = createDecipher(this.config.algorithm!, this.key);
+    const decipher = createDecipheriv(this.config.algorithm!, Buffer.from(this.key, 'hex'), iv);
     
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');

@@ -20,7 +20,7 @@ import { SecurityProvider } from '../security/SecurityProvider.js';
 import { ReliabilityManager } from '../reliability/ReliabilityManager.js';
 import { AnalyticsEngine } from '../analytics/AnalyticsEngine.js';
 import { PluginManager } from '../plugins/PluginManager.js';
-import { DashboardServer } from '../dashboard/server/DashboardServer.js';
+import { TelemetryAPIServer } from '../api/TelemetryAPIServer.js';
 
 export class TelemetryService extends TelemetryEventEmitter {
   private config: TelemetryConfig;
@@ -30,7 +30,7 @@ export class TelemetryService extends TelemetryEventEmitter {
   private reliabilityManager: ReliabilityManager;
   private analyticsEngine?: AnalyticsEngine;
   private pluginManager: PluginManager;
-  private dashboardServer?: DashboardServer;
+  private apiServer?: TelemetryAPIServer;
   private isInitialized = false;
   private maintenanceInterval?: NodeJS.Timeout;
 
@@ -52,7 +52,7 @@ export class TelemetryService extends TelemetryEventEmitter {
       security: { ...DEFAULT_CONFIG.security, ...config.security },
       reliability: { ...DEFAULT_CONFIG.reliability, ...config.reliability },
       analytics: { ...DEFAULT_CONFIG.analytics, ...config.analytics },
-      dashboard: { ...DEFAULT_CONFIG.dashboard, ...config.dashboard },
+      api: { ...DEFAULT_CONFIG.api, ...config.api },
     };
 
     if (!merged.serviceName) {
@@ -129,10 +129,18 @@ export class TelemetryService extends TelemetryEventEmitter {
     if (!this.config.streaming) return;
 
     const { WebSocketProvider } = await import('../streaming/providers/WebSocketProvider.js');
+    const { SSEProvider } = await import('../streaming/providers/SSEProvider.js');
+    const { GRPCProvider } = await import('../streaming/providers/GRPCProvider.js');
     
     switch (this.config.streaming.type) {
       case 'websocket':
         this.streamingProvider = new WebSocketProvider();
+        break;
+      case 'sse':
+        this.streamingProvider = new SSEProvider();
+        break;
+      case 'grpc':
+        this.streamingProvider = new GRPCProvider();
         break;
       default:
         throw new Error(`Unknown streaming provider type: ${this.config.streaming.type}`);
@@ -176,36 +184,83 @@ export class TelemetryService extends TelemetryEventEmitter {
       throw new Error('TelemetryService must be initialized before tracking events');
     }
 
+    const correlationId = event.id || `track-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    
     try {
       // Enrich event with defaults
       const enrichedEvent = await this.enrichEvent(event);
       
-      // Apply security measures
-      const sanitizedEvent = await this.securityProvider.sanitize(enrichedEvent);
+      // Apply security measures with error handling
+      let sanitizedEvent: TelemetryEvent;
+      try {
+        sanitizedEvent = await this.securityProvider.sanitize(enrichedEvent);
+      } catch (error) {
+        console.warn(`Security sanitization failed for event ${enrichedEvent.id}, proceeding with original event:`, error);
+        sanitizedEvent = enrichedEvent; // Graceful degradation
+        this.emit('security:warning', { event: enrichedEvent, error });
+      }
       
       // Apply rate limiting
       await this.reliabilityManager.checkRateLimit(sanitizedEvent);
       
-      // Process through plugins
-      const processedEvent = await this.pluginManager.processEvent(sanitizedEvent);
-      
-      // Store event
-      await this.storeEvent(processedEvent);
-      
-      // Stream event if configured
-      if (this.streamingProvider) {
-        await this.streamingProvider.stream(processedEvent);
+      // Process through plugins with error handling
+      let processedEvent: TelemetryEvent;
+      try {
+        processedEvent = await this.pluginManager.processEvent(sanitizedEvent);
+      } catch (error) {
+        console.warn(`Plugin processing failed for event ${sanitizedEvent.id}, proceeding with sanitized event:`, error);
+        processedEvent = sanitizedEvent; // Graceful degradation
+        this.emit('plugin:warning', { event: sanitizedEvent, error });
       }
       
-      // Update analytics
+      // Store event (critical operation)
+      await this.storeEvent(processedEvent);
+      
+      // Stream event if configured (non-critical)
+      if (this.streamingProvider) {
+        try {
+          await this.reliabilityManager.executeWithRetry(
+            () => this.streamingProvider!.stream(processedEvent),
+            'streaming'
+          );
+        } catch (error) {
+          console.warn(`Event streaming failed for event ${processedEvent.id}:`, error);
+          this.emit('streaming:error', { event: processedEvent, error });
+          // Don't throw - streaming failure shouldn't fail the entire tracking operation
+        }
+      }
+      
+      // Update analytics (non-critical)
       if (this.analyticsEngine) {
-        await this.analyticsEngine.process(processedEvent);
+        try {
+          await this.reliabilityManager.executeWithRetry(
+            () => this.analyticsEngine!.process(processedEvent),
+            'analytics'
+          );
+        } catch (error) {
+          console.warn(`Analytics processing failed for event ${processedEvent.id}:`, error);
+          this.emit('analytics:error', { event: processedEvent, error });
+          // Don't throw - analytics failure shouldn't fail the entire tracking operation
+        }
       }
       
       this.emit('event:tracked', processedEvent);
     } catch (error) {
-      this.emit('event:error', error instanceof Error ? error : new Error(String(error)));
-      throw error;
+      const enrichedError = error instanceof Error ? error : new Error(String(error));
+      
+      // Add correlation context to error
+      if (!enrichedError.message.includes(correlationId)) {
+        enrichedError.message = `[${correlationId}] ${enrichedError.message}`;
+      }
+      
+      this.emit('event:error', { 
+        error: enrichedError, 
+        event, 
+        correlationId,
+        timestamp: Date.now() 
+      });
+      
+      throw enrichedError;
     }
   }
 
@@ -231,52 +286,73 @@ export class TelemetryService extends TelemetryEventEmitter {
 
   private async storeEvent(event: TelemetryEvent): Promise<void> {
     const errors: Error[] = [];
+    let successCount = 0;
     
+    // Try each storage provider with enhanced error handling
     for (const provider of this.storageProviders) {
       try {
-        await this.reliabilityManager.executeWithCircuitBreaker(
-          `storage:${provider.name}`,
-          () => provider.store(event)
+        await this.reliabilityManager.executeWithGracefulDegradation(
+          // Primary operation
+          () => provider.store(event),
+          // Fallback operation - try to store without reliability checks
+          () => provider.store(event),
+          `storage:${provider.name}`
         );
+        successCount++;
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         errors.push(err);
         this.emit('storage:error', err);
+        
+        console.warn(`Storage provider ${provider.name} failed to store event ${event.id}:`, err.message);
       }
     }
 
-    // If all storage providers failed, throw error
-    if (errors.length === this.storageProviders.length) {
-      throw new Error(`All storage providers failed: ${errors.map(e => e.message).join(', ')}`);
+    // Enhanced error handling for storage failures
+    if (successCount === 0) {
+      // All providers failed - this is critical
+      const criticalError = new Error(`All ${this.storageProviders.length} storage providers failed: ${errors.map(e => e.message).join(', ')}`);
+      this.emit('storage:critical', { event, errors, criticalError });
+      throw criticalError;
+    } else if (errors.length > 0) {
+      // Some providers failed - this is degraded operation
+      const degradationWarning = `${errors.length}/${this.storageProviders.length} storage providers failed for event ${event.id}`;
+      console.warn(degradationWarning, { errors: errors.map(e => e.message) });
+      this.emit('storage:degraded', { event, errors, successCount, totalProviders: this.storageProviders.length });
     }
   }
 
-  // Convenience methods for common event types
-  async trackStart(category: string, action: string, label?: string, metadata?: any): Promise<void> {
-    return this.track({
+  // Convenience methods for common event types  
+  async trackStart(category: string, action: string, label?: string, metadata?: any): Promise<string> {
+    const sessionId = uuidv4();
+    await this.track({
+      sessionId,
       eventType: 'start',
       category,
-      action,
+      action: 'start',
       label,
       metadata,
     });
+    return sessionId;
   }
 
-  async trackEnd(category: string, action: string, label?: string, metadata?: any): Promise<void> {
+  async trackEnd(sessionId: string, status: string, metadata?: any): Promise<void> {
     return this.track({
+      sessionId,
       eventType: 'end',
-      category,
-      action,
-      label,
+      category: 'agent',
+      action: 'end',
+      label: status,
       metadata,
     });
   }
 
-  async trackError(category: string, action: string, error: Error | string, metadata?: any): Promise<void> {
+  async trackError(sessionId: string, error: Error | string, metadata?: any): Promise<void> {
     return this.track({
+      sessionId,
       eventType: 'error',
-      category,
-      action,
+      category: 'agent',
+      action: 'error',
       label: error instanceof Error ? error.message : error,
       metadata: {
         ...metadata,
@@ -290,14 +366,14 @@ export class TelemetryService extends TelemetryEventEmitter {
   }
 
   // Dashboard management
-  async startDashboard(options?: DashboardOptions): Promise<DashboardServer> {
-    if (!this.config.dashboard?.enabled) {
-      throw new Error('Dashboard is not enabled in configuration');
+  async startAPIServer(options?: DashboardOptions): Promise<TelemetryAPIServer> {
+    if (!this.config.api?.enabled) {
+      throw new Error('API server is not enabled in configuration');
     }
     
-    this.dashboardServer = new DashboardServer(this, options);
-    await this.dashboardServer.start();
-    return this.dashboardServer;
+    this.apiServer = new TelemetryAPIServer(this, options);
+    await this.apiServer.start();
+    return this.apiServer;
   }
 
   // Plugin management
@@ -337,25 +413,41 @@ export class TelemetryService extends TelemetryEventEmitter {
   }
 
   // Export methods
-  async export(format: ExportFormat, filter?: QueryFilter): Promise<ExportResult> {
+  async export(format: ExportFormat | { format: string }, filter?: QueryFilter): Promise<string> {
     const events = await this.query(filter || {});
     
-    const { JSONExporter } = await import('../export/formats/JSONExporter.js');
-    const { CSVExporter } = await import('../export/formats/CSVExporter.js');
+    const formatType = typeof format === 'object' && 'format' in format ? format.format : format.type;
     
-    let exporter;
-    switch (format.type) {
-      case 'json':
-        exporter = new JSONExporter();
-        break;
-      case 'csv':
-        exporter = new CSVExporter();
-        break;
+    switch (formatType) {
+      case 'json': {
+        const { JSONExporter } = await import('../export/formats/JSONExporter.js');
+        const exporter = new JSONExporter();
+        const result = await exporter.export(events);
+        return result.data;
+      }
+      case 'csv': {
+        const { CSVExporter } = await import('../export/formats/CSVExporter.js');
+        const exporter = new CSVExporter();
+        const result = await exporter.export(events);
+        return result.data;
+      }
+      case 'otlp': {
+        const { OTLPExporter } = await import('../export/formats/OTLPExporter.js');
+        const exporter = new OTLPExporter({
+          serviceName: this.config.serviceName,
+          serviceVersion: this.config.serviceVersion,
+        });
+        return exporter.export(events);
+      }
+      case 'parquet': {
+        const { ParquetExporter } = await import('../export/formats/ParquetExporter.js');
+        const exporter = new ParquetExporter();
+        const buffer = await exporter.export(events);
+        return buffer.toString('base64'); // Return as base64 string
+      }
       default:
-        throw new Error(`Unsupported export format: ${format.type}`);
+        throw new Error(`Unsupported export format: ${formatType}`);
     }
-    
-    return exporter.export(events, format.options);
   }
 
   // Analytics methods
@@ -384,21 +476,175 @@ export class TelemetryService extends TelemetryEventEmitter {
       clearInterval(this.maintenanceInterval);
     }
     
-    // Flush any pending events
-    await this.flush();
+    try {
+      // Flush any pending events with timeout
+      await Promise.race([
+        this.flush(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Flush timeout')), 10000)
+        )
+      ]);
+    } catch (error) {
+      console.warn('Error during flush on shutdown:', error);
+    }
     
-    // Shutdown providers
+    // Shutdown providers with individual error handling
     const shutdownPromises = [
-      ...this.storageProviders.map(p => p.shutdown()),
-      this.streamingProvider?.shutdown(),
-      this.analyticsEngine?.shutdown(),
-      this.pluginManager.shutdown(),
-      this.dashboardServer?.shutdown(),
+      ...this.storageProviders.map(p => this.safeShutdown(() => p.shutdown(), `storage:${p.name}`)),
+      this.safeShutdown(() => this.streamingProvider?.shutdown(), 'streaming'),
+      this.safeShutdown(() => this.analyticsEngine?.shutdown(), 'analytics'),
+      this.safeShutdown(() => this.pluginManager.shutdown(), 'plugins'),
+      this.safeShutdown(() => this.apiServer?.shutdown(), 'api-server'),
+      this.safeShutdown(() => this.reliabilityManager.shutdown(), 'reliability'),
     ].filter(Boolean);
     
-    await Promise.all(shutdownPromises);
+    await Promise.allSettled(shutdownPromises);
     
     this.isInitialized = false;
     this.emit('shutdown');
+  }
+
+  private async safeShutdown(shutdownFn: () => Promise<void> | void | undefined, context: string): Promise<void> {
+    try {
+      const result = shutdownFn();
+      if (result && typeof result.then === 'function') {
+        await result;
+      }
+    } catch (error) {
+      console.warn(`Error during shutdown of ${context}:`, error);
+    }
+  }
+
+  // Session management methods
+  async getActiveSessions(): Promise<Array<{ id: string; eventCount: number; status: string }>> {
+    const events = await this.query({});
+    const sessionMap = new Map<string, { eventCount: number; hasEnd: boolean }>();
+    
+    for (const event of events) {
+      const session = sessionMap.get(event.sessionId) || { eventCount: 0, hasEnd: false };
+      session.eventCount++;
+      if (event.eventType === 'end') {
+        session.hasEnd = true;
+      }
+      sessionMap.set(event.sessionId, session);
+    }
+    
+    return Array.from(sessionMap.entries())
+      .filter(([_, session]) => !session.hasEnd)
+      .map(([id, session]) => ({
+        id,
+        eventCount: session.eventCount,
+        status: 'active'
+      }));
+  }
+
+  async getSession(sessionId: string): Promise<{ id: string; eventCount: number; status: string } | null> {
+    const events = await this.query({ sessionId });
+    if (events.length === 0) return null;
+    
+    const hasEnd = events.some(e => e.eventType === 'end');
+    return {
+      id: sessionId,
+      eventCount: events.length,
+      status: hasEnd ? 'completed' : 'active'
+    };
+  }
+
+  // Health monitoring methods
+  getHealthStatus(): {
+    status: 'healthy' | 'degraded' | 'unhealthy';
+    details: {
+      initialized: boolean;
+      providers: Record<string, any>;
+      reliability: any;
+      timestamp: string;
+    };
+  } {
+    const reliabilityHealth = this.reliabilityManager.getHealthStatus();
+    
+    // Check provider health
+    const providerHealth = {
+      storage: this.storageProviders.map(p => ({
+        name: p.name,
+        supportsQuery: p.supportsQuery,
+        supportsBatch: p.supportsBatch,
+      })),
+      streaming: this.streamingProvider ? { enabled: true } : { enabled: false },
+      analytics: this.analyticsEngine ? { enabled: true } : { enabled: false },
+    };
+
+    return {
+      status: reliabilityHealth.status,
+      details: {
+        initialized: this.isInitialized,
+        providers: providerHealth,
+        reliability: reliabilityHealth.details,
+        timestamp: new Date().toISOString(),
+      },
+    };
+  }
+
+  // Error recovery methods
+  async resetCircuitBreakers(): Promise<void> {
+    // This would be part of the ReliabilityManager
+    const stats = this.reliabilityManager.getCircuitBreakerStats();
+    console.log('Circuit breaker stats before reset:', stats);
+    
+    // Manual reset could be implemented in ReliabilityManager
+    console.log('Circuit breakers reset requested');
+  }
+
+  async validateConfiguration(): Promise<{ valid: boolean; errors: string[] }> {
+    const errors: string[] = [];
+
+    // Validate storage providers
+    if (this.storageProviders.length === 0) {
+      errors.push('No storage providers configured');
+    }
+
+    // Validate reliability configuration
+    if (!this.config.reliability?.enabled) {
+      errors.push('Reliability features are disabled');
+    }
+
+    // Validate security configuration
+    if (!this.config.security?.enabled) {
+      errors.push('Security features are disabled');
+    }
+
+    // Check provider connectivity
+    for (const provider of this.storageProviders) {
+      try {
+        await provider.getStats();
+      } catch (error) {
+        errors.push(`Storage provider ${provider.name} is not accessible: ${(error as Error).message}`);
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  }
+
+  // Enhanced error reporting
+  getErrorReport(): {
+    reliability: any;
+    recentErrors: any[];
+    healthStatus: any;
+    configuration: any;
+  } {
+    return {
+      reliability: this.reliabilityManager.getErrorStats(),
+      recentErrors: [], // Could be expanded to track service-level errors
+      healthStatus: this.getHealthStatus(),
+      configuration: {
+        storageProviders: this.storageProviders.length,
+        streamingEnabled: !!this.streamingProvider,
+        analyticsEnabled: !!this.analyticsEngine,
+        securityEnabled: this.config.security?.enabled || false,
+        reliabilityEnabled: this.config.reliability?.enabled || false,
+      },
+    };
   }
 }

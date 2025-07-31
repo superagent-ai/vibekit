@@ -1,6 +1,6 @@
 export const DEFAULT_CONFIG = {
   serviceName: 'vibekit-telemetry',
-  serviceVersion: '1.0.0',
+  serviceVersion: '0.0.1',
   environment: 'development',
   
   storage: [
@@ -56,7 +56,7 @@ export const DEFAULT_CONFIG = {
     enabled: false,
   },
   
-  dashboard: {
+  api: {
     enabled: false,
     port: 3000,
   },

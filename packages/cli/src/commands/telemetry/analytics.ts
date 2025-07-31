@@ -6,8 +6,7 @@
  */
 
 import { Command } from 'commander';
-import { TelemetryService } from '../../../services/telemetry';
-import { TelemetryConfig } from '../../../types';
+import { TelemetryService, TelemetryConfig } from '@vibe-kit/telemetry';
 
 // Create analytics command
 export const analyticsCommand = new Command('analytics')

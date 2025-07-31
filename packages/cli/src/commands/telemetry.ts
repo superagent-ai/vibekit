@@ -1,8 +1,7 @@
 import { Command } from "commander";
 import { join } from "path";
 import { existsSync, writeFileSync } from "fs";
-import { TelemetryService } from "../../services/telemetry";
-import { TelemetryConfig } from "../../types";
+import { TelemetryService, TelemetryConfig } from '@vibe-kit/telemetry';
 
 interface TelemetryCliOptions {
   database?: string;

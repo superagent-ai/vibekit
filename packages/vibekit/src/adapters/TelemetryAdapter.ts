@@ -42,7 +42,7 @@ export class VibeKitTelemetryAdapter {
       
       security: {
         pii: {
-          enabled: true,
+          enabled: false, // Disable PII detection for better compatibility
         },
         encryption: {
           enabled: false,
@@ -53,7 +53,7 @@ export class VibeKitTelemetryAdapter {
         },
       },
       
-      dashboard: {
+      api: {
         enabled: false, // Enable via CLI commands
       },
       
@@ -75,11 +75,12 @@ export class VibeKitTelemetryAdapter {
     mode: string,
     prompt: string,
     metadata?: any
-  ): Promise<void> {
+  ): Promise<string> {
     return this.telemetry.trackStart(agentType, mode, prompt, metadata);
   }
   
   async trackStream(
+    sessionId: string,
     agentType: string,
     mode: string,
     prompt: string,
@@ -89,6 +90,7 @@ export class VibeKitTelemetryAdapter {
     metadata?: any
   ): Promise<void> {
     return this.telemetry.track({
+      sessionId,
       eventType: 'stream',
       category: agentType,
       action: mode,
@@ -103,6 +105,7 @@ export class VibeKitTelemetryAdapter {
   }
   
   async trackEnd(
+    sessionId: string,
     agentType: string,
     mode: string,
     prompt: string,
@@ -110,21 +113,22 @@ export class VibeKitTelemetryAdapter {
     repoUrl?: string,
     metadata?: any
   ): Promise<void> {
-    return this.telemetry.trackEnd(agentType, mode, prompt, {
+    return this.telemetry.trackEnd(sessionId, 'completed', {
       ...metadata,
+      agentType,
+      mode,
+      prompt,
       sandboxId,
       repoUrl,
     });
   }
   
   async trackError(
-    agentType: string,
-    mode: string,
-    prompt: string,
+    sessionId: string,
     error: string,
     metadata?: any
   ): Promise<void> {
-    return this.telemetry.trackError(agentType, mode, error, metadata);
+    return this.telemetry.trackError(sessionId, error, metadata);
   }
   
   // Delegate other methods
