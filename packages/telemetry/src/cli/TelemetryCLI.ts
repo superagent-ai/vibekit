@@ -227,7 +227,7 @@ program
       if (options.session) filter.sessionId = options.session;
       
       // Export data
-      const exportedData = await telemetry.export({ type: options.format }, filter);
+      const exportedData = await telemetry.export({ format: options.format }, filter);
       
       if (options.output) {
         await mkdir(dirname(options.output), { recursive: true });

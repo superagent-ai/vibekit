@@ -55,14 +55,20 @@ export class RealtimeAnalytics extends EventEmitter {
    * Process a new event in real-time
    */
   processEvent(event: TelemetryEvent): void {
+    // First prune old events to ensure we have space
+    this.pruneOldEvents();
+    
+    // Check if we're at max capacity even after pruning
+    if (this.events.length >= this.options.maxEvents) {
+      // Remove oldest event to make room
+      this.events.shift();
+    }
+    
     // Add to events array
     this.events.push(event);
     
     // Update session tracking
     this.updateSessionTracking(event);
-    
-    // Maintain event window
-    this.pruneOldEvents();
     
     // Emit event for subscribers
     this.emit('event', event);
@@ -93,11 +99,14 @@ export class RealtimeAnalytics extends EventEmitter {
     
     // Clean up old sessions (inactive for more than window size)
     const cutoff = Date.now() - this.options.windowSize;
+    const sessionsToDelete: string[] = [];
     for (const [sessionId, sessionData] of this.sessions.entries()) {
       if (sessionData.lastActivity < cutoff) {
-        this.sessions.delete(sessionId);
+        sessionsToDelete.push(sessionId);
       }
     }
+    // Delete after iteration to avoid iterator invalidation
+    sessionsToDelete.forEach(id => this.sessions.delete(id));
   }
   
   /**
@@ -143,12 +152,29 @@ export class RealtimeAnalytics extends EventEmitter {
     const oneSecondAgo = now - 1000;
     const oneMinuteAgo = now - 60000;
     
-    // Events per second
-    const eventsLastSecond = this.events.filter(e => e.timestamp >= oneSecondAgo);
-    this.metricsCache.eventsPerSecond = eventsLastSecond.length;
+    // Use binary search for better performance with sorted arrays
+    const findFirstAfter = (timestamp: number): number => {
+      let left = 0;
+      let right = this.events.length;
+      while (left < right) {
+        const mid = Math.floor((left + right) / 2);
+        if (this.events[mid].timestamp < timestamp) {
+          left = mid + 1;
+        } else {
+          right = mid;
+        }
+      }
+      return left;
+    };
     
-    // Events per minute
-    const eventsLastMinute = this.events.filter(e => e.timestamp >= oneMinuteAgo);
+    const secondIndex = findFirstAfter(oneSecondAgo);
+    const minuteIndex = findFirstAfter(oneMinuteAgo);
+    
+    // Events per second
+    this.metricsCache.eventsPerSecond = this.events.length - secondIndex;
+    
+    // Events per minute  
+    const eventsLastMinute = this.events.slice(minuteIndex);
     this.metricsCache.eventsPerMinute = eventsLastMinute.length;
     
     // Active sessions
@@ -372,9 +398,10 @@ export class RealtimeAnalytics extends EventEmitter {
    * Clean up resources
    */
   async shutdown(): Promise<void> {
-    // Stop update loop
+    // Stop update loop first to prevent new events during cleanup
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
+      this.updateInterval = undefined;
     }
     
     // Clear all subscriptions
@@ -384,8 +411,8 @@ export class RealtimeAnalytics extends EventEmitter {
       }
     }
     
-    // Clear data
-    this.events = [];
+    // Clear data efficiently
+    this.events.length = 0; // More efficient than reassigning
     this.sessions.clear();
     this.subscriptions.clear();
     

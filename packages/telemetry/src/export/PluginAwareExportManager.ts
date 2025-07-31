@@ -48,7 +48,7 @@ export class PluginAwareExportManager {
       const processedEvents = await this.pluginManager.executeExportHooks(
         'beforeExport',
         [events, format, options],
-        format
+        format as ExportFormat
       );
       
       if (!processedEvents || processedEvents.length === 0) {
@@ -70,7 +70,7 @@ export class PluginAwareExportManager {
       const transformedData = await this.pluginManager.executeExportHooks(
         'transformExportData',
         [result.data, format],
-        format
+        format as ExportFormat
       );
       
       if (transformedData && transformedData !== result.data) {
@@ -84,7 +84,7 @@ export class PluginAwareExportManager {
       await this.pluginManager.executeExportHooks(
         'afterExport',
         [result, format, options],
-        format
+        format as ExportFormat
       );
       
       return result;
@@ -93,7 +93,7 @@ export class PluginAwareExportManager {
       await this.pluginManager.executeExportHooks(
         'onExportError',
         [error, format, options],
-        format
+        format as ExportFormat
       );
       throw error;
     }

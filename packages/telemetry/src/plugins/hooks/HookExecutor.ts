@@ -332,4 +332,16 @@ export class HookExecutor {
       custom: customHooks,
     };
   }
+  
+  /**
+   * Clean up resources
+   */
+  shutdown(): void {
+    // Clear all registries
+    this.registry.storage.clear();
+    this.registry.query.clear();
+    this.registry.export.clear();
+    this.registry.analytics.clear();
+    this.registry.custom.clear();
+  }
 }

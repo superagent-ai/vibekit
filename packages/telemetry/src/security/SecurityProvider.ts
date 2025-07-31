@@ -41,4 +41,12 @@ export class SecurityProvider {
     }
     return event;
   }
+  
+  /**
+   * Clean up resources
+   */
+  shutdown(): void {
+    // Currently, PIIDetector and DataEncryption don't have resources to clean up
+    // But we add this method for consistency and future extensibility
+  }
 }

@@ -14,6 +14,7 @@ import type {
   Plugin,
 } from './types.js';
 import { DEFAULT_CONFIG } from './constants.js';
+import { EventValidator, EventValidationError } from '../utils/event-validation.js';
 import { StorageProvider } from '../storage/StorageProvider.js';
 import { StreamingProvider } from '../streaming/StreamingProvider.js';
 import { SecurityProvider } from '../security/SecurityProvider.js';
@@ -244,11 +245,23 @@ export class TelemetryService extends TelemetryEventEmitter {
       throw new Error('TelemetryService must be initialized before tracking events');
     }
 
-    const correlationId = event.id || `track-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // Validate input event
+    const validationResult = EventValidator.validate(event);
+    if (!validationResult.valid) {
+      const errorMessages = validationResult.errors.map(e => 
+        `${e.field}: ${e.message} (constraint: ${e.constraint})`
+      ).join('; ');
+      throw new Error(`Invalid telemetry event: ${errorMessages}`);
+    }
+
+    // Use sanitized values from validation
+    const sanitizedInput = { ...event, ...validationResult.sanitized };
+
+    const correlationId = sanitizedInput.id || `track-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     
     try {
       // Enrich event with defaults
-      const enrichedEvent = await this.enrichEvent(event);
+      const enrichedEvent = await this.enrichEvent(sanitizedInput);
       
       // Apply security measures with error handling
       let sanitizedEvent: TelemetryEvent;
@@ -397,6 +410,14 @@ export class TelemetryService extends TelemetryEventEmitter {
 
   // Convenience methods for common event types  
   async trackStart(category: string, action: string, label?: string, metadata?: any): Promise<string> {
+    // Validate inputs
+    if (!category || typeof category !== 'string') {
+      throw new Error('Category must be a non-empty string');
+    }
+    if (!action || typeof action !== 'string') {
+      throw new Error('Action must be a non-empty string');
+    }
+
     const sessionId = uuidv4();
     await this.track({
       sessionId,
@@ -410,6 +431,14 @@ export class TelemetryService extends TelemetryEventEmitter {
   }
 
   async trackEnd(sessionId: string, status: string, metadata?: any): Promise<void> {
+    // Validate inputs
+    if (!sessionId || typeof sessionId !== 'string') {
+      throw new Error('SessionId must be a non-empty string');
+    }
+    if (!status || typeof status !== 'string') {
+      throw new Error('Status must be a non-empty string');
+    }
+
     return this.track({
       sessionId,
       eventType: 'end',
@@ -421,6 +450,14 @@ export class TelemetryService extends TelemetryEventEmitter {
   }
 
   async trackError(sessionId: string, error: Error | string, metadata?: any): Promise<void> {
+    // Validate inputs
+    if (!sessionId || typeof sessionId !== 'string') {
+      throw new Error('SessionId must be a non-empty string');
+    }
+    if (!error) {
+      throw new Error('Error must be provided');
+    }
+
     return this.track({
       sessionId,
       eventType: 'error',
@@ -456,6 +493,21 @@ export class TelemetryService extends TelemetryEventEmitter {
 
   // Query methods
   async query(filter: QueryFilter): Promise<TelemetryEvent[]> {
+    // Validate query filter
+    if (filter.limit !== undefined) {
+      const limit = Number(filter.limit);
+      if (isNaN(limit) || limit < 1 || limit > 10000) {
+        throw new Error('Query limit must be between 1 and 10000');
+      }
+    }
+    
+    if (filter.offset !== undefined) {
+      const offset = Number(filter.offset);
+      if (isNaN(offset) || offset < 0) {
+        throw new Error('Query offset must be a non-negative number');
+      }
+    }
+
     const results: TelemetryEvent[] = [];
     
     for (const provider of this.storageProviders) {
@@ -489,7 +541,7 @@ export class TelemetryService extends TelemetryEventEmitter {
   async export(format: ExportFormat | { format: string }, filter?: QueryFilter): Promise<string> {
     const events = await this.query(filter || {});
     
-    const formatType = typeof format === 'object' && 'format' in format ? format.format : format.type;
+    const formatType = typeof format === 'object' && 'format' in format ? format.format : format;
     
     switch (formatType) {
       case 'json': {
