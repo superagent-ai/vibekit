@@ -42,6 +42,9 @@ export { RateLimiter } from './reliability/RateLimiter.js';
 // Analytics
 export { AnalyticsEngine } from './analytics/AnalyticsEngine.js';
 
+// Events
+export * from './events/index.js';
+
 // Export
 export { JSONExporter } from './export/formats/JSONExporter.js';
 export { CSVExporter } from './export/formats/CSVExporter.js';
