@@ -2,11 +2,20 @@ import type { TelemetryEvent, ReliabilityConfig } from '../core/types.js';
 import { CircuitBreaker } from './CircuitBreaker.js';
 import { RateLimiter } from './RateLimiter.js';
 import { ErrorHandler, type TelemetryError, type ErrorCategory, type ErrorSeverity } from './ErrorHandler.js';
+import { AlertingService, type AlertChannel, type AlertRule, type Alert } from './AlertingService.js';
+import { HealthChecker, type SystemHealth, type HealthCheckResult } from './HealthChecker.js';
+import { BackpressureManager, type BackpressureStats } from './BackpressureManager.js';
+import { ResourceMonitor, type ResourceMetrics, type ResourceThresholds } from './ResourceMonitor.js';
+import { FallbackStrategy, type FallbackHandler, type FallbackOptions, type FallbackChain } from './FallbackStrategy.js';
 
 export class ReliabilityManager {
   private circuitBreakers = new Map<string, CircuitBreaker>();
   private rateLimiter: RateLimiter;
   private errorHandler: ErrorHandler;
+  private alertingService: AlertingService;
+  private healthChecker: HealthChecker;
+  private backpressureManager: BackpressureManager;
+  private resourceMonitor: ResourceMonitor;
   private config: ReliabilityConfig;
   
   constructor(config: ReliabilityConfig = {}) {
@@ -32,6 +41,35 @@ export class ReliabilityManager {
       onErrorThreshold: this.handleErrorThreshold.bind(this),
       onCriticalError: this.handleCriticalError.bind(this),
     });
+    
+    // Initialize new components
+    this.alertingService = new AlertingService();
+    this.healthChecker = new HealthChecker(this);
+    this.backpressureManager = new BackpressureManager({
+      highWaterMark: 1000,
+      lowWaterMark: 500,
+      strategy: 'drop-oldest',
+      onPressure: (level) => {
+        console.warn(`Backpressure detected: ${(level * 100).toFixed(1)}%`);
+      },
+    });
+    
+    this.resourceMonitor = new ResourceMonitor({
+      cpu: { warning: 70, critical: 90 },
+      memory: { warning: 70, critical: 85 },
+      eventLoop: { warning: 100, critical: 250 },
+    });
+    
+    // Set up resource monitoring alerts
+    this.resourceMonitor.on('alert', (alert) => {
+      this.handleResourceAlert(alert);
+    });
+    
+    // Start resource monitoring
+    this.resourceMonitor.start(5000);
+    
+    // Start health checks
+    this.healthChecker.startPeriodicChecks(60000);
   }
   
   async checkRateLimit(event: TelemetryEvent): Promise<void> {
@@ -189,8 +227,12 @@ export class ReliabilityManager {
       })),
     });
 
-    // TODO: Implement alerting integration (Slack, PagerDuty, etc.)
-    // This is where you would integrate with your alerting system
+    // Check alert rules with current error context
+    await this.alertingService.checkRules({
+      errors,
+      circuitBreakerStates: this.getCircuitBreakerStats(),
+      rateLimiterStats: this.getRateLimiterStats(),
+    });
   }
 
   private async handleCriticalError(error: TelemetryError): Promise<void> {
@@ -203,8 +245,30 @@ export class ReliabilityManager {
       correlationId: error.correlationId,
     });
 
-    // TODO: Implement immediate alerting for critical errors
-    // This could trigger immediate notifications to on-call engineers
+    // Trigger immediate alert for critical errors
+    await this.alertingService.checkRules({
+      errors: [error],
+      circuitBreakerStates: this.getCircuitBreakerStats(),
+      rateLimiterStats: this.getRateLimiterStats(),
+    });
+  }
+  
+  private async handleResourceAlert(alert: any): Promise<void> {
+    // Convert resource alert to telemetry error for consistent handling
+    const telemetryError = this.errorHandler.createError(
+      alert.message,
+      'system',
+      alert.severity === 'critical' ? 'critical' : 'high',
+      {
+        resourceType: alert.type,
+        value: alert.value,
+        threshold: alert.threshold,
+      },
+      undefined,
+      false
+    );
+    
+    await this.errorHandler.handleError(telemetryError);
   }
 
   // Enhanced stats methods
@@ -259,6 +323,9 @@ export class ReliabilityManager {
     this.rateLimiter.shutdown();
     this.errorHandler.shutdown();
     this.circuitBreakers.clear();
+    this.resourceMonitor.shutdown();
+    this.backpressureManager.shutdown();
+    this.healthChecker.stop();
   }
 
   // Graceful degradation helper
@@ -294,5 +361,105 @@ export class ReliabilityManager {
         throw telemetryError;
       }
     }
+  }
+
+  // Alert management methods
+  addAlertChannel(channel: AlertChannel): void {
+    this.alertingService.addChannel(channel.name, channel);
+  }
+
+  removeAlertChannel(name: string): void {
+    this.alertingService.removeChannel(name);
+  }
+
+  addAlertRule(rule: AlertRule): void {
+    this.alertingService.addRule(rule);
+  }
+
+  removeAlertRule(id: string): void {
+    this.alertingService.removeRule(id);
+  }
+
+  getAlertHistory(duration?: number): Alert[] {
+    return this.alertingService.getAlertHistory(duration);
+  }
+
+  // Backpressure management
+  async pushToQueue<T>(item: T, queueName: string = 'default'): Promise<boolean> {
+    return this.backpressureManager.push(item);
+  }
+
+  async *consumeFromQueue<T>(queueName: string = 'default'): AsyncGenerator<T, void, unknown> {
+    yield* this.backpressureManager.consume<T>();
+  }
+
+  getBackpressureStats(): BackpressureStats {
+    return this.backpressureManager.getStats();
+  }
+
+  // Resource monitoring
+  getResourceMetrics(): ResourceMetrics | null {
+    return this.resourceMonitor.getLatestMetrics();
+  }
+
+  getResourceHistory(duration?: number): ResourceMetrics[] {
+    return this.resourceMonitor.getMetricsHistory(duration);
+  }
+
+  updateResourceThresholds(thresholds: ResourceThresholds): void {
+    this.resourceMonitor.updateThresholds(thresholds);
+  }
+
+  // Health check methods
+  async getSystemHealth(): Promise<SystemHealth> {
+    return this.healthChecker.checkHealth();
+  }
+
+  async runHealthCheck(checkName?: string): Promise<HealthCheckResult | SystemHealth> {
+    if (checkName) {
+      return this.healthChecker.runCheck(checkName);
+    }
+    return this.healthChecker.runChecks();
+  }
+
+  // Fallback strategy helpers
+  async executeWithFallbackChain<T>(
+    chain: FallbackChain<T>,
+    options?: FallbackOptions
+  ): Promise<T> {
+    return FallbackStrategy.withChain(chain, options);
+  }
+
+  createCircuitBreakerHandler<T>(
+    handler: FallbackHandler<T>,
+    options: {
+      threshold: number;
+      timeout: number;
+      resetTimeout: number;
+      fallback?: FallbackHandler<T>;
+    }
+  ): FallbackHandler<T> {
+    return FallbackStrategy.createCircuitBreaker(handler, options);
+  }
+
+  // Combined reliability stats
+  getReliabilityReport(): {
+    health: any;
+    errors: any;
+    circuitBreakers: Record<string, any>;
+    rateLimiter: any;
+    backpressure: BackpressureStats;
+    resources: ResourceMetrics | null;
+    alerts: Alert[];
+  } {
+    return {
+      health: this.getHealthStatus(),
+      errors: this.getErrorStats(),
+      circuitBreakers: this.getCircuitBreakerStats(),
+      rateLimiter: this.getRateLimiterStats(),
+      backpressure: this.getBackpressureStats(),
+      resources: this.getResourceMetrics(),
+      alerts: this.getAlertHistory(300000), // Last 5 minutes
+    };
   }
 }
