@@ -9,6 +9,10 @@ export interface TelemetryEventMap {
   'storage:degraded': (data: any) => void;
   'streaming:error': (data: any) => void;
   'analytics:error': (data: any) => void;
+  'analytics:anomaly': (anomaly: any) => void;
+  'analytics:alert': (alert: any) => void;
+  'analytics:realtime': (metrics: any) => void;
+  'metrics:snapshot': (snapshot: any) => void;
   'security:warning': (data: any) => void;
   'plugin:warning': (data: any) => void;
   'shutdown': () => void;
