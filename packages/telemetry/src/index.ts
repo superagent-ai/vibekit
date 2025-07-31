@@ -54,6 +54,12 @@ export { TelemetryAPIServer } from './api/TelemetryAPIServer.js';
 
 // Plugin system
 export { PluginManager } from './plugins/PluginManager.js';
+export * from './plugins/index.js';
+
+// Plugin-aware wrappers
+export { PluginAwareStorageProvider } from './storage/PluginAwareStorageProvider.js';
+export { PluginAwareExportManager } from './export/PluginAwareExportManager.js';
+export type { Exporter } from './export/PluginAwareExportManager.js';
 
 // Constants
 export { DEFAULT_CONFIG, EVENT_TYPES, STORAGE_TYPES, STREAMING_TYPES } from './core/constants.js';

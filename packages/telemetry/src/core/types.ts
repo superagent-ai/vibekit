@@ -131,14 +131,49 @@ export interface DashboardConfig {
 export interface Plugin {
   name: string;
   version: string;
+  description?: string;
+  
+  // Lifecycle hooks
   initialize?(telemetry: any): Promise<void>;
   shutdown?(): Promise<void>;
+  
+  // Event tracking hooks
   beforeTrack?(event: TelemetryEvent): Promise<TelemetryEvent | null>;
   afterTrack?(event: TelemetryEvent): Promise<void>;
+  
+  // Storage hooks
+  beforeStore?(events: TelemetryEvent[], provider: string, context?: any): Promise<TelemetryEvent[]>;
+  afterStore?(events: TelemetryEvent[], provider: string, result?: any, context?: any): Promise<void>;
+  onStorageError?(error: Error, events: TelemetryEvent[], provider: string, context?: any): Promise<void>;
+  registerStorageProvider?(register: (name: string, provider: any) => void): void;
+  
+  // Query hooks
+  beforeQuery?(filter: QueryFilter, provider: string, context?: any): Promise<QueryFilter>;
+  afterQuery?(results: TelemetryEvent[], filter: QueryFilter, provider: string, context?: any): Promise<TelemetryEvent[]>;
+  onQueryError?(error: Error, filter: QueryFilter, provider: string, context?: any): Promise<void>;
+  transformQueryResult?(result: any, filter: QueryFilter, context?: any): Promise<any>;
+  
+  // Export hooks
+  beforeExport?(events: TelemetryEvent[], format: ExportFormat | string, options?: any, context?: any): Promise<TelemetryEvent[]>;
+  afterExport?(result: ExportResult, format: ExportFormat | string, options?: any, context?: any): Promise<void>;
+  onExportError?(error: Error, format: ExportFormat | string, options?: any, context?: any): Promise<void>;
+  registerExporter?(register: (format: string, exporter: any) => void): void;
+  
+  // Analytics hooks
+  beforeAnalytics?(operation: string, params: any): Promise<any>;
+  afterAnalytics?(operation: string, result: any, params: any): Promise<any>;
+  
+  // Custom hooks for extensibility
+  hooks?: {
+    [key: string]: (...args: any[]) => any | Promise<any>;
+  };
 }
 
 export interface QueryFilter {
   sessionId?: string;
+  userId?: string;
+  startTime?: number;
+  endTime?: number;
   category?: string;
   action?: string;
   eventType?: string;
@@ -191,16 +226,19 @@ export interface Insights {
   recommendations: string[];
 }
 
-export interface ExportFormat {
-  type: 'json' | 'csv' | 'otlp' | 'parquet';
-  options?: any;
-}
+export type ExportFormat = 'json' | 'csv' | 'otlp' | 'parquet';
 
 export interface ExportResult {
-  format: string;
+  success: boolean;
+  format: ExportFormat | string;
   data: any;
-  size: number;
-  exportedAt: number;
+  size?: number;
+  exportedAt?: number | string;
+  metadata?: {
+    totalEvents?: number;
+    exportedAt?: string;
+    [key: string]: any;
+  };
 }
 
 export interface DashboardOptions {

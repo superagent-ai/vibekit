@@ -4,6 +4,7 @@ export class CSVExporter {
   async export(events: TelemetryEvent[], options?: any): Promise<ExportResult> {
     if (events.length === 0) {
       return {
+      success: true,
         format: 'csv',
         data: '',
         size: 0,
@@ -47,6 +48,7 @@ export class CSVExporter {
     const csvString = rows.join('\n');
     
     return {
+      success: true,
       format: 'csv',
       data: csvString,
       size: Buffer.byteLength(csvString, 'utf8'),

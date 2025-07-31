@@ -77,6 +77,7 @@ export class OTLPExporter {
     const jsonString = JSON.stringify(otlpData, null, 2);
     
     return {
+      success: true,
       format: 'otlp',
       data: jsonString,
       size: Buffer.byteLength(jsonString, 'utf8'),
@@ -381,6 +382,7 @@ export class OTLPExporter {
       }
       
       return {
+      success: true,
         format: 'otlp',
         data: `Exported ${events.length} events to OTLP collector`,
         size: events.length,

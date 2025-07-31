@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import type { TelemetryEvent, ExportResult, QueryFilter } from '../core/types.js';
+import type { TelemetryEvent, ExportResult, QueryFilter, ExportFormat } from '../core/types.js';
 import { JSONExporter } from './formats/JSONExporter.js';
 import { CSVExporter } from './formats/CSVExporter.js';
 import { OTLPExporter } from './formats/OTLPExporter.js';
@@ -326,7 +326,8 @@ export class ExportScheduler extends EventEmitter {
     }
     
     return {
-      format,
+      success: true,
+      format: format as ExportFormat,
       data: `Exported ${events.length} events to ${filePath}`,
       size: events.length,
       exportedAt: Date.now(),
@@ -377,7 +378,8 @@ export class ExportScheduler extends EventEmitter {
     }
     
     return {
-      format,
+      success: true,
+      format: format as ExportFormat,
       data: `Exported ${events.length} events to ${endpoint}`,
       size: events.length,
       exportedAt: Date.now(),

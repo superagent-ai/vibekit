@@ -16,6 +16,7 @@ export class JSONExporter {
     const jsonString = JSON.stringify(data, null, 2);
     
     return {
+      success: true,
       format: 'json',
       data: jsonString,
       size: Buffer.byteLength(jsonString, 'utf8'),

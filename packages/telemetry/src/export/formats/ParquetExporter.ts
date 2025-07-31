@@ -67,6 +67,7 @@ export class ParquetExporter {
       writeFileSync(filePath, buffer);
       
       return {
+      success: true,
         format: 'parquet',
         data: `Exported ${events.length} events to ${filePath}`,
         size: events.length,
