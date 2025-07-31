@@ -30,11 +30,11 @@
   "license": "MIT",
   "dependencies": {
     "better-sqlite3": "^9.2.2",
-    "drizzle-orm": "^0.29.0"
+    "drizzle-orm": "^0.44.4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
-    "drizzle-kit": "^0.20.6",
+    "drizzle-kit": "^0.31.4",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3"
   },
