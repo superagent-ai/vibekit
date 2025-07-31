@@ -18,7 +18,14 @@ import { StorageProvider } from '../storage/StorageProvider.js';
 import { StreamingProvider } from '../streaming/StreamingProvider.js';
 import { SecurityProvider } from '../security/SecurityProvider.js';
 import { ReliabilityManager } from '../reliability/ReliabilityManager.js';
-import { AnalyticsEngine } from '../analytics/AnalyticsEngine.js';
+import { 
+  AnalyticsEngine,
+  MetricsCollector,
+  AnomalyDetector,
+  AlertManager,
+  AggregationEngine,
+  RealtimeAnalytics
+} from '../analytics/index.js';
 import { PluginManager } from '../plugins/PluginManager.js';
 import { TelemetryAPIServer } from '../api/TelemetryAPIServer.js';
 
@@ -29,6 +36,11 @@ export class TelemetryService extends TelemetryEventEmitter {
   private securityProvider: SecurityProvider;
   private reliabilityManager: ReliabilityManager;
   private analyticsEngine?: AnalyticsEngine;
+  private metricsCollector?: MetricsCollector;
+  private anomalyDetector?: AnomalyDetector;
+  private alertManager?: AlertManager;
+  private aggregationEngine?: AggregationEngine;
+  private realtimeAnalytics?: RealtimeAnalytics;
   private pluginManager: PluginManager;
   private apiServer?: TelemetryAPIServer;
   private isInitialized = false;
@@ -152,8 +164,56 @@ export class TelemetryService extends TelemetryEventEmitter {
   private async initializeAnalytics(): Promise<void> {
     if (!this.config.analytics?.enabled) return;
     
+    // Initialize core analytics engine
     this.analyticsEngine = new AnalyticsEngine(this.config.analytics);
     await this.analyticsEngine.initialize();
+    
+    // Initialize metrics collector
+    if (this.config.analytics.metrics?.enabled) {
+      this.metricsCollector = new MetricsCollector(this.analyticsEngine, this.config.analytics);
+      this.metricsCollector.start();
+    }
+    
+    // Initialize anomaly detector
+    if (this.config.analytics.anomaly?.enabled) {
+      this.anomalyDetector = new AnomalyDetector(this.config.analytics);
+      
+      // Listen for anomalies and forward to alert manager
+      this.anomalyDetector.onAnomaly(async (anomaly) => {
+        this.emit('analytics:anomaly', anomaly);
+        if (this.alertManager) {
+          await this.alertManager.checkAnomaly(anomaly);
+        }
+      });
+    }
+    
+    // Initialize alert manager
+    if (this.config.analytics.alerts?.enabled) {
+      this.alertManager = new AlertManager(this.config.analytics);
+      
+      // Listen for alerts
+      if (this.metricsCollector) {
+        // Check alerts on metric snapshots
+        this.on('metrics:snapshot', async (snapshot) => {
+          const alerts = await this.alertManager!.checkMetrics(snapshot.metrics);
+          alerts.forEach(alert => this.emit('analytics:alert', alert));
+        });
+      }
+    }
+    
+    // Initialize aggregation engine
+    this.aggregationEngine = new AggregationEngine();
+    
+    // Initialize real-time analytics
+    this.realtimeAnalytics = new RealtimeAnalytics({
+      windowSize: 300000, // 5 minutes
+      updateInterval: 1000, // 1 second
+    });
+    
+    // Listen for real-time metrics updates
+    this.realtimeAnalytics.on('metrics', (metrics) => {
+      this.emit('analytics:realtime', metrics);
+    });
   }
 
   private startMaintenanceTasks(): void {
@@ -237,6 +297,19 @@ export class TelemetryService extends TelemetryEventEmitter {
             () => this.analyticsEngine!.process(processedEvent),
             'analytics'
           );
+          
+          // Process through additional analytics components
+          if (this.anomalyDetector) {
+            await this.anomalyDetector.processEvent(processedEvent);
+          }
+          
+          if (this.aggregationEngine) {
+            this.aggregationEngine.addEvents([processedEvent]);
+          }
+          
+          if (this.realtimeAnalytics) {
+            this.realtimeAnalytics.processEvent(processedEvent);
+          }
         } catch (error) {
           console.warn(`Analytics processing failed for event ${processedEvent.id}:`, error);
           this.emit('analytics:error', { event: processedEvent, error });
@@ -437,7 +510,8 @@ export class TelemetryService extends TelemetryEventEmitter {
           serviceName: this.config.serviceName,
           serviceVersion: this.config.serviceVersion,
         });
-        return exporter.export(events);
+        const result = await exporter.export(events);
+        return result.data;
       }
       case 'parquet': {
         const { ParquetExporter } = await import('../export/formats/ParquetExporter.js');
@@ -463,6 +537,70 @@ export class TelemetryService extends TelemetryEventEmitter {
       throw new Error('Analytics is not enabled');
     }
     return this.analyticsEngine.getInsights(options);
+  }
+  
+  // Advanced analytics methods
+  getRealtimeMetrics() {
+    if (!this.realtimeAnalytics) {
+      throw new Error('Real-time analytics is not enabled');
+    }
+    return this.realtimeAnalytics.getMetrics();
+  }
+  
+  subscribeToMetric(metric: string, callback: (data: any) => void, options?: any) {
+    if (!this.realtimeAnalytics) {
+      throw new Error('Real-time analytics is not enabled');
+    }
+    return this.realtimeAnalytics.subscribe(metric, callback, options);
+  }
+  
+  unsubscribeFromMetric(subscriptionId: string) {
+    if (!this.realtimeAnalytics) {
+      throw new Error('Real-time analytics is not enabled');
+    }
+    this.realtimeAnalytics.unsubscribe(subscriptionId);
+  }
+  
+  async queryAggregations(query: any) {
+    if (!this.aggregationEngine) {
+      throw new Error('Aggregation engine is not enabled');
+    }
+    return this.aggregationEngine.query(query);
+  }
+  
+  getAnomalies(timeRange?: TimeRange, severity?: string[]) {
+    if (!this.anomalyDetector) {
+      throw new Error('Anomaly detection is not enabled');
+    }
+    return this.anomalyDetector.getAnomalies(timeRange, severity as any);
+  }
+  
+  getAlerts(options?: any) {
+    if (!this.alertManager) {
+      throw new Error('Alert manager is not enabled');
+    }
+    return this.alertManager.getAlerts(options);
+  }
+  
+  addAlertRule(rule: any) {
+    if (!this.alertManager) {
+      throw new Error('Alert manager is not enabled');
+    }
+    this.alertManager.addRule(rule);
+  }
+  
+  removeAlertRule(ruleId: string) {
+    if (!this.alertManager) {
+      throw new Error('Alert manager is not enabled');
+    }
+    this.alertManager.removeRule(ruleId);
+  }
+  
+  getMetricSnapshots(timeRange?: TimeRange) {
+    if (!this.metricsCollector) {
+      throw new Error('Metrics collector is not enabled');
+    }
+    return this.metricsCollector.getSnapshots(timeRange);
   }
 
   // Lifecycle methods
@@ -493,6 +631,11 @@ export class TelemetryService extends TelemetryEventEmitter {
       ...this.storageProviders.map(p => this.safeShutdown(() => p.shutdown(), `storage:${p.name}`)),
       this.safeShutdown(() => this.streamingProvider?.shutdown(), 'streaming'),
       this.safeShutdown(() => this.analyticsEngine?.shutdown(), 'analytics'),
+      this.safeShutdown(() => this.metricsCollector?.shutdown(), 'metrics-collector'),
+      this.safeShutdown(() => this.anomalyDetector?.shutdown(), 'anomaly-detector'),
+      this.safeShutdown(() => this.alertManager?.shutdown(), 'alert-manager'),
+      this.safeShutdown(() => this.aggregationEngine?.shutdown(), 'aggregation-engine'),
+      this.safeShutdown(() => this.realtimeAnalytics?.shutdown(), 'realtime-analytics'),
       this.safeShutdown(() => this.pluginManager.shutdown(), 'plugins'),
       this.safeShutdown(() => this.apiServer?.shutdown(), 'api-server'),
       this.safeShutdown(() => this.reliabilityManager.shutdown(), 'reliability'),

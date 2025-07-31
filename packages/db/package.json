@@ -16,7 +16,11 @@
     "clean": "rm -rf dist",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "migrate": "tsx scripts/migrate.ts",
+    "migrate:generate": "tsx scripts/generate-migration.ts",
+    "migrate:push": "drizzle-kit push",
+    "migrate:drop": "drizzle-kit drop"
   },
   "keywords": [
     "vibekit",
@@ -36,6 +40,7 @@
     "@types/better-sqlite3": "^7.6.8",
     "drizzle-kit": "^0.31.4",
     "tsup": "^8.0.1",
+    "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   },
   "exports": {

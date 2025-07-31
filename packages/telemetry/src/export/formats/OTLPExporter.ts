@@ -72,16 +72,23 @@ export class OTLPExporter {
     this.serviceVersion = options.serviceVersion || '1.0.0';
   }
   
-  async export(events: TelemetryEvent[]): Promise<string> {
+  async export(events: TelemetryEvent[]): Promise<ExportResult> {
     const otlpData = this.convertToOTLP(events);
-    return JSON.stringify(otlpData, null, 2);
+    const jsonString = JSON.stringify(otlpData, null, 2);
+    
+    return {
+      format: 'otlp',
+      data: jsonString,
+      size: Buffer.byteLength(jsonString, 'utf8'),
+      exportedAt: Date.now(),
+    };
   }
   
   async exportBinary(events: TelemetryEvent[]): Promise<Buffer> {
     // For a full implementation, this would use protobuf encoding
     // For now, we'll return JSON as bytes
-    const jsonData = await this.export(events);
-    return Buffer.from(jsonData, 'utf-8');
+    const result = await this.export(events);
+    return Buffer.from(result.data, 'utf-8');
   }
   
   private convertToOTLP(events: TelemetryEvent[]): OTLPExportData {

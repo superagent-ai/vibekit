@@ -149,11 +149,9 @@ export function validateAgentConfig(config: any): void {
       ...CommonValidations.nonEmptyString,
     },
     sandboxId: {
-      type: 'string',
       ...CommonValidations.uuid,
     },
     repoUrl: {
-      type: 'string',
       ...CommonValidations.url,
     },
   };
@@ -199,7 +197,6 @@ export function validateTelemetryConfig(config: any): void {
       type: 'boolean',
     },
     endpoint: {
-      type: 'string',
       ...CommonValidations.url,
     },
     apiKey: {
