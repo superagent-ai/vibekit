@@ -1,6 +1,6 @@
 import { defineConfig } from "tsup";
 
-export default defineConfig([
+export default defineConfig({
   // Main package and agents (with TypeScript declarations)
   {
     entry: {
@@ -24,48 +24,10 @@ export default defineConfig([
     sourcemap: true,
     outDir: "dist",
   },
-  // CLI (ESM only, no TypeScript declarations, with shebang)
-  {
-    entry: {
-      "cli/index": "src/cli/index.ts",
-    },
-    format: ["esm"],
-    dts: false,
-    clean: false,
-    splitting: false,
-    sourcemap: true,
-    outDir: "dist",
-    banner: {
-      js: "#!/usr/bin/env node",
-    },
-    // Keep all dependencies external to avoid bundling issues
-    noExternal: [],
-    // Externalize Node.js built-ins and large dependencies
-    external: [
-      "@vibe-kit/dagger",
-      "@dagger.io/dagger",
-      "adm-zip",
-      "fs-extra",
-      "child_process",
-      "fs",
-      "path",
-      "os",
-      "util",
-      "crypto",
-      "stream",
-      "events",
-      "url",
-      "http",
-      "https",
-      "net",
-      "tls",
-      "querystring",
-      "zlib",
-      "buffer",
-      "fs/promises",
-      "process",
-      "tty",
-      "readline",
-    ],
-  },
-]);
+  format: ["esm", "cjs"],
+  dts: true,
+  clean: true,
+  splitting: false,
+  sourcemap: true,
+  outDir: "dist",
+});

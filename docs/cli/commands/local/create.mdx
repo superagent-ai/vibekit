@@ -1,0 +1,327 @@
+---
+title: vibekit local create
+description: "Create a new sandbox environment with AI agent support"
+---
+
+## Overview
+
+The `vibekit local create` command creates a new isolated sandbox environment configured with your chosen AI agent. Each environment is independent and can have its own configuration, dependencies, and state.
+
+## Syntax
+
+```bash
+vibekit local create [options]
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--name <name>` | Environment name | Auto-generated |
+| `--agent <type>` | AI agent type: `claude`, `codex`, `opencode`, `gemini` | None |
+| `--working-directory <path>` | Working directory in sandbox | `/vibe0` |
+| `--env <vars>` | Environment variables (key=value,key2=value2) | None |
+| `--github-token <token>` | GitHub token for git operations | From env: `GITHUB_TOKEN` |
+| `--model <model>` | Specific AI model to use | Agent default |
+| `--api-key <key>` | API key for the agent | From environment |
+| `--timeout <ms>` | Default command timeout in milliseconds | 30000 |
+
+## Agent Types
+
+### Available Agents
+
+| Agent | Provider | Default Model | Required API Key |
+|-------|----------|---------------|------------------|
+| `claude` | Anthropic | claude-3-5-sonnet-20241022 | `ANTHROPIC_API_KEY` |
+| `codex` | OpenAI | gpt-4o | `OPENAI_API_KEY` |
+| `gemini` | Google | gemini-1.5-pro | `GOOGLE_API_KEY` |
+| `opencode` | Groq | llama-3.1-70b-versatile | `GROQ_API_KEY` |
+
+### Agent-Specific Features
+
+<Tabs>
+  <Tab title="Claude">
+    - Excellent at complex reasoning and refactoring
+    - Strong understanding of code context
+    - Best for architectural decisions
+    - Supports 200k token context window
+  </Tab>
+  <Tab title="Codex">
+    - Versatile and well-tested
+    - Great for general coding tasks
+    - Strong language support
+    - Good for code completion
+  </Tab>
+  <Tab title="Gemini">
+    - Large context window (1M tokens)
+    - Good for analyzing large codebases
+    - Strong multimodal capabilities
+    - Efficient for batch operations
+  </Tab>
+  <Tab title="OpenCode">
+    - Fast inference times
+    - Open source models
+    - Good for rapid iteration
+    - Cost-effective option
+  </Tab>
+</Tabs>
+
+## Examples
+
+### Basic Environment Creation
+
+Create with auto-generated name:
+```bash
+vibekit local create --agent claude
+```
+
+Create with specific name:
+```bash
+vibekit local create --name my-project --agent codex
+```
+
+### Advanced Configuration
+
+With environment variables:
+```bash
+vibekit local create \
+  --name dev-env \
+  --agent claude \
+  --env "NODE_ENV=development,PORT=3000,DEBUG=true"
+```
+
+With custom model:
+```bash
+vibekit local create \
+  --name gpt4-env \
+  --agent codex \
+  --model "gpt-4-turbo-preview"
+```
+
+With GitHub integration:
+```bash
+vibekit local create \
+  --name feature-branch \
+  --agent claude \
+  --github-token "ghp_xxxxxxxxxxxx" \
+  --env "GITHUB_REPOSITORY=owner/repo"
+```
+
+### Specific Use Cases
+
+For testing:
+```bash
+vibekit local create \
+  --name test-env \
+  --agent codex \
+  --env "NODE_ENV=test" \
+  --timeout 300000  # 5 minutes for test runs
+```
+
+For production debugging:
+```bash
+vibekit local create \
+  --name prod-debug \
+  --agent claude \
+  --env "NODE_ENV=production,LOG_LEVEL=debug" \
+  --working-directory "/app"
+```
+
+For API development:
+```bash
+vibekit local create \
+  --name api-dev \
+  --agent gemini \
+  --env "DATABASE_URL=postgresql://localhost/dev,REDIS_URL=redis://localhost"
+```
+
+## Environment Naming
+
+### Auto-generated Names
+
+If no name is provided, names are generated as:
+- Format: `{agent}-{timestamp}`
+- Example: `claude-k8n3d4`, `codex-m2p5q1`
+
+### Naming Conventions
+
+Recommended naming patterns:
+- Feature branches: `feature-{feature-name}`
+- Bug fixes: `bugfix-{issue-number}`
+- Experiments: `exp-{description}`
+- Development: `dev-{project}`
+
+### Name Validation
+
+- Must be 1-50 characters
+- Only letters, numbers, hyphens, and underscores
+- Must be unique across all environments
+
+## Working Directory
+
+The `--working-directory` option sets the default directory for:
+- Command execution
+- File operations
+- Git operations
+
+Default: `/vibe0`
+
+Common patterns:
+```bash
+# Web projects
+--working-directory "/app"
+
+# Monorepos
+--working-directory "/workspace"
+
+# Specific subdirectory
+--working-directory "/project/backend"
+```
+
+## Environment Variables
+
+### Setting Variables
+
+Format: `key=value,key2=value2`
+
+```bash
+vibekit local create --env "API_KEY=secret,DEBUG=true,PORT=3000"
+```
+
+### Common Variables
+
+```bash
+# Development
+NODE_ENV=development
+DEBUG=true
+LOG_LEVEL=debug
+
+# API Keys (if not using --api-key)
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+
+# Database
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://...
+
+# Services
+API_ENDPOINT=https://api.example.com
+WEBHOOK_URL=https://example.com/webhook
+```
+
+## API Key Management
+
+### Priority Order
+
+API keys are resolved in this order:
+1. `--api-key` command option
+2. Agent-specific environment variable
+3. Environment variables passed via `--env`
+
+### Examples
+
+Using command option:
+```bash
+vibekit local create --agent claude --api-key "sk-ant-xxxx"
+```
+
+Using environment variable:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-xxxx"
+vibekit local create --agent claude
+```
+
+Using --env option:
+```bash
+vibekit local create --agent claude --env "ANTHROPIC_API_KEY=sk-ant-xxxx"
+```
+
+## What Happens During Creation
+
+1. **Validates Input** - Checks name, agent type, and options
+2. **Checks API Key** - Ensures required API key is available
+3. **Creates Sandbox** - Initializes isolated environment
+4. **Configures Agent** - Sets up AI agent with specified model
+5. **Sets Environment** - Applies environment variables
+6. **Saves Metadata** - Stores environment configuration
+
+## Output
+
+Successful creation shows:
+```
+✅ Environment created!
+📦 Name: my-project
+🆔 ID: abc123def456
+🤖 Agent: claude
+🧠 Model: claude-3-5-sonnet-20241022
+📁 Working Directory: /vibe0
+🔧 Environment Variables: NODE_ENV, DEBUG
+
+💡 Next steps:
+  • Run commands: vibekit local exec -e my-project -c "your-command"
+  • Generate code: vibekit local generate -e my-project -p "your-prompt"
+  • List environments: vibekit local list
+```
+
+## Troubleshooting
+
+### Name Already Exists
+
+```bash
+# Check existing environments
+vibekit local list
+
+# Use a different name
+vibekit local create --name my-project-2 --agent claude
+```
+
+### Missing API Key
+
+```bash
+# Set the required API key
+export ANTHROPIC_API_KEY="your-key"
+
+# Or provide directly
+vibekit local create --agent claude --api-key "your-key"
+```
+
+### Docker Issues
+
+```bash
+# Ensure Docker is running
+docker info
+
+# Check Docker resources
+docker system df
+
+# Clean up if needed
+docker system prune
+```
+
+### Creation Fails
+
+```bash
+# Check logs
+vibekit local logs -e <partial-name>
+
+# Try with more resources
+vibekit init --memory 4096
+
+# Verify provider is initialized
+vibekit init --providers Dagger
+```
+
+## Best Practices
+
+1. **Use Descriptive Names** - Makes environments easy to identify
+2. **Set Appropriate Timeouts** - Longer for tests, shorter for quick tasks
+3. **Minimize Environment Variables** - Only include what's needed
+4. **Document Agent Choice** - Note why specific agent was selected
+5. **Clean Up Regularly** - Delete environments when done
+
+## Related Commands
+
+- [`vibekit local list`](/cli/commands/local/list) - List created environments
+- [`vibekit local delete`](/cli/commands/local/delete) - Remove environments
+- [`vibekit local generate`](/cli/commands/local/generate) - Use the created environment
+- [`vibekit init`](/cli/commands/init) - Set up providers before creating environments

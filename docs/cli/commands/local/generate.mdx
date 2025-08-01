@@ -1,0 +1,377 @@
+---
+title: vibekit local generate
+description: "Generate code using AI agents in sandbox environments"
+---
+
+## Overview
+
+The `vibekit local generate` command uses AI agents to generate, modify, and improve code within your sandbox environment. It supports multiple AI models, conversation history, and different generation modes.
+
+## Syntax
+
+```bash
+vibekit local generate [options]
+```
+
+## Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env <name>` | `-e` | Environment name to use | Interactive prompt |
+| `--prompt <prompt>` | `-p` | Code generation prompt | Interactive prompt |
+| `--mode <mode>` | `-m` | Generation mode: `ask` or `code` | `code` |
+| `--branch <branch>` | | Branch context for generation | Current branch |
+| `--history <file>` | | JSON file with conversation history | None |
+| `--stream` | | Enable streaming output | false |
+| `--save-to <file>` | | Save response to file | None |
+
+## Generation Modes
+
+### Code Mode (Default)
+
+Generates executable code based on your prompt:
+```bash
+vibekit local generate -e my-env -p "Create a REST API endpoint for user authentication"
+```
+
+The AI will:
+- Generate complete, runnable code
+- Follow existing patterns in your codebase
+- Include necessary imports and dependencies
+- Add appropriate error handling
+
+### Ask Mode
+
+Interactive Q&A about code without generation:
+```bash
+vibekit local generate -e my-env -m ask -p "How should I structure the database schema for a multi-tenant application?"
+```
+
+The AI will:
+- Provide architectural guidance
+- Suggest best practices
+- Explain trade-offs
+- Answer follow-up questions
+
+## Examples
+
+### Basic Code Generation
+
+Generate a new feature:
+```bash
+vibekit local generate -e my-env -p "Add user authentication with JWT tokens"
+```
+
+Improve existing code:
+```bash
+vibekit local generate -e my-env -p "Refactor the payment processing module to use async/await"
+```
+
+Fix bugs:
+```bash
+vibekit local generate -e my-env -p "Fix the memory leak in the WebSocket connection handler"
+```
+
+### Interactive Development
+
+Ask for guidance:
+```bash
+vibekit local generate -e my-env -m ask -p "What's the best way to implement rate limiting?"
+```
+
+Get code reviews:
+```bash
+vibekit local generate -e my-env -m ask -p "Review this function for potential issues and suggest improvements"
+```
+
+### Advanced Usage
+
+With conversation history:
+```bash
+# First conversation
+vibekit local generate -e my-env -p "Create a user model with validation" --save-to chat1.json
+
+# Continue conversation
+vibekit local generate -e my-env --history chat1.json -p "Now add password hashing" --save-to chat2.json
+```
+
+With streaming for long responses:
+```bash
+vibekit local generate -e my-env -p "Create a complete CRUD API for products" --stream
+```
+
+## Prompt Engineering
+
+### Effective Prompts
+
+Be specific:
+```bash
+# Good
+vibekit local generate -e my-env -p "Create an Express.js middleware that validates JWT tokens and adds user info to req.user"
+
+# Too vague
+vibekit local generate -e my-env -p "Add authentication"
+```
+
+Include context:
+```bash
+vibekit local generate -e my-env -p "Update the UserController to handle soft deletes using the existing deletedAt timestamp field"
+```
+
+Specify requirements:
+```bash
+vibekit local generate -e my-env -p "Create a Redis caching layer for the product API with 5-minute TTL and automatic cache invalidation on updates"
+```
+
+### Prompt Templates
+
+API endpoint:
+```bash
+vibekit local generate -e my-env -p "Create a POST /api/users endpoint that:
+- Validates email and password
+- Checks for existing users
+- Hashes the password with bcrypt
+- Saves to PostgreSQL
+- Returns JWT token"
+```
+
+Refactoring:
+```bash
+vibekit local generate -e my-env -p "Refactor the OrderService class to:
+- Use dependency injection
+- Add proper error handling
+- Implement the repository pattern
+- Add unit tests"
+```
+
+Bug fix:
+```bash
+vibekit local generate -e my-env -p "Fix the race condition in the checkout process where multiple requests can process the same order"
+```
+
+## Working with Different Agents
+
+### Claude
+Best for complex logic and refactoring:
+```bash
+vibekit local create --name claude-env --agent claude
+vibekit local generate -e claude-env -p "Refactor this monolithic service into microservices"
+```
+
+### Codex (GPT-4)
+Great for general coding tasks:
+```bash
+vibekit local create --name gpt-env --agent codex
+vibekit local generate -e gpt-env -p "Create a GraphQL schema for an e-commerce platform"
+```
+
+### Gemini
+Excellent for large codebases:
+```bash
+vibekit local create --name gemini-env --agent gemini
+vibekit local generate -e gemini-env -p "Analyze the entire codebase and suggest performance improvements"
+```
+
+### OpenCode
+Fast iterations with open models:
+```bash
+vibekit local create --name open-env --agent opencode
+vibekit local generate -e open-env -p "Generate test cases for the auth module"
+```
+
+## Conversation History
+
+### Maintaining Context
+
+Save conversations:
+```bash
+# Start a new feature
+vibekit local generate -e my-env \
+  -p "Design a notification system architecture" \
+  --save-to notif-1.json
+
+# Implement first part
+vibekit local generate -e my-env \
+  --history notif-1.json \
+  -p "Implement the email notification service" \
+  --save-to notif-2.json
+
+# Continue building
+vibekit local generate -e my-env \
+  --history notif-2.json \
+  -p "Now add SMS notifications" \
+  --save-to notif-3.json
+```
+
+### History File Format
+
+```json
+{
+  "prompt": "Create a user authentication system",
+  "response": {
+    "stdout": "Generated code output...",
+    "stderr": "",
+    "exitCode": 0,
+    "sandboxId": "sandbox_123"
+  },
+  "timestamp": "2024-01-15T10:30:00Z",
+  "agent": "claude",
+  "mode": "code"
+}
+```
+
+## Output Handling
+
+### Console Output
+
+Default output shows:
+```
+✅ Code Generation Complete!
+
+📤 Generated Output:
+// Generated code appears here
+import express from 'express';
+import jwt from 'jsonwebtoken';
+...
+
+🔢 Exit Code: 0
+📦 Sandbox ID: sandbox_123
+```
+
+### Saving Output
+
+Save for later reference:
+```bash
+vibekit local generate -e my-env \
+  -p "Create database migrations" \
+  --save-to migrations.json
+```
+
+Access saved output:
+```bash
+# View generated code
+cat migrations.json | jq -r '.stdout'
+
+# Check for errors
+cat migrations.json | jq '.exitCode'
+```
+
+## Best Practices
+
+### 1. Iterative Development
+
+Start simple and build up:
+```bash
+# Step 1: Basic structure
+vibekit local generate -e my-env -p "Create a basic Express server"
+
+# Step 2: Add features
+vibekit local generate -e my-env -p "Add user authentication routes"
+
+# Step 3: Enhance
+vibekit local generate -e my-env -p "Add input validation and error handling"
+```
+
+### 2. Code Review Workflow
+
+Generate then review:
+```bash
+# Generate code
+vibekit local generate -e my-env -p "Implement shopping cart functionality"
+
+# Review generated code
+vibekit local generate -e my-env -m ask -p "Review the shopping cart code for security issues"
+```
+
+### 3. Test-Driven Development
+
+Generate tests first:
+```bash
+# Generate tests
+vibekit local generate -e my-env -p "Write unit tests for a user registration function"
+
+# Implement to pass tests
+vibekit local generate -e my-env -p "Implement the user registration function to pass these tests"
+```
+
+## Integration with Development Workflow
+
+### Pre-commit Generation
+
+```bash
+# Generate documentation
+vibekit local generate -e my-env -p "Generate JSDoc comments for all public methods"
+
+# Format code
+vibekit local generate -e my-env -p "Format this code according to the project's ESLint rules"
+```
+
+### Continuous Improvement
+
+```bash
+# Performance optimization
+vibekit local generate -e my-env -p "Optimize database queries in the reporting module"
+
+# Security hardening
+vibekit local generate -e my-env -p "Add security headers and input sanitization"
+```
+
+## Troubleshooting
+
+### No API Key
+
+```bash
+# Check if API key is set
+vibekit local exec -e my-env -c "env | grep API_KEY"
+
+# Set API key for environment
+export ANTHROPIC_API_KEY="sk-ant-..."
+vibekit local create --name new-env --agent claude
+```
+
+### Generation Fails
+
+```bash
+# Check environment status
+vibekit local status -e my-env
+
+# Try with a different agent
+vibekit local create --name backup-env --agent codex
+vibekit local generate -e backup-env -p "Your prompt"
+```
+
+### Context Issues
+
+```bash
+# Provide more context
+vibekit local generate -e my-env -p "In the Express.js app using TypeScript, add a middleware for request logging"
+
+# Reference specific files
+vibekit local generate -e my-env -p "Update the UserModel in models/User.ts to add email validation"
+```
+
+### Long Generation Times
+
+```bash
+# Use streaming to see progress
+vibekit local generate -e my-env -p "Create a complete application" --stream
+
+# Break into smaller tasks
+vibekit local generate -e my-env -p "First, create the database schema"
+vibekit local generate -e my-env -p "Now, create the API endpoints"
+```
+
+## Tips for Better Results
+
+1. **Be Specific** - Include technology stack, patterns, and requirements
+2. **Provide Context** - Reference existing code structure and conventions
+3. **Iterate** - Build complex features step by step
+4. **Review Output** - Always review and test generated code
+5. **Save History** - Maintain conversation context for related tasks
+
+## Related Commands
+
+- [`vibekit local exec`](/cli/commands/local/exec) - Run generated code
+- [`vibekit local pr`](/cli/commands/local/pr) - Create PR with generated changes
+- [`vibekit local create`](/cli/commands/local/create) - Set up environments with different agents
+- [`vibekit local connect`](/cli/commands/local/connect) - Review generated code interactively

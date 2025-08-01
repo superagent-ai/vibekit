@@ -1,0 +1,283 @@
+---
+title: vibekit init
+description: "Initialize VibeKit providers and set up your development environment"
+---
+
+## Overview
+
+The `vibekit init` command sets up VibeKit by installing and configuring your chosen sandbox providers and AI agent templates. This is typically the first command you run after installing the CLI.
+
+## Syntax
+
+```bash
+vibekit init [options]
+```
+
+## Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--providers` | `-p` | Comma-separated list of providers to install | Interactive prompt |
+| `--agents` | `-a` | Comma-separated list of agent templates | Interactive prompt |
+| `--cpu` | `-c` | CPU cores per provider (2-4 recommended) | Interactive prompt |
+| `--memory` | `-m` | Memory per provider in MB (1024-4096 recommended) | Interactive prompt |
+| `--disk` | `-d` | Disk space per provider in GB (10-50 recommended) | Interactive prompt |
+| `--project-id` | `-P` | Northflank project ID | From env: `NORTHFLANK_PROJECT_ID` |
+| `--workspace-id` | `-w` | Daytona workspace ID | From env: `DAYTONA_WORKSPACE_ID` |
+| `--upload-images` | `-u` | Auto-upload Docker images (local provider only) | Interactive prompt |
+| `--no-upload-images` | | Skip Docker registry setup | false |
+
+## Interactive Mode
+
+When run without options, `vibekit init` enters interactive mode:
+
+```bash
+vibekit init
+```
+
+You'll be prompted to:
+
+1. **Select Providers** - Choose from available sandbox providers
+2. **Select Agents** - Choose AI agent templates to install
+3. **Configure Resources** - Set CPU, memory, and disk allocations
+4. **Provider Settings** - Configure provider-specific options
+
+## Providers
+
+### Available Providers
+
+- **Dagger** - Local container-based sandboxes (recommended for local development)
+- **E2B** - Cloud-based ephemeral environments
+- **Daytona** - Self-hosted development environments
+- **Northflank** - Kubernetes-based cloud sandboxes
+
+### Provider Requirements
+
+Each provider has specific requirements:
+
+<Tabs>
+  <Tab title="Dagger">
+    - Docker installed and running
+    - Optional: Docker Hub account for image uploads
+    - No additional setup required
+  </Tab>
+  <Tab title="E2B">
+    - E2B account and API key
+    - E2B CLI installed
+    - Active E2B subscription
+  </Tab>
+  <Tab title="Daytona">
+    - Daytona CLI installed
+    - Daytona server running
+    - Configured Daytona workspace
+  </Tab>
+  <Tab title="Northflank">
+    - Northflank account
+    - Northflank CLI installed
+    - Project ID configured
+  </Tab>
+</Tabs>
+
+## Agent Templates
+
+Available AI agents that can be installed:
+
+- **claude** - Claude 3.5 Sonnet optimized environment
+- **codex** - OpenAI GPT-4/Codex environment
+- **gemini** - Google Gemini environment
+- **opencode** - Open source models via Groq
+- **grok** - Grok AI environment
+
+## Examples
+
+### Basic Initialization
+
+Interactive setup:
+```bash
+vibekit init
+```
+
+### Install Specific Providers
+
+Install Dagger and E2B providers:
+```bash
+vibekit init --providers Dagger,E2B
+```
+
+### Full Configuration
+
+Complete setup with all options:
+```bash
+vibekit init \
+  --providers Dagger,Northflank \
+  --agents claude,codex,gemini \
+  --cpu 4 \
+  --memory 4096 \
+  --disk 50 \
+  --project-id "my-project" \
+  --upload-images
+```
+
+### Local Development Setup
+
+Quick setup for local development:
+```bash
+vibekit init --providers Dagger --agents claude --memory 2048
+```
+
+### CI/CD Setup
+
+Non-interactive setup for automation:
+```bash
+vibekit init \
+  --providers E2B \
+  --agents codex \
+  --cpu 2 \
+  --memory 2048 \
+  --disk 20 \
+  --no-upload-images
+```
+
+## Resource Recommendations
+
+### CPU Cores
+- **Minimum**: 1 core
+- **Recommended**: 2-4 cores
+- **Heavy workloads**: 4-8 cores
+
+### Memory (RAM)
+- **Minimum**: 512 MB
+- **Recommended**: 1024-4096 MB
+- **Large projects**: 8192+ MB
+
+### Disk Space
+- **Minimum**: 5 GB
+- **Recommended**: 10-50 GB
+- **Data-intensive**: 100+ GB
+
+## Environment Variables
+
+The init command uses these environment variables:
+
+```bash
+# Provider-specific
+NORTHFLANK_PROJECT_ID    # Northflank project identifier
+DAYTONA_WORKSPACE_ID     # Daytona workspace naming
+DOCKER_USERNAME          # Docker Hub username for uploads
+
+# API Keys (used by agents)
+ANTHROPIC_API_KEY        # For Claude agent
+OPENAI_API_KEY          # For Codex agent
+GOOGLE_API_KEY          # For Gemini agent
+GROQ_API_KEY            # For OpenCode agent
+```
+
+## Docker Image Management
+
+For the Dagger (local) provider:
+
+### With --upload-images
+
+1. Builds agent images locally
+2. Tags images with your Docker Hub username
+3. Pushes images to Docker Hub
+4. Requires `docker login` to be configured
+
+### Without --upload-images
+
+1. Builds and uses images locally only
+2. Faster initial setup
+3. Images not shareable across machines
+
+## What Happens During Init
+
+1. **Checks Prerequisites** - Verifies Docker, required CLIs
+2. **Installs Providers** - Sets up selected sandbox providers
+3. **Builds Images** - Creates Docker images for agents
+4. **Configures Settings** - Saves configuration for future use
+5. **Validates Setup** - Ensures everything is working
+
+## Troubleshooting
+
+### Docker Not Running
+
+```bash
+# Check Docker status
+docker info
+
+# Start Docker
+# macOS: Open Docker Desktop
+# Linux: sudo systemctl start docker
+```
+
+### Provider Installation Fails
+
+```bash
+# Check provider CLI is installed
+e2b --version
+daytona --version
+northflank --version
+
+# Install missing CLIs
+npm install -g @e2b/cli
+# Follow provider-specific installation guides
+```
+
+### Image Build Failures
+
+```bash
+# Clear Docker cache
+docker system prune
+
+# Rebuild with more memory
+vibekit init --memory 4096
+
+# Skip upload if Docker Hub issues
+vibekit init --no-upload-images
+```
+
+### Permission Errors
+
+```bash
+# Add user to docker group (Linux)
+sudo usermod -aG docker $USER
+
+# Restart terminal or run
+newgrp docker
+```
+
+## Configuration File
+
+After initialization, settings are saved to `~/.vibekit/config.json`:
+
+```json
+{
+  "providers": {
+    "dagger": {
+      "enabled": true,
+      "preferRegistryImages": false
+    },
+    "e2b": {
+      "enabled": false
+    }
+  },
+  "defaults": {
+    "cpu": 2,
+    "memory": 2048,
+    "disk": 20
+  }
+}
+```
+
+## Next Steps
+
+After successful initialization:
+
+1. [Create your first environment](/cli/commands/local/create): `vibekit local create --name my-env`
+2. [Generate code with AI](/cli/commands/local/generate): `vibekit local generate -e my-env -p "Your prompt"`
+3. [Execute commands](/cli/commands/local/exec): `vibekit local exec -e my-env -c "npm install"`
+
+## Related Commands
+
+- [`vibekit local create`](/cli/commands/local/create) - Create sandbox environments
+- [`vibekit local list`](/cli/commands/local/list) - List available environments

@@ -8,7 +8,6 @@ import {
   Conversation,
   ModelProvider,
 } from "../types";
-import { getValidToken } from "../auth/oauth";
 
 export class ClaudeAgent extends BaseAgent {
   private anthropicApiKey?: string;
@@ -55,14 +54,7 @@ export class ClaudeAgent extends BaseAgent {
   private async initializeToken(): Promise<void> {
     if (this.tokenInitialized) return;
     
-    // If no auth method provided yet, try to load from saved OAuth token
-    if (!this.anthropicApiKey && !this.oauthToken) {
-      const savedToken = await getValidToken();
-      if (savedToken) {
-        this.oauthToken = savedToken;
-        this.useOAuth = true;
-      }
-    }
+    // No automatic OAuth token loading - users must provide tokens themselves
     
     // Determine which auth method to use
     this._determineAuthMethod();

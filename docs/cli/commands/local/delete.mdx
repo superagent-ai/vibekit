@@ -1,0 +1,429 @@
+---
+title: vibekit local delete
+description: "Delete sandbox environments and clean up resources"
+---
+
+## Overview
+
+The `vibekit local delete` command removes sandbox environments, freeing up resources and cleaning up Docker containers. It supports bulk operations, interactive selection, and forced deletion.
+
+## Syntax
+
+```bash
+vibekit local delete [names...] [options]
+vibekit local rm [names...] [options]  # alias
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--force` | Skip confirmation prompt | false |
+| `--all` | Delete all environments | false |
+| `--interactive` | Interactive selection mode | false |
+| `--cleanup` | Show additional cleanup commands | false |
+
+## Examples
+
+### Delete Specific Environments
+
+Single environment:
+```bash
+vibekit local delete my-env
+```
+
+Multiple environments:
+```bash
+vibekit local delete env1 env2 env3
+```
+
+With confirmation skip:
+```bash
+vibekit local delete old-env --force
+```
+
+### Interactive Deletion
+
+Select environments to delete:
+```bash
+vibekit local delete --interactive
+```
+
+Shows multi-select prompt:
+```
+Select environments to delete:
+◯ dev-env (claude, running)
+◉ old-project (gemini, stopped)
+◉ test-env (codex, error)
+◯ prod-debug (claude, running)
+
+Space to select, Enter to confirm
+```
+
+### Bulk Operations
+
+Delete all environments:
+```bash
+vibekit local delete --all
+```
+
+Delete all with force:
+```bash
+vibekit local delete --all --force
+```
+
+### Cleanup Mode
+
+Show cleanup suggestions:
+```bash
+vibekit local delete my-env --cleanup
+```
+
+Output includes:
+```
+✅ Deleted 1 environment(s)
+
+🧹 Additional cleanup options:
+  • Clean Docker containers: docker container prune
+  • Clean Docker images: docker image prune
+  • Clean Docker volumes: docker volume prune
+```
+
+## Deletion Process
+
+### What Gets Deleted
+
+1. **Environment record** from `~/.vibekit/environments.json`
+2. **Running sandbox** (if active)
+3. **Associated Docker container** (if using Dagger provider)
+4. **Temporary files** in the sandbox
+
+### What's Preserved
+
+- Generated code (if saved locally)
+- Pull requests already created
+- Logs saved with `--save-output`
+- Docker images (unless manually pruned)
+
+## Confirmation Prompts
+
+### Default Behavior
+
+Without `--force`, confirms deletion:
+```
+Are you sure you want to delete 2 environment(s): dev-env, test-env? (y/N)
+```
+
+### Bypass Confirmation
+
+Use `--force` for scripts:
+```bash
+vibekit local delete old-env --force
+```
+
+## Use Cases
+
+### Regular Cleanup
+
+Remove stopped environments:
+```bash
+# List stopped environments
+vibekit local list --status stopped
+
+# Delete them
+vibekit local list --status stopped --json | \
+  jq -r '.[].name' | \
+  xargs -I {} vibekit local delete {} --force
+```
+
+### Error Recovery
+
+Clean up failed environments:
+```bash
+# Find error environments
+vibekit local list --status error --json | jq -r '.[].name' > failed-envs.txt
+
+# Delete them
+cat failed-envs.txt | xargs -I {} vibekit local delete {} --force
+```
+
+### Project Completion
+
+Clean up after finishing:
+```bash
+# Delete all project environments
+vibekit local delete project-dev project-test project-staging --force
+
+# Full cleanup
+vibekit local delete --all --cleanup
+```
+
+### Automated Cleanup
+
+Scheduled cleanup script:
+```bash
+#!/bin/bash
+# Delete environments older than 7 days
+
+DAYS_OLD=7
+CURRENT_TIME=$(date +%s)
+
+vibekit local list --all --json | jq -r '.[] | "\(.name) \(.lastUsed)"' | while read name last_used; do
+  last_used_time=$(date -d "$last_used" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "$last_used" +%s)
+  age_days=$(( ($CURRENT_TIME - $last_used_time) / 86400 ))
+  
+  if [ $age_days -gt $DAYS_OLD ]; then
+    echo "Deleting $name (${age_days} days old)"
+    vibekit local delete "$name" --force
+  fi
+done
+```
+
+## Selective Deletion
+
+### By Pattern
+
+Delete environments matching pattern:
+```bash
+# Delete all test environments
+vibekit local list --json | \
+  jq -r '.[] | select(.name | contains("test")) | .name' | \
+  xargs -I {} vibekit local delete {} --force
+
+# Delete by agent type
+vibekit local list --agent gemini --json | \
+  jq -r '.[].name' | \
+  xargs -I {} vibekit local delete {} --force
+```
+
+### Keep Recent
+
+Delete all except recent:
+```bash
+# Keep 3 most recent
+vibekit local list --json | \
+  jq -r 'sort_by(.lastUsed) | reverse | .[3:] | .[].name' | \
+  xargs -I {} vibekit local delete {} --force
+```
+
+## Error Handling
+
+### Environment Not Found
+
+```bash
+# Attempt to delete non-existent
+vibekit local delete nonexistent-env
+# Output: ⚠️ Environment 'nonexistent-env' not found
+
+# Continue with others
+vibekit local delete env1 nonexistent env2
+# Deletes env1 and env2, warns about nonexistent
+```
+
+### Running Environment
+
+Running environments are stopped before deletion:
+```bash
+vibekit local delete running-env
+# Automatically stops the sandbox before deletion
+```
+
+### Permission Issues
+
+```bash
+# If deletion fails due to permissions
+sudo vibekit local delete problematic-env --force
+
+# Or manually clean Docker
+docker ps -a | grep problematic-env
+docker rm -f <container-id>
+```
+
+## Docker Cleanup
+
+### After Deletion
+
+Clean up Docker resources:
+```bash
+# Remove stopped containers
+docker container prune -f
+
+# Remove unused images
+docker image prune -f
+
+# Remove unused volumes
+docker volume prune -f
+
+# Complete cleanup (careful!)
+docker system prune -af
+```
+
+### Check Docker Usage
+
+Before and after cleanup:
+```bash
+# Before
+docker system df
+
+# Delete environments
+vibekit local delete --all --force
+
+# Clean Docker
+docker system prune -f
+
+# After
+docker system df
+```
+
+## Best Practices
+
+### 1. Regular Maintenance
+
+```bash
+# Weekly cleanup script
+#!/bin/bash
+echo "=== VibeKit Cleanup ==="
+
+# Delete stopped environments
+vibekit local list --status stopped --json | \
+  jq -r '.[].name' | \
+  xargs -I {} vibekit local delete {} --force
+
+# Show remaining
+vibekit local list
+
+# Docker cleanup
+docker system prune -f
+```
+
+### 2. Pre-deletion Checks
+
+```bash
+# Save important data before deletion
+ENV_NAME="important-env"
+
+# Save logs
+vibekit local logs -e $ENV_NAME -n 1000 > ${ENV_NAME}-logs.txt
+
+# Check for uncommitted changes
+vibekit local exec -e $ENV_NAME -c "git status"
+
+# Then delete
+vibekit local delete $ENV_NAME
+```
+
+### 3. Safe Deletion
+
+```bash
+# Function for safe deletion
+safe_delete() {
+  local env=$1
+  
+  # Check if environment exists
+  if ! vibekit local list --json | jq -r '.[].name' | grep -q "^$env$"; then
+    echo "Environment $env not found"
+    return 1
+  fi
+  
+  # Backup logs
+  vibekit local logs -e "$env" -n 1000 > "backup-${env}-$(date +%Y%m%d).log"
+  
+  # Delete
+  vibekit local delete "$env" --force
+}
+
+# Usage
+safe_delete "my-env"
+```
+
+## Troubleshooting
+
+### Deletion Fails
+
+```bash
+# Check what's blocking
+docker ps -a | grep my-env
+
+# Force remove Docker container
+docker rm -f <container-id>
+
+# Manually remove from storage
+vi ~/.vibekit/environments.json
+# Remove the environment entry
+```
+
+### Incomplete Cleanup
+
+```bash
+# If environment removed but container remains
+docker ps -a | grep vibekit
+docker rm -f <orphaned-containers>
+
+# Clean up all VibeKit containers
+docker ps -a | grep vibekit | awk '{print $1}' | xargs docker rm -f
+```
+
+### Storage Corruption
+
+```bash
+# Backup current state
+cp ~/.vibekit/environments.json ~/.vibekit/environments.backup.json
+
+# Validate JSON
+cat ~/.vibekit/environments.json | jq '.'
+
+# If corrupted, restore or recreate
+echo '[]' > ~/.vibekit/environments.json
+```
+
+## Integration
+
+### CI/CD Cleanup
+
+```bash
+# In CI pipeline
+trap "vibekit local delete --all --force" EXIT
+
+# Run tests
+vibekit local create --name ci-test --agent codex
+vibekit local exec -e ci-test -c "npm test"
+# Cleanup happens automatically on exit
+```
+
+### Development Scripts
+
+```bash
+# Reset development environment
+#!/bin/bash
+echo "Resetting development environment..."
+
+# Delete existing
+vibekit local delete dev-env --force 2>/dev/null || true
+
+# Create fresh
+vibekit local create --name dev-env --agent claude
+
+echo "Fresh dev-env created"
+```
+
+## Performance
+
+### Deletion Speed
+
+- Single environment: ~2-5 seconds
+- Multiple environments: Processed in parallel
+- With `--force`: Faster (no confirmation)
+
+### Resource Recovery
+
+After deletion:
+- Memory: Immediately available
+- Disk: After Docker cleanup
+- CPU: Immediately available
+
+## Related Commands
+
+- [`vibekit local list`](/cli/commands/local/list) - List environments before deletion
+- [`vibekit local status`](/cli/commands/local/status) - Check environment state
+- [`vibekit local create`](/cli/commands/local/create) - Create new environments
+- [`vibekit init`](/cli/commands/init) - Reinitialize after major cleanup

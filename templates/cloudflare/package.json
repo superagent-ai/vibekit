@@ -1,0 +1,19 @@
+{
+	"name": "cloudflare",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"start": "wrangler dev",
+		"cf-typegen": "wrangler types"
+	},
+	"devDependencies": {
+		"typescript": "^5.5.2",
+		"wrangler": "^4.26.0"
+	},
+	"dependencies": {
+		"@vibe-kit/cloudflare": "^0.0.6",
+		"@vibe-kit/sdk": "^0.0.55"
+	}
+}

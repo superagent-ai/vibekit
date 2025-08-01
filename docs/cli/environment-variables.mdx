@@ -1,0 +1,348 @@
+---
+title: Environment Variables
+description: "Complete reference for environment variables used by the VibeKit CLI"
+---
+
+## Overview
+
+The VibeKit CLI uses environment variables for configuration, API keys, and integration settings. These can be set in your shell, `.env` files, or passed directly to commands.
+
+## API Keys
+
+### AI Agent Keys
+
+Configure API keys for different AI providers:
+
+| Variable | Description | Required For |
+|----------|-------------|--------------|
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude | `--agent claude` |
+| `OPENAI_API_KEY` | OpenAI API key | `--agent codex` |
+| `GOOGLE_API_KEY` | Google API key | `--agent gemini` |
+| `GROQ_API_KEY` | Groq API key | `--agent opencode` |
+
+Example:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-api03-..."
+export OPENAI_API_KEY="sk-..."
+export GOOGLE_API_KEY="AIza..."
+export GROQ_API_KEY="gsk_..."
+```
+
+### Priority Order
+
+API keys are resolved in this order:
+1. Command line `--api-key` option
+2. Environment-specific API key variable
+3. Environment variables passed via `--env`
+4. `.env` file in current directory
+
+## GitHub Integration
+
+### Authentication
+
+| Variable | Description | Required For |
+|----------|-------------|--------------|
+| `GITHUB_TOKEN` | Personal access token | PR creation, Git operations |
+| `GITHUB_REPOSITORY` | Repository in `owner/repo` format | PR creation |
+
+Example:
+```bash
+export GITHUB_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
+export GITHUB_REPOSITORY="myorg/myrepo"
+```
+
+### Token Permissions
+
+Required GitHub token scopes:
+- `repo` - Full repository access
+- `write:pull_requests` - Create PRs
+- `read:user` - Read user profile
+
+## Provider Configuration
+
+### Dagger (Local Provider)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VIBEKIT_PREFER_REGISTRY_IMAGES` | Use Docker Hub images instead of local builds | `false` |
+| `DOCKER_USERNAME` | Docker Hub username for image uploads | None |
+
+Example:
+```bash
+export VIBEKIT_PREFER_REGISTRY_IMAGES="true"
+export DOCKER_USERNAME="myusername"
+```
+
+### Northflank
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NORTHFLANK_PROJECT_ID` | Default project ID for Northflank | None |
+| `NORTHFLANK_API_TOKEN` | Northflank API token | None |
+
+### Daytona
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DAYTONA_WORKSPACE_ID` | Default workspace ID | None |
+| `DAYTONA_API_TOKEN` | Daytona API token | None |
+
+### E2B
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `E2B_API_KEY` | E2B API key | None |
+| `E2B_TEAM_ID` | E2B team identifier | None |
+
+## Telemetry
+
+### Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VIBEKIT_TELEMETRY_ENABLED` | Enable telemetry collection | `false` |
+| `VIBEKIT_TELEMETRY_SESSION_ID` | Custom session ID for telemetry | Auto-generated |
+| `VIBEKIT_TELEMETRY_ENDPOINT` | Telemetry endpoint URL | VibeKit default |
+
+Example:
+```bash
+export VIBEKIT_TELEMETRY_ENABLED="true"
+export VIBEKIT_TELEMETRY_SESSION_ID="my-session-123"
+```
+
+## Default Settings
+
+### Resource Allocation
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VIBEKIT_DEFAULT_CPU` | Default CPU cores for environments | 2 |
+| `VIBEKIT_DEFAULT_MEMORY` | Default memory in MB | 2048 |
+| `VIBEKIT_DEFAULT_DISK` | Default disk space in GB | 20 |
+
+Example:
+```bash
+export VIBEKIT_DEFAULT_CPU="4"
+export VIBEKIT_DEFAULT_MEMORY="4096"
+export VIBEKIT_DEFAULT_DISK="50"
+```
+
+### Behavior Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VIBEKIT_DEFAULT_AGENT` | Default AI agent type | None |
+| `VIBEKIT_DEFAULT_TIMEOUT` | Default command timeout in ms | 30000 |
+| `VIBEKIT_AUTO_CLEANUP` | Auto-delete stopped environments | `false` |
+
+## Development Settings
+
+### Debug Options
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VIBEKIT_DEBUG` | Enable debug logging | `false` |
+| `VIBEKIT_LOG_LEVEL` | Log level (error, warn, info, debug) | `info` |
+| `VIBEKIT_LOG_FILE` | Log output file | None (stdout) |
+
+Example:
+```bash
+export VIBEKIT_DEBUG="true"
+export VIBEKIT_LOG_LEVEL="debug"
+export VIBEKIT_LOG_FILE="/tmp/vibekit.log"
+```
+
+## Using .env Files
+
+### File Location
+
+The CLI automatically loads `.env` files from:
+1. Current working directory
+2. Project root (if in a git repository)
+3. Home directory (`~/.env`)
+
+### .env File Format
+
+```bash
+# .env
+# AI API Keys
+ANTHROPIC_API_KEY=sk-ant-api03-...
+OPENAI_API_KEY=sk-...
+
+# GitHub Integration
+GITHUB_TOKEN=ghp_...
+GITHUB_REPOSITORY=owner/repo
+
+# Provider Settings
+DOCKER_USERNAME=myusername
+NORTHFLANK_PROJECT_ID=proj_123
+
+# Defaults
+VIBEKIT_DEFAULT_AGENT=claude
+VIBEKIT_DEFAULT_MEMORY=4096
+
+# Debug
+VIBEKIT_DEBUG=true
+```
+
+### Security Best Practices
+
+1. **Never commit `.env` files** - Add to `.gitignore`
+2. **Use `.env.example`** - Template without secrets
+3. **Restrict permissions** - `chmod 600 .env`
+4. **Rotate keys regularly** - Update API keys periodically
+
+## Command-Specific Variables
+
+### vibekit init
+
+Additional variables during initialization:
+```bash
+# Skip interactive prompts
+export VIBEKIT_INIT_PROVIDERS="Dagger,E2B"
+export VIBEKIT_INIT_AGENTS="claude,codex"
+export VIBEKIT_INIT_CPU="4"
+export VIBEKIT_INIT_MEMORY="4096"
+```
+
+### vibekit local create
+
+Override defaults for environment creation:
+```bash
+# Set working directory
+export VIBEKIT_WORKING_DIR="/app"
+
+# Set default environment variables
+export VIBEKIT_ENV_VARS="NODE_ENV=development,PORT=3000"
+```
+
+## Precedence Rules
+
+Environment variables are loaded in this order (later overrides earlier):
+
+1. System environment variables
+2. `~/.env` file
+3. Project `.env` file
+4. Current directory `.env` file
+5. Command line options
+
+Example:
+```bash
+# System env
+export ANTHROPIC_API_KEY="old-key"
+
+# .env file
+ANTHROPIC_API_KEY=new-key
+
+# Command line (highest priority)
+vibekit local create --api-key "newest-key"
+```
+
+## Validation
+
+### Checking Variables
+
+View current settings:
+```bash
+# All environment variables
+env | grep VIBEKIT
+
+# Specific variable
+echo $ANTHROPIC_API_KEY
+
+# In environment
+vibekit local exec -e my-env -c "env | grep API"
+```
+
+### Required Variables
+
+Commands will fail with clear messages if required variables are missing:
+```
+❌ No API key found for claude agent. 
+Set ANTHROPIC_API_KEY environment variable or use --api-key
+```
+
+## Troubleshooting
+
+### Variables Not Loading
+
+```bash
+# Check if .env exists
+ls -la .env
+
+# Verify format
+cat .env
+
+# Test loading
+source .env
+echo $ANTHROPIC_API_KEY
+```
+
+### Permission Issues
+
+```bash
+# Fix .env permissions
+chmod 600 .env
+
+# Check ownership
+ls -l .env
+```
+
+### Debugging Variable Loading
+
+```bash
+# Enable debug mode
+export VIBEKIT_DEBUG=true
+
+# Run command to see variable loading
+vibekit local create --name test
+```
+
+## Best Practices
+
+### 1. Use .env.example
+
+Create a template for team members:
+```bash
+# .env.example
+ANTHROPIC_API_KEY=your-anthropic-key-here
+OPENAI_API_KEY=your-openai-key-here
+GITHUB_TOKEN=your-github-token-here
+GITHUB_REPOSITORY=owner/repo
+```
+
+### 2. Separate Environments
+
+Use different files for different environments:
+```bash
+# .env.development
+VIBEKIT_DEFAULT_AGENT=codex
+VIBEKIT_DEBUG=true
+
+# .env.production
+VIBEKIT_DEFAULT_AGENT=claude
+VIBEKIT_DEBUG=false
+```
+
+### 3. Security Script
+
+Check for exposed secrets:
+```bash
+#!/bin/bash
+# check-secrets.sh
+files=".env .env.* *.env"
+for file in $files; do
+  if [ -f "$file" ]; then
+    if grep -q "sk-\|ghp_\|gsk_" "$file"; then
+      echo "WARNING: $file might contain secrets"
+      ls -la "$file"
+    fi
+  fi
+done
+```
+
+## Related Topics
+
+- [Configuration Files](/cli/configuration-files) - Other configuration options
+- [Installation](/cli/installation) - Initial setup and configuration
+- [Quick Reference](/cli/quick-reference) - Common variable usage

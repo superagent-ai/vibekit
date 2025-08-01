@@ -38,9 +38,8 @@ export const createTelemetryService = async () => {
   return TelemetryService;
 };
 
-// Authentication exports
-export { ClaudeAuth } from "./auth";
-export type { OAuthToken } from "./auth";
+// Authentication is handled separately via @vibe-kit/auth package
+// Users should get tokens from auth package and pass them as API keys
 
 // Type-only exports for advanced usage
 export type { ClaudeConfig, ClaudeResponse } from "./types";

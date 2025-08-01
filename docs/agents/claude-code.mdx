@@ -16,13 +16,20 @@ description: 'Run Claude Code in a secure and private sandbox'
 
 VibeKit runs Anthropic's Claude Code in headless mode, with the `--dangerously-skip-permissions` flag enabled. This means that the agent will automatically create, edit and delete files if it's in `code` mode.
 
-The Claude Code CLI is ran in the configured environment and has access to the network, which means it could be used to connect to the outside world. This is a powerful feature that can be used to build powerful applications and should be user with caution.
+The Claude Code CLI runs in the configured environment and has access to the network, which means it could be used to connect to the outside world. This is a powerful feature that can be used to build powerful applications and should be used with caution.
 
 [Read more about Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)
 
 ## Authentication
 
-Claude Code agent supports two authentication methods:
+Claude Code agent supports OAuth and API key authentication. Authentication is now handled by the separate `@vibe-kit/auth` package.
+
+### Installation
+
+```bash
+# Install both packages
+npm install @vibe-kit/sdk @vibe-kit/auth
+```
 
 ### 1. OAuth Token Authentication (Recommended)
 
@@ -30,43 +37,27 @@ Authenticate with your Claude Pro/Max account for better rate limits.
 
 > **Security Note**: OAuth tokens are stored locally at `~/.vibekit/claude-oauth-token.json` with restricted permissions (600). For production environments, consider using environment variables or a secrets manager.
 
-#### CLI Authentication
-
-```bash
-# Authenticate with Claude
-vibekit auth login claude
-
-# Check authentication status
-vibekit auth status        # Show all providers
-vibekit auth status claude # Show specific provider
-
-# Verify authentication with test API call
-vibekit auth verify claude
-
-# Export token for other instances
-vibekit auth export claude              # Shows environment variable format
-vibekit auth export claude --format json # JSON format
-vibekit auth export claude --format full # Full token with refresh capability
-
-# Import token on another instance
-vibekit auth import claude --env                    # From environment variable
-vibekit auth import claude --token "your-token"     # Direct token
-vibekit auth import claude --file token.json        # From file
-
-# Logout
-vibekit auth logout claude
-```
-
 #### Using OAuth in Code
 
-Once authenticated, Claude will use your OAuth token automatically:
+Get an OAuth token and pass it as the API key:
 
 ```typescript
+import { VibeKit } from '@vibe-kit/sdk';
+import { ClaudeAuth } from '@vibe-kit/auth';
+
+// Get OAuth token
+const accessToken = await ClaudeAuth.getValidToken();
+if (!accessToken) {
+  await ClaudeAuth.authenticate();
+  accessToken = await ClaudeAuth.getValidToken();
+}
+
+// Use token with VibeKit
 const vibeKit = new VibeKit()
   .withAgent({
     type: "claude",
     provider: "anthropic",
-    // OAuth token will be used automatically
+    providerApiKey: accessToken, // Pass OAuth token as API key
     model: "claude-sonnet-4-20250514",
   })
   .withSandbox(sandboxProvider);
@@ -76,18 +67,19 @@ const vibeKit = new VibeKit()
 
 You can also provide the OAuth token directly via environment variable:
 
-```bash
-export CLAUDE_CODE_OAUTH_TOKEN="your-oauth-token"
-```
-
-Or pass it in your code:
-
 ```typescript
+import { ClaudeAuth } from '@vibe-kit/auth';
+
+// Import token from environment
+await ClaudeAuth.importToken({ fromEnv: true });
+const accessToken = await ClaudeAuth.getValidToken();
+
+// Use with VibeKit
 const vibeKit = new VibeKit()
   .withAgent({
     type: "claude",
     provider: "anthropic",
-    oauthToken: process.env.MY_OAUTH_TOKEN,
+    providerApiKey: accessToken,
     model: "claude-sonnet-4-20250514",
   })
   .withSandbox(sandboxProvider);
@@ -103,10 +95,10 @@ For using OAuth tokens across multiple instances (CI/CD, containers, etc.):
 
 #### Library API Usage
 
-You can also use OAuth authentication programmatically:
+You can use OAuth authentication programmatically with the auth package:
 
 ```typescript
-import { ClaudeAuth } from '@vibe-kit/sdk';
+import { ClaudeAuth } from '@vibe-kit/auth';
 
 // Authenticate and get token
 const token = await ClaudeAuth.authenticate();
@@ -132,7 +124,7 @@ await ClaudeAuth.logout();
 For web applications, OAuth authentication works the same way as CLI - users copy and paste the authentication code:
 
 ```typescript
-import { ClaudeWebAuth, MemoryTokenStorage } from '@vibe-kit/sdk/auth';
+import { ClaudeWebAuth, MemoryTokenStorage } from '@vibe-kit/auth';
 
 // Frontend - Generate OAuth URL
 const { url, state, codeVerifier } = ClaudeWebAuth.createAuthorizationUrl();
@@ -152,23 +144,33 @@ const storage = new MemoryTokenStorage(sessionId);
 const auth = new ClaudeWebAuth(storage);
 await auth.authenticate(authCode, codeVerifier, state);
 
-// Use the token
+// Use the token with VibeKit
 const accessToken = await auth.getValidToken();
+
+// Pass token as API key to VibeKit
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    providerApiKey: accessToken, // Pass OAuth token as API key
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(sandboxProvider);
 ```
 
 ### 2. API Key Authentication
 
-Use your Anthropic API key:
+Use your Anthropic API key directly:
 
 ```typescript
 const vibeKit = new VibeKit()
   .withAgent({
     type: "claude",
     provider: "anthropic",
-    apiKey: process.env.ANTHROPIC_API_KEY,
+    providerApiKey: process.env.ANTHROPIC_API_KEY, // Traditional API key
     model: "claude-sonnet-4-20250514",
   })
   .withSandbox(sandboxProvider);
 ```
 
-Note: If both API key and OAuth token are provided, OAuth token takes precedence.
+Both OAuth tokens and API keys are passed the same way to VibeKit - as the `providerApiKey` parameter.

@@ -5,7 +5,7 @@ import {
   LocalStorageTokenStorage,
   type TokenStorage,
   type OAuthToken 
-} from '../packages/vibekit/src/auth/oauth-web';
+} from '../packages/auth/src/browser.js';
 
 describe('ClaudeWebAuth - CLI-like OAuth Flow', () => {
   let storage: TokenStorage;
@@ -20,7 +20,7 @@ describe('ClaudeWebAuth - CLI-like OAuth Flow', () => {
   describe('Complete OAuth Flow (like CLI)', () => {
     it('should complete authentication flow with manual code input', async () => {
       // Step 1: Generate authorization URL (like CLI)
-      const { url, state, codeVerifier } = ClaudeWebAuth.createAuthorizationUrl();
+      const { url, state, codeVerifier } = await ClaudeWebAuth.createAuthorizationUrl();
       
       // Verify URL is correct for manual code copying
       expect(url).toContain('https://claude.ai/oauth/authorize');
@@ -59,7 +59,7 @@ describe('ClaudeWebAuth - CLI-like OAuth Flow', () => {
     });
     
     it('should reject invalid code format', async () => {
-      const { state, codeVerifier } = ClaudeWebAuth.createAuthorizationUrl();
+      const { state, codeVerifier } = await ClaudeWebAuth.createAuthorizationUrl();
       
       // User pastes wrong format (missing #state)
       const invalidCode = 'just-a-code-without-state';
@@ -70,7 +70,7 @@ describe('ClaudeWebAuth - CLI-like OAuth Flow', () => {
     });
     
     it('should reject state mismatch', async () => {
-      const { state, codeVerifier } = ClaudeWebAuth.createAuthorizationUrl();
+      const { state, codeVerifier } = await ClaudeWebAuth.createAuthorizationUrl();
       
       // User somehow gets a code with wrong state
       const codeWithWrongState = 'test-code#wrong-state';
@@ -214,7 +214,7 @@ describe('ClaudeWebAuth - CLI-like OAuth Flow', () => {
   
   describe('Error Handling', () => {
     it('should handle API errors gracefully', async () => {
-      const { state, codeVerifier } = ClaudeWebAuth.createAuthorizationUrl();
+      const { state, codeVerifier } = await ClaudeWebAuth.createAuthorizationUrl();
       
       // Mock API error
       (global.fetch as any).mockResolvedValueOnce({

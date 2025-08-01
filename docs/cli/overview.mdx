@@ -1,0 +1,96 @@
+---
+title: CLI Overview
+description: "Introduction to the VibeKit CLI - your command-line interface for managing AI-powered development environments"
+---
+
+## What is the VibeKit CLI?
+
+The VibeKit CLI (`vibekit`) is a powerful command-line tool that enables developers to:
+
+- 🚀 **Create and manage sandbox environments** for isolated development
+- 🤖 **Generate code using AI agents** (Claude, GPT-4, Gemini, and more)
+- 💻 **Execute commands** in sandboxed environments
+- 🔀 **Create pull requests** directly from your environments
+- 🔧 **Configure providers** (E2B, Dagger, Daytona, Northflank)
+
+## Architecture
+
+The VibeKit CLI acts as a unified interface to:
+
+1. **Sandbox Providers** - Manage isolated development environments
+2. **AI Agents** - Generate and modify code using various AI models
+3. **Version Control** - Integrate with GitHub for seamless workflows
+4. **Local Development** - Execute commands and interact with your code
+
+## Quick Example
+
+Here's a typical workflow with the VibeKit CLI:
+
+```bash
+# 1. Initialize VibeKit with your preferred providers
+vibekit init
+
+# 2. Create a new environment with Claude
+vibekit local create --name my-project --agent claude
+
+# 3. Generate code using AI
+vibekit local generate -e my-project -p "Create a REST API with authentication"
+
+# 4. Execute commands in the environment
+vibekit local exec -e my-project -c "npm install && npm test"
+
+# 5. Create a pull request
+vibekit local pr -e my-project --title "Add authentication API"
+```
+
+## Why Use the CLI?
+
+### For Individual Developers
+- **Rapid Prototyping**: Generate boilerplate code and scaffolding instantly
+- **Safe Experimentation**: Test changes in isolated environments
+- **AI Assistance**: Get help with complex coding tasks
+
+### For Teams
+- **Consistent Environments**: Everyone works with the same setup
+- **Collaborative AI**: Share AI-generated solutions across the team
+- **Automated Workflows**: Integrate with CI/CD pipelines
+
+### For Open Source
+- **Easy Contributions**: Contributors can quickly set up development environments
+- **AI-Powered Reviews**: Generate code improvements and suggestions
+- **Sandbox Testing**: Test contributions in isolated environments
+
+## CLI Structure
+
+The VibeKit CLI is organized into two main commands:
+
+1. **`vibekit init`** - Set up providers and configure your environment
+2. **`vibekit local`** - Manage local sandbox environments with subcommands for:
+   - Creating and deleting environments
+   - Executing commands
+   - Generating code with AI
+   - Creating pull requests
+   - And more...
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/cli/installation">
+    Install the VibeKit CLI and set up your development environment
+  </Card>
+  <Card title="Quick Reference" icon="book" href="/cli/quick-reference">
+    Browse common commands and workflows
+  </Card>
+  <Card title="Init Command" icon="play" href="/cli/commands/init">
+    Learn how to initialize VibeKit with providers
+  </Card>
+  <Card title="Local Command" icon="terminal" href="/cli/commands/local">
+    Explore the local environment management commands
+  </Card>
+</CardGroup>
+
+## Support
+
+- **GitHub Issues**: [github.com/superagent-ai/vibekit/issues](https://github.com/superagent-ai/vibekit/issues)
+- **Discord Community**: [discord.gg/spZ7MnqFT4](https://discord.gg/spZ7MnqFT4)
+- **Email**: ismail@superagent.sh

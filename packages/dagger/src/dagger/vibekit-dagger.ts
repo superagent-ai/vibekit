@@ -1,24 +1,113 @@
 /**
  * VibeKit Dagger Local Sandbox Provider
  *
- * Implements the same interface as E2B and Daytona providers but uses Dagger
- * for local containerized development environments with ARM64 agent images.
+ * Implements the sandbox provider interface using Dagger for local containerized
+ * development environments with ARM64 agent images.
  */
 
 import { connect } from "@dagger.io/dagger";
+<<<<<<< HEAD
 import type { Client, Container, Directory } from "@dagger.io/dagger";
+=======
+import type { Client, Directory } from "@dagger.io/dagger";
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
 import { exec } from "child_process";
 import { promisify } from "util";
-import { readFile, writeFile } from "fs/promises";
+import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { EventEmitter } from "events";
+import { homedir } from "os";
 
 // MCP integration imports
 import { VibeKitMCPManager } from '@vibe-kit/sdk/mcp/manager';
 import type { MCPConfig, MCPTool, MCPToolResult } from '@vibe-kit/sdk';
 
 const execAsync = promisify(exec);
+
+// Logger interface for structured logging
+interface Logger {
+  debug(message: string, meta?: any): void;
+  info(message: string, meta?: any): void;
+  warn(message: string, meta?: any): void;
+  error(message: string, error?: Error | any, meta?: any): void;
+}
+
+// Default console logger implementation
+class ConsoleLogger implements Logger {
+  private context: string;
+  
+  constructor(context: string = "VibeKitDagger") {
+    this.context = context;
+  }
+
+  private log(level: string, message: string, meta?: any): void {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [${level}] [${this.context}] ${message}`;
+    
+    if (meta) {
+      console.log(logMessage, meta);
+    } else {
+      console.log(logMessage);
+    }
+  }
+
+  debug(message: string, meta?: any): void {
+    if (process.env.VIBEKIT_LOG_LEVEL === "debug") {
+      this.log("DEBUG", message, meta);
+    }
+  }
+
+  info(message: string, meta?: any): void {
+    this.log("INFO", message, meta);
+  }
+
+  warn(message: string, meta?: any): void {
+    this.log("WARN", message, meta);
+  }
+
+  error(message: string, error?: Error | any, meta?: any): void {
+    const errorMeta = error instanceof Error ? {
+      ...meta,
+      error: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      }
+    } : meta;
+    
+    this.log("ERROR", message, errorMeta);
+  }
+}
+
+// Custom error types for specific failure scenarios
+export class VibeKitError extends Error {
+  constructor(message: string, public code: string, public cause?: Error) {
+    super(message);
+    this.name = "VibeKitError";
+  }
+}
+
+export class ImageResolutionError extends VibeKitError {
+  constructor(message: string, cause?: Error) {
+    super(message, "IMAGE_RESOLUTION_ERROR", cause);
+    this.name = "ImageResolutionError";
+  }
+}
+
+export class ContainerExecutionError extends VibeKitError {
+  constructor(message: string, public exitCode: number, cause?: Error) {
+    super(message, "CONTAINER_EXECUTION_ERROR", cause);
+    this.name = "ContainerExecutionError";
+  }
+}
+
+export class ConfigurationError extends VibeKitError {
+  constructor(message: string, cause?: Error) {
+    super(message, "CONFIGURATION_ERROR", cause);
+    this.name = "ConfigurationError";
+  }
+}
 
 // Environment interface for provider methods
 interface Environment {
@@ -92,36 +181,225 @@ export interface LocalConfig {
   privateRegistry?: string; // Alternative registry (ghcr.io, etc.)
   autoInstall?: boolean; // Whether to automatically install Dagger CLI if not found
   mcpConfig?: MCPConfig;
+  logger?: Logger;
+  retryAttempts?: number;
+  retryDelayMs?: number;
+  connectionTimeout?: number;
+  configPath?: string;
 }
 
+// Configuration with environment variable support
+class Configuration {
+  private static instance: Configuration;
+  private config: LocalConfig;
+  private logger: Logger;
 
+  private constructor(config: LocalConfig = {}) {
+    this.config = {
+      preferRegistryImages: this.getEnvBoolean("VIBEKIT_PREFER_REGISTRY", config.preferRegistryImages ?? true),
+      dockerHubUser: process.env.VIBEKIT_DOCKER_USER || config.dockerHubUser,
+      pushImages: this.getEnvBoolean("VIBEKIT_PUSH_IMAGES", config.pushImages ?? true),
+      privateRegistry: process.env.VIBEKIT_REGISTRY || config.privateRegistry,
+      autoInstall: this.getEnvBoolean("VIBEKIT_AUTO_INSTALL", config.autoInstall ?? false),
+      retryAttempts: this.getEnvNumber("VIBEKIT_RETRY_ATTEMPTS", config.retryAttempts ?? 3),
+      retryDelayMs: this.getEnvNumber("VIBEKIT_RETRY_DELAY", config.retryDelayMs ?? 1000),
+      connectionTimeout: this.getEnvNumber("VIBEKIT_CONNECTION_TIMEOUT", config.connectionTimeout ?? 30000),
+      configPath: process.env.VIBEKIT_CONFIG_PATH || config.configPath || join(homedir(), ".vibekit"),
+      logger: config.logger || new ConsoleLogger()
+    };
+    this.logger = this.config.logger!;
+  }
+
+  static getInstance(config?: LocalConfig): Configuration {
+    if (!Configuration.instance) {
+      Configuration.instance = new Configuration(config);
+    }
+    return Configuration.instance;
+  }
+
+  private getEnvBoolean(key: string, defaultValue: boolean): boolean {
+    const value = process.env[key];
+    if (value === undefined) return defaultValue;
+    return value.toLowerCase() === "true";
+  }
+
+  private getEnvNumber(key: string, defaultValue: number): number {
+    const value = process.env[key];
+    if (value === undefined) return defaultValue;
+    const num = parseInt(value, 10);
+    return isNaN(num) ? defaultValue : num;
+  }
+
+  get(): LocalConfig {
+    return this.config;
+  }
+
+  getLogger(): Logger {
+    return this.logger;
+  }
+}
+
+// Connection pool for Dagger clients
+class DaggerConnectionPool {
+  private static instance: DaggerConnectionPool;
+  private connections: Map<string, { client: Client; lastUsed: number }> = new Map();
+  private maxConnections = 5;
+  private connectionTTL = 300000; // 5 minutes
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private logger: Logger;
+
+  private constructor(logger: Logger) {
+    this.logger = logger;
+    this.startCleanup();
+  }
+
+  static getInstance(logger: Logger): DaggerConnectionPool {
+    if (!DaggerConnectionPool.instance) {
+      DaggerConnectionPool.instance = new DaggerConnectionPool(logger);
+    }
+    return DaggerConnectionPool.instance;
+  }
+
+  private startCleanup(): void {
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [key, conn] of this.connections.entries()) {
+        if (now - conn.lastUsed > this.connectionTTL) {
+          this.logger.debug(`Cleaning up stale connection: ${key}`);
+          this.connections.delete(key);
+        }
+      }
+    }, 60000); // Clean up every minute
+  }
+
+  async getConnection(key: string): Promise<Client> {
+    const existing = this.connections.get(key);
+    if (existing) {
+      existing.lastUsed = Date.now();
+      return existing.client;
+    }
+
+    if (this.connections.size >= this.maxConnections) {
+      // Remove least recently used
+      let oldestKey = "";
+      let oldestTime = Date.now();
+      for (const [k, v] of this.connections.entries()) {
+        if (v.lastUsed < oldestTime) {
+          oldestTime = v.lastUsed;
+          oldestKey = k;
+        }
+      }
+      if (oldestKey) {
+        this.logger.debug(`Evicting LRU connection: ${oldestKey}`);
+        this.connections.delete(oldestKey);
+      }
+    }
+
+    // Create new connection
+    let newClient: Client | null = null;
+    await connect(async (client) => {
+      newClient = client;
+    });
+    
+    if (!newClient) {
+      throw new Error("Failed to create Dagger client connection");
+    }
+    
+    this.connections.set(key, { client: newClient, lastUsed: Date.now() });
+    return newClient;
+  }
+
+  async close(): Promise<void> {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    this.connections.clear();
+  }
+}
+
+// Retry utility with exponential backoff for transient failures
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  options: {
+    attempts: number;
+    delayMs: number;
+    logger: Logger;
+    context: string;
+  }
+): Promise<T> {
+  let lastError: Error | undefined;
+  
+  for (let attempt = 1; attempt <= options.attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      options.logger.warn(
+        `${options.context} failed (attempt ${attempt}/${options.attempts})`,
+        lastError
+      );
+      
+      if (attempt < options.attempts) {
+        const delay = options.delayMs * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError || new Error(`${options.context} failed after ${options.attempts} attempts`);
+}
+
+// Validates and sanitizes command input to prevent injection
+function sanitizeCommand(command: string): string {
+  // Basic command injection prevention
+  const dangerous = [";", "&&", "||", "|", "`", "$", "(", ")", "{", "}", "[", "]", "<", ">", "&"];
+  let sanitized = command;
+  
+  // Only allow these characters in quoted strings
+  const quotedRegex = /(["'])(?:(?=(\\?))\2.)*?\1/g;
+  const quoted: string[] = [];
+  sanitized = sanitized.replace(quotedRegex, (match) => {
+    quoted.push(match);
+    return `__QUOTE_${quoted.length - 1}__`;
+  });
+  
+  // Check for dangerous characters outside quotes
+  for (const char of dangerous) {
+    if (sanitized.includes(char)) {
+      throw new Error(`Command contains potentially dangerous character: ${char}`);
+    }
+  }
+  
+  // Restore quoted strings
+  quoted.forEach((q, i) => {
+    sanitized = sanitized.replace(`__QUOTE_${i}__`, q);
+  });
+  
+  return sanitized;
+}
 
 // Helper function to get Dockerfile path based on agent type
 const getDockerfilePathFromAgentType = (
   agentType?: AgentType
 ): string | undefined => {
-  if (agentType === "claude") {
-    return "assets/dockerfiles/Dockerfile.claude";
-  } else if (agentType === "codex") {
-    return "assets/dockerfiles/Dockerfile.codex";
-  } else if (agentType === "opencode") {
-    return "assets/dockerfiles/Dockerfile.opencode";
-  } else if (agentType === "gemini") {
-    return "assets/dockerfiles/Dockerfile.gemini";
-  } else if (agentType === "grok") {
-    return "assets/dockerfiles/Dockerfile.grok";
-  }
-  return undefined; // fallback to base image
+  const dockerfileMap: Record<AgentType, string> = {
+    claude: "assets/dockerfiles/Dockerfile.claude",
+    codex: "assets/dockerfiles/Dockerfile.codex",
+    opencode: "assets/dockerfiles/Dockerfile.opencode",
+    gemini: "assets/dockerfiles/Dockerfile.gemini",
+    grok: "assets/dockerfiles/Dockerfile.grok"
+  };
+  
+  return agentType ? dockerfileMap[agentType] : undefined;
 };
 
-// Helper to get registry image name (configurable version for future use)
-const getConfigurableRegistryImage = (
-  agentType?: AgentType,
-  config?: LocalConfig
-): string => {
-  const registry = config?.privateRegistry || "docker.io";
-  const user = config?.dockerHubUser || "superagent-ai"; // fallback to project default
+// Image resolution strategy implementation
+class ImageResolver {
+  private logger: Logger;
+  private config: LocalConfig;
 
+<<<<<<< HEAD
   switch (agentType) {
     case "claude":
       return `${
@@ -145,21 +423,81 @@ const getConfigurableRegistryImage = (
       }${user}/vibekit-grok-cli:latest`;
     default:
       return "node:18"; // fallback for unknown agent types - includes git
+=======
+  constructor(config: LocalConfig, logger: Logger) {
+    this.config = config;
+    this.logger = logger;
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
   }
-};
 
-// Helper to get registry image name (current implementation with user config support)
-const getRegistryImage = async (agentType?: AgentType): Promise<string> => {
-  // Check if user has configured their own images
-  try {
-    const config = await getVibeKitConfig();
-    if (agentType && config.registryImages?.[agentType]) {
-      return config.registryImages[agentType]!;
+  async resolveImage(agentType?: AgentType): Promise<string> {
+    if (!agentType) {
+      return "ubuntu:24.04";
     }
-  } catch {
-    // Fall back to default if config reading fails
+
+    const localTag = this.getLocalImageTag(agentType);
+    const registryImage = await this.getRegistryImageName(agentType);
+
+    // Step 1: Check local cache
+    try {
+      const localImage = await this.checkLocalImage(localTag);
+      if (localImage) {
+        this.logger.info(`Using cached local image: ${localTag}`);
+        return localTag;
+      }
+    } catch (error) {
+      this.logger.debug(`Local image check failed: ${error}`);
+    }
+
+    // Step 2: Try to pull from user's registry
+    if (registryImage) {
+      try {
+        await this.pullImage(registryImage);
+        this.logger.info(`Successfully pulled image from registry: ${registryImage}`);
+        
+        // Tag it locally for cache
+        await this.tagImage(registryImage, localTag);
+        return localTag;
+      } catch (error) {
+        this.logger.warn(`Failed to pull from registry: ${registryImage}`, error);
+      }
+    }
+
+    // Step 3: Build locally and push to user's registry
+    const dockerfilePath = getDockerfilePathFromAgentType(agentType);
+    if (dockerfilePath && existsSync(dockerfilePath)) {
+      try {
+        // Build the image
+        await this.buildImage(dockerfilePath, localTag);
+        this.logger.info(`Built image locally: ${localTag}`);
+
+        // Push to registry if configured
+        if (this.config.pushImages && registryImage) {
+          try {
+            await this.tagImage(localTag, registryImage);
+            await this.pushImage(registryImage);
+            this.logger.info(`Pushed image to registry: ${registryImage}`);
+          } catch (pushError) {
+            this.logger.warn(`Failed to push to registry, continuing with local image`, pushError);
+          }
+        }
+
+        return localTag;
+      } catch (buildError) {
+        this.logger.error(`Failed to build image from Dockerfile`, buildError);
+        throw new ImageResolutionError(
+          `Failed to resolve image for ${agentType}`,
+          buildError instanceof Error ? buildError : undefined
+        );
+      }
+    }
+
+    // Final fallback
+    this.logger.warn(`No image available for ${agentType}, using fallback`);
+    return "ubuntu:24.04";
   }
 
+<<<<<<< HEAD
   // Default fallback to superagent-ai
   const baseRegistry = "superagent-ai";
   switch (agentType) {
@@ -175,27 +513,127 @@ const getRegistryImage = async (agentType?: AgentType): Promise<string> => {
       return `${baseRegistry}/vibekit-grok-cli:latest`;
     default:
       return "node:18"; // fallback for unknown agent types - includes git
+=======
+  private getLocalImageTag(agentType: AgentType): string {
+    return `vibekit-${agentType}:latest`;
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
   }
-};
 
-// Helper to get tagged image name (for local builds only)
-const getImageTag = (agentType?: AgentType): string => {
-  return `vibekit-${agentType || "default"}:latest`;
-};
+  private async getRegistryImageName(agentType: AgentType): Promise<string | null> {
+    // First check config file for custom images
+    try {
+      const config = await this.loadVibeKitConfig();
+      if (config.registryImages?.[agentType]) {
+        return config.registryImages[agentType]!;
+      }
+    } catch {
+      // Ignore config errors
+    }
 
-// Local Dagger implementation with proper workspace state persistence and VibeKit streaming compatibility
+    // Check Docker login
+    const dockerInfo = await this.getDockerLoginInfo();
+    if (!dockerInfo.username && !this.config.dockerHubUser) {
+      return null;
+    }
+
+    const user = this.config.dockerHubUser || dockerInfo.username || "superagent-ai";
+    const registry = this.config.privateRegistry || "";
+    const prefix = registry ? `${registry}/` : "";
+    
+    return `${prefix}${user}/vibekit-${agentType}:latest`;
+  }
+
+  private async checkLocalImage(tag: string): Promise<boolean> {
+    try {
+      const { stdout } = await execAsync(`docker images -q ${tag}`);
+      return stdout.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private async pullImage(image: string): Promise<void> {
+    await retryWithBackoff(
+      async () => {
+        await execAsync(`docker pull ${image}`);
+      },
+      {
+        attempts: this.config.retryAttempts || 3,
+        delayMs: this.config.retryDelayMs || 1000,
+        logger: this.logger,
+        context: `Pulling image ${image}`
+      }
+    );
+  }
+
+  private async buildImage(dockerfilePath: string, tag: string): Promise<void> {
+    const buildCommand = `docker build -t ${tag} -f ${dockerfilePath} .`;
+    await execAsync(buildCommand, { timeout: 600000 }); // 10 minute timeout
+  }
+
+  private async tagImage(source: string, target: string): Promise<void> {
+    await execAsync(`docker tag ${source} ${target}`);
+  }
+
+  private async pushImage(image: string): Promise<void> {
+    await retryWithBackoff(
+      async () => {
+        await execAsync(`docker push ${image}`);
+      },
+      {
+        attempts: this.config.retryAttempts || 3,
+        delayMs: this.config.retryDelayMs || 1000,
+        logger: this.logger,
+        context: `Pushing image ${image}`
+      }
+    );
+  }
+
+  private async getDockerLoginInfo(): Promise<{ username?: string }> {
+    try {
+      const { stdout } = await execAsync("docker info");
+      const match = stdout.match(/Username:\s*(.+)/);
+      if (match) {
+        return { username: match[1].trim() };
+      }
+    } catch {
+      // Ignore errors
+    }
+    return {};
+  }
+
+  private async loadVibeKitConfig(): Promise<any> {
+    const configPath = join(this.config.configPath || join(homedir(), ".vibekit"), "config.json");
+    
+    if (existsSync(configPath)) {
+      const content = await readFile(configPath, "utf-8");
+      return JSON.parse(content);
+    }
+    
+    return {};
+  }
+}
+
+// Local Dagger sandbox instance implementation
 class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
   private isRunning = true;
   private workspaceDirectory: Directory | null = null;
+<<<<<<< HEAD
   private baseContainer: Container | null = null;
   private initializationPromise: Promise<void> | null = null;
   public mcpManager?: VibeKitMCPManager;
+=======
+  private connectionPool: DaggerConnectionPool;
+  private logger: Logger;
+  private imageResolver: ImageResolver;
+  private config: LocalConfig;
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
 
   constructor(
     public sandboxId: string,
-    private image: string, // Fallback image if no Dockerfile
     private envs?: Record<string, string>,
     private workDir?: string,
+<<<<<<< HEAD
     private dockerfilePath?: string, // Path to Dockerfile if building from source
     private agentType?: AgentType,
     mcpConfig?: MCPConfig
@@ -254,6 +692,16 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
         this.agentType
       );
     });
+=======
+    private agentType?: AgentType,
+    config?: LocalConfig
+  ) {
+    super();
+    this.config = Configuration.getInstance(config).get();
+    this.logger = Configuration.getInstance().getLogger();
+    this.connectionPool = DaggerConnectionPool.getInstance(this.logger);
+    this.imageResolver = new ImageResolver(this.config, this.logger);
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
   }
 
   get commands(): SandboxCommands {
@@ -262,6 +710,7 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
         command: string,
         options?: SandboxCommandOptions
       ): Promise<SandboxExecutionResult> => {
+<<<<<<< HEAD
         await this.ensureInitialized();
 
         // Emit start event for VibeKit streaming compatibility
@@ -409,33 +858,66 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
             stdout: "",
             stderr: errorMessage,
           };
+=======
+        if (!this.isRunning) {
+          throw new ContainerExecutionError("Sandbox instance is not running", -1);
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
         }
 
-        // Emit end event for VibeKit streaming compatibility
-        this.emit(
-          "update",
-          JSON.stringify({
-            type: "end",
-            command: command,
-            exitCode: result.exitCode,
-            timestamp: Date.now(),
-          })
-        );
+        // Validate and sanitize command
+        let sanitizedCommand: string;
+        try {
+          sanitizedCommand = sanitizeCommand(command);
+        } catch (error) {
+          throw new ContainerExecutionError(
+            `Invalid command: ${error instanceof Error ? error.message : String(error)}`,
+            -1
+          );
+        }
 
-        return result;
+        // Emit start event
+        this.emit("update", JSON.stringify({
+          type: "start",
+          command: sanitizedCommand,
+          timestamp: Date.now(),
+        }));
+
+        try {
+          return await this.executeCommand(sanitizedCommand, options);
+        } catch (error) {
+          // Emit error event
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.emit("error", errorMessage);
+          
+          if (error instanceof ContainerExecutionError) {
+            throw error;
+          }
+          
+          throw new ContainerExecutionError(
+            `Command execution failed: ${errorMessage}`,
+            -1,
+            error instanceof Error ? error : undefined
+          );
+        } finally {
+          // Emit end event
+          this.emit("update", JSON.stringify({
+            type: "end",
+            command: sanitizedCommand,
+            timestamp: Date.now(),
+          }));
+        }
       },
     };
   }
 
-  /**
-   * Get or create a persistent workspace container that maintains state across commands
-   * This is the key method that makes our implementation work like E2B/Northflank
-   */
-  private async getWorkspaceContainer(client: Client): Promise<Container> {
-    if (!this.baseContainer) {
-      throw new Error("Base container not initialized");
-    }
+  private async executeCommand(
+    command: string,
+    options?: SandboxCommandOptions
+  ): Promise<SandboxExecutionResult> {
+    const connectionKey = `sandbox-${this.sandboxId}`;
+    const client = await this.connectionPool.getConnection(connectionKey);
 
+<<<<<<< HEAD
     // Start with our cached base container but create a new instance for this session
     let container = this.baseContainer;
 
@@ -544,6 +1026,15 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
         lastError = dockerfileError instanceof Error ? dockerfileError : new Error(String(dockerfileError));
       }
     }
+=======
+    // Resolve the image
+    const image = await this.imageResolver.resolveImage(this.agentType);
+    
+    // Create container
+    let container = client.container()
+      .from(image)
+      .withWorkdir(this.workDir || "/vibe0");
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
 
     // No fallback to base images - fail with clear error message
     const errorMessage = [
@@ -560,6 +1051,7 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
       "   5. Run 'vibekit setup' to ensure proper configuration"
     ].join("\n");
 
+<<<<<<< HEAD
     throw new Error(errorMessage);
   }
 
@@ -592,6 +1084,79 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
       // CRITICAL: Export the workspace directory to persist the file write
       this.workspaceDirectory = container.directory(this.workDir || "/vibe0");
     });
+=======
+    // Restore workspace if exists
+    if (this.workspaceDirectory) {
+      container = container.withDirectory(
+        this.workDir || "/vibe0",
+        this.workspaceDirectory
+      );
+    }
+
+    // Execute command
+    if (options?.background) {
+      // Background execution
+      container = container.withExec(["sh", "-c", command], {
+        experimentalPrivilegedNesting: true,
+      });
+
+      // Save workspace state
+      this.workspaceDirectory = container.directory(this.workDir || "/vibe0");
+
+      return {
+        exitCode: 0,
+        stdout: `Background process started: ${command}`,
+        stderr: "",
+      };
+    } else {
+      // Foreground execution with timeout
+      const timeout = options?.timeoutMs || 120000; // 2 minutes default
+      const execContainer = container.withExec(["sh", "-c", command]);
+
+      try {
+        const [stdout, stderr, exitCode] = await Promise.race([
+          Promise.all([
+            execContainer.stdout(),
+            execContainer.stderr(),
+            execContainer.exitCode()
+          ]),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error("Command execution timeout")), timeout)
+          )
+        ]);
+
+        // Save workspace state
+        this.workspaceDirectory = execContainer.directory(this.workDir || "/vibe0");
+
+        // Handle output callbacks
+        if (stdout && options?.onStdout) {
+          this.emitOutput("stdout", stdout, options.onStdout);
+        }
+        if (stderr && options?.onStderr) {
+          this.emitOutput("stderr", stderr, options.onStderr);
+        }
+
+        return { exitCode, stdout, stderr };
+      } catch (error) {
+        if (error instanceof Error && error.message === "Command execution timeout") {
+          throw new ContainerExecutionError("Command execution timeout", -1, error);
+        }
+        throw error;
+      }
+    }
+  }
+
+  private emitOutput(
+    type: "stdout" | "stderr",
+    output: string,
+    callback?: (data: string) => void
+  ): void {
+    const lines = output.split("\n").filter(line => line.trim());
+    for (const line of lines) {
+      this.emit("update", `${type.toUpperCase()}: ${line}`);
+      if (callback) callback(line);
+    }
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
   }
 
   async kill(): Promise<void> {
@@ -606,23 +1171,27 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     
     this.isRunning = false;
     this.workspaceDirectory = null;
-    this.baseContainer = null;
-
-    // Close the Dagger connection
-    // No explicit action needed here as the connection is managed by the shared connect
+    this.logger.debug(`Killed sandbox instance: ${this.sandboxId}`);
   }
 
   async pause(): Promise<void> {
     // Not applicable for Dagger containers
+    this.logger.debug(`Pause requested for sandbox: ${this.sandboxId} (no-op)`);
   }
 
-  async getHost(port: number): Promise<string> {
-    return Promise.resolve("localhost"); // Local containers run on localhost
+  async getHost(_port: number): Promise<string> {
+    return "localhost";
   }
 }
 
 export class LocalSandboxProvider implements SandboxProvider {
-  constructor(private config: LocalConfig = {}) {}
+  private logger: Logger;
+  private config: LocalConfig;
+
+  constructor(config: LocalConfig = {}) {
+    this.config = Configuration.getInstance(config).get();
+    this.logger = Configuration.getInstance().getLogger();
+  }
 
   async create(
     envs?: Record<string, string>,
@@ -630,41 +1199,52 @@ export class LocalSandboxProvider implements SandboxProvider {
     workingDirectory?: string,
     mcpConfig?: MCPConfig
   ): Promise<SandboxInstance> {
+<<<<<<< HEAD
     const finalMcpConfig = mcpConfig || this.config.mcpConfig;
     const sandboxId = `dagger-${agentType || "default"}-${Date.now().toString(
       36
     )}`;
+=======
+    const sandboxId = `dagger-${agentType || "default"}-${Date.now().toString(36)}`;
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
     const workDir = workingDirectory || "/vibe0";
 
-    // Get Dockerfile path for the agent type (only if not preferring registry images)
-    const dockerfilePath = this.config.preferRegistryImages
-      ? undefined
-      : getDockerfilePathFromAgentType(agentType);
+    this.logger.info(`Creating sandbox instance`, { sandboxId, agentType, workDir });
 
-    // Create sandbox instance with Dockerfile if available and not preferring registry, otherwise use registry/base image
     const instance = new LocalSandboxInstance(
       sandboxId,
+<<<<<<< HEAD
       "node:18", // fallback image with git and development tools
       envs,
       workDir,
       dockerfilePath,
       agentType,
       finalMcpConfig
+=======
+      envs,
+      workDir,
+      agentType,
+      this.config
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
     );
 
     return instance;
   }
 
+<<<<<<< HEAD
   async resume(sandboxId: string, mcpConfig?: MCPConfig): Promise<SandboxInstance> {
     // For Dagger, resume is the same as create since containers are ephemeral
     // The workspace state is maintained through the Directory persistence
     const finalMcpConfig = mcpConfig || this.config.mcpConfig;
     return await this.create(undefined, undefined, undefined, finalMcpConfig);
+=======
+  async resume(sandboxId: string): Promise<SandboxInstance> {
+    this.logger.info(`Resuming sandbox instance: ${sandboxId}`);
+    return await this.create();
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
   }
 
   async listEnvironments(): Promise<Environment[]> {
-    // For Dagger-based local provider, we don't maintain persistent environments
-    // Return empty array as environments are created on-demand
     return [];
   }
 }
@@ -675,11 +1255,10 @@ export function createLocalProvider(
   return new LocalSandboxProvider(config);
 }
 
-/**
- * Pre-cache all agent images for faster startup times
- * This function pulls public registry images to local cache and/or builds from Dockerfiles as fallback
- */
-export async function prebuildAgentImages(): Promise<{
+// Pre-cache agent images for faster startup
+export async function prebuildAgentImages(
+  selectedAgents?: AgentType[]
+): Promise<{
   success: boolean;
   results: Array<{
     agentType: AgentType;
@@ -688,13 +1267,12 @@ export async function prebuildAgentImages(): Promise<{
     source: "registry" | "dockerfile" | "cached";
   }>;
 }> {
-  const agentTypes: AgentType[] = [
-    "claude",
-    "codex",
-    "opencode",
-    "gemini",
-    "grok",
-  ];
+  const config = Configuration.getInstance().get();
+  const logger = Configuration.getInstance().getLogger();
+  const imageResolver = new ImageResolver(config, logger);
+
+  const allAgentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini", "grok"];
+  const agentTypes = selectedAgents?.length ? selectedAgents : allAgentTypes;
   const results: Array<{
     agentType: AgentType;
     success: boolean;
@@ -702,15 +1280,11 @@ export async function prebuildAgentImages(): Promise<{
     source: "registry" | "dockerfile" | "cached";
   }> = [];
 
-  console.log("🚀 Pre-caching agent images for faster future startup...");
-  console.log("📋 Priority: Registry images → Dockerfile builds → Skip");
+  logger.info("Pre-caching agent images for faster startup");
 
   for (const agentType of agentTypes) {
-    const registryImage = await getRegistryImage(agentType);
-    const imageTag = getImageTag(agentType);
-    const dockerfilePath = getDockerfilePathFromAgentType(agentType);
-
     try {
+<<<<<<< HEAD
       console.log(`⏳ Processing ${agentType} agent...`);
 
       // Check if registry image is already cached locally
@@ -762,38 +1336,19 @@ export async function prebuildAgentImages(): Promise<{
           source: "dockerfile",
         });
       }
+=======
+      await imageResolver.resolveImage(agentType);
+      results.push({ agentType, success: true, source: "cached" });
+>>>>>>> 9b85a7535de7b04cf0349f56e8a19c82ce10d483
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      console.error(
-        `❌ Failed to cache image for ${agentType}: ${errorMessage}`
-      );
-      results.push({
-        agentType,
-        success: false,
-        error: errorMessage,
-        source: "dockerfile",
-      });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to cache image for ${agentType}`, error);
+      results.push({ agentType, success: false, error: errorMessage, source: "dockerfile" });
     }
   }
 
-  const successCount = results.filter((r) => r.success).length;
-  const registryCount = results.filter(
-    (r) => r.success && r.source === "registry"
-  ).length;
-  const dockerfileCount = results.filter(
-    (r) => r.success && r.source === "dockerfile"
-  ).length;
-  const cachedCount = results.filter(
-    (r) => r.success && r.source === "cached"
-  ).length;
-
-  console.log(
-    `🎯 Pre-cache complete: ${successCount}/${agentTypes.length} images ready`
-  );
-  console.log(
-    `📊 Sources: ${registryCount} registry, ${dockerfileCount} dockerfile, ${cachedCount} cached`
-  );
+  const successCount = results.filter(r => r.success).length;
+  logger.info(`Pre-cache complete: ${successCount}/${agentTypes.length} images ready`);
 
   return {
     success: successCount > 0,
@@ -801,7 +1356,7 @@ export async function prebuildAgentImages(): Promise<{
   };
 }
 
-// Docker login and configuration utilities
+// Docker login and configuration types
 export interface DockerLoginInfo {
   isLoggedIn: boolean;
   username?: string;
@@ -816,8 +1371,9 @@ export interface VibeKitConfig {
 
 // Check if user is logged into Docker Hub
 export async function checkDockerLogin(): Promise<DockerLoginInfo> {
+  const logger = Configuration.getInstance().getLogger();
+  
   try {
-    // Method 1: Try docker info
     const { stdout } = await execAsync("docker info");
     const usernameMatch = stdout.match(/Username:\s*(.+)/);
     if (usernameMatch) {
@@ -827,43 +1383,18 @@ export async function checkDockerLogin(): Promise<DockerLoginInfo> {
         registry: "https://index.docker.io/v1/",
       };
     }
-
-    // Method 2: Try credential store (Docker Desktop)
-    try {
-      const { stdout: credList } = await execAsync(
-        "docker-credential-desktop list"
-      );
-      const creds = JSON.parse(credList);
-      const dockerHubUser = creds["https://index.docker.io/v1/"];
-
-      if (dockerHubUser) {
-        return {
-          isLoggedIn: true,
-          username: dockerHubUser,
-          registry: "https://index.docker.io/v1/",
-        };
-      }
-    } catch {
-      // Credential store method failed, continue
-    }
-
-    // Method 3: Try a simple docker push test (safe way)
-    try {
-      // This will fail fast if not logged in without actually pushing anything
-      await execAsync('docker info | grep -q "Username"');
-    } catch {
-      // Not logged in
-    }
-
+    
     return { isLoggedIn: false };
   } catch (error) {
+    logger.debug("Docker login check failed", error);
     return { isLoggedIn: false };
   }
 }
 
 // Get or create VibeKit configuration
 export async function getVibeKitConfig(): Promise<VibeKitConfig> {
-  const configPath = join(process.cwd(), ".vibekit-config.json");
+  const config = Configuration.getInstance().get();
+  const configPath = join(config.configPath || join(homedir(), ".vibekit"), "config.json");
 
   if (existsSync(configPath)) {
     try {
@@ -879,13 +1410,24 @@ export async function getVibeKitConfig(): Promise<VibeKitConfig> {
 
 // Save VibeKit configuration
 export async function saveVibeKitConfig(config: VibeKitConfig): Promise<void> {
-  const configPath = join(process.cwd(), ".vibekit-config.json");
+  const appConfig = Configuration.getInstance().get();
+  const configPath = join(appConfig.configPath || join(homedir(), ".vibekit"), "config.json");
+  const configDir = join(appConfig.configPath || join(homedir(), ".vibekit"));
+  
+  // Ensure directory exists
+  if (!existsSync(configDir)) {
+    const { mkdir } = await import("fs/promises");
+    await mkdir(configDir, { recursive: true });
+  }
+  
+  const { writeFile } = await import("fs/promises");
   await writeFile(configPath, JSON.stringify(config, null, 2));
 }
 
 // Upload images to user's Docker Hub account
 export async function uploadImagesToUserAccount(
-  dockerHubUser: string
+  dockerHubUser: string,
+  selectedAgents?: AgentType[]
 ): Promise<{
   success: boolean;
   results: Array<{
@@ -895,7 +1437,11 @@ export async function uploadImagesToUserAccount(
     imageUrl?: string;
   }>;
 }> {
-  const agentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini"];
+  const logger = Configuration.getInstance().getLogger();
+  const imageResolver = new ImageResolver(Configuration.getInstance().get(), logger);
+  
+  const defaultAgentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini"];
+  const agentTypes = selectedAgents?.length ? selectedAgents : defaultAgentTypes;
   const results: Array<{
     agentType: AgentType;
     success: boolean;
@@ -903,51 +1449,37 @@ export async function uploadImagesToUserAccount(
     imageUrl?: string;
   }> = [];
 
-  console.log(
-    `🚀 Uploading VibeKit images to ${dockerHubUser}'s Docker Hub account...`
-  );
+  logger.info(`Uploading VibeKit images to ${dockerHubUser}'s Docker Hub account`);
 
   for (const agentType of agentTypes) {
     try {
-      console.log(`📦 Processing ${agentType} agent...`);
+      logger.info(`Processing ${agentType} agent`);
 
-      // Check if local image exists
-      const localImageTag = getImageTag(agentType);
-      const { stdout: localImages } = await execAsync(
-        `docker images -q ${localImageTag}`
-      );
-
-      if (!localImages.trim()) {
-        console.log(
-          `⚠️ Local image ${localImageTag} not found, building from Dockerfile...`
-        );
-
-        // Build image if it doesn't exist
-        const dockerfilePath = getDockerfilePathFromAgentType(agentType);
-        if (dockerfilePath) {
-          await execAsync(
-            `docker build -t ${localImageTag} -f ${dockerfilePath} .`
-          );
-          console.log(`✅ Built ${localImageTag} from Dockerfile`);
-        } else {
-          results.push({
-            agentType,
-            success: false,
-            error: "No Dockerfile found and no local image",
-          });
-          continue;
-        }
-      }
-
+      // Ensure image exists locally first
+      await imageResolver.resolveImage(agentType);
+      
       // Tag for user's account
+      const localTag = `vibekit-${agentType}:latest`;
       const userImageTag = `${dockerHubUser}/vibekit-${agentType}:latest`;
-      await execAsync(`docker tag ${localImageTag} ${userImageTag}`);
-      console.log(`🏷️ Tagged as ${userImageTag}`);
+      
+      await execAsync(`docker tag ${localTag} ${userImageTag}`);
+      logger.info(`Tagged as ${userImageTag}`);
 
       // Push to user's Docker Hub
-      console.log(`📤 Pushing ${userImageTag} to Docker Hub...`);
-      await execAsync(`docker push ${userImageTag}`);
-      console.log(`✅ Successfully pushed ${userImageTag}`);
+      logger.info(`Pushing ${userImageTag} to Docker Hub`);
+      await retryWithBackoff(
+        async () => {
+          await execAsync(`docker push ${userImageTag}`);
+        },
+        {
+          attempts: 3,
+          delayMs: 1000,
+          logger: logger,
+          context: `Pushing image ${userImageTag}`
+        }
+      );
+      
+      logger.info(`Successfully pushed ${userImageTag}`);
 
       results.push({
         agentType,
@@ -955,17 +1487,14 @@ export async function uploadImagesToUserAccount(
         imageUrl: userImageTag,
       });
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      console.error(`❌ Failed to upload ${agentType} image: ${errorMessage}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to upload ${agentType} image`, error);
       results.push({ agentType, success: false, error: errorMessage });
     }
   }
 
-  const successCount = results.filter((r) => r.success).length;
-  console.log(
-    `🎯 Upload complete: ${successCount}/${agentTypes.length} images uploaded successfully`
-  );
+  const successCount = results.filter(r => r.success).length;
+  logger.info(`Upload complete: ${successCount}/${agentTypes.length} images uploaded`);
 
   return {
     success: successCount > 0,
@@ -973,19 +1502,22 @@ export async function uploadImagesToUserAccount(
   };
 }
 
-// Setup user's Docker registry integration
-export async function setupUserDockerRegistry(): Promise<{
+// Docker registry setup utilities
+export async function setupUserDockerRegistry(
+  selectedAgents?: AgentType[]
+): Promise<{
   success: boolean;
   config?: VibeKitConfig;
   error?: string;
 }> {
+  const logger = Configuration.getInstance().getLogger();
+
   try {
-    console.log("🐳 Setting up VibeKit Docker Registry Integration...");
+    logger.info("Setting up VibeKit Docker Registry Integration");
 
-    // Step 1: Check Docker login
-    console.log("🔍 Checking Docker login status...");
+    // Check Docker login
     const loginInfo = await checkDockerLogin();
-
+    
     if (!loginInfo.isLoggedIn || !loginInfo.username) {
       return {
         success: false,
@@ -993,10 +1525,10 @@ export async function setupUserDockerRegistry(): Promise<{
       };
     }
 
-    console.log(`✅ Logged in as: ${loginInfo.username}`);
+    logger.info(`Logged in as: ${loginInfo.username}`);
 
-    // Step 2: Upload images to user's account
-    const uploadResult = await uploadImagesToUserAccount(loginInfo.username);
+    // Upload images to user's account
+    const uploadResult = await uploadImagesToUserAccount(loginInfo.username, selectedAgents);
 
     if (!uploadResult.success) {
       return {
@@ -1005,7 +1537,7 @@ export async function setupUserDockerRegistry(): Promise<{
       };
     }
 
-    // Step 3: Update configuration
+    // Update configuration
     const config: VibeKitConfig = {
       dockerHubUser: loginInfo.username,
       lastImageBuild: new Date().toISOString(),
@@ -1020,24 +1552,12 @@ export async function setupUserDockerRegistry(): Promise<{
     }
 
     await saveVibeKitConfig(config);
-    console.log("💾 Configuration saved to .vibekit-config.json");
-
-    console.log(
-      "🎉 Setup complete! VibeKit will now use your Docker Hub images."
-    );
-    console.log("📋 Your images:");
-    for (const result of uploadResult.results) {
-      if (result.success) {
-        console.log(`  ✅ ${result.agentType}: ${result.imageUrl}`);
-      }
-    }
+    logger.info("Configuration saved");
 
     return { success: true, config };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return {
-      success: false,
-      error: `Setup failed: ${errorMessage}`,
-    };
+    logger.error("Failed to setup Docker registry", error);
+    return { success: false, error: errorMessage };
   }
 }

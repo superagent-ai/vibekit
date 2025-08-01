@@ -3,11 +3,16 @@ import dotenv from "dotenv";
 
 import { VibeKit } from "../packages/vibekit/src/index.js";
 import { createE2BProvider } from "../packages/e2b/dist/index.js";
+import { skipIfNoVibeKitKeys, skipTest } from "./helpers/test-utils.js";
 
 dotenv.config();
 
 describe("VibeKit SDK", () => {
   it("should create working directory", async () => {
+    if (skipIfNoVibeKitKeys()) {
+      return skipTest();
+    }
+
     const dir = "/var/vibe0";
 
     const e2bProvider = createE2BProvider({
@@ -35,6 +40,10 @@ describe("VibeKit SDK", () => {
   }, 60000);
 
   it("should download repository", async () => {
+    if (skipIfNoVibeKitKeys()) {
+      return skipTest();
+    }
+
     const dir = "/var/vibe0";
 
     const e2bProvider = createE2BProvider({
@@ -77,6 +86,10 @@ describe("VibeKit SDK", () => {
     expect(gitUpdateReceived).toBe(true);
   }, 60000);
   it("should set env variables", async () => {
+    if (skipIfNoVibeKitKeys()) {
+      return skipTest();
+    }
+
     const e2bProvider = createE2BProvider({
       apiKey: process.env.E2B_API_KEY!,
       templateId: "vibekit-claude",
