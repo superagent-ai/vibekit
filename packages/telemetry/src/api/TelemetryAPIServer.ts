@@ -1,8 +1,19 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import chokidar from 'chokidar';
+import { resolve, normalize, isAbsolute } from 'path';
 import type { DashboardOptions } from '../core/types.js';
+import { createAuthMiddleware, type AuthConfig } from './middleware/auth.js';
+import { 
+  validateQuery, 
+  queryFilterSchema, 
+  exportQuerySchema, 
+  insightQuerySchema 
+} from './middleware/validation.js';
 
 export class TelemetryAPIServer {
   private app: express.Application;
@@ -43,20 +54,65 @@ export class TelemetryAPIServer {
   }
   
   private setupRoutes(): void {
-    this.app.use(express.json());
+    // Security middleware
+    this.app.use(helmet({
+      crossOriginEmbedderPolicy: false,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:"],
+        },
+      },
+    }));
     
-    // Enable CORS
-    this.app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-      }
-      next();
+    // CORS configuration - restrict to specific origins
+    const allowedOrigins = process.env.TELEMETRY_ALLOWED_ORIGINS?.split(',') || [];
+    this.app.use(cors({
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+        
+        // Check if origin is allowed
+        if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
+      credentials: true,
+      methods: ['GET', 'POST', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+    }));
+    
+    // Rate limiting
+    const limiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // Limit each IP to 100 requests per windowMs
+      message: 'Too many requests from this IP, please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
     });
     
-    // Root endpoint - API info
+    // Apply rate limiting to all routes
+    this.app.use('/api/', limiter);
+    
+    // JSON body parser with size limit
+    this.app.use(express.json({ limit: '1mb' }));
+    
+    // Authentication middleware
+    const authConfig: AuthConfig = {
+      enabled: process.env.TELEMETRY_AUTH_ENABLED === 'true',
+      apiKeys: process.env.TELEMETRY_API_KEYS?.split(',').filter(Boolean),
+      bearerTokens: process.env.TELEMETRY_BEARER_TOKENS?.split(',').filter(Boolean),
+    };
+    const authMiddleware = createAuthMiddleware(authConfig);
+    
+    // Apply auth to all API routes except health check
+    this.app.use('/api/', authMiddleware);
+    
+    // Root endpoint - API info (no auth required)
     this.app.get('/', (req, res) => {
       res.json({
         service: 'VibeKit Telemetry Server',
@@ -430,17 +486,18 @@ export class TelemetryAPIServer {
   private parseQueryFilter(query: any): any {
     const filter: any = {};
     
+    // All values have been validated by middleware
     if (query.sessionId) filter.sessionId = query.sessionId;
     if (query.category) filter.category = query.category;
     if (query.action) filter.action = query.action;
     if (query.eventType) filter.eventType = query.eventType;
-    if (query.limit) filter.limit = parseInt(query.limit);
-    if (query.offset) filter.offset = parseInt(query.offset);
+    if (query.limit !== undefined) filter.limit = query.limit;
+    if (query.offset !== undefined) filter.offset = query.offset;
     
-    if (query.start && query.end) {
+    if (query.start !== undefined && query.end !== undefined) {
       filter.timeRange = {
-        start: parseInt(query.start),
-        end: parseInt(query.end),
+        start: query.start,
+        end: query.end,
       };
     }
     
@@ -448,10 +505,10 @@ export class TelemetryAPIServer {
   }
   
   private parseTimeRange(query: any): any {
-    if (query.start && query.end) {
+    if (query.start !== undefined && query.end !== undefined) {
       return {
-        start: parseInt(query.start),
-        end: parseInt(query.end),
+        start: query.start, // Already validated as number
+        end: query.end,     // Already validated as number
       };
     }
     return undefined;
@@ -460,15 +517,19 @@ export class TelemetryAPIServer {
   private parseInsightOptions(query: any): any {
     const options: any = {};
     
-    if (query.start && query.end) {
+    if (query.start !== undefined && query.end !== undefined) {
       options.timeRange = {
-        start: parseInt(query.start),
-        end: parseInt(query.end),
+        start: query.start, // Already validated as number
+        end: query.end,     // Already validated as number
       };
     }
     
     if (query.categories) {
-      options.categories = query.categories.split(',');
+      // Validate individual categories after split
+      const categories = query.categories.split(',').filter((c: string) => c.trim());
+      if (categories.length > 0) {
+        options.categories = categories.map((c: string) => c.trim());
+      }
     }
     
     if (query.window) {
@@ -476,6 +537,59 @@ export class TelemetryAPIServer {
     }
     
     return options;
+  }
+  
+  private validateDatabasePath(inputPath: string): string {
+    // Normalize the path to resolve any '..' or '.' segments
+    const normalizedPath = normalize(inputPath);
+    
+    // Get absolute path
+    const absolutePath = isAbsolute(normalizedPath) 
+      ? normalizedPath 
+      : resolve(process.cwd(), normalizedPath);
+    
+    // Define allowed base directories
+    const allowedBaseDirs = [
+      process.cwd(),
+      resolve(process.cwd(), '.vibekit'),
+      resolve(process.cwd(), 'data'),
+      '/tmp/vibekit', // For temporary files
+    ];
+    
+    // Check if the path is within allowed directories
+    const isAllowed = allowedBaseDirs.some(baseDir => {
+      const resolvedBase = resolve(baseDir);
+      return absolutePath.startsWith(resolvedBase);
+    });
+    
+    if (!isAllowed) {
+      throw new Error(
+        `Database path '${inputPath}' is outside allowed directories. ` +
+        `Path must be within project directory or designated data folders.`
+      );
+    }
+    
+    // Additional security checks
+    if (absolutePath.includes('..')) {
+      throw new Error('Database path cannot contain ".." after normalization');
+    }
+    
+    // Check for suspicious patterns
+    const suspiciousPatterns = [
+      /\/etc\//,
+      /\/sys\//,
+      /\/proc\//,
+      /\.ssh/,
+      /\.env/,
+      /private/i,
+      /secret/i,
+    ];
+    
+    if (suspiciousPatterns.some(pattern => pattern.test(absolutePath))) {
+      throw new Error('Database path contains suspicious patterns');
+    }
+    
+    return absolutePath;
   }
   
   async shutdown(): Promise<void> {
@@ -502,7 +616,10 @@ export class TelemetryAPIServer {
   
   private setupDatabaseWatcher(): void {
     // Get database path from telemetry config
-    const dbPath = this.telemetryService.config?.storage?.[0]?.options?.path || '.vibekit/telemetry.db';
+    const configPath = this.telemetryService.config?.storage?.[0]?.options?.path || '.vibekit/telemetry.db';
+    
+    // Validate and normalize the path
+    const dbPath = this.validateDatabasePath(configPath);
     
     console.log(`👁️  Setting up database watcher for: ${dbPath}`);
     

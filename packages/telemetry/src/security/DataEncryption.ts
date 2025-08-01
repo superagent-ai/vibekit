@@ -17,12 +17,29 @@ export class DataEncryption {
       ...config,
     };
     
-    if (config.enabled && !config.key) {
-      // Generate a random key if encryption is enabled but no key provided
-      this.key = randomBytes(32).toString('hex');
-      console.warn('Encryption enabled but no key provided. Generated random key. Data may not be decryptable after restart.');
-    } else {
-      this.key = config.key;
+    if (config.enabled) {
+      if (!config.key) {
+        // Try to get key from environment
+        const envKey = process.env.TELEMETRY_ENCRYPTION_KEY;
+        if (envKey) {
+          this.key = envKey;
+        } else {
+          throw new Error(
+            'Encryption is enabled but no key provided. ' +
+            'Please set TELEMETRY_ENCRYPTION_KEY environment variable or provide key in config.'
+          );
+        }
+      } else {
+        this.key = config.key;
+      }
+      
+      // Validate key length
+      if (this.key.length !== 64) {
+        throw new Error(
+          'Encryption key must be 64 hex characters (32 bytes). ' +
+          'Generate with: openssl rand -hex 32'
+        );
+      }
     }
   }
   

@@ -11,10 +11,17 @@ export class WebSocketProvider extends StreamingProvider {
   
   async initialize(config: StreamingConfig): Promise<void> {
     this.server = createServer();
+    
+    // Parse allowed origins from environment or config
+    const allowedOrigins = process.env.TELEMETRY_ALLOWED_ORIGINS?.split(',') || 
+                          config.cors?.origin || 
+                          false; // Disable CORS by default
+    
     this.io = new SocketIOServer(this.server, {
-      cors: config.cors || {
-        origin: "*",
-        methods: ["GET", "POST"]
+      cors: {
+        origin: allowedOrigins,
+        methods: ["GET", "POST"],
+        credentials: true,
       },
       transports: ['websocket', 'polling'],
     });
