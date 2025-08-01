@@ -77,9 +77,9 @@ await sandbox.kill();
 ### Configuration
 
 ```typescript
-import { createLocalProvider, LocalDaggerConfig } from '@vibe-kit/dagger';
+import { createLocalProvider, LocalConfig } from '@vibe-kit/dagger';
 
-const config: LocalDaggerConfig = {
+const config: LocalConfig = {
   // Configuration options for the local provider
 };
 

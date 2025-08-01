@@ -140,7 +140,7 @@ export class CloudflareSandboxProvider implements SandboxProvider {
     }
 
     // Generate a unique sandbox ID
-    const sandboxId = `vibekit-${agentType || 'default'}-${Date.now()}`;
+    const sandboxId = `vibekit-${agentType || 'default'}-${Date.now().toString(36)}`;
 
     // Get or create a sandbox instance using the SDK
     const sandbox = getSandbox(this.config.env.Sandbox, sandboxId) as Sandbox;

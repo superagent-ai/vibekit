@@ -131,7 +131,7 @@ describe("Local Dagger Sandbox Provider - Unit Tests", () => {
 
       const sandbox1 = await provider.create();
       // Add small delay to ensure different timestamps
-      await new Promise((resolve) => setTimeout(resolve, 1));
+      await new Promise((resolve) => setTimeout(resolve, 5));
       const sandbox2 = await provider.create();
 
       expect(sandbox1.sandboxId).not.toBe(sandbox2.sandboxId);

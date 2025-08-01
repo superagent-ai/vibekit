@@ -2,6 +2,7 @@
   "name": "@vibe-kit/e2b",
   "version": "0.0.2",
   "type": "module",
+  "description": "E2B integration for VibeKit sandbox environments",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -16,8 +17,15 @@
     "dev": "tsup src/index.ts --watch",
     "type-check": "tsc --noEmit"
   },
-  "peerDependencies": {
-    "@vibe-kit/sdk": "*"
+  "author": "Superagent-AI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/superagent-ai/vibekit.git",
+    "directory": "packages/e2b"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "@e2b/code-interpreter": "1.2.0-beta.4"
@@ -26,5 +34,8 @@
     "@types/node": "^22.15.18",
     "tsup": "^8.4.0",
     "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "@vibe-kit/sdk": "*"
   }
 }
