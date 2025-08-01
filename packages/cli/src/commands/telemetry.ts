@@ -361,7 +361,7 @@ async function exportCommand(options: TelemetryCliOptions): Promise<void> {
     TelemetryCliLogger.info(`Exporting telemetry data as ${format}...`);
     
     // Export using the TelemetryService export method
-    const exportData = await service.export({ type: format }, filter);
+    const exportData = await service.export({ format }, filter);
     
     // Write to file
     writeFileSync(outputPath, exportData);
