@@ -197,8 +197,9 @@ export class ResourceMonitor extends EventEmitter {
     const systemDelta = currentCpuUsage.system - this.lastCpuUsage.system;
     const timeDelta = (currentTime - this.lastCpuTime) * 1000; // Convert to microseconds
     
-    const cpuUser = (userDelta / timeDelta) * 100;
-    const cpuSystem = (systemDelta / timeDelta) * 100;
+    // Avoid division by zero
+    const cpuUser = timeDelta > 0 ? (userDelta / timeDelta) * 100 : 0;
+    const cpuSystem = timeDelta > 0 ? (systemDelta / timeDelta) * 100 : 0;
     const cpuTotal = cpuUser + cpuSystem;
     
     // Memory metrics

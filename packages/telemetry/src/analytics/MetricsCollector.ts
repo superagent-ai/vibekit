@@ -203,7 +203,7 @@ export class MetricsCollector {
   private async persistSnapshot(snapshot: MetricsSnapshot): Promise<void> {
     // TODO: Implement persistence to database or file
     // For now, this is a placeholder
-    console.debug('Would persist snapshot:', snapshot.timestamp);
+    // Snapshot created with timestamp: snapshot.timestamp
   }
   
   /**
