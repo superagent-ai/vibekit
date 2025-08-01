@@ -2,7 +2,8 @@ import type {
   TelemetryEvent,
   Metrics,
   AnalyticsConfig,
-  TimeRange
+  TimeRange,
+  StorageProvider
 } from '../core/types.js';
 import { AnalyticsEngine } from './AnalyticsEngine.js';
 import { createLogger } from '../utils/logger.js';
@@ -17,12 +18,13 @@ export interface MetricsCollectorOptions {
   interval?: number; // Collection interval in ms
   maxSnapshots?: number; // Maximum number of snapshots to keep
   persistSnapshots?: boolean; // Whether to persist snapshots
+  storageProviders?: StorageProvider[]; // Storage providers for persistence
 }
 
 export class MetricsCollector {
   private analyticsEngine: AnalyticsEngine;
   private config: AnalyticsConfig;
-  private options: Required<MetricsCollectorOptions>;
+  private options: Required<Omit<MetricsCollectorOptions, 'storageProviders'>> & { storageProviders?: StorageProvider[] };
   private intervalId?: NodeJS.Timeout;
   private snapshots: MetricsSnapshot[] = [];
   private isRunning = false;
@@ -35,6 +37,7 @@ export class MetricsCollector {
       interval: options?.interval || config.metrics?.interval || 60000, // Default 1 minute
       maxSnapshots: options?.maxSnapshots || 1440, // Default 24 hours of minute snapshots
       persistSnapshots: options?.persistSnapshots ?? false,
+      storageProviders: options?.storageProviders,
     };
   }
   
@@ -203,12 +206,39 @@ export class MetricsCollector {
   }
   
   /**
-   * Persist snapshot (placeholder for actual implementation)
+   * Persist snapshot to configured storage providers
    */
   private async persistSnapshot(snapshot: MetricsSnapshot): Promise<void> {
-    // TODO: Implement persistence to database or file
-    // For now, this is a placeholder
-    // Snapshot created with timestamp: snapshot.timestamp
+    if (!this.options.storageProviders || this.options.storageProviders.length === 0) {
+      this.logger.warn('No storage providers configured for metrics persistence');
+      return;
+    }
+
+    // Convert snapshot to telemetry event format
+    const metricEvent: TelemetryEvent = {
+      sessionId: `metrics-${Date.now()}`,
+      eventType: 'metric_snapshot',
+      category: 'analytics',
+      action: 'snapshot',
+      timestamp: snapshot.timestamp,
+      metadata: {
+        interval: snapshot.interval,
+        metrics: snapshot.metrics,
+        type: 'metrics_snapshot'
+      }
+    };
+
+    // Store to each configured storage provider
+    const promises = this.options.storageProviders.map(async (provider) => {
+      try {
+        await provider.store(metricEvent);
+        this.logger.debug(`Metrics snapshot persisted to ${provider.constructor.name}`);
+      } catch (error) {
+        this.logger.error(`Failed to persist metrics snapshot to ${provider.constructor.name}:`, error);
+      }
+    });
+
+    await Promise.allSettled(promises);
   }
   
   /**

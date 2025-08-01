@@ -955,6 +955,66 @@ export class DrizzleTelemetryOperations {
   }
 
   /**
+   * Delete events based on filter criteria
+   */
+  async deleteEvents(filter: Partial<TelemetryQueryFilter> = {}): Promise<number> {
+    const db = await this.getDB();
+
+    return await this.dbManager.executeWithMetrics(
+      'DELETE_EVENTS',
+      async () => {
+        let whereConditions: any[] = [];
+
+        // Build where conditions based on filter
+        if (filter.sessionId) {
+          whereConditions.push(eq(telemetryEvents.sessionId, filter.sessionId));
+        }
+        if (filter.eventType) {
+          whereConditions.push(eq(telemetryEvents.eventType, filter.eventType));
+        }
+        if (filter.category) {
+          whereConditions.push(eq(telemetryEvents.agentType, filter.category));
+        }
+        if (filter.action) {
+          whereConditions.push(eq(telemetryEvents.mode, filter.action));
+        }
+        if (filter.from !== undefined) {
+          whereConditions.push(gte(telemetryEvents.timestamp, filter.from));
+        }
+        if (filter.to !== undefined) {
+          whereConditions.push(lte(telemetryEvents.timestamp, filter.to));
+        }
+
+        const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+        
+        const result = await db
+          .delete(telemetryEvents)
+          .where(whereClause);
+        
+        return result.changes || 0;
+      }
+    );
+  }
+
+  /**
+   * Delete events older than specified timestamp
+   */
+  async deleteEventsBefore(timestamp: number): Promise<number> {
+    const db = await this.getDB();
+
+    return await this.dbManager.executeWithMetrics(
+      'DELETE_EVENTS_BEFORE',
+      async () => {
+        const result = await db
+          .delete(telemetryEvents)
+          .where(lte(telemetryEvents.timestamp, timestamp));
+        
+        return result.changes || 0;
+      }
+    );
+  }
+
+  /**
    * Clear all telemetry data
    */
   async clearAllData(): Promise<void> {
@@ -973,6 +1033,56 @@ export class DrizzleTelemetryOperations {
 
         // Vacuum database to reclaim space
         await db.run(sql`VACUUM`);
+      }
+    );
+  }
+
+  /**
+   * Optimize database performance (VACUUM)
+   */
+  async vacuum(): Promise<void> {
+    const db = await this.getDB();
+
+    await this.dbManager.executeWithMetrics(
+      'VACUUM',
+      async () => {
+        await db.run(sql`VACUUM`);
+      }
+    );
+  }
+
+  /**
+   * Analyze database statistics for query optimization
+   */
+  async analyze(): Promise<void> {
+    const db = await this.getDB();
+
+    await this.dbManager.executeWithMetrics(
+      'ANALYZE',
+      async () => {
+        await db.run(sql`ANALYZE`);
+      }
+    );
+  }
+
+  /**
+   * Run full database optimization (VACUUM + ANALYZE)
+   */
+  async optimize(): Promise<void> {
+    await this.vacuum();
+    await this.analyze();
+  }
+
+  /**
+   * Reindex database for better performance
+   */
+  async reindex(): Promise<void> {
+    const db = await this.getDB();
+
+    await this.dbManager.executeWithMetrics(
+      'REINDEX',
+      async () => {
+        await db.run(sql`REINDEX`);
       }
     );
   }

@@ -393,9 +393,7 @@ describe('Integrated Security Tests', () => {
       // Should report that it would clean old events (3 events are older than 7 days)
       expect(cleaned).toBe(3);
 
-      // Note: The current SQLiteProvider doesn't actually delete events yet (TODO in code)
-      // So we can't verify that old data is gone. Instead, verify the clean method
-      // at least correctly identifies which events should be cleaned.
+      // Verify that old events were actually deleted
       const allEvents = await service.query({ sessionId });
       
       // Count how many events are older than 7 days

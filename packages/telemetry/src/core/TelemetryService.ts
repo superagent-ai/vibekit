@@ -183,7 +183,9 @@ export class TelemetryService extends TelemetryEventEmitter {
     
     // Initialize metrics collector
     if (this.config.analytics.metrics?.enabled) {
-      this.metricsCollector = new MetricsCollector(this.analyticsEngine, this.config.analytics);
+      this.metricsCollector = new MetricsCollector(this.analyticsEngine, this.config.analytics, {
+        storageProviders: this.storageProviders
+      });
       this.metricsCollector.start();
     }
     

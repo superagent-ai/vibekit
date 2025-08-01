@@ -263,23 +263,30 @@ export class SQLiteProvider extends StorageProvider {
     
     const cutoffTime = before.getTime();
     
-    // Query for events to delete
-    const eventsToDelete = await this.operations.queryEvents({
-      to: cutoffTime,
-    });
-    
-    // Delete in batches
-    const batchSize = 100;
-    let deleted = 0;
-    
-    for (let i = 0; i < eventsToDelete.length; i += batchSize) {
-      const batch = eventsToDelete.slice(i, i + batchSize);
-      // SQLite operations don't have a deleteEvents method, skip deletion for now
-      // TODO: Add proper deletion when API is available
-      deleted += batch.length;
+    try {
+      // Use the new deleteEventsBefore method
+      const deleted = await this.operations.deleteEventsBefore(cutoffTime);
+      this.logger.info(`Cleaned ${deleted} events before ${before.toISOString()}`);
+      return deleted;
+    } catch (error) {
+      this.logger.error('Failed to clean events:', error);
+      throw error;
     }
-    
-    return deleted;
+  }
+
+  /**
+   * Delete events based on filter criteria
+   */
+  async deleteEvents(filter: QueryFilter): Promise<number> {
+    try {
+      const dbFilter = this.convertQueryFilter(filter);
+      const deleted = await this.operations.deleteEvents(dbFilter);
+      this.logger.info(`Deleted ${deleted} events matching filter`);
+      return deleted;
+    } catch (error) {
+      this.logger.error('Failed to delete events:', error);
+      throw error;
+    }
   }
   
   async flush(): Promise<void> {
@@ -288,8 +295,52 @@ export class SQLiteProvider extends StorageProvider {
   }
   
   async compact(): Promise<void> {
-    // VACUUM operation not available in current API
-    // TODO: Add when database optimization API is available
+    try {
+      await this.operations.optimize();
+      this.logger.info('Database optimization completed (VACUUM + ANALYZE)');
+    } catch (error) {
+      this.logger.error('Failed to optimize database:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Run database vacuum only
+   */
+  async vacuum(): Promise<void> {
+    try {
+      await this.operations.vacuum();
+      this.logger.info('Database VACUUM completed');
+    } catch (error) {
+      this.logger.error('Failed to vacuum database:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Analyze database statistics for query optimization
+   */
+  async analyze(): Promise<void> {
+    try {
+      await this.operations.analyze();
+      this.logger.info('Database ANALYZE completed');
+    } catch (error) {
+      this.logger.error('Failed to analyze database:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reindex database for better performance
+   */
+  async reindex(): Promise<void> {
+    try {
+      await this.operations.reindex();
+      this.logger.info('Database REINDEX completed');
+    } catch (error) {
+      this.logger.error('Failed to reindex database:', error);
+      throw error;
+    }
   }
   
   async shutdown(): Promise<void> {

@@ -1,4 +1,7 @@
 import { EventEmitter } from "events";
+import { readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import type {
   AgentType,
   AgentMode,
@@ -48,6 +51,22 @@ export interface VibeKitOptions {
   workingDirectory?: string;
   secrets?: Record<string, string>;
   sandboxId?: string;
+}
+
+/**
+ * Get the package version from package.json
+ */
+function getPackageVersion(): string {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const packageJsonPath = join(__dirname, '../../package.json');
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+    return packageJson.version || '1.0.0';
+  } catch (error) {
+    console.warn('Failed to read package version, using default:', error);
+    return '1.0.0';
+  }
 }
 
 export class VibeKit extends EventEmitter {
@@ -181,7 +200,7 @@ export class VibeKit extends EventEmitter {
 
       this.telemetryService = new VibeKitTelemetryAdapter({
         ...telemetryConfig,
-        serviceVersion: '1.0.0', // TODO: Get from package.json
+        serviceVersion: getPackageVersion(),
       });
       await this.telemetryService.initialize();
     }
