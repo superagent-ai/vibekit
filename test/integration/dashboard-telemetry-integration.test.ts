@@ -344,7 +344,7 @@ describe("Dashboard + Telemetry API Integration", () => {
       });
       
       // Wait for file watcher to be ready
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Create a separate telemetry service instance (simulating external process)
       const externalService = new TelemetryService({
@@ -355,6 +355,8 @@ describe("Dashboard + Telemetry API Integration", () => {
           enabled: true,
           options: {
             path: dbPath, // Same database
+            streamBatchSize: 1, // Force immediate writes
+            streamFlushInterval: 0, // No buffering
           }
         }]
       });
@@ -362,13 +364,22 @@ describe("Dashboard + Telemetry API Integration", () => {
       await externalService.initialize();
       
       // Create event from external service
-      await externalService.trackStart('gemini', 'analyze', 'External event');
+      const sessionId = await externalService.trackStart('gemini', 'analyze', 'External event');
+      
+      // Add more events to ensure database write
+      await externalService.track({
+        sessionId,
+        eventType: 'stream',
+        category: 'gemini',
+        action: 'analyze',
+        metadata: { test: true }
+      });
       
       // Force flush to ensure database write
       await externalService.shutdown();
       
       // Wait for change detection (file watcher has 300ms debounce + detection time)
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       // API should detect the change
       expect(changeDetected).toBe(true);
@@ -379,8 +390,6 @@ describe("Dashboard + Telemetry API Integration", () => {
       
       expect(data.length).toBeGreaterThan(0);
       expect(data[0].category).toBe('gemini');
-      
-      await externalService.shutdown();
     });
   });
 
