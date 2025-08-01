@@ -3,6 +3,7 @@ import { StorageProvider } from '../StorageProvider.js';
 import { DrizzleTelemetryOperations } from '@vibe-kit/db';
 import type { TelemetryEvent as DBTelemetryEvent, TelemetryQueryFilter, EventType } from '@vibe-kit/db';
 import { createHash } from 'crypto';
+import { createLogger } from '../../utils/logger.js';
 
 export class SQLiteProvider extends StorageProvider {
   readonly name = 'sqlite';
@@ -16,6 +17,7 @@ export class SQLiteProvider extends StorageProvider {
   private readonly maxCacheSize = 10000; // Maximum number of sessions to cache
   private readonly maxMapSize = 5000; // Maximum number of session ID mappings
   private cleanupCounter = 0;
+  private logger = createLogger('SQLiteProvider');
   
   constructor(options: { path?: string; dbPath?: string } = {}) {
     super();
@@ -471,7 +473,7 @@ export class SQLiteProvider extends StorageProvider {
       this.sessionCache.delete(cacheArray[i]);
     }
     
-    console.warn(`[SQLiteProvider] Session cache trimmed: removed ${excessCount} entries, current size: ${this.sessionCache.size}`);
+    this.logger.warn(`Session cache trimmed: removed ${excessCount} entries, current size: ${this.sessionCache.size}`);
   }
 
   /**
@@ -487,7 +489,7 @@ export class SQLiteProvider extends StorageProvider {
       this.sessionIdMap.delete(mapEntries[i][0]);
     }
     
-    console.warn(`[SQLiteProvider] Session ID map trimmed: removed ${excessCount} entries, current size: ${this.sessionIdMap.size}`);
+    this.logger.warn(`Session ID map trimmed: removed ${excessCount} entries, current size: ${this.sessionIdMap.size}`);
   }
 
   /**
