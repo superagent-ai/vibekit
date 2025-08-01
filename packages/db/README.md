@@ -394,37 +394,165 @@ CREATE INDEX idx_events_event_type ON telemetry_events(event_type);
 
 ## Migrations
 
+The @vibe-kit/db package uses Drizzle ORM for database operations and Drizzle Kit for migration management. All telemetry-related database schemas and migrations are centralized in this package.
+
+### Migration Files
+
+- **Location**: `packages/db/migrations/`
+- **Format**: SQL files with timestamps
+- **Schema**: Defined in `packages/db/src/schema.ts`
+
 ### Running Migrations
 
+#### Apply Migrations
+
+To apply pending migrations to your database:
+
 ```bash
-# Apply pending migrations
+# From the db package directory
+npm run migrate
+
+# Or from the project root
+npm run migrate -w @vibe-kit/db
+
+# Apply all pending migrations
 npm run db:migrate
+```
 
-# Generate new migration
+#### Generate New Migrations
+
+When you modify the schema in `src/schema.ts`, generate a new migration:
+
+```bash
+# Generate with auto-generated name
+npm run migrate:generate
+
+# Generate with custom name
+npm run migrate:generate -- "add_user_preferences"
+
+# Using Drizzle Kit directly
 npm run db:generate -- "add_user_preferences"
+```
 
-# Push schema changes (development only)
+#### Push Schema Changes (Development)
+
+For development, you can push schema changes directly without generating migrations:
+
+```bash
+npm run migrate:push
+# or
 npm run db:push
+```
 
-# View database with Drizzle Studio
+⚠️ **Warning**: Only use `push` in development. Always use migrations in production.
+
+#### View Database
+
+To explore your database with Drizzle Studio:
+
+```bash
 npm run db:studio
 ```
 
 ### Migration Strategy
 
-1. **Schema-First**: Define changes in `src/schema.ts`
-2. **Generate**: Create SQL migrations with `db:generate`
-3. **Review**: Check generated SQL in `migrations/`
-4. **Test**: Apply in development environment
-5. **Deploy**: Run migrations in production
+1. **Schema-First Approach**: Define your schema in `src/schema.ts`
+2. **Generate Migrations**: Use `migrate:generate` to create SQL migrations
+3. **Review Migrations**: Check the generated SQL in `migrations/`
+4. **Test Migrations**: Apply in development environment first
+5. **Apply Migrations**: Run `migrate` to apply changes
+6. **Version Control**: Commit both schema changes and migration files
+7. **Deploy**: Run migrations in production
+
+### Migration Scripts
+
+The package includes several migration-related scripts:
+
+- `migrate` - Apply pending migrations using custom script
+- `migrate:generate` - Generate new migration from schema changes
+- `migrate:push` - Push schema directly (development only)
+- `migrate:drop` - Drop all migrations (development only)
+- `db:generate` - Generate migration using Drizzle Kit
+- `db:migrate` - Apply migrations using Drizzle Kit
+- `db:push` - Push schema using Drizzle Kit
+- `db:studio` - Open Drizzle Studio
+
+### Environment Variables
+
+- `VIBEKIT_DB_PATH`: Custom database path (default: `.vibekit/telemetry.db`)
+
+Example:
+
+```bash
+VIBEKIT_DB_PATH=/custom/path/telemetry.db npm run migrate
+```
+
+### Troubleshooting Migrations
+
+#### Migration Fails
+
+If a migration fails:
+
+1. Check the error message for constraint violations
+2. Ensure the database file is not locked
+3. Verify foreign key constraints are satisfied
+4. Check for existing data that conflicts with new constraints
+
+```typescript
+// Temporarily disable foreign keys to debug
+const db = new DrizzleTelemetryDB({
+  enableForeignKeys: false
+});
+```
+
+#### Schema Out of Sync
+
+If your schema gets out of sync:
+
+```bash
+# Drop all migrations and regenerate (DEVELOPMENT ONLY)
+npm run migrate:drop
+npm run migrate:generate -- "initial_schema"
+npm run migrate
+```
+
+#### Database Locked During Migration
+
+If you get "database is locked" errors:
+
+1. Close any open database connections
+2. Stop any running VibeKit services
+3. Close Drizzle Studio if running
+4. Kill any hanging Node processes: `killall node`
+5. Remove WAL files if necessary:
+   ```bash
+   rm .vibekit/telemetry.db-wal
+   rm .vibekit/telemetry.db-shm
+   ```
 
 ### Best Practices
 
-- Always backup before major migrations
-- Test migrations in staging environment
-- Use transactions (enabled by default)
-- Document breaking changes
-- Version control migration files
+- **Always Review Generated Migrations**: Check the SQL before applying
+- **Test Migrations**: Run migrations in a test environment first
+- **Backup Before Major Changes**: Always backup production data
+- **Document Schema Changes**: Update documentation when adding new tables/columns
+- **Use Transactions**: Migrations run in transactions by default
+- **Incremental Changes**: Make small, incremental schema changes
+- **No Manual Edits**: Don't manually edit generated migration files
+- **Migration Order**: Ensure migrations are applied in the correct order
+
+### Integration with Other Packages
+
+The telemetry package and other VibeKit packages use this database through the exported operations:
+
+```typescript
+import { DrizzleTelemetryOperations } from '@vibe-kit/db';
+
+const ops = new DrizzleTelemetryOperations();
+await ops.initialize();
+```
+
+No direct migration management is needed in consuming packages - they always use the current schema through the operations API.
 
 ## Performance
 

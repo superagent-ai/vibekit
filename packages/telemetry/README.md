@@ -586,7 +586,89 @@ await telemetry.track({
 
 ## Security Features
 
+The telemetry service includes multiple security layers to protect your data and infrastructure:
+
+### Overview
+
+- **CORS Protection**: Control which domains can access your telemetry API
+- **API Authentication**: Secure endpoints with API keys and bearer tokens
+- **Rate Limiting**: Built-in protection against abuse (100 req/15 min per IP)
+- **Input Validation**: Comprehensive validation using Zod schemas
+- **Data Encryption**: AES-256 encryption for sensitive data at rest
+- **Path Traversal Protection**: Prevent directory traversal attacks
+- **PII Detection & Redaction**: Automatic detection and redaction of sensitive data
+- **Security Headers**: Helmet.js integration for secure HTTP headers
+
+### Quick Security Setup
+
+1. **Generate secure keys**:
+```bash
+# Generate encryption key (32 bytes)
+openssl rand -hex 32
+
+# Generate API keys
+openssl rand -hex 32
+openssl rand -hex 32
+```
+
+2. **Configure environment variables**:
+```env
+# CORS Protection
+TELEMETRY_ALLOWED_ORIGINS=https://app.example.com,https://dashboard.example.com
+
+# API Authentication
+TELEMETRY_AUTH_ENABLED=true
+TELEMETRY_API_KEYS=abc123...,def456...
+TELEMETRY_BEARER_TOKENS=token1...,token2...
+
+# Data Encryption
+TELEMETRY_ENCRYPTION_ENABLED=true
+TELEMETRY_ENCRYPTION_KEY=0123456789abcdef... # 64 hex chars
+```
+
+### CORS Protection
+
+Control which domains can access your telemetry API:
+
+```typescript
+// Configure CORS
+const telemetry = new TelemetryService({
+  api: {
+    cors: {
+      origins: ['https://app.example.com', 'https://dashboard.example.com'],
+      credentials: true
+    }
+  }
+});
+
+// Or via environment variable
+// TELEMETRY_ALLOWED_ORIGINS=https://app.example.com,https://dashboard.example.com
+```
+
+### API Authentication
+
+Protect your API endpoints with multiple authentication methods:
+
+```typescript
+// Configure authentication
+const telemetry = new TelemetryService({
+  api: {
+    auth: {
+      enabled: true,
+      apiKeys: ['your-api-key-1', 'your-api-key-2'],
+      bearerTokens: ['bearer-token-1', 'bearer-token-2']
+    }
+  }
+});
+
+// Use in requests
+// API Key: curl -H "X-API-Key: your-api-key-1" https://api.example.com/api/events
+// Bearer: curl -H "Authorization: Bearer bearer-token-1" https://api.example.com/api/events
+```
+
 ### PII Detection & Redaction
+
+Automatically detect and redact personally identifiable information:
 
 ```typescript
 // Configure PII detection
@@ -614,13 +696,15 @@ await telemetry.track({
   category: 'user',
   action: 'update',
   metadata: {
-    email: 'user@example.com', // Automatically redacted
-    apiKey: 'sk-abc123...'      // Custom redaction
+    email: 'user@example.com', // Automatically redacted to '[REDACTED_EMAIL]'
+    apiKey: 'sk-abc123...'      // Custom redaction to '[REDACTED_API_KEY]'
   }
 });
 ```
 
 ### Data Encryption
+
+Encrypt sensitive telemetry data at rest:
 
 ```typescript
 // Enable encryption at rest
@@ -635,12 +719,55 @@ const telemetry = new TelemetryService({
 });
 
 // All sensitive data is encrypted before storage
+// Encryption key from TELEMETRY_ENCRYPTION_KEY env var
+```
+
+⚠️ **Important**: Store your encryption key securely. Lost keys mean unrecoverable data!
+
+### Rate Limiting
+
+Built-in rate limiting protects against abuse:
+
+```typescript
+// Default: 100 requests per 15 minutes per IP
+// Applied to all /api/ endpoints
+// Returns 429 Too Many Requests when exceeded
+
+// Custom rate limiting
+const telemetry = new TelemetryService({
+  api: {
+    rateLimit: {
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100 // limit each IP to 100 requests per windowMs
+    }
+  }
+});
+```
+
+### Input Validation
+
+All API inputs are validated using Zod schemas:
+
+```typescript
+// Invalid inputs return detailed error messages:
+// {
+//   "error": "Validation Error",
+//   "message": "Invalid query parameters",
+//   "details": [
+//     {
+//       "field": "limit",
+//       "message": "Number must be between 1 and 1000"
+//     }
+//   ]
+// }
 ```
 
 ### Audit Trail
 
+Enable comprehensive audit logging for compliance:
+
 ```typescript
-// Enable comprehensive audit logging
+// Enable audit logging
 const telemetry = new TelemetryService({
   security: {
     audit: {
@@ -656,6 +783,50 @@ const auditLogs = await telemetry.getAuditLogs({
   since: Date.now() - 86400000
 });
 ```
+
+### Security Best Practices
+
+1. **Use HTTPS**: Always deploy with TLS/SSL in production
+2. **Rotate Keys**: Regularly rotate API keys and tokens
+3. **Monitor Access**: Review logs for suspicious activity
+4. **Limit Origins**: Only allow necessary domains in CORS
+5. **Secure Storage**: Use environment variables or secret management systems
+6. **Regular Updates**: Keep dependencies up to date
+7. **Least Privilege**: Grant minimal required permissions
+
+### Threat Model
+
+The telemetry service protects against:
+
+- **Cross-Site Scripting (XSS)**: CSP headers, input sanitization
+- **SQL Injection**: Parameterized queries, input validation
+- **Directory Traversal**: Path validation and normalization
+- **DoS Attacks**: Rate limiting, resource limits
+- **Data Exposure**: Encryption, authentication, PII detection
+
+### Security Checklist
+
+Before deploying to production:
+
+- [ ] Generated strong encryption key (32 bytes)
+- [ ] Generated unique API keys
+- [ ] Configured CORS origins appropriately
+- [ ] Enabled authentication for API endpoints
+- [ ] Set up HTTPS/TLS certificates
+- [ ] Reviewed and adjusted rate limits
+- [ ] Tested with security scanner
+- [ ] Configured monitoring/alerting
+- [ ] Documented key storage process
+- [ ] Set up key rotation schedule
+- [ ] Enabled PII detection if handling user data
+- [ ] Configured audit logging for compliance
+
+### Reporting Security Issues
+
+Found a security vulnerability? Please report it responsibly:
+- Email: security@vibekit.io
+- Do NOT open public issues for security vulnerabilities
+- We aim to respond within 48 hours
 
 ## Plugin System
 
