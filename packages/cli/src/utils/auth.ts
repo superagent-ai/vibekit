@@ -3,7 +3,7 @@ import enquirer from "enquirer";
 import ora from "ora";
 import chalk from "chalk";
 
-import { SANDBOX_PROVIDERS } from "../constants/enums.js";
+import { SANDBOX_PROVIDERS } from "@vibe-kit/sdk";
 
 export interface AuthStatus {
   isAuthenticated: boolean;
@@ -105,6 +105,21 @@ const authConfigs: Record<SANDBOX_PROVIDERS, ProviderAuthConfig> = {
       }
 
       return { isAuthenticated, username };
+    },
+    loginCommand: ["login"],
+    needsBrowserOpen: true,
+  },
+  [SANDBOX_PROVIDERS.CLOUDFLARE]: {
+    cliName: "wrangler",
+    installInstructions: "npm install -g wrangler",
+    checkAuthCommand: ["whoami"],
+    parseAuthOutput: (stdout: string) => {
+      const isAuthenticated = !stdout.includes("Not logged in") && !!stdout;
+      const emailMatch = stdout.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+      return {
+        isAuthenticated,
+        username: emailMatch ? emailMatch[0] : "Cloudflare User",
+      };
     },
     loginCommand: ["login"],
     needsBrowserOpen: true,

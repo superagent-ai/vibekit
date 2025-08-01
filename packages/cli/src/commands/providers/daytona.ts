@@ -1,7 +1,7 @@
 import { execa } from "execa";
 import ora from "ora";
 import chalk from "chalk";
-import { AGENT_TEMPLATES } from "../../constants/enums.js";
+import { AGENT_TEMPLATES } from "@vibe-kit/sdk";
 
 import { isCliInstalled } from "../../utils/auth.js";
 

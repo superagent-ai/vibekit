@@ -1,3 +1,5 @@
+import { ProviderType } from './constants/providers';
+
 // AGENTS
 export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
 
@@ -295,7 +297,7 @@ export interface SandboxInstance {
 }
 
 export interface SandboxConfig {
-  type: "e2b" | "daytona" | "northflank";
+  type: ProviderType;
   apiKey: string;
   templateId?: string; // for E2B
   image?: string; // for Daytona
@@ -310,7 +312,7 @@ export interface SandboxConfig {
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
+    agentType?: AgentType,
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;

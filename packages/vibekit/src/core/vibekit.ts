@@ -8,6 +8,7 @@ import type {
   LabelOptions,
 } from "../types";
 import { AgentResponse, ExecuteCommandOptions } from "../agents/base";
+import { AGENT_TYPES } from "../constants/agents";
 
 export interface VibeKitEvents {
   stdout: (chunk: string) => void;
@@ -98,23 +99,23 @@ export class VibeKit extends EventEmitter {
     // Dynamic imports for different agents
     let AgentClass;
     switch (type) {
-      case "claude":
+      case AGENT_TYPES.CLAUDE:
         const { ClaudeAgent } = await import("../agents/claude");
         AgentClass = ClaudeAgent;
         break;
-      case "codex":
+      case AGENT_TYPES.CODEX:
         const { CodexAgent } = await import("../agents/codex");
         AgentClass = CodexAgent;
         break;
-      case "opencode":
+      case AGENT_TYPES.OPENCODE:
         const { OpenCodeAgent } = await import("../agents/opencode");
         AgentClass = OpenCodeAgent;
         break;
-      case "gemini":
+      case AGENT_TYPES.GEMINI:
         const { GeminiAgent } = await import("../agents/gemini");
         AgentClass = GeminiAgent;
         break;
-      case "grok":
+      case AGENT_TYPES.GROK:
         const { GrokAgent } = await import("../agents/grok");
         AgentClass = GrokAgent;
         break;
