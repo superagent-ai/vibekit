@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { VibeKitTelemetryAdapter } from '../adapters/TelemetryAdapter.js';
+import { VibeKitTelemetryAdapter } from '../packages/vibekit/src/adapters/TelemetryAdapter.js';
 
 // Unmock fs for this test file since we need real filesystem operations
 vi.unmock('fs');

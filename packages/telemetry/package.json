@@ -30,6 +30,9 @@
     "build": "tsup",
     "dev": "tsup src/index.ts --watch",
     "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "test:ui": "vitest --ui",
     "type-check": "tsc --noEmit"
   },
   "keywords": [
