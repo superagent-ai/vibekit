@@ -33,6 +33,12 @@ export const telemetryEvents = sqliteTable('telemetry_events', {
   agentTypeIdx: index('idx_events_agent').on(table.agentType),
   compoundIdx: index('idx_events_compound').on(table.sessionId, table.eventType, table.timestamp),
   versionIdx: index('idx_events_version').on(table.version),
+  
+  // Performance optimization indexes
+  modeIdx: index('idx_events_mode').on(table.mode), // Critical for action queries
+  timestampDescIdx: index('idx_events_timestamp_desc').on(table.timestamp), // For ORDER BY timestamp DESC
+  sessionTimeDescIdx: index('idx_events_session_time_desc').on(table.sessionId, table.timestamp), // Common compound query
+  
   // Foreign key constraint
   sessionFk: foreignKey({
     columns: [table.sessionId],
@@ -67,6 +73,10 @@ export const telemetrySessions = sqliteTable('telemetry_sessions', {
   startTimeIdx: index('idx_sessions_start_time').on(table.startTime),
   sandboxIdx: index('idx_sessions_sandbox').on(table.sandboxId),
   versionIdx: index('idx_sessions_version').on(table.version),
+  
+  // Performance optimization indexes
+  endTimeIdx: index('idx_sessions_end_time').on(table.endTime), // For completed session queries
+  statusStartTimeIdx: index('idx_sessions_status_start_time').on(table.status, table.startTime), // For active session queries
 }));
 
 // Stream event buffers for batching with foreign key constraints
