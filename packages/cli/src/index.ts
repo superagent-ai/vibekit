@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
 import { registerTelemetryCommands } from "./commands/telemetry.js";
 import { createLocalCommand } from "./commands/local.js";
+import { createDashboardCommand } from "./commands/dashboard.js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -66,6 +67,9 @@ registerTelemetryCommands(program);
 
 // Add local command with subcommands
 program.addCommand(createLocalCommand());
+
+// Add dashboard command
+program.addCommand(createDashboardCommand());
 
 // Auth commands are available separately via @vibe-kit/auth package
 

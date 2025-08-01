@@ -396,19 +396,19 @@ function Dashboard() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-sm">Start Events</span>
-                        <Badge variant="outline">{metrics.events.start}</Badge>
+                        <Badge variant="outline">{metrics?.events?.start || 0}</Badge>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm">Stream Events</span>
-                        <Badge variant="outline">{metrics.events.stream}</Badge>
+                        <Badge variant="outline">{metrics?.events?.stream || 0}</Badge>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm">End Events</span>
-                        <Badge variant="outline">{metrics.events.end}</Badge>
+                        <Badge variant="outline">{metrics?.events?.end || 0}</Badge>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm">Error Events</span>
-                        <Badge variant="destructive">{metrics.events.error}</Badge>
+                        <Badge variant="destructive">{metrics?.events?.error || 0}</Badge>
                       </div>
                     </div>
                   )}
@@ -424,15 +424,15 @@ function Dashboard() {
                      <div className="space-y-3">
                        <div className="flex justify-between items-center">
                          <span className="text-sm">Average Latency</span>
-                         <span className="text-sm font-mono">{metrics.performance.avgLatency}ms</span>
+                         <span className="text-sm font-mono">{metrics?.performance?.avgLatency || 0}ms</span>
                        </div>
                        <div className="flex justify-between items-center">
                          <span className="text-sm">Throughput</span>
-                         <span className="text-sm font-mono">{metrics.performance.throughput.toFixed(2)} events/sec</span>
+                         <span className="text-sm font-mono">{(metrics?.performance?.throughput || 0).toFixed(2)} events/sec</span>
                        </div>
                        <div className="flex justify-between items-center">
                          <span className="text-sm">95th Percentile</span>
-                         <span className="text-sm font-mono">{metrics.performance.p95Latency}ms</span>
+                         <span className="text-sm font-mono">{metrics?.performance?.p95Latency || 0}ms</span>
                        </div>
                      </div>
                    )}
@@ -440,7 +440,7 @@ function Dashboard() {
                      <div className="mt-4 pt-4 border-t space-y-3">
                        <div className="flex justify-between items-center">
                          <span className="text-sm">Uptime</span>
-                         <span className="text-sm font-mono">{formatDuration(metrics.health.uptime * 1000)}</span>
+                         <span className="text-sm font-mono">{formatDuration((metrics?.health?.uptime || 0) * 1000)}</span>
                        </div>
                      </div>
                    )}

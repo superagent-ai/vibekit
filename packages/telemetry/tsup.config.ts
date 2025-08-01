@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: "src/index.ts",
     "api/TelemetryAPIServer": "src/api/TelemetryAPIServer.ts",
+    "api/start-server": "src/api/start-server.ts",
     "cli/TelemetryCLI": "src/cli/TelemetryCLI.ts",
   },
   format: ["esm", "cjs"],
@@ -14,7 +15,7 @@ export default defineConfig({
   outDir: "dist",
   target: "node18",
   banner: {
-    js: "#!/usr/bin/env node",
+    js: "",
   },
   external: [
     "better-sqlite3",
