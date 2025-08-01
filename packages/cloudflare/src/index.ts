@@ -1,5 +1,9 @@
 import { getSandbox, type LogEvent, parseSSEStream, type Sandbox, type SandboxEnv } from "@cloudflare/sandbox";
 
+// MCP integration imports
+import { VibeKitMCPManager } from '@vibe-kit/vibekit/mcp/manager';
+import type { MCPConfig, MCPTool, MCPToolResult } from '@vibe-kit/vibekit';
+
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {
   exitCode: number;
@@ -24,18 +28,24 @@ export interface SandboxCommands {
 export interface SandboxInstance {
   sandboxId: string;
   commands: SandboxCommands;
+  mcpManager?: VibeKitMCPManager;
   kill(): Promise<void>;
   pause(): Promise<void>;
   getHost(port: number): Promise<string>;
+  // MCP integration methods
+  initializeMCP?(mcpConfig: MCPConfig): Promise<void>;
+  getAvailableTools?(): Promise<MCPTool[]>;
+  executeMCPTool?(toolName: string, args: any): Promise<MCPToolResult>;
 }
 
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
     agentType?: "codex" | "claude" | "opencode" | "gemini",
-    workingDirectory?: string
+    workingDirectory?: string,
+    mcpConfig?: MCPConfig
   ): Promise<SandboxInstance>;
-  resume(sandboxId: string): Promise<SandboxInstance>;
+  resume(sandboxId: string, mcpConfig?: MCPConfig): Promise<SandboxInstance>;
 }
 
 export type AgentType = "codex" | "claude" | "opencode" | "gemini";
@@ -43,15 +53,54 @@ export type AgentType = "codex" | "claude" | "opencode" | "gemini";
 export interface CloudflareConfig {
   env: SandboxEnv;
   hostname: string;
+  mcpConfig?: MCPConfig;
 }
 
 // Cloudflare implementation
 export class CloudflareSandboxInstance implements SandboxInstance {
+  public mcpManager?: VibeKitMCPManager;
+
   constructor(
     private sandbox: Sandbox,
     public sandboxId: string,
     private hostname: string,
-  ) { }
+    mcpConfig?: MCPConfig
+  ) {
+    // Initialize MCP manager if config is provided
+    if (mcpConfig) {
+      this.initializeMCP(mcpConfig).catch(error => {
+        console.error('Failed to initialize MCP in Cloudflare sandbox:', error);
+      });
+    }
+  }
+
+  async initializeMCP(mcpConfig: MCPConfig): Promise<void> {
+    if (!mcpConfig) return;
+    
+    try {
+      this.mcpManager = new VibeKitMCPManager();
+      const servers = Array.isArray(mcpConfig.servers) ? mcpConfig.servers : [mcpConfig.servers];
+      await this.mcpManager.initialize(servers);
+      console.log('MCP initialized successfully in Cloudflare sandbox');
+    } catch (error) {
+      console.error('Failed to initialize MCP in Cloudflare sandbox:', error);
+      throw error;
+    }
+  }
+
+  async getAvailableTools(): Promise<MCPTool[]> {
+    if (!this.mcpManager) {
+      return [];
+    }
+    return await this.mcpManager.listTools();
+  }
+
+  async executeMCPTool(toolName: string, args: any): Promise<MCPToolResult> {
+    if (!this.mcpManager) {
+      throw new Error('MCP manager not initialized. Call initializeMCP() first.');
+    }
+    return await this.mcpManager.executeTool(toolName, args);
+  }
 
   private async handleBackgroundCommand(command: string, options?: SandboxCommandOptions) {
     const response = await this.sandbox.startProcess(command);
@@ -111,6 +160,14 @@ export class CloudflareSandboxInstance implements SandboxInstance {
   }
 
   async kill(): Promise<void> {
+    // Clean up MCP manager before destroying sandbox
+    if (this.mcpManager) {
+      try {
+        await this.mcpManager.cleanup();
+      } catch (error) {
+        console.error('Error cleaning up MCP manager:', error);
+      }
+    }
     await this.sandbox.destroy();
   }
 
@@ -130,8 +187,10 @@ export class CloudflareSandboxProvider implements SandboxProvider {
   async create(
     envs?: Record<string, string>,
     agentType?: AgentType,
-    workingDirectory?: string
+    workingDirectory?: string,
+    mcpConfig?: MCPConfig
   ): Promise<SandboxInstance> {
+    const finalMcpConfig = mcpConfig || this.config.mcpConfig;
     if (!this.config.env || !this.config.env.Sandbox) {
       throw new Error(
         `Cloudflare Durable Object binding "Sandbox" not found. ` +
@@ -147,12 +206,13 @@ export class CloudflareSandboxProvider implements SandboxProvider {
     sandbox.setEnvVars(envs || {});
     await sandbox.exec(`sudo mkdir -p ${workingDirectory} && sudo chown $USER:$USER ${workingDirectory}`);
 
-    return new CloudflareSandboxInstance(sandbox, sandboxId, this.config.hostname);
+    return new CloudflareSandboxInstance(sandbox, sandboxId, this.config.hostname, finalMcpConfig);
   }
 
-  async resume(sandboxId: string): Promise<SandboxInstance> {
+  async resume(sandboxId: string, mcpConfig?: MCPConfig): Promise<SandboxInstance> {
+    const finalMcpConfig = mcpConfig || this.config.mcpConfig;
     const sandbox = getSandbox(this.config.env.Sandbox, sandboxId) as Sandbox;
-    return new CloudflareSandboxInstance(sandbox, sandboxId, this.config.hostname);
+    return new CloudflareSandboxInstance(sandbox, sandboxId, this.config.hostname, finalMcpConfig);
   }
 }
 

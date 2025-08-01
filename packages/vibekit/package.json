@@ -15,6 +15,11 @@
       "types": "./dist/agents/*.d.ts",
       "import": "./dist/agents/*.js",
       "require": "./dist/agents/*.cjs"
+    },
+    "./mcp/*": {
+      "types": "./dist/mcp/*.d.ts",
+      "import": "./dist/mcp/*.js",
+      "require": "./dist/mcp/*.cjs"
     }
   },
   "scripts": {
@@ -26,6 +31,7 @@
     "@ai-sdk/anthropic": "^1.2.12",
     "@ai-sdk/openai": "^1.3.22",
     "@ai-sdk/openai-compatible": "^0.2.14",
+    "@modelcontextprotocol/sdk": "^1.17.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/auto-instrumentations-node": "^0.59.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.201.1",
@@ -38,6 +44,14 @@
     "@opentelemetry/semantic-conventions": "^1.34.0",
     "@types/uuid": "^10.0.0",
     "ai": "^4.3.16",
+    "cfonts": "^3.3.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "enquirer": "^2.4.1",
+    "execa": "^9.5.1",
+    "node-fetch": "^3.3.2",
+    "open": "^10.2.0",
+    "ora": "^8.2.0",
     "uuid": "^11.1.0",
     "zod": "^3.25.76"
   },

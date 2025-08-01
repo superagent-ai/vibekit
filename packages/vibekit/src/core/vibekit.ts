@@ -6,6 +6,8 @@ import type {
   SandboxProvider,
   Conversation,
   LabelOptions,
+  MCPConfig,
+  MCPServerConfig,
 } from "../types";
 import { AgentResponse, ExecuteCommandOptions } from "../agents/base";
 
@@ -36,6 +38,7 @@ export interface VibeKitOptions {
   workingDirectory?: string;
   secrets?: Record<string, string>;
   sandboxId?: string;
+  mcp?: MCPConfig;
 }
 
 export class VibeKit extends EventEmitter {
@@ -85,6 +88,20 @@ export class VibeKit extends EventEmitter {
 
   withSession(sandboxId: string): this {
     this.options.sandboxId = sandboxId;
+    return this;
+  }
+
+  withMCP(config: MCPConfig | MCPServerConfig[]): this {
+    // Normalize config format
+    if (Array.isArray(config)) {
+      this.options.mcp = { servers: config };
+    } else if ('servers' in config) {
+      this.options.mcp = config;
+    } else {
+      // Single server config
+      this.options.mcp = { servers: [config as MCPServerConfig] };
+    }
+    
     return this;
   }
 
@@ -144,6 +161,7 @@ export class VibeKit extends EventEmitter {
         ? { isEnabled: true, sessionId: this.options.telemetry.sessionId }
         : undefined,
       sandboxId: this.options.sandboxId,
+      mcpConfig: this.options.mcp,
     };
 
     this.agent = new AgentClass(agentConfig);

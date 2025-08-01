@@ -48,6 +48,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/vibekit/vibekit.git",
-    "directory": "packages/local"
+    "directory": "packages/dagger"
   }
 }

@@ -6,8 +6,13 @@
  */
 
 import { Environment } from "@vibe-kit/dagger";
-import { MCPServerInstance } from "./local-mcp";
 import { BaseAgent } from "./base";
+
+// Simple type to replace the dependency on local-mcp
+interface MCPServerInstance {
+  isRunning: boolean;
+  serverUrl?: string;
+}
 
 export interface AgentSession {
   id: string;
@@ -187,17 +192,7 @@ export class AgentSessionManager {
       }
     }
 
-    // Cleanup MCP server
-    if (session.mcpServer) {
-      try {
-        const { cleanupMCPForEnvironment } = await import("./local-mcp");
-        await cleanupMCPForEnvironment(session.environment);
-      } catch (error) {
-        console.warn(
-          `Failed to cleanup MCP server for session ${sessionId}: ${error}`
-        );
-      }
-    }
+    // MCP cleanup is handled by the agent's MCP manager
 
     // Remove from tracking
     this.sessions.delete(sessionId);

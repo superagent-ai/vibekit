@@ -2,14 +2,27 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   // Main package and agents (with TypeScript declarations)
-  entry: {
-    index: "src/index.ts",
-    "agents/base": "src/agents/base.ts",
-    "agents/claude": "src/agents/claude.ts",
-    "agents/codex": "src/agents/codex.ts",
-    "agents/gemini": "src/agents/gemini.ts",
-    "agents/opencode": "src/agents/opencode.ts",
-    "agents/utils": "src/agents/utils.ts",
+  {
+    entry: {
+      index: "src/index.ts",
+      "agents/base": "src/agents/base.ts",
+      "agents/claude": "src/agents/claude.ts",
+      "agents/codex": "src/agents/codex.ts",
+      "agents/gemini": "src/agents/gemini.ts",
+      "agents/opencode": "src/agents/opencode.ts",
+      "agents/utils": "src/agents/utils.ts",
+      "auth/index": "src/auth/index.ts",
+      "auth/oauth": "src/auth/oauth.ts",
+      "auth/oauth-web": "src/auth/oauth-web.ts",
+      "mcp/types": "src/mcp/types.ts",
+      "mcp/manager": "src/mcp/manager.ts",
+    },
+    format: ["esm", "cjs"],
+    dts: true,
+    clean: true,
+    splitting: false,
+    sourcemap: true,
+    outDir: "dist",
   },
   format: ["esm", "cjs"],
   dts: true,

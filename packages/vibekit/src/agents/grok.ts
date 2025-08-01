@@ -28,7 +28,7 @@ export class GrokAgent extends BaseAgent {
       sandboxId: config.sandboxId,
       telemetry: config.telemetry,
       workingDirectory: config.workingDirectory,
-      localMCP: config.localMCP,
+      mcpConfig: config.mcpConfig,
     };
 
     super(baseConfig);
@@ -114,7 +114,7 @@ export class GrokAgent extends BaseAgent {
     };
   }
 
-  // Override generateCode to support history in the instruction
+  // Override generateCode to support history and MCP tools
   public async generateCode(
     prompt: string,
     mode?: "ask" | "code",
@@ -123,6 +123,9 @@ export class GrokAgent extends BaseAgent {
     callbacks?: GrokStreamCallbacks,
     background?: boolean
   ): Promise<GrokResponse> {
+    // Get available MCP tools
+    const availableTools = await this.getAvailableTools();
+    
     let instruction: string;
     if (mode === "ask") {
       instruction =
@@ -139,12 +142,21 @@ export class GrokAgent extends BaseAgent {
         .map((h) => `${h.role}\n ${h.content}`)
         .join("\n\n")}`;
     }
+    
+    // Add MCP tools information to instruction if available
+    if (availableTools.length > 0) {
+      const toolDescriptions = availableTools.map(tool => 
+        `- ${tool.name}: ${tool.description}`
+      ).join('\n');
+      instruction += `\n\nAvailable MCP tools:\n${toolDescriptions}\n` +
+        "You can reference these tools by using [TOOL_CALL:toolname]args[/TOOL_CALL] format.";
+    }
 
     const escapedPrompt = this.escapePrompt(prompt);
     const modelFlag = this.model ? `--model ${this.model}` : "";
     const baseUrlFlag = this.baseUrl ? `--base-url ${this.baseUrl}` : "";
 
-    // Override the command config with history-aware instruction
+    // Override the command config with MCP-aware instruction
     const originalGetCommandConfig = this.getCommandConfig.bind(this);
     this.getCommandConfig = (p: string, m?: "ask" | "code") => ({
       ...originalGetCommandConfig(p, m),
@@ -163,6 +175,51 @@ export class GrokAgent extends BaseAgent {
     // Restore original method
     this.getCommandConfig = originalGetCommandConfig;
 
-    return result as GrokResponse;
+    // Process result for MCP tool calls if needed
+    return await this.processMCPResponse(result as GrokResponse, availableTools);
+  }
+
+  /**
+   * Process Grok response and execute any MCP tool calls
+   */
+  private async processMCPResponse(
+    response: GrokResponse, 
+    availableTools: any[]
+  ): Promise<GrokResponse> {
+    if (!availableTools.length || !response.stdout) {
+      return response;
+    }
+
+    try {
+      let processedStdout = response.stdout;
+      const toolCallRegex = /\[TOOL_CALL:(\w+)\](.+?)\[\/TOOL_CALL\]/gs;
+      const toolCalls = [...response.stdout.matchAll(toolCallRegex)];
+      
+      for (const [fullMatch, toolName, argsStr] of toolCalls) {
+        try {
+          const args = JSON.parse(argsStr.trim());
+          const toolResult = await this.executeMCPTool(toolName, args);
+          
+          // Replace the tool call with the result
+          const resultText = `[TOOL_RESULT:${toolName}]${JSON.stringify(toolResult)}[/TOOL_RESULT]`;
+          processedStdout = processedStdout.replace(fullMatch, resultText);
+          
+        } catch (error) {
+          console.warn(`Failed to execute MCP tool ${toolName}:`, (error as Error)?.message || error);
+          const errorText = `[TOOL_ERROR:${toolName}]${(error as Error)?.message || error}[/TOOL_ERROR]`;
+          processedStdout = processedStdout.replace(fullMatch, errorText);
+        }
+      }
+
+      return {
+        ...response,
+        stdout: processedStdout,
+        mcpToolsUsed: toolCalls.length
+      };
+      
+    } catch (error) {
+      console.warn('Error processing MCP response:', (error as Error)?.message || error);
+      return response;
+    }
   }
 }

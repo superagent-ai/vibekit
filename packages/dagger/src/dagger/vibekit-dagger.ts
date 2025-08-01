@@ -6,7 +6,7 @@
  */
 
 import { connect } from "@dagger.io/dagger";
-import type { Client, Directory } from "@dagger.io/dagger";
+import type { Client, Container, Directory } from "@dagger.io/dagger";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { readFile } from "fs/promises";
@@ -14,6 +14,10 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { EventEmitter } from "events";
 import { homedir } from "os";
+
+// MCP integration imports
+import { VibeKitMCPManager } from '@vibe-kit/sdk/mcp/manager';
+import type { MCPConfig, MCPTool, MCPToolResult } from '@vibe-kit/sdk';
 
 const execAsync = promisify(exec);
 
@@ -141,21 +145,27 @@ export interface SandboxCommands {
 export interface SandboxInstance {
   sandboxId: string;
   commands: SandboxCommands;
+  mcpManager?: VibeKitMCPManager;
   kill(): Promise<void>;
   pause(): Promise<void>;
   getHost(port: number): Promise<string>;
   // EventEmitter methods for VibeKit streaming compatibility
   on(event: string, listener: (...args: any[]) => void): this;
   emit(event: string, ...args: any[]): boolean;
+  // MCP integration methods
+  initializeMCP?(mcpConfig: MCPConfig): Promise<void>;
+  getAvailableTools?(): Promise<MCPTool[]>;
+  executeMCPTool?(toolName: string, args: any): Promise<MCPToolResult>;
 }
 
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
     agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
-    workingDirectory?: string
+    workingDirectory?: string,
+    mcpConfig?: MCPConfig
   ): Promise<SandboxInstance>;
-  resume(sandboxId: string): Promise<SandboxInstance>;
+  resume(sandboxId: string, mcpConfig?: MCPConfig): Promise<SandboxInstance>;
 }
 
 export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
@@ -171,6 +181,7 @@ export interface LocalConfig {
   retryDelayMs?: number;
   connectionTimeout?: number;
   configPath?: string;
+  mcpConfig?: MCPConfig;
 }
 
 // Configuration with environment variable support
@@ -190,7 +201,8 @@ class Configuration {
       retryDelayMs: this.getEnvNumber("VIBEKIT_RETRY_DELAY", config.retryDelayMs ?? 1000),
       connectionTimeout: this.getEnvNumber("VIBEKIT_CONNECTION_TIMEOUT", config.connectionTimeout ?? 30000),
       configPath: process.env.VIBEKIT_CONFIG_PATH || config.configPath || join(homedir(), ".vibekit"),
-      logger: config.logger || new ConsoleLogger()
+      logger: config.logger || new ConsoleLogger(),
+      mcpConfig: config.mcpConfig
     };
     this.logger = this.config.logger!;
   }
@@ -559,6 +571,9 @@ class ImageResolver {
 class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
   private isRunning = true;
   private workspaceDirectory: Directory | null = null;
+  private baseContainer: Container | null = null;
+  private initializationPromise: Promise<void> | null = null;
+  public mcpManager?: VibeKitMCPManager;
   private connectionPool: DaggerConnectionPool;
   private logger: Logger;
   private imageResolver: ImageResolver;
@@ -568,14 +583,69 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     public sandboxId: string,
     private envs?: Record<string, string>,
     private workDir?: string,
+    private dockerfilePath?: string, // Path to Dockerfile if building from source
     private agentType?: AgentType,
+    mcpConfig?: MCPConfig,
     config?: LocalConfig
   ) {
-    super();
+    super(); // Call EventEmitter constructor
     this.config = Configuration.getInstance(config).get();
     this.logger = Configuration.getInstance().getLogger();
     this.connectionPool = DaggerConnectionPool.getInstance(this.logger);
     this.imageResolver = new ImageResolver(this.config, this.logger);
+    
+    // Initialize MCP manager if config is provided
+    if (mcpConfig) {
+      this.initializeMCP(mcpConfig).catch(error => {
+        this.logger.error('Failed to initialize MCP in Dagger sandbox', error);
+      });
+    }
+  }
+
+  async initializeMCP(mcpConfig: MCPConfig): Promise<void> {
+    if (!mcpConfig) return;
+    
+    try {
+      this.mcpManager = new VibeKitMCPManager();
+      const servers = Array.isArray(mcpConfig.servers) ? mcpConfig.servers : [mcpConfig.servers];
+      await this.mcpManager.initialize(servers);
+      this.logger.info('MCP initialized successfully in Dagger sandbox');
+    } catch (error) {
+      this.logger.error('Failed to initialize MCP in Dagger sandbox', error);
+      throw error;
+    }
+  }
+
+  async getAvailableTools(): Promise<MCPTool[]> {
+    if (!this.mcpManager) {
+      return [];
+    }
+    return await this.mcpManager.listTools();
+  }
+
+  async executeMCPTool(toolName: string, args: any): Promise<MCPToolResult> {
+    if (!this.mcpManager) {
+      throw new Error('MCP manager not initialized. Call initializeMCP() first.');
+    }
+    return await this.mcpManager.executeTool(toolName, args);
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initializationPromise) {
+      this.initializationPromise = this.initializeBaseContainer();
+    }
+    await this.initializationPromise;
+  }
+
+  private async initializeBaseContainer(): Promise<void> {
+    await connect(async (client) => {
+      // Create the base container once and store it for reuse
+      this.baseContainer = await this.createBaseContainer(
+        client,
+        this.dockerfilePath,
+        this.agentType
+      );
+    });
   }
 
   get commands(): SandboxCommands {
@@ -588,148 +658,263 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
           throw new ContainerExecutionError("Sandbox instance is not running", -1);
         }
 
-        // Validate and sanitize command
-        let sanitizedCommand: string;
+        await this.ensureInitialized();
+
+        // Emit start event for VibeKit streaming compatibility
+        this.emit(
+          "update",
+          JSON.stringify({
+            type: "start",
+            command: command,
+            timestamp: Date.now(),
+          })
+        );
+
+        let result: SandboxExecutionResult = {
+          exitCode: 1,
+          stdout: "",
+          stderr: "Command execution failed",
+        };
+
         try {
-          sanitizedCommand = sanitizeCommand(command);
-        } catch (error) {
-          throw new ContainerExecutionError(
-            `Invalid command: ${error instanceof Error ? error.message : String(error)}`,
-            -1
-          );
+          await connect(async (client) => {
+            try {
+              // Get or create persistent workspace container using our reusable base
+              let container = await this.getWorkspaceContainer(client);
+
+              if (options?.background) {
+                // Background execution: start and detach
+                container = container.withExec(["sh", "-c", command], {
+                  experimentalPrivilegedNesting: true,
+                });
+
+                // CRITICAL: Export the workspace directory to capture any changes
+                this.workspaceDirectory = container.directory(
+                  this.workDir || "/vibe0"
+                );
+
+                result = {
+                  exitCode: 0,
+                  stdout: `Background process started: ${command}`,
+                  stderr: "",
+                };
+              } else {
+                // Foreground execution with output
+                container = container.withExec(["sh", "-c", command]);
+
+                // CRITICAL: Export the workspace directory to capture filesystem changes
+                this.workspaceDirectory = container.directory(
+                  this.workDir || "/vibe0"
+                );
+
+                try {
+                  // Execute the command and get output
+                  const stdout = await container.stdout();
+                  const stderr = await container.stderr();
+
+                  // Simulate incremental streaming by splitting into lines and emitting with delays
+                  const emitIncremental = async (
+                    type: "stdout" | "stderr",
+                    fullOutput: string,
+                    callback?: (data: string) => void
+                  ) => {
+                    const lines = fullOutput
+                      .split("\n")
+                      .filter((line) => line.trim());
+                    for (const [index, line] of lines.entries()) {
+                      await new Promise((resolve) =>
+                        setTimeout(resolve, 100 + index * 50)
+                      ); // Progressive delay
+                      const message = line; // Simple string as per docs
+                      // Emit all output as update events - stderr is often just informational (e.g., git progress)
+                      this.emit("update", message);
+                      if (callback) callback(line);
+                    }
+                  };
+
+                  // Handle stdout
+                  if (stdout) {
+                    await emitIncremental("stdout", stdout, options?.onStdout);
+                  }
+
+                  // Handle stderr (non-fatal: route to 'update' with flag)
+                  if (stderr) {
+                    await emitIncremental("stderr", stderr, options?.onStderr);
+                    this.emit("update", `STDERR: ${stderr}`); // Docs-compatible update
+                  }
+
+                  result = {
+                    exitCode: 0,
+                    stdout: stdout,
+                    stderr: stderr,
+                  };
+                } catch (execError) {
+                  // Fatal error: emit 'error' as per docs
+                  const errorMessage =
+                    execError instanceof Error
+                      ? execError.message
+                      : String(execError);
+                  this.emit("error", errorMessage);
+                  // If the container execution failed, extract exit code and return proper result
+                  const exitCode = errorMessage.includes("exit code")
+                    ? parseInt(
+                        errorMessage.match(/exit code (\d+)/)?.[1] || "1"
+                      )
+                    : 1;
+
+                  // Return error result instead of throwing for better test compatibility
+                  result = {
+                    exitCode: exitCode,
+                    stdout: "",
+                    stderr: errorMessage,
+                  };
+                }
+              }
+            } catch (error) {
+              const errorMessage =
+                error instanceof Error ? error.message : String(error);
+              const exitCode = errorMessage.includes("exit code")
+                ? parseInt(errorMessage.match(/exit code (\d+)/)?.[1] || "1")
+                : 1;
+
+              // Emit error event for VibeKit compatibility
+              this.emit("error", errorMessage);
+
+              result = {
+                exitCode: exitCode,
+                stdout: "",
+                stderr: errorMessage,
+              };
+            }
+          });
+        } catch (connectError) {
+          // Handle errors from the connect function itself
+          const errorMessage =
+            connectError instanceof Error
+              ? connectError.message
+              : String(connectError);
+          const exitCode = errorMessage.includes("exit code")
+            ? parseInt(errorMessage.match(/exit code (\d+)/)?.[1] || "1")
+            : 1;
+
+          // Emit error event for VibeKit compatibility
+          this.emit("error", errorMessage);
+
+          result = {
+            exitCode: exitCode,
+            stdout: "",
+            stderr: errorMessage,
+          };
         }
 
-        // Emit start event
+        // Emit end event
         this.emit("update", JSON.stringify({
-          type: "start",
-          command: sanitizedCommand,
+          type: "end",
+          command: command,
           timestamp: Date.now(),
         }));
 
-        try {
-          return await this.executeCommand(sanitizedCommand, options);
-        } catch (error) {
-          // Emit error event
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          this.emit("error", errorMessage);
-          
-          if (error instanceof ContainerExecutionError) {
-            throw error;
-          }
-          
-          throw new ContainerExecutionError(
-            `Command execution failed: ${errorMessage}`,
-            -1,
-            error instanceof Error ? error : undefined
-          );
-        } finally {
-          // Emit end event
-          this.emit("update", JSON.stringify({
-            type: "end",
-            command: sanitizedCommand,
-            timestamp: Date.now(),
-          }));
-        }
+        return result;
       },
     };
   }
 
-  private async executeCommand(
-    command: string,
-    options?: SandboxCommandOptions
-  ): Promise<SandboxExecutionResult> {
-    const connectionKey = `sandbox-${this.sandboxId}`;
-    const client = await this.connectionPool.getConnection(connectionKey);
+  private async getWorkspaceContainer(
+    client: Client
+  ): Promise<Container> {
+    // Start with our cached base container but create a new instance for this session
+    let container = this.baseContainer;
 
-    // Resolve the image
-    const image = await this.imageResolver.resolveImage(this.agentType);
+    if (!container) {
+      throw new Error("Base container not initialized");
+    }
+
+    // If we have a saved workspace directory, restore it using withDirectory (copies content)
+    if (this.workspaceDirectory) {
+      container = container.withDirectory(
+        this.workDir || "/vibe0",
+        this.workspaceDirectory
+      );
+    } else {
+      // First time: ensure working directory exists
+      container = container.withExec(["mkdir", "-p", this.workDir || "/vibe0"]);
+    }
+
+    // Ensure we're in the working directory
+    container = container.withWorkdir(this.workDir || "/vibe0");
+
+    return container;
+  }
+
+  private async createBaseContainer(
+    client: Client,
+    dockerfilePath?: string,
+    agentType?: AgentType
+  ): Promise<Container> {
+    if (!agentType) {
+      throw new Error(
+        "Agent type is required for container creation. Cannot proceed without agent type."
+      );
+    }
+
+    // Use the image resolver from main branch
+    const image = await this.imageResolver.resolveImage(agentType);
     
     // Create container
     let container = client.container()
       .from(image)
       .withWorkdir(this.workDir || "/vibe0");
-
     // Add environment variables
     if (this.envs) {
       for (const [key, value] of Object.entries(this.envs)) {
         container = container.withEnvVariable(key, value);
       }
     }
-
-    // Restore workspace if exists
-    if (this.workspaceDirectory) {
-      container = container.withDirectory(
-        this.workDir || "/vibe0",
-        this.workspaceDirectory
-      );
-    }
-
-    // Execute command
-    if (options?.background) {
-      // Background execution
-      container = container.withExec(["sh", "-c", command], {
-        experimentalPrivilegedNesting: true,
-      });
-
-      // Save workspace state
-      this.workspaceDirectory = container.directory(this.workDir || "/vibe0");
-
-      return {
-        exitCode: 0,
-        stdout: `Background process started: ${command}`,
-        stderr: "",
-      };
-    } else {
-      // Foreground execution with timeout
-      const timeout = options?.timeoutMs || 120000; // 2 minutes default
-      const execContainer = container.withExec(["sh", "-c", command]);
-
-      try {
-        const [stdout, stderr, exitCode] = await Promise.race([
-          Promise.all([
-            execContainer.stdout(),
-            execContainer.stderr(),
-            execContainer.exitCode()
-          ]),
-          new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error("Command execution timeout")), timeout)
-          )
-        ]);
-
-        // Save workspace state
-        this.workspaceDirectory = execContainer.directory(this.workDir || "/vibe0");
-
-        // Handle output callbacks
-        if (stdout && options?.onStdout) {
-          this.emitOutput("stdout", stdout, options.onStdout);
-        }
-        if (stderr && options?.onStderr) {
-          this.emitOutput("stderr", stderr, options.onStderr);
-        }
-
-        return { exitCode, stdout, stderr };
-      } catch (error) {
-        if (error instanceof Error && error.message === "Command execution timeout") {
-          throw new ContainerExecutionError("Command execution timeout", -1, error);
-        }
-        throw error;
-      }
-    }
+    
+    return container;
   }
 
-  private emitOutput(
-    type: "stdout" | "stderr",
-    output: string,
-    callback?: (data: string) => void
-  ): void {
-    const lines = output.split("\n").filter(line => line.trim());
-    for (const line of lines) {
-      this.emit("update", `${type.toUpperCase()}: ${line}`);
-      if (callback) callback(line);
-    }
+  // File operations for git workflow
+  async readFile(path: string): Promise<string> {
+    await this.ensureInitialized();
+
+    let content = "";
+    await connect(async (client) => {
+      if (!this.baseContainer) {
+        throw new Error("Base container not initialized");
+      }
+
+      const container = await this.getWorkspaceContainer(client);
+      content = await container.file(path).contents();
+    });
+    return content;
+  }
+
+  async writeFile(path: string, content: string): Promise<void> {
+    await this.ensureInitialized();
+
+    await connect(async (client) => {
+      if (!this.baseContainer) {
+        throw new Error("Base container not initialized");
+      }
+
+      let container = await this.getWorkspaceContainer(client);
+      container = container.withNewFile(path, content);
+      // CRITICAL: Export the workspace directory to persist the file write
+      this.workspaceDirectory = container.directory(this.workDir || "/vibe0");
+    });
   }
 
   async kill(): Promise<void> {
+    // Clean up MCP manager before destroying sandbox
+    if (this.mcpManager) {
+      try {
+        await this.mcpManager.cleanup();
+      } catch (error) {
+        this.logger.error('Error cleaning up MCP manager', error);
+      }
+    }
+    
     this.isRunning = false;
     this.workspaceDirectory = null;
     this.logger.debug(`Killed sandbox instance: ${this.sandboxId}`);
@@ -757,27 +942,37 @@ export class LocalSandboxProvider implements SandboxProvider {
   async create(
     envs?: Record<string, string>,
     agentType?: AgentType,
-    workingDirectory?: string
+    workingDirectory?: string,
+    mcpConfig?: MCPConfig
   ): Promise<SandboxInstance> {
+    const finalMcpConfig = mcpConfig || this.config.mcpConfig;
     const sandboxId = `dagger-${agentType || "default"}-${Date.now().toString(36)}`;
     const workDir = workingDirectory || "/vibe0";
 
     this.logger.info(`Creating sandbox instance`, { sandboxId, agentType, workDir });
 
+    // Determine dockerfile path if needed
+    const dockerfilePath = getDockerfilePathFromAgentType(agentType);
+
     const instance = new LocalSandboxInstance(
       sandboxId,
       envs,
       workDir,
+      dockerfilePath,
       agentType,
+      finalMcpConfig,
       this.config
     );
 
     return instance;
   }
 
-  async resume(sandboxId: string): Promise<SandboxInstance> {
+  async resume(sandboxId: string, mcpConfig?: MCPConfig): Promise<SandboxInstance> {
+    // For Dagger, resume is the same as create since containers are ephemeral
+    // The workspace state is maintained through the Directory persistence
     this.logger.info(`Resuming sandbox instance: ${sandboxId}`);
-    return await this.create();
+    const finalMcpConfig = mcpConfig || this.config.mcpConfig;
+    return await this.create(undefined, undefined, undefined, finalMcpConfig);
   }
 
   async listEnvironments(): Promise<Environment[]> {
@@ -820,6 +1015,7 @@ export async function prebuildAgentImages(
 
   for (const agentType of agentTypes) {
     try {
+      logger.info(`Processing ${agentType} agent...`);
       await imageResolver.resolveImage(agentType);
       results.push({ agentType, success: true, source: "cached" });
     } catch (error) {

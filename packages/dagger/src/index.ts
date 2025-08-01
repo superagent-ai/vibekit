@@ -64,3 +64,14 @@ export {
   EnvironmentStore,
   type EnvironmentRecord,
 } from "./storage/environment-store";
+
+// Import the types we need for the provider function
+import { LocalSandboxProvider, type LocalConfig } from "./dagger/vibekit-dagger";
+
+// Main provider creation function - consistent with other providers
+export function createDaggerProvider(config: LocalConfig = {}): LocalSandboxProvider {
+  return new LocalSandboxProvider(config);
+}
+
+// Alias for backward compatibility
+export const dagger = createDaggerProvider;
