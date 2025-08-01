@@ -5,6 +5,7 @@ import type {
   TimeRange
 } from '../core/types.js';
 import { AnalyticsEngine } from './AnalyticsEngine.js';
+import { createLogger } from '../utils/logger.js';
 
 export interface MetricsSnapshot {
   timestamp: number;
@@ -25,6 +26,7 @@ export class MetricsCollector {
   private intervalId?: NodeJS.Timeout;
   private snapshots: MetricsSnapshot[] = [];
   private isRunning = false;
+  private logger = createLogger('MetricsCollector');
   
   constructor(analyticsEngine: AnalyticsEngine, config: AnalyticsConfig, options?: MetricsCollectorOptions) {
     this.analyticsEngine = analyticsEngine;
@@ -45,7 +47,7 @@ export class MetricsCollector {
     }
     
     if (!this.config.enabled || !this.config.metrics?.enabled) {
-      console.warn('Metrics collection is disabled in configuration');
+      this.logger.warn('Metrics collection is disabled in configuration');
       return;
     }
     
@@ -85,9 +87,12 @@ export class MetricsCollector {
       
       this.snapshots.push(snapshot);
       
-      // Trim old snapshots
+      // Trim old snapshots more aggressively to prevent memory issues
       if (this.snapshots.length > this.options.maxSnapshots) {
-        this.snapshots = this.snapshots.slice(-this.options.maxSnapshots);
+        const excessCount = this.snapshots.length - Math.floor(this.options.maxSnapshots * 0.8);
+        this.snapshots = this.snapshots.slice(-Math.floor(this.options.maxSnapshots * 0.8));
+        
+        this.logger.warn(`Trimmed ${excessCount} old metric snapshots, current size: ${this.snapshots.length}/${this.options.maxSnapshots}`);
       }
       
       // Persist if configured
@@ -95,7 +100,7 @@ export class MetricsCollector {
         await this.persistSnapshot(snapshot);
       }
     } catch (error) {
-      console.error('Failed to collect metrics snapshot:', error);
+      this.logger.error('Failed to collect metrics snapshot:', error);
     }
   }
   

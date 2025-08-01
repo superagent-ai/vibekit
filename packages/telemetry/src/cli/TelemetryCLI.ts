@@ -5,8 +5,10 @@ import { TelemetryService } from '../core/TelemetryService.js';
 import { TelemetryAPIServer } from '../api/TelemetryAPIServer.js';
 import { writeFile, mkdir } from 'fs/promises';
 import { dirname } from 'path';
+import { createLogger } from '../utils/logger.js';
 
 const program = new Command();
+const logger = createLogger('TelemetryCLI');
 
 program
   .name('telemetry')
@@ -18,7 +20,7 @@ program
   .description('Initialize telemetry configuration')
   .option('-c, --config <path>', 'Configuration file path', './telemetry.config.js')
   .action(async (options) => {
-    console.log('🔧 Initializing telemetry configuration...');
+    logger.info('Initializing telemetry configuration...');
     
     const configTemplate = `export default {
   serviceName: 'my-service',
@@ -67,10 +69,10 @@ program
     try {
       await mkdir(dirname(options.config), { recursive: true });
       await writeFile(options.config, configTemplate);
-      console.log(`✅ Configuration file created at: ${options.config}`);
-      console.log('📝 Edit the configuration file to customize your telemetry setup');
+      logger.info(`Configuration file created at: ${options.config}`);
+      logger.info('Edit the configuration file to customize your telemetry setup');
     } catch (error) {
-      console.error('❌ Failed to create configuration file:', error);
+      logger.error('Failed to create configuration file:', error);
       process.exit(1);
     }
   });

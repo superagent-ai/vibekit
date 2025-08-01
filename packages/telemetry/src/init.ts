@@ -1,6 +1,7 @@
 import { config } from 'dotenv';
 import { TelemetryService } from './core/TelemetryService.js';
 import type { TelemetryConfig } from './core/types.js';
+import { createLogger } from './utils/logger.js';
 
 // Load environment variables
 config();
@@ -79,17 +80,18 @@ export function createTelemetryService(): TelemetryService {
  * Initialize telemetry service with production-ready defaults
  */
 export async function initializeTelemetry(): Promise<TelemetryService> {
+  const logger = createLogger('TelemetryInit');
   const telemetry = createTelemetryService();
   
   // Set up graceful shutdown
   const shutdown = async () => {
-    console.log('Shutting down telemetry service...');
+    logger.info('Shutting down telemetry service...');
     try {
       await telemetry.shutdown();
-      console.log('Telemetry service shut down successfully');
+      logger.info('Telemetry service shut down successfully');
       process.exit(0);
     } catch (error) {
-      console.error('Error shutting down telemetry service:', error);
+      logger.error('Error shutting down telemetry service:', error);
       process.exit(1);
     }
   };
@@ -99,7 +101,7 @@ export async function initializeTelemetry(): Promise<TelemetryService> {
   
   // Initialize the service
   await telemetry.initialize();
-  console.log('Telemetry service initialized successfully');
+  logger.info('Telemetry service initialized successfully');
   
   return telemetry;
 }

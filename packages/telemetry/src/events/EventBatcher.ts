@@ -241,13 +241,17 @@ export class MultiChannelBatcher {
   private batchers = new Map<string, EventBatcher>();
   private defaultBatcher: EventBatcher;
   private router: (event: TelemetryEvent) => string;
+  private readonly maxChannels: number;
+  private channelCounter = 0;
   
   constructor(
     router: (event: TelemetryEvent) => string,
-    defaultOptions: BatcherOptions = {}
+    defaultOptions: BatcherOptions = {},
+    maxChannels = 100 // Prevent unbounded channel growth
   ) {
     this.router = router;
     this.defaultBatcher = new EventBatcher(defaultOptions);
+    this.maxChannels = maxChannels;
   }
   
   /**
@@ -258,6 +262,11 @@ export class MultiChannelBatcher {
       throw new Error(`Channel ${channel} already exists`);
     }
     
+    if (this.batchers.size >= this.maxChannels) {
+      console.warn(`[MultiChannelBatcher] Maximum channels (${this.maxChannels}) reached, using default batcher for channel: ${channel}`);
+      return;
+    }
+    
     this.batchers.set(channel, new EventBatcher(options));
   }
   
@@ -266,7 +275,25 @@ export class MultiChannelBatcher {
    */
   add(event: TelemetryEvent): void {
     const channel = this.router(event);
-    const batcher = this.batchers.get(channel) || this.defaultBatcher;
+    let batcher = this.batchers.get(channel);
+    
+    if (!batcher) {
+      // Auto-create channel if under limit
+      if (this.batchers.size < this.maxChannels) {
+        batcher = new EventBatcher();
+        this.batchers.set(channel, batcher);
+        this.channelCounter++;
+        
+        // Log when approaching limit
+        if (this.batchers.size > this.maxChannels * 0.8) {
+          console.warn(`[MultiChannelBatcher] Approaching max channels: ${this.batchers.size}/${this.maxChannels}`);
+        }
+      } else {
+        // Use default batcher when at capacity
+        batcher = this.defaultBatcher;
+      }
+    }
+    
     batcher.add(event);
   }
   

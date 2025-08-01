@@ -16,36 +16,42 @@ export interface TelemetryError extends Error {
 export interface ErrorHandlerConfig {
   maxErrors?: number;
   errorWindowMs?: number;
+  cleanupInterval?: number;
+  aggressiveCleanup?: boolean; // Clean up more frequently when hitting limits
   alertThresholds?: {
     high: number;
     critical: number;
   };
   onErrorThreshold?: (errors: TelemetryError[], threshold: ErrorSeverity) => void;
   onCriticalError?: (error: TelemetryError) => void;
+  onMemoryPressure?: (currentSize: number, maxSize: number) => void;
 }
 
 export class ErrorHandler {
   private errors: TelemetryError[] = [];
   private config: Required<ErrorHandlerConfig>;
   private cleanupInterval?: NodeJS.Timeout;
+  private errorCounter = 0;
 
   constructor(config: ErrorHandlerConfig = {}) {
     this.config = {
-      maxErrors: 1000,
-      errorWindowMs: 300000, // 5 minutes
-      alertThresholds: {
+      maxErrors: config.maxErrors || 1000,
+      errorWindowMs: config.errorWindowMs || 300000, // 5 minutes
+      cleanupInterval: config.cleanupInterval || 60000, // 1 minute
+      aggressiveCleanup: config.aggressiveCleanup ?? true,
+      alertThresholds: config.alertThresholds || {
         high: 10,
         critical: 5,
       },
-      onErrorThreshold: () => {},
-      onCriticalError: () => {},
-      ...config,
+      onErrorThreshold: config.onErrorThreshold || (() => {}),
+      onCriticalError: config.onCriticalError || (() => {}),
+      onMemoryPressure: config.onMemoryPressure || (() => {}),
     };
 
     // Start cleanup interval
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
-    }, 60000); // Clean up every minute
+    }, this.config.cleanupInterval);
   }
 
   createError(
@@ -86,6 +92,21 @@ export class ErrorHandler {
 
     // Store error for tracking
     this.errors.push(telemetryError);
+    this.errorCounter++;
+
+    // Check for memory pressure and cleanup aggressively if needed
+    if (this.errors.length > this.config.maxErrors * 0.9) {
+      this.config.onMemoryPressure(this.errors.length, this.config.maxErrors);
+      
+      if (this.config.aggressiveCleanup) {
+        this.cleanup();
+      }
+    }
+
+    // Trigger periodic cleanup every 50 errors to prevent unbounded growth
+    if (this.config.aggressiveCleanup && this.errorCounter % 50 === 0) {
+      this.cleanup();
+    }
 
     // Trigger immediate alerts for critical errors
     if (telemetryError.severity === 'critical') {
@@ -194,12 +215,23 @@ export class ErrorHandler {
   }
 
   private cleanup(): void {
+    const initialCount = this.errors.length;
     const cutoff = Date.now() - this.config.errorWindowMs * 2; // Keep errors for 2x window
+    
+    // Remove old errors first
     this.errors = this.errors.filter(error => error.timestamp > cutoff);
 
-    // Limit total errors to prevent memory issues
+    // Limit total errors to prevent memory issues (keep most recent)
     if (this.errors.length > this.config.maxErrors) {
-      this.errors = this.errors.slice(-this.config.maxErrors);
+      // Sort by timestamp descending and keep most recent
+      this.errors.sort((a, b) => b.timestamp - a.timestamp);
+      this.errors = this.errors.slice(0, this.config.maxErrors);
+    }
+
+    // Log cleanup if significant number of errors were removed
+    const removedCount = initialCount - this.errors.length;
+    if (removedCount > 0) {
+      console.warn(`[ErrorHandler] Cleaned up ${removedCount} old errors, current size: ${this.errors.length}/${this.config.maxErrors}`);
     }
   }
 

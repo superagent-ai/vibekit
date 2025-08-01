@@ -3,6 +3,7 @@ import type {
   Metrics
 } from '../core/types.js';
 import type { Anomaly } from './AnomalyDetector.js';
+import { createLogger } from '../utils/logger.js';
 
 export interface Alert {
   id: string;
@@ -48,6 +49,7 @@ export interface AlertAction {
 
 export class AlertManager {
   private config: AnalyticsConfig;
+  private logger = createLogger('AlertManager');
   private rules: Map<string, AlertRule> = new Map();
   private alerts: Map<string, Alert> = new Map();
   private lastAlertTimes: Map<string, number> = new Map();
@@ -370,12 +372,12 @@ export class AlertManager {
             break;
           
           case 'log':
-            console.log(`[ALERT] ${alert.severity.toUpperCase()}: ${alert.title} - ${alert.message}`);
+            this.logger.info(`[ALERT] ${alert.severity.toUpperCase()}: ${alert.title} - ${alert.message}`);
             break;
           
           case 'email':
             // Email implementation would go here
-            console.log(`[ALERT] Would send email: ${alert.title}`);
+            this.logger.info(`[ALERT] Would send email: ${alert.title}`);
             break;
           
           case 'custom':
@@ -385,7 +387,7 @@ export class AlertManager {
             break;
         }
       } catch (error) {
-        console.error(`Failed to execute alert action ${action.type}:`, error);
+        this.logger.error(`Failed to execute alert action ${action.type}:`, error);
       }
     }
     
@@ -415,10 +417,10 @@ export class AlertManager {
       });
       
       if (!response.ok) {
-        console.error(`Webhook failed: ${response.status} ${response.statusText}`);
+        this.logger.error(`Webhook failed: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
-      console.error('Failed to send webhook:', error);
+      this.logger.error('Failed to send webhook:', error);
     }
   }
   

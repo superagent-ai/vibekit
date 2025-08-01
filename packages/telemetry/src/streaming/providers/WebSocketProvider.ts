@@ -2,12 +2,14 @@ import { Server as SocketIOServer } from 'socket.io';
 import { createServer, Server as HTTPServer } from 'http';
 import { StreamingProvider } from '../StreamingProvider.js';
 import type { TelemetryEvent, StreamingConfig } from '../../core/types.js';
+import { createLogger } from '../../utils/logger.js';
 
 export class WebSocketProvider extends StreamingProvider {
   readonly name = 'websocket';
   
   private io?: SocketIOServer;
   private server?: HTTPServer;
+  private logger = createLogger('WebSocketProvider');
   
   async initialize(config: StreamingConfig): Promise<void> {
     this.server = createServer();
@@ -31,7 +33,7 @@ export class WebSocketProvider extends StreamingProvider {
     const port = config.port || 3001;
     await new Promise<void>((resolve) => {
       this.server!.listen(port, () => {
-        console.log(`WebSocket streaming server listening on port ${port}`);
+        this.logger.info(`WebSocket streaming server listening on port ${port}`);
         resolve();
       });
     });
@@ -41,7 +43,7 @@ export class WebSocketProvider extends StreamingProvider {
     if (!this.io) return;
     
     this.io.on('connection', (socket) => {
-      console.log('Client connected to telemetry stream');
+      this.logger.info('Client connected to telemetry stream');
       
       // Handle subscriptions
       socket.on('subscribe:session', (sessionId: string) => {
@@ -61,7 +63,7 @@ export class WebSocketProvider extends StreamingProvider {
       });
       
       socket.on('disconnect', () => {
-        console.log('Client disconnected from telemetry stream');
+        this.logger.info('Client disconnected from telemetry stream');
       });
     });
   }

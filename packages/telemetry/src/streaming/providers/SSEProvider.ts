@@ -1,6 +1,7 @@
 import { StreamingProvider } from '../StreamingProvider.js';
 import type { TelemetryEvent, StreamingConfig } from '../../core/types.js';
 import { createServer, IncomingMessage, ServerResponse } from 'http';
+import { createLogger } from '../../utils/logger.js';
 
 interface SSEClient {
   id: string;
@@ -14,6 +15,7 @@ export class SSEProvider extends StreamingProvider {
   private server?: any;
   private clients = new Map<string, SSEClient>();
   private handlers = new Map<string, Set<(data: any) => void>>();
+  private logger = createLogger('SSEProvider');
   
   async initialize(config: StreamingConfig): Promise<void> {
     this.server = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -23,7 +25,7 @@ export class SSEProvider extends StreamingProvider {
     const port = config.port || 3002;
     await new Promise<void>((resolve) => {
       this.server.listen(port, () => {
-        console.log(`SSE streaming server listening on port ${port}`);
+        this.logger.info(`SSE streaming server listening on port ${port}`);
         resolve();
       });
     });
@@ -69,10 +71,10 @@ export class SSEProvider extends StreamingProvider {
     // Handle client disconnect
     req.on('close', () => {
       this.clients.delete(clientId);
-      console.log(`SSE client ${clientId} disconnected`);
+      this.logger.info(`SSE client ${clientId} disconnected`);
     });
     
-    console.log(`SSE client ${clientId} connected`);
+    this.logger.info(`SSE client ${clientId} connected`);
   }
   
   private handleSubscription(req: IncomingMessage, res: ServerResponse, url: URL): void {
@@ -156,7 +158,7 @@ export class SSEProvider extends StreamingProvider {
       try {
         client.response.end();
       } catch (error) {
-        console.warn(`Error closing SSE client ${client.id}:`, error);
+        this.logger.warn(`Error closing SSE client ${client.id}:`, error);
       }
     }
     this.clients.clear();

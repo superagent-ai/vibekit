@@ -7,6 +7,7 @@ import { HealthChecker, type SystemHealth, type HealthCheckResult } from './Heal
 import { BackpressureManager, type BackpressureStats } from './BackpressureManager.js';
 import { ResourceMonitor, type ResourceMetrics, type ResourceThresholds } from './ResourceMonitor.js';
 import { FallbackStrategy, type FallbackHandler, type FallbackOptions, type FallbackChain } from './FallbackStrategy.js';
+import { createLogger } from '../utils/logger.js';
 
 export class ReliabilityManager {
   private circuitBreakers = new Map<string, CircuitBreaker>();
@@ -17,6 +18,7 @@ export class ReliabilityManager {
   private backpressureManager: BackpressureManager;
   private resourceMonitor: ResourceMonitor;
   private config: ReliabilityConfig;
+  private logger = createLogger('ReliabilityManager');
   
   constructor(config: ReliabilityConfig = {}) {
     this.config = {
@@ -50,7 +52,7 @@ export class ReliabilityManager {
       lowWaterMark: 500,
       strategy: 'drop-oldest',
       onPressure: (level) => {
-        console.warn(`Backpressure detected: ${(level * 100).toFixed(1)}%`);
+        this.logger.warn(`Backpressure detected: ${(level * 100).toFixed(1)}%`);
       },
     });
     
@@ -190,7 +192,7 @@ export class ReliabilityManager {
         }
         
         // Log retry attempt
-        console.warn(`Retry attempt ${attempt + 1}/${maxRetries} for ${context || 'operation'} after ${delay}ms: ${lastError.message}`);
+        this.logger.warn(`Retry attempt ${attempt + 1}/${maxRetries} for ${context || 'operation'} after ${delay}ms: ${lastError.message}`);
         
         // Exponential backoff
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -216,7 +218,7 @@ export class ReliabilityManager {
 
   // Error handling callback methods
   private async handleErrorThreshold(errors: TelemetryError[], threshold: ErrorSeverity): Promise<void> {
-    console.error(`Error threshold reached for ${threshold} severity:`, {
+    this.logger.error(`Error threshold reached for ${threshold} severity:`, {
       count: errors.length,
       threshold,
       errors: errors.map(e => ({
@@ -236,7 +238,7 @@ export class ReliabilityManager {
   }
 
   private async handleCriticalError(error: TelemetryError): Promise<void> {
-    console.error('CRITICAL ERROR detected:', {
+    this.logger.error('CRITICAL ERROR detected:', {
       message: error.message,
       category: error.category,
       severity: error.severity,
@@ -340,7 +342,7 @@ export class ReliabilityManager {
         () => this.executeWithRetry(primary, context)
       );
     } catch (error) {
-      console.warn(`Primary operation failed for ${context}, using fallback:`, error);
+      this.logger.warn(`Primary operation failed for ${context}, using fallback:`, error);
       
       try {
         return await Promise.resolve(fallback());

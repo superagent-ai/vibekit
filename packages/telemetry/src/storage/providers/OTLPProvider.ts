@@ -1,5 +1,6 @@
 import { StorageProvider } from '../StorageProvider.js';
 import type { TelemetryEvent, QueryFilter, StorageStats } from '../../core/types.js';
+import { createLogger } from '../../utils/logger.js';
 
 export interface OTLPConfig {
   endpoint: string;
@@ -16,6 +17,7 @@ export class OTLPProvider extends StorageProvider {
   private config: OTLPConfig;
   private batch: TelemetryEvent[] = [];
   private flushTimeout?: NodeJS.Timeout;
+  private logger = createLogger('OTLPProvider');
   
   constructor(config: OTLPConfig) {
     super();
@@ -42,7 +44,7 @@ export class OTLPProvider extends StorageProvider {
         throw new Error(`OTLP endpoint not reachable: ${response.status}`);
       }
     } catch (error) {
-      console.warn('OTLP endpoint test failed:', error);
+      this.logger.warn('OTLP endpoint test failed:', error);
       // Don't fail initialization, just warn
     }
   }
@@ -74,7 +76,7 @@ export class OTLPProvider extends StorageProvider {
     if (this.flushTimeout) return;
     
     this.flushTimeout = setTimeout(() => {
-      this.flush().catch(console.error);
+      this.flush().catch(error => this.logger.error('Failed to flush OTLP batch:', error));
     }, this.config.timeout!);
   }
   

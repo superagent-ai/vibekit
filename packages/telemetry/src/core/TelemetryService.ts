@@ -29,6 +29,8 @@ import {
 } from '../analytics/index.js';
 import { PluginManager } from '../plugins/PluginManager.js';
 import { TelemetryAPIServer } from '../api/TelemetryAPIServer.js';
+import { createLogger } from '../utils/logger.js';
+import { initializeEnvironment } from '../utils/env-validator.js';
 
 export class TelemetryService extends TelemetryEventEmitter {
   private config: TelemetryConfig;
@@ -46,9 +48,14 @@ export class TelemetryService extends TelemetryEventEmitter {
   private apiServer?: TelemetryAPIServer;
   private isInitialized = false;
   private maintenanceInterval?: NodeJS.Timeout;
+  private logger = createLogger('TelemetryService');
 
   constructor(config: Partial<TelemetryConfig>) {
     super();
+    
+    // Validate environment variables on service creation
+    initializeEnvironment();
+    
     this.config = this.validateAndMergeConfig(config);
     this.pluginManager = new PluginManager(this);
     this.securityProvider = new SecurityProvider(this.config.security);
@@ -268,7 +275,7 @@ export class TelemetryService extends TelemetryEventEmitter {
       try {
         sanitizedEvent = await this.securityProvider.sanitize(enrichedEvent);
       } catch (error) {
-        console.warn(`Security sanitization failed for event ${enrichedEvent.id}, proceeding with original event:`, error);
+        this.logger.warn(`Security sanitization failed for event ${enrichedEvent.id}, proceeding with original event:`, error);
         sanitizedEvent = enrichedEvent; // Graceful degradation
         this.emit('security:warning', { event: enrichedEvent, error });
       }
@@ -281,7 +288,7 @@ export class TelemetryService extends TelemetryEventEmitter {
       try {
         processedEvent = await this.pluginManager.processEvent(sanitizedEvent);
       } catch (error) {
-        console.warn(`Plugin processing failed for event ${sanitizedEvent.id}, proceeding with sanitized event:`, error);
+        this.logger.warn(`Plugin processing failed for event ${sanitizedEvent.id}, proceeding with sanitized event:`, error);
         processedEvent = sanitizedEvent; // Graceful degradation
         this.emit('plugin:warning', { event: sanitizedEvent, error });
       }
@@ -297,7 +304,7 @@ export class TelemetryService extends TelemetryEventEmitter {
             'streaming'
           );
         } catch (error) {
-          console.warn(`Event streaming failed for event ${processedEvent.id}:`, error);
+          this.logger.warn(`Event streaming failed for event ${processedEvent.id}:`, error);
           this.emit('streaming:error', { event: processedEvent, error });
           // Don't throw - streaming failure shouldn't fail the entire tracking operation
         }
@@ -324,7 +331,7 @@ export class TelemetryService extends TelemetryEventEmitter {
             this.realtimeAnalytics.processEvent(processedEvent);
           }
         } catch (error) {
-          console.warn(`Analytics processing failed for event ${processedEvent.id}:`, error);
+          this.logger.warn(`Analytics processing failed for event ${processedEvent.id}:`, error);
           this.emit('analytics:error', { event: processedEvent, error });
           // Don't throw - analytics failure shouldn't fail the entire tracking operation
         }
@@ -390,7 +397,7 @@ export class TelemetryService extends TelemetryEventEmitter {
         errors.push(err);
         this.emit('storage:error', err);
         
-        console.warn(`Storage provider ${provider.name} failed to store event ${event.id}:`, err.message);
+        this.logger.warn(`Storage provider ${provider.name} failed to store event ${event.id}:`, err.message);
       }
     }
 
@@ -403,7 +410,7 @@ export class TelemetryService extends TelemetryEventEmitter {
     } else if (errors.length > 0) {
       // Some providers failed - this is degraded operation
       const degradationWarning = `${errors.length}/${this.storageProviders.length} storage providers failed for event ${event.id}`;
-      console.warn(degradationWarning, { errors: errors.map(e => e.message) });
+      this.logger.warn(degradationWarning, { errors: errors.map(e => e.message) });
       this.emit('storage:degraded', { event, errors, successCount, totalProviders: this.storageProviders.length });
     }
   }
@@ -675,7 +682,7 @@ export class TelemetryService extends TelemetryEventEmitter {
         )
       ]);
     } catch (error) {
-      console.warn('Error during flush on shutdown:', error);
+      this.logger.warn('Error during flush on shutdown:', error);
     }
     
     // Shutdown providers with individual error handling
@@ -706,7 +713,7 @@ export class TelemetryService extends TelemetryEventEmitter {
         await result;
       }
     } catch (error) {
-      console.warn(`Error during shutdown of ${context}:`, error);
+      this.logger.warn(`Error during shutdown of ${context}:`, error);
     }
   }
 
@@ -783,10 +790,10 @@ export class TelemetryService extends TelemetryEventEmitter {
   async resetCircuitBreakers(): Promise<void> {
     // This would be part of the ReliabilityManager
     const stats = this.reliabilityManager.getCircuitBreakerStats();
-    console.log('Circuit breaker stats before reset:', stats);
+    this.logger.info('Circuit breaker stats before reset:', stats);
     
     // Manual reset could be implemented in ReliabilityManager
-    console.log('Circuit breakers reset requested');
+    this.logger.info('Circuit breakers reset requested');
   }
 
   async validateConfiguration(): Promise<{ valid: boolean; errors: string[] }> {

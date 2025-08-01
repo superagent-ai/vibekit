@@ -28,6 +28,28 @@ export const insightQuerySchema = z.object({
   window: z.string().max(50).optional(),
 });
 
+// Session events query schema
+export const sessionEventsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(1000).default(100).optional(),
+  offset: z.coerce.number().int().min(0).default(0).optional(),
+});
+
+// Path parameter schemas
+export const sessionIdParamSchema = z.object({
+  sessionId: z.string().min(1).max(100).regex(/^[a-zA-Z0-9\-_]+$/, 'Invalid session ID format'),
+});
+
+// Export body schema
+export const exportBodySchema = z.object({
+  format: z.enum(['json', 'csv', 'otlp', 'parquet']),
+  filter: z.object({
+    sessionId: z.string().optional(),
+    category: z.string().optional(),
+    startTime: z.number().optional(),
+    endTime: z.number().optional(),
+  }).optional(),
+});
+
 // Validation middleware factory
 export function validateQuery(schema: z.ZodSchema) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -64,6 +86,30 @@ export function validateBody(schema: z.ZodSchema) {
         res.status(400).json({
           error: 'Validation Error',
           message: 'Invalid request body',
+          details: error.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message,
+          })),
+        });
+      } else {
+        next(error);
+      }
+    }
+  };
+}
+
+// Validate path parameters
+export function validateParams(schema: z.ZodSchema) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const validated = schema.parse(req.params);
+      req.params = validated as any;
+      next();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({
+          error: 'Validation Error',
+          message: 'Invalid path parameters',
           details: error.errors.map(e => ({
             field: e.path.join('.'),
             message: e.message,

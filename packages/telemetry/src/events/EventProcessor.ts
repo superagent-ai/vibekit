@@ -327,42 +327,4 @@ export const CommonProcessors = {
       }
     };
   },
-  
-  /**
-   * Deduplicate events based on a key
-   * @deprecated Use createDeduplicator from './deduplicator' for proper cleanup
-   */
-  deduplicator: (
-    keyGenerator: (event: TelemetryEvent) => string,
-    windowMs = 1000
-  ): EventTransformer => {
-    console.warn(
-      'CommonProcessors.deduplicator is deprecated. ' +
-      'Use createDeduplicator from "./deduplicator" for proper resource cleanup.'
-    );
-    const seen = new Map<string, number>();
-    
-    // Note: This implementation has a memory leak as the interval cannot be cleared
-    // Use createDeduplicator instead which returns a cleanup function
-    setInterval(() => {
-      const cutoff = Date.now() - windowMs;
-      for (const [key, timestamp] of seen.entries()) {
-        if (timestamp < cutoff) {
-          seen.delete(key);
-        }
-      }
-    }, windowMs);
-    
-    return (event) => {
-      const key = keyGenerator(event);
-      const lastSeen = seen.get(key);
-      
-      if (lastSeen && Date.now() - lastSeen < windowMs) {
-        return null; // Duplicate
-      }
-      
-      seen.set(key, Date.now());
-      return event;
-    };
-  },
 };

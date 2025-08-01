@@ -8,12 +8,19 @@ import chokidar from 'chokidar';
 import { resolve, normalize, isAbsolute } from 'path';
 import type { DashboardOptions } from '../core/types.js';
 import { createAuthMiddleware, type AuthConfig } from './middleware/auth.js';
+import { getEnvVar } from '../utils/env-validator.js';
 import { 
   validateQuery, 
+  validateParams,
+  validateBody,
   queryFilterSchema, 
   exportQuerySchema, 
-  insightQuerySchema 
+  insightQuerySchema,
+  sessionEventsQuerySchema,
+  sessionIdParamSchema,
+  exportBodySchema
 } from './middleware/validation.js';
+import { createLogger } from '../utils/logger.js';
 
 export class TelemetryAPIServer {
   private app: express.Application;
@@ -21,6 +28,7 @@ export class TelemetryAPIServer {
   private io: SocketIOServer;
   private dbWatcher?: chokidar.FSWatcher;
   private debounceTimer?: NodeJS.Timeout;
+  private logger = createLogger('TelemetryAPIServer');
   
   constructor(
     private telemetryService: any,
@@ -28,11 +36,12 @@ export class TelemetryAPIServer {
   ) {
     this.app = express();
     this.server = createServer(this.app);
+    
+    // Get CORS configuration
+    const corsConfig = this.getCorsConfig();
+    
     this.io = new SocketIOServer(this.server, {
-      cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-      }
+      cors: corsConfig
     });
     
     this.setupRoutes();
@@ -47,7 +56,7 @@ export class TelemetryAPIServer {
     
     return new Promise((resolve) => {
       this.server.listen(port, () => {
-        console.log(`Telemetry API server running at http://localhost:${port}`);
+        this.logger.info(`Telemetry API server running at http://localhost:${port}`);
         resolve();
       });
     });
@@ -67,29 +76,13 @@ export class TelemetryAPIServer {
       },
     }));
     
-    // CORS configuration - restrict to specific origins
-    const allowedOrigins = process.env.TELEMETRY_ALLOWED_ORIGINS?.split(',') || [];
-    this.app.use(cors({
-      origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl)
-        if (!origin) return callback(null, true);
-        
-        // Check if origin is allowed
-        if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-    }));
+    // CORS configuration - use centralized config
+    this.app.use(cors(this.getCorsConfig()));
     
-    // Rate limiting
+    // Rate limiting with validated environment variables
     const limiter = rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // Limit each IP to 100 requests per windowMs
+      windowMs: getEnvVar('TELEMETRY_API_RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000), // 15 minutes default
+      max: getEnvVar('TELEMETRY_API_RATE_LIMIT_MAX_REQUESTS', 100), // 100 requests default
       message: 'Too many requests from this IP, please try again later.',
       standardHeaders: true,
       legacyHeaders: false,
@@ -101,11 +94,11 @@ export class TelemetryAPIServer {
     // JSON body parser with size limit
     this.app.use(express.json({ limit: '1mb' }));
     
-    // Authentication middleware
+    // Authentication middleware with validated environment
     const authConfig: AuthConfig = {
-      enabled: process.env.TELEMETRY_AUTH_ENABLED === 'true',
-      apiKeys: process.env.TELEMETRY_API_KEYS?.split(',').filter(Boolean),
-      bearerTokens: process.env.TELEMETRY_BEARER_TOKENS?.split(',').filter(Boolean),
+      enabled: !!getEnvVar('TELEMETRY_API_SECRET'),
+      apiKeys: getEnvVar('TELEMETRY_API_KEYS')?.split(',').filter(Boolean),
+      bearerTokens: getEnvVar('TELEMETRY_BEARER_TOKENS')?.split(',').filter(Boolean),
     };
     const authMiddleware = createAuthMiddleware(authConfig);
     
@@ -371,32 +364,35 @@ export class TelemetryAPIServer {
       }
     });
     
-    // Session events endpoint
-    this.app.get('/sessions/:sessionId/events', async (req, res) => {
-      try {
-        const { sessionId } = req.params;
-        const { limit = '100', offset = '0' } = req.query;
-        
-        const events = await this.telemetryService.query({
-          sessionId,
-          limit: parseInt(limit as string),
-          offset: parseInt(offset as string)
-        });
-        
-        res.json({
-          sessionId,
-          events,
-          count: events.length,
-          timestamp: new Date().toISOString()
-        });
-      } catch (error) {
-        res.status(500).json({ 
-          error: 'Failed to query session events',
-          message: error instanceof Error ? error.message : 'Unknown error',
-          timestamp: new Date().toISOString()
-        });
-      }
-    });
+    // Session events endpoint with validation
+    this.app.get('/sessions/:sessionId/events', 
+      validateParams(sessionIdParamSchema),
+      validateQuery(sessionEventsQuerySchema),
+      async (req, res) => {
+        try {
+          const { sessionId } = req.params;
+          const { limit = 100, offset = 0 } = req.query;
+          
+          const events = await this.telemetryService.query({
+            sessionId,
+            limit: Number(limit),
+            offset: Number(offset)
+          });
+          
+          res.json({
+            sessionId,
+            events,
+            count: events.length,
+            timestamp: new Date().toISOString()
+          });
+        } catch (error) {
+          res.status(500).json({ 
+            error: 'Failed to query session events',
+            message: error instanceof Error ? error.message : 'Unknown error',
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
     
     // Legacy API routes for compatibility
     this.app.get('/api/health', async (req, res) => {
@@ -404,52 +400,94 @@ export class TelemetryAPIServer {
       res.json(health);
     });
     
-    this.app.get('/api/events', async (req, res) => {
-      const filter = this.parseQueryFilter(req.query);
-      const events = await this.telemetryService.query(filter);
-      res.json(events);
+    this.app.get('/api/events', validateQuery(queryFilterSchema), async (req, res) => {
+      try {
+        const filter = this.parseQueryFilter(req.query);
+        const events = await this.telemetryService.query(filter);
+        res.json(events);
+      } catch (error) {
+        res.status(500).json({ 
+          error: 'Failed to query events',
+          message: error instanceof Error ? error.message : 'Unknown error' 
+        });
+      }
     });
     
     this.app.get('/api/metrics', async (req, res) => {
-      const timeRange = this.parseTimeRange(req.query);
-      const metrics = await this.telemetryService.getMetrics(timeRange);
-      res.json(metrics);
+      try {
+        const timeRange = this.parseTimeRange(req.query);
+        const metrics = await this.telemetryService.getMetrics(timeRange);
+        res.json(metrics);
+      } catch (error) {
+        res.status(500).json({ 
+          error: 'Failed to get metrics',
+          message: error instanceof Error ? error.message : 'Unknown error' 
+        });
+      }
     });
     
-    this.app.get('/api/insights', async (req, res) => {
-      const options = this.parseInsightOptions(req.query);
-      const insights = await this.telemetryService.getInsights(options);
-      res.json(insights);
+    this.app.get('/api/insights', validateQuery(insightQuerySchema), async (req, res) => {
+      try {
+        const options = this.parseInsightOptions(req.query);
+        const insights = await this.telemetryService.getInsights(options);
+        res.json(insights);
+      } catch (error) {
+        res.status(500).json({ 
+          error: 'Failed to get insights',
+          message: error instanceof Error ? error.message : 'Unknown error' 
+        });
+      }
     });
     
     this.app.get('/api/sessions', async (req, res) => {
-      const sessions = await this.telemetryService.getActiveSessions();
-      res.json(sessions);
-    });
-    
-    this.app.get('/api/sessions/:sessionId', async (req, res) => {
-      const { sessionId } = req.params;
-      const session = await this.telemetryService.getSession(sessionId);
-      if (!session) {
-        res.status(404).json({ error: 'Session not found' });
-        return;
+      try {
+        const sessions = await this.telemetryService.getActiveSessions();
+        res.json(sessions);
+      } catch (error) {
+        res.status(500).json({ 
+          error: 'Failed to get sessions',
+          message: error instanceof Error ? error.message : 'Unknown error' 
+        });
       }
-      res.json(session);
     });
     
-    this.app.post('/api/export', async (req, res) => {
-      const { format, filter } = req.body;
-      const result = await this.telemetryService.export(
-        { type: format },
-        filter
-      );
+    this.app.get('/api/sessions/:sessionId', validateParams(sessionIdParamSchema), async (req, res) => {
+      try {
+        const { sessionId } = req.params;
+        const session = await this.telemetryService.getSession(sessionId);
+        if (!session) {
+          res.status(404).json({ error: 'Session not found' });
+          return;
+        }
+        res.json(session);
+      } catch (error) {
+        res.status(500).json({ 
+          error: 'Failed to get session',
+          message: error instanceof Error ? error.message : 'Unknown error' 
+        });
+      }
+    });
+    
+    this.app.post('/api/export', validateBody(exportBodySchema), async (req, res) => {
+      try {
+        const { format, filter } = req.body;
+        const result = await this.telemetryService.export(
+          { type: format },
+          filter
+        );
+        
+        const contentType = format === 'csv' ? 'text/csv' : 'application/json';
+        const filename = `telemetry-export-${Date.now()}.${format}`;
       
-      const contentType = format === 'csv' ? 'text/csv' : 'application/json';
-      const filename = `telemetry-export-${Date.now()}.${format}`;
-      
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send(result);
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(result);
+      } catch (error) {
+        res.status(500).json({ 
+          error: 'Failed to export data',
+          message: error instanceof Error ? error.message : 'Unknown error' 
+        });
+      }
     });
   }
   
@@ -465,20 +503,20 @@ export class TelemetryAPIServer {
     
     // Handle client connections
     this.io.on('connection', (socket) => {
-      console.log('API client connected');
+      this.logger.info('API client connected');
       
       socket.on('subscribe', (channel: string) => {
         socket.join(channel);
-        console.log(`Client subscribed to channel: ${channel}`);
+        this.logger.info(`Client subscribed to channel: ${channel}`);
       });
       
       socket.on('unsubscribe', (channel: string) => {
         socket.leave(channel);
-        console.log(`Client unsubscribed from channel: ${channel}`);
+        this.logger.info(`Client unsubscribed from channel: ${channel}`);
       });
       
       socket.on('disconnect', () => {
-        console.log('API client disconnected');
+        this.logger.info('API client disconnected');
       });
     });
   }
@@ -608,7 +646,7 @@ export class TelemetryAPIServer {
     
     return new Promise((resolve) => {
       this.server.close(() => {
-        console.log('Telemetry API server shut down');
+        this.logger.info('Telemetry API server shut down');
         resolve();
       });
     });
@@ -621,7 +659,7 @@ export class TelemetryAPIServer {
     // Validate and normalize the path
     const dbPath = this.validateDatabasePath(configPath);
     
-    console.log(`👁️  Setting up database watcher for: ${dbPath}`);
+    this.logger.info(`Setting up database watcher for: ${dbPath}`);
     
     this.dbWatcher = chokidar.watch(dbPath, {
       ignored: /(^|[\/\\])\../, // Ignore dotfiles
@@ -635,7 +673,7 @@ export class TelemetryAPIServer {
     
     // Handle database changes
     this.dbWatcher.on('change', async (path) => {
-      console.log(`🔔 Database file changed: ${path}`);
+      this.logger.info(`Database file changed: ${path}`);
       
       // Debounce multiple rapid changes
       clearTimeout(this.debounceTimer);
@@ -644,15 +682,15 @@ export class TelemetryAPIServer {
           // Query updated data
           const [metrics, insights, sessions] = await Promise.all([
             this.telemetryService.getMetrics().catch((err: any) => {
-              console.warn('Failed to get metrics:', err.message);
+              this.logger.warn('Failed to get metrics:', err.message);
               return null;
             }),
             this.telemetryService.getInsights({ window: 'day' }).catch((err: any) => {
-              console.warn('Failed to get insights:', err.message);
+              this.logger.warn('Failed to get insights:', err.message);
               return null;
             }),
             this.telemetryService.query({ limit: 10 }).catch((err: any) => {
-              console.warn('Failed to query events:', err.message);
+              this.logger.warn('Failed to query events:', err.message);
               return [];
             })
           ]);
@@ -716,20 +754,56 @@ export class TelemetryAPIServer {
             }
           });
           
-          console.log(`📡 Broadcasted real-time updates to connected clients`);
+          this.logger.info('Broadcasted real-time updates to connected clients');
           
         } catch (error) {
-          console.error('❌ Error broadcasting real-time updates:', error);
+          this.logger.error('Error broadcasting real-time updates:', error);
         }
       }, 300); // Debounce by 300ms
     });
     
     this.dbWatcher.on('error', (error) => {
-      console.error('❌ Database watcher error:', error);
+      this.logger.error('Database watcher error:', error);
     });
     
     this.dbWatcher.on('ready', () => {
-      console.log('👁️  Database watcher is ready and monitoring for changes');
+      this.logger.info('Database watcher is ready and monitoring for changes');
     });
+  }
+
+  private getCorsConfig() {
+    // Use provided CORS config or environment-based defaults
+    if (this.options.cors) {
+      return this.options.cors;
+    }
+    
+    // Default to validated environment variable or restrictive defaults
+    const allowedOriginsStr = getEnvVar('TELEMETRY_ALLOWED_ORIGINS');
+    const allowedOrigins = allowedOriginsStr?.split(',').map(o => o.trim()).filter(Boolean) || [];
+    
+    return {
+      origin: (origin: string | undefined, callback: (err: Error | null, origin?: boolean | string | string[]) => void) => {
+        // Allow requests with no origin (like mobile apps, curl, or same-origin)
+        if (!origin) return callback(null, true);
+        
+        // If no origins specified, only allow same-origin (restrictive by default)
+        if (allowedOrigins.length === 0) {
+          // In production, you should specify allowed origins explicitly
+          this.logger.warn('No TELEMETRY_ALLOWED_ORIGINS specified. Only same-origin requests allowed.');
+          callback(new Error('CORS not configured. Please set TELEMETRY_ALLOWED_ORIGINS.'));
+          return;
+        }
+        
+        // Check if origin is allowed
+        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+          callback(null, true);
+        } else {
+          callback(new Error(`Origin ${origin} not allowed by CORS`));
+        }
+      },
+      credentials: true,
+      methods: ['GET', 'POST', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
+    };
   }
 }

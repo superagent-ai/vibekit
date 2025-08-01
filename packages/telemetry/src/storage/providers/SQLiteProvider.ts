@@ -13,6 +13,9 @@ export class SQLiteProvider extends StorageProvider {
   private initialized = false;
   private sessionCache = new Set<string>();
   private sessionIdMap = new Map<string, string>(); // Map from original ID to UUID
+  private readonly maxCacheSize = 10000; // Maximum number of sessions to cache
+  private readonly maxMapSize = 5000; // Maximum number of session ID mappings
+  private cleanupCounter = 0;
   
   constructor(options: { path?: string; dbPath?: string } = {}) {
     super();
@@ -377,6 +380,12 @@ export class SQLiteProvider extends StorageProvider {
       return;
     }
     
+    // Cleanup caches periodically to prevent unbounded growth
+    this.cleanupCounter++;
+    if (this.cleanupCounter % 100 === 0) {
+      this.cleanupCaches();
+    }
+    
     try {
       // Try to create or update the session
       await this.operations.upsertSession({
@@ -394,9 +403,19 @@ export class SQLiteProvider extends StorageProvider {
       
       // Add to cache
       this.sessionCache.add(sessionId);
+      
+      // Enforce cache size limit
+      if (this.sessionCache.size > this.maxCacheSize) {
+        this.trimSessionCache();
+      }
     } catch (error) {
       // Session might already exist, which is fine
       this.sessionCache.add(sessionId);
+      
+      // Enforce cache size limit
+      if (this.sessionCache.size > this.maxCacheSize) {
+        this.trimSessionCache();
+      }
     }
   }
   
@@ -428,9 +447,60 @@ export class SQLiteProvider extends StorageProvider {
       hash.substring(20, 32),
     ].join('-');
     
-    // Cache for later
+    // Cache for later with size limit enforcement
     this.sessionIdMap.set(input, uuid);
     
+    // Enforce map size limit using LRU-style eviction
+    if (this.sessionIdMap.size > this.maxMapSize) {
+      this.trimSessionIdMap();
+    }
+    
     return uuid;
+  }
+
+  /**
+   * Trim session cache to prevent unbounded growth using LRU-style eviction
+   */
+  private trimSessionCache(): void {
+    const excessCount = this.sessionCache.size - Math.floor(this.maxCacheSize * 0.8);
+    if (excessCount <= 0) return;
+
+    const cacheArray = Array.from(this.sessionCache);
+    // Remove oldest entries (first 20% of excess)
+    for (let i = 0; i < excessCount && i < cacheArray.length; i++) {
+      this.sessionCache.delete(cacheArray[i]);
+    }
+    
+    console.warn(`[SQLiteProvider] Session cache trimmed: removed ${excessCount} entries, current size: ${this.sessionCache.size}`);
+  }
+
+  /**
+   * Trim session ID map to prevent unbounded growth using LRU-style eviction
+   */
+  private trimSessionIdMap(): void {
+    const excessCount = this.sessionIdMap.size - Math.floor(this.maxMapSize * 0.8);
+    if (excessCount <= 0) return;
+
+    const mapEntries = Array.from(this.sessionIdMap.entries());
+    // Remove oldest entries (first 20% of excess)
+    for (let i = 0; i < excessCount && i < mapEntries.length; i++) {
+      this.sessionIdMap.delete(mapEntries[i][0]);
+    }
+    
+    console.warn(`[SQLiteProvider] Session ID map trimmed: removed ${excessCount} entries, current size: ${this.sessionIdMap.size}`);
+  }
+
+  /**
+   * Periodic cleanup of both caches
+   */
+  private cleanupCaches(): void {
+    // Trigger cleanup if either cache is approaching limits
+    if (this.sessionCache.size > this.maxCacheSize * 0.9) {
+      this.trimSessionCache();
+    }
+    
+    if (this.sessionIdMap.size > this.maxMapSize * 0.9) {
+      this.trimSessionIdMap();
+    }
   }
 }

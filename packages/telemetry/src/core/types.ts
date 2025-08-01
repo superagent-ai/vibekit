@@ -248,4 +248,10 @@ export interface DashboardOptions {
     enabled: boolean;
     secret?: string;
   };
+  cors?: {
+    origin: string | string[] | boolean;
+    credentials?: boolean;
+    methods?: string[];
+    allowedHeaders?: string[];
+  };
 }

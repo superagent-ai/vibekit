@@ -3,6 +3,7 @@ import type {
   AnalyticsConfig,
   TimeRange
 } from '../core/types.js';
+import { createLogger } from '../utils/logger.js';
 
 export interface Anomaly {
   id: string;
@@ -39,6 +40,7 @@ export class AnomalyDetector {
   private metricStats: Map<string, MetricStats> = new Map();
   private anomalies: Anomaly[] = [];
   private listeners: Array<(anomaly: Anomaly) => void> = [];
+  private logger = createLogger('AnomalyDetector');
   
   constructor(config: AnalyticsConfig, options?: AnomalyDetectorOptions) {
     this.config = config;
@@ -300,7 +302,7 @@ export class AnomalyDetector {
       try {
         listener(anomaly);
       } catch (error) {
-        console.error('Error in anomaly listener:', error);
+        this.logger.error('Error in anomaly listener:', error);
       }
     });
   }
