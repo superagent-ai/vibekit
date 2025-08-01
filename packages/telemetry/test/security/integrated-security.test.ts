@@ -368,42 +368,55 @@ describe('Integrated Security Tests', () => {
 
   describe('Cleanup and Resource Security', () => {
     it('should securely clean up sensitive data', async () => {
-      const sessionId = 'cleanup-test';
+      // Start a proper session first
+      const sessionId = await service.trackStart('test', 'cleanup', 'test-label', {
+        testSession: true
+      });
       
-      // Track events
+      // Track events with different ages
       const baseTime = Date.now();
-      for (let i = 0; i < 10; i++) {
+      
+      // Track some recent events (should NOT be cleaned)
+      for (let i = 0; i < 5; i++) {
         await service.track({
-          id: `cleanup-${i}`,
           sessionId,
-          eventType: 'custom',
+          eventType: 'custom' as const,
           category: 'test',
-          action: 'cleanup',
-          timestamp: baseTime - (i * 1000 * 60 * 60 * 24), // Days ago
-          metadata: {
-            sensitive: 'data-to-clean',
-            email: 'old@example.com',
-          },
+          action: 'recent',
+          timestamp: baseTime - (i * 1000 * 60 * 60 * 24), // 0-4 days ago
         });
       }
-
-      // Clean old data
-      const cleaned = await service.clean(7); // 7 days
       
-      // Should report that it would clean old events (3 events are older than 7 days)
-      expect(cleaned).toBe(3);
+      // Track some old events (should be cleaned)
+      for (let i = 8; i < 10; i++) {
+        await service.track({
+          sessionId,
+          eventType: 'custom' as const,
+          category: 'test', 
+          action: 'old',
+          timestamp: baseTime - (i * 1000 * 60 * 60 * 24), // 8-9 days ago
+        });
+      }
+      
+      // Clean events older than 7 days
+      const cleaned = await service.clean(7);
+      
+      // Should have cleaned 2 events (8 and 9 days old)
+      expect(cleaned).toBe(2);
 
       // Verify that old events were actually deleted
-      const allEvents = await service.query({ sessionId });
+      const remainingEvents = await service.query({ sessionId });
       
-      // Count how many events are older than 7 days
-      const oldEventCount = allEvents.filter(event => {
+      // Should have 6 events remaining (1 start event + 5 recent events)
+      expect(remainingEvents.length).toBe(6);
+      
+      // Verify no old events remain
+      const oldEventCount = remainingEvents.filter(event => {
         const age = Date.now() - event.timestamp;
         return age > 7 * 24 * 60 * 60 * 1000;
       }).length;
       
-      // Clean method should have reported the same count
-      expect(cleaned).toBe(oldEventCount);
+      expect(oldEventCount).toBe(0);
     });
 
     it('should handle shutdown securely', async () => {

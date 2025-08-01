@@ -7,7 +7,7 @@
 
 // @ts-nocheck - Temporarily disable type checking due to complex Drizzle type issues
 
-import { eq, desc, asc, and, or, gte, lte, count, sum, avg, max, min, sql } from 'drizzle-orm';
+import { eq, desc, asc, and, or, gte, lte, lt, count, sum, avg, max, min, sql } from 'drizzle-orm';
 import { DrizzleTelemetryDB, getTelemetryDB } from './connection';
 import {
   telemetryEvents,
@@ -1007,7 +1007,7 @@ export class DrizzleTelemetryOperations {
       async () => {
         const result = await db
           .delete(telemetryEvents)
-          .where(lte(telemetryEvents.timestamp, timestamp));
+          .where(lt(telemetryEvents.timestamp, timestamp));
         
         return result.changes || 0;
       }
