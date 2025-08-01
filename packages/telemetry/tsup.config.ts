@@ -24,4 +24,10 @@ export default defineConfig({
     "socket.io",
     "express",
   ],
+  esbuildOptions(options) {
+    // Suppress the direct-eval warning from dependencies
+    options.logOverride = {
+      "direct-eval": "silent",
+    };
+  },
 });
