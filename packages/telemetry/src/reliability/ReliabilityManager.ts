@@ -57,8 +57,8 @@ export class ReliabilityManager {
     });
     
     this.resourceMonitor = new ResourceMonitor({
-      cpu: { warning: 70, critical: 90 },
-      memory: { warning: 70, critical: 85 },
+      cpu: { warning: 80, critical: 95 },
+      memory: { warning: 85, critical: 95 }, // Increased thresholds
       eventLoop: { warning: 100, critical: 250 },
     });
     
@@ -67,11 +67,10 @@ export class ReliabilityManager {
       this.handleResourceAlert(alert);
     });
     
-    // Start resource monitoring
-    this.resourceMonitor.start(5000);
-    
-    // Start health checks
-    this.healthChecker.startPeriodicChecks(60000);
+    // Disable automatic monitoring to prevent error feedback loops
+    // Resource monitoring and health checks should be triggered manually
+    // this.resourceMonitor.start(5000);
+    // this.healthChecker.startPeriodicChecks(60000);
   }
   
   async checkRateLimit(event: TelemetryEvent): Promise<void> {

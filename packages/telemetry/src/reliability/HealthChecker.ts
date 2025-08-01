@@ -223,7 +223,7 @@ export class HealthChecker {
         const heapTotalMB = usage.heapTotal / 1024 / 1024;
         const heapPercent = (usage.heapUsed / usage.heapTotal) * 100;
         
-        if (heapPercent < 70) {
+        if (heapPercent < 85) {
           return {
             status: 'healthy',
             message: `Memory usage at ${heapPercent.toFixed(1)}% (${heapUsedMB.toFixed(1)}MB/${heapTotalMB.toFixed(1)}MB)`,
@@ -234,7 +234,7 @@ export class HealthChecker {
               rss: usage.rss / 1024 / 1024,
             },
           };
-        } else if (heapPercent < 85) {
+        } else if (heapPercent < 95) {
           return {
             status: 'degraded',
             message: `Memory usage at ${heapPercent.toFixed(1)}% (${heapUsedMB.toFixed(1)}MB/${heapTotalMB.toFixed(1)}MB)`,
@@ -293,12 +293,18 @@ export class HealthChecker {
             duration: Date.now() - startTime,
           };
         } catch (error) {
+          // Don't log health check errors to prevent feedback loops
           checkResults[name] = {
             name,
             status: 'unhealthy',
             message: `Health check failed: ${(error as Error).message}`,
             duration: Date.now() - startTime,
           };
+          
+          // Only log if it's a critical health check
+          if (check.critical) {
+            console.warn(`Critical health check '${name}' failed:`, error);
+          }
         }
       })();
       

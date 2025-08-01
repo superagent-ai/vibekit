@@ -16,27 +16,59 @@ export interface HealthCheck {
 
 export interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy'
-  timestamp: string
-  service: string
-  database: HealthCheck
-  analytics: {
+  timestamp?: string
+  service?: string
+  database?: HealthCheck
+  analytics?: {
     status: string
     enabled: boolean
     source: string
   }
-  export: {
+  export?: {
     status: string
     enabled: boolean
     formats: string[]
   }
-  metrics: TelemetryMetric[]
-  uptime: number
-  memory: {
+  metrics?: TelemetryMetric[]
+  uptime?: number
+  memory?: {
     rss: number
     heapTotal: number
     heapUsed: number
     external: number
     arrayBuffers: number
+  }
+  details?: {
+    initialized?: boolean
+    providers?: {
+      storage?: Array<{
+        name?: string
+        type?: string
+        status?: string
+        error?: string
+      }>
+    }
+    reliability?: {
+      errors?: {
+        recent?: number
+        bySeverity?: {
+          critical?: number
+          high?: number
+          medium?: number
+          low?: number
+        }
+      }
+      circuitBreakers?: Record<string, {
+        state?: string
+        failureCount?: number
+      }>
+    }
+    memory?: {
+      heapUsedMB?: number
+      heapTotalMB?: number
+      percentage?: number
+    }
+    timestamp?: string
   }
 }
 

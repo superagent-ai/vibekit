@@ -30,7 +30,7 @@ async function start() {
   
   const server = new TelemetryAPIServer(telemetryService, {
     port: parseInt(process.env.PORT || '3000'),
-    enableDatabaseWatcher: true
+    enableDatabaseWatcher: false // Disabled to prevent error feedback loops
   });
   
   await server.start();

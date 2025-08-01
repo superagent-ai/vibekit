@@ -15,6 +15,7 @@ import { Badge } from './components/ui/badge'
 import { Button } from './components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs'
 import { ScrollArea } from './components/ui/scroll-area'
+import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover'
 
 import { Activity, Zap, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 
@@ -125,7 +126,7 @@ function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">VibeKit Telemetry</h1>
+              <h1 className="text-2xl font-bold">🖖 VibeKit Telemetry</h1>
               <p className="text-muted-foreground">Real-time monitoring and analytics</p>
             </div>
             
@@ -180,9 +181,76 @@ function Dashboard() {
               </Button>
 
               {/* Health Status */}
-              <Badge variant={health?.status === 'healthy' ? 'default' : 'destructive'}>
-                {health?.status || 'Unknown'}
-              </Badge>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" className="h-auto p-0">
+                    <Badge 
+                      variant={health?.status === 'healthy' ? 'default' : health?.status === 'degraded' ? 'secondary' : 'destructive'}
+                      className="cursor-pointer"
+                    >
+                      {health?.status ? health.status.charAt(0).toUpperCase() + health.status.slice(1) : 'Unknown'}
+                    </Badge>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold">System Health</h4>
+                      <div className={`h-3 w-3 rounded-full ${
+                        health?.status === 'healthy' ? 'bg-green-500' : 
+                        health?.status === 'degraded' ? 'bg-yellow-500' : 'bg-red-500'
+                      }`} />
+                    </div>
+                    
+                    {health?.details && (
+                      <div className="space-y-2 text-sm">
+                        {health.details.providers?.storage?.map((provider: any, idx: number) => (
+                          <div key={idx} className="flex justify-between">
+                            <span className="text-muted-foreground">{provider.type || provider.name}:</span>
+                            <span className={provider.status === 'healthy' ? 'text-green-600' : 'text-red-600'}>
+                              {provider.status}
+                            </span>
+                          </div>
+                        ))}
+                        
+                        {health.details.reliability?.errors && (
+                          <div className="pt-2 border-t">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Recent Errors:</span>
+                              <span className={(health.details.reliability.errors.recent || 0) > 0 ? 'text-red-600' : ''}>
+                                {health.details.reliability.errors.recent || 0}
+                              </span>
+                            </div>
+                            {(health.details.reliability.errors.bySeverity?.critical || 0) > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Critical Errors:</span>
+                                <span className="text-red-600">{health.details.reliability.errors.bySeverity?.critical || 0}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {health.details.reliability?.circuitBreakers && (
+                          <div className="pt-2 border-t">
+                            {Object.entries(health.details.reliability.circuitBreakers).map(([name, breaker]: [string, any]) => (
+                              <div key={name} className="flex justify-between">
+                                <span className="text-muted-foreground">{name}:</span>
+                                <span className={breaker.state === 'closed' ? 'text-green-600' : 'text-red-600'}>
+                                  {breaker.state}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        <div className="pt-2 border-t text-xs text-muted-foreground">
+                          Last checked: {health.details.timestamp ? new Date(health.details.timestamp).toLocaleTimeString() : 'Unknown'}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </div>

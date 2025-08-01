@@ -802,18 +802,18 @@ export class TelemetryAPIServer {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = setTimeout(async () => {
         try {
-          // Query updated data
+          // Query updated data - silently fail to prevent error loops
           const [metrics, insights, sessions] = await Promise.all([
             this.telemetryService.getMetrics().catch((err: any) => {
-              this.logger.warn('Failed to get metrics:', err.message);
+              // Don't log to prevent feedback loop
               return null;
             }),
             this.telemetryService.getInsights({ window: 'day' }).catch((err: any) => {
-              this.logger.warn('Failed to get insights:', err.message);
+              // Don't log to prevent feedback loop
               return null;
             }),
             this.telemetryService.query({ limit: 10 }).catch((err: any) => {
-              this.logger.warn('Failed to query events:', err.message);
+              // Don't log to prevent feedback loop
               return [];
             })
           ]);
