@@ -776,7 +776,7 @@ export class TelemetryAPIServer {
     this.logger.info(`Setting up database watcher for: ${dbPath}`);
     
     // Use polling in test/CI environments for better reliability
-    const isTestEnv = process.env.NODE_ENV === 'test' || process.env.CI || process.env.GITHUB_ACTIONS;
+    const isTestEnv = process.env.NODE_ENV === 'test' || !!process.env.CI || !!process.env.GITHUB_ACTIONS;
     
     if (isTestEnv) {
       this.logger.info('Using polling mode for file watching (test/CI environment)');
@@ -791,6 +791,7 @@ export class TelemetryAPIServer {
       },
       usePolling: isTestEnv, // Use polling in test/CI environments
       interval: isTestEnv ? 100 : undefined, // Poll every 100ms in test mode
+      binaryInterval: isTestEnv ? 300 : undefined, // Binary file interval
     });
     
     // Handle database changes
