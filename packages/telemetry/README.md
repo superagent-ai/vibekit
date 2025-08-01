@@ -72,11 +72,21 @@ graph TB
 ```bash
 npm install @vibe-kit/telemetry
 
+# Required dependencies for SQLite storage (recommended)
+npm install @vibe-kit/db        # Database layer with Drizzle ORM
+npm install better-sqlite3      # SQLite3 native bindings
+
 # Optional dependencies for specific features
-npm install @vibe-kit/db        # For SQLite storage
 npm install @opentelemetry/api  # For OTLP export
 npm install ws                  # For WebSocket streaming
 ```
+
+### Dependencies Explained
+
+- **@vibe-kit/db**: Provides the SQLite database layer with Drizzle ORM. **Required if you plan to use SQLite storage** (recommended for most use cases). See the [@vibe-kit/db documentation](../db/README.md) for detailed setup and migration information.
+- **better-sqlite3**: Native SQLite3 bindings required by @vibe-kit/db
+- **@opentelemetry/api**: Only needed if you plan to export telemetry data to OpenTelemetry collectors
+- **ws**: Only needed if you plan to use WebSocket streaming features
 
 ## Quick Start
 
@@ -214,6 +224,7 @@ Multiple storage backends are supported:
 
 ```typescript
 // SQLite (recommended for local development)
+// Requires @vibe-kit/db package
 storage: [{
   type: 'sqlite',
   enabled: true,
