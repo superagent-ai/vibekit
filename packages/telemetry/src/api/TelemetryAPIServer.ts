@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import chokidar from 'chokidar';
 import { resolve, normalize, isAbsolute } from 'path';
-import type { DashboardOptions } from '../core/types.js';
+import type { DashboardOptions, TimeRange } from '../core/types.js';
 import { createAuthMiddleware, type AuthConfig } from './middleware/auth.js';
 import { getEnvVar } from '../utils/env-validator.js';
 import { 
@@ -233,17 +233,43 @@ export class TelemetryAPIServer {
     this.app.get('/analytics', async (req, res) => {
       try {
         const window = (req.query.window as string) || 'day';
-        const insights = await this.telemetryService.getInsights({ window });
+        
+        // Convert window to time range
+        const now = Date.now();
+        let timeRange: TimeRange | undefined;
+        
+        switch (window) {
+          case 'hour':
+            timeRange = { start: now - (60 * 60 * 1000), end: now };
+            break;
+          case 'day':
+            timeRange = { start: now - (24 * 60 * 60 * 1000), end: now };
+            break;
+          case 'week':
+            timeRange = { start: now - (7 * 24 * 60 * 60 * 1000), end: now };
+            break;
+          case 'all':
+          default:
+            // No time range means all data
+            timeRange = undefined;
+            break;
+        }
+        
+        const insightOptions = timeRange ? { timeRange } : {};
+        const insights = await this.telemetryService.getInsights(insightOptions);
         
         // Transform to analytics dashboard format
         const analytics = {
           timeWindow: window,
           overview: {
-            totalSessions: insights.totalSessions || 0,
-            totalEvents: insights.totalEvents || 0,
-            avgResponseTime: insights.avgResponseTime || 0,
-            errorRate: insights.errorRate || 0,
-            throughput: insights.throughput || 0
+            totalSessions: insights?.metrics?.sessions ? 
+                         (insights.metrics.sessions.active || 0) + 
+                         (insights.metrics.sessions.completed || 0) + 
+                         (insights.metrics.sessions.errored || 0) : 0,
+            totalEvents: insights?.metrics?.events?.total || 0,
+            avgResponseTime: insights?.metrics?.performance?.avgDuration || 0,
+            errorRate: insights?.metrics?.performance?.errorRate || 0,
+            throughput: insights?.metrics?.events?.total || 0
           },
           health: {
             status: 'healthy',
@@ -463,7 +489,24 @@ export class TelemetryAPIServer {
     
     this.app.get('/api/sessions', async (req, res) => {
       try {
-        const sessions = await this.telemetryService.getActiveSessions();
+        // Get all events to extract unique sessions
+        const events = await this.telemetryService.query({});
+        const sessionMap = new Map<string, { id: string; eventCount: number; status: string }>();
+        
+        for (const event of events) {
+          const session = sessionMap.get(event.sessionId) || { 
+            id: event.sessionId, 
+            eventCount: 0, 
+            status: 'active' 
+          };
+          session.eventCount++;
+          if (event.eventType === 'end') {
+            session.status = 'completed';
+          }
+          sessionMap.set(event.sessionId, session);
+        }
+        
+        const sessions = Array.from(sessionMap.values());
         res.json(sessions);
       } catch (error) {
         res.status(500).json({ 
@@ -549,6 +592,10 @@ export class TelemetryAPIServer {
         type: event.eventType, 
         data: event 
       });
+      // Emit to session-specific room
+      if (event.sessionId) {
+        this.io.to(`session:${event.sessionId}`).emit(`telemetry:session:${event.sessionId}`, event);
+      }
     });
     
     // Handle client connections
@@ -563,6 +610,17 @@ export class TelemetryAPIServer {
       socket.on('unsubscribe', (channel: string) => {
         socket.leave(channel);
         this.logger.info(`Client unsubscribed from channel: ${channel}`);
+      });
+      
+      // Handle session-specific subscriptions
+      socket.on('telemetry:subscribe-session', (sessionId: string) => {
+        socket.join(`session:${sessionId}`);
+        this.logger.info(`Client subscribed to session: ${sessionId}`);
+      });
+      
+      socket.on('telemetry:unsubscribe-session', (sessionId: string) => {
+        socket.leave(`session:${sessionId}`);
+        this.logger.info(`Client unsubscribed from session: ${sessionId}`);
       });
       
       socket.on('disconnect', () => {
@@ -643,6 +701,12 @@ export class TelemetryAPIServer {
       resolve(process.cwd(), 'data'),
       '/tmp/vibekit', // For temporary files
     ];
+    
+    // In test environment, also allow any /tmp paths
+    if (process.env.NODE_ENV === 'test') {
+      allowedBaseDirs.push('/tmp');
+      allowedBaseDirs.push('/var/folders'); // macOS temp directory
+    }
     
     // Check if the path is within allowed directories
     const isAllowed = allowedBaseDirs.some(baseDir => {
@@ -803,6 +867,9 @@ export class TelemetryAPIServer {
               timestamp: new Date().toISOString()
             }
           });
+          
+          // Emit specific database change event
+          this.io.emit('telemetry:db-change');
           
           this.logger.info('Broadcasted real-time updates to connected clients');
           

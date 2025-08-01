@@ -156,96 +156,117 @@ export class DrizzleTelemetryDB {
     // Temporarily disable foreign keys to avoid issues during table creation
     this.sqlite.pragma('foreign_keys = OFF');
     
-    this.sqlite.exec(`
-      CREATE TABLE IF NOT EXISTS telemetry_sessions (
-        id text PRIMARY KEY NOT NULL,
-        agent_type text NOT NULL,
-        mode text NOT NULL,
-        status text DEFAULT 'active' NOT NULL,
-        start_time real NOT NULL,
-        end_time real,
-        duration real,
-        sandbox_id text,
-        repo_url text,
-        event_count integer DEFAULT 0,
-        stream_event_count integer DEFAULT 0,
-        error_count integer DEFAULT 0,
-        metadata text,
-        version integer NOT NULL DEFAULT 1,
-        schema_version text NOT NULL DEFAULT '1.0.0',
-        created_at real NOT NULL DEFAULT (unixepoch() * 1000),
-        updated_at real NOT NULL DEFAULT (unixepoch() * 1000)
-      );
+    try {
+      // Create tables first
+      this.sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS telemetry_sessions (
+          id text PRIMARY KEY NOT NULL,
+          agent_type text NOT NULL,
+          mode text NOT NULL,
+          status text DEFAULT 'active' NOT NULL,
+          start_time real NOT NULL,
+          end_time real,
+          duration real,
+          sandbox_id text,
+          repo_url text,
+          event_count integer DEFAULT 0 NOT NULL,
+          stream_event_count integer DEFAULT 0 NOT NULL,
+          error_count integer DEFAULT 0 NOT NULL,
+          metadata text,
+          version integer DEFAULT 1 NOT NULL,
+          schema_version text DEFAULT '1.0.0' NOT NULL,
+          created_at real DEFAULT (unixepoch() * 1000) NOT NULL,
+          updated_at real DEFAULT (unixepoch() * 1000) NOT NULL
+        );
+      `);
 
-      CREATE TABLE IF NOT EXISTS telemetry_events (
-        id integer PRIMARY KEY AUTOINCREMENT,
-        session_id text NOT NULL,
-        event_type text NOT NULL,
-        agent_type text NOT NULL,
-        mode text NOT NULL,
-        prompt text NOT NULL,
-        stream_data text,
-        sandbox_id text,
-        repo_url text,
-        metadata text,
-        timestamp real NOT NULL,
-        version integer NOT NULL DEFAULT 1,
-        schema_version text NOT NULL DEFAULT '1.0.0',
-        created_at real NOT NULL DEFAULT (unixepoch() * 1000)
-      );
+      this.sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS telemetry_events (
+          id integer PRIMARY KEY AUTOINCREMENT,
+          session_id text NOT NULL,
+          event_type text NOT NULL,
+          agent_type text NOT NULL,
+          mode text NOT NULL,
+          prompt text NOT NULL,
+          stream_data text,
+          sandbox_id text,
+          repo_url text,
+          metadata text,
+          timestamp real NOT NULL,
+          version integer DEFAULT 1 NOT NULL,
+          schema_version text DEFAULT '1.0.0' NOT NULL,
+          created_at real DEFAULT (unixepoch() * 1000) NOT NULL
+        );
+      `);
 
-      CREATE TABLE IF NOT EXISTS telemetry_buffers (
-        id integer PRIMARY KEY AUTOINCREMENT,
-        event_data text NOT NULL,
-        version integer NOT NULL DEFAULT 1,
-        schema_version text NOT NULL DEFAULT '1.0.0',
-        created_at real NOT NULL DEFAULT (unixepoch() * 1000)
-      );
+      this.sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS telemetry_buffers (
+          id integer PRIMARY KEY AUTOINCREMENT,
+          event_data text NOT NULL,
+          version integer DEFAULT 1 NOT NULL,
+          schema_version text DEFAULT '1.0.0' NOT NULL,
+          created_at real DEFAULT (unixepoch() * 1000) NOT NULL
+        );
+      `);
 
-      CREATE TABLE IF NOT EXISTS telemetry_stats (
-        id integer PRIMARY KEY AUTOINCREMENT,
-        metric_type text NOT NULL,
-        metric_value real NOT NULL,
-        dimensions text,
-        timestamp real NOT NULL,
-        version integer NOT NULL DEFAULT 1,
-        schema_version text NOT NULL DEFAULT '1.0.0',
-        created_at real NOT NULL DEFAULT (unixepoch() * 1000)
-      );
+      this.sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS telemetry_stats (
+          id integer PRIMARY KEY AUTOINCREMENT,
+          metric_type text NOT NULL,
+          metric_value real NOT NULL,
+          dimensions text,
+          timestamp real NOT NULL,
+          version integer DEFAULT 1 NOT NULL,
+          schema_version text DEFAULT '1.0.0' NOT NULL,
+          created_at real DEFAULT (unixepoch() * 1000) NOT NULL
+        );
+      `);
 
-      CREATE TABLE IF NOT EXISTS telemetry_errors (
-        id integer PRIMARY KEY AUTOINCREMENT,
-        session_id text,
-        error_type text NOT NULL,
-        error_message text NOT NULL,
-        stack_trace text,
-        context text,
-        timestamp real NOT NULL,
-        version integer NOT NULL DEFAULT 1,
-        schema_version text NOT NULL DEFAULT '1.0.0',
-        created_at real NOT NULL DEFAULT (unixepoch() * 1000)
-      );
+      this.sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS telemetry_errors (
+          id integer PRIMARY KEY AUTOINCREMENT,
+          session_id text,
+          error_type text NOT NULL,
+          error_message text NOT NULL,
+          stack_trace text,
+          context text,
+          timestamp real NOT NULL,
+          version integer DEFAULT 1 NOT NULL,
+          schema_version text DEFAULT '1.0.0' NOT NULL,
+          created_at real DEFAULT (unixepoch() * 1000) NOT NULL
+        );
+      `);
 
-      -- Create indexes for performance
-      CREATE INDEX IF NOT EXISTS idx_telemetry_sessions_start_time ON telemetry_sessions(start_time);
-      CREATE INDEX IF NOT EXISTS idx_telemetry_sessions_agent_type ON telemetry_sessions(agent_type);
-      CREATE INDEX IF NOT EXISTS idx_telemetry_sessions_status ON telemetry_sessions(status);
-      CREATE INDEX IF NOT EXISTS idx_sessions_version ON telemetry_sessions(version);
-      CREATE INDEX IF NOT EXISTS idx_telemetry_events_session_id ON telemetry_events(session_id);
-      CREATE INDEX IF NOT EXISTS idx_telemetry_events_timestamp ON telemetry_events(timestamp);
-      CREATE INDEX IF NOT EXISTS idx_telemetry_events_event_type ON telemetry_events(event_type);
-      CREATE INDEX IF NOT EXISTS idx_events_version ON telemetry_events(version);
-      CREATE INDEX IF NOT EXISTS idx_telemetry_stats_timestamp ON telemetry_stats(timestamp);
-      CREATE INDEX IF NOT EXISTS idx_telemetry_stats_metric_type ON telemetry_stats(metric_type);
-      CREATE INDEX IF NOT EXISTS idx_stats_version ON telemetry_stats(version);
-      CREATE INDEX IF NOT EXISTS idx_telemetry_errors_timestamp ON telemetry_errors(timestamp);
-      CREATE INDEX IF NOT EXISTS idx_telemetry_errors_session_id ON telemetry_errors(session_id);
-      CREATE INDEX IF NOT EXISTS idx_errors_version ON telemetry_errors(version);
-      CREATE INDEX IF NOT EXISTS idx_buffers_version ON telemetry_buffers(version);
-    `);
-    
-    // Re-enable foreign keys after table creation
-    this.sqlite.pragma('foreign_keys = ON');
+      // Create indexes separately to better handle errors
+      const indexes = [
+        'CREATE INDEX IF NOT EXISTS idx_telemetry_sessions_start_time ON telemetry_sessions(start_time)',
+        'CREATE INDEX IF NOT EXISTS idx_telemetry_sessions_agent_type ON telemetry_sessions(agent_type)',
+        'CREATE INDEX IF NOT EXISTS idx_telemetry_sessions_status ON telemetry_sessions(status)',
+        'CREATE INDEX IF NOT EXISTS idx_sessions_version ON telemetry_sessions(version)',
+        'CREATE INDEX IF NOT EXISTS idx_telemetry_events_session_id ON telemetry_events(session_id)',
+        'CREATE INDEX IF NOT EXISTS idx_telemetry_events_timestamp ON telemetry_events(timestamp)',
+        'CREATE INDEX IF NOT EXISTS idx_telemetry_events_event_type ON telemetry_events(event_type)',
+        'CREATE INDEX IF NOT EXISTS idx_events_version ON telemetry_events(version)',
+        'CREATE INDEX IF NOT EXISTS idx_telemetry_stats_timestamp ON telemetry_stats(timestamp)',
+        'CREATE INDEX IF NOT EXISTS idx_telemetry_stats_metric_type ON telemetry_stats(metric_type)',
+        'CREATE INDEX IF NOT EXISTS idx_stats_version ON telemetry_stats(version)',
+        'CREATE INDEX IF NOT EXISTS idx_telemetry_errors_timestamp ON telemetry_errors(timestamp)',
+        'CREATE INDEX IF NOT EXISTS idx_telemetry_errors_session_id ON telemetry_errors(session_id)',
+        'CREATE INDEX IF NOT EXISTS idx_errors_version ON telemetry_errors(version)',
+        'CREATE INDEX IF NOT EXISTS idx_buffers_version ON telemetry_buffers(version)',
+      ];
+
+      for (const indexSql of indexes) {
+        try {
+          this.sqlite.exec(indexSql);
+        } catch (indexError) {
+          console.warn(`Failed to create index: ${indexSql}`, indexError);
+        }
+      }
+    } finally {
+      // Re-enable foreign keys after table creation
+      this.sqlite.pragma('foreign_keys = ON');
+    }
   }
 
   /**
@@ -386,10 +407,10 @@ export class DrizzleTelemetryDB {
               stream_event_count integer DEFAULT 0,
               error_count integer DEFAULT 0,
               metadata text,
-              version integer NOT NULL DEFAULT 1,
-              schema_version text NOT NULL DEFAULT '1.0.0',
-              created_at real NOT NULL DEFAULT (unixepoch() * 1000),
-              updated_at real NOT NULL DEFAULT (unixepoch() * 1000)
+              version integer DEFAULT 1 NOT NULL,
+              schema_version text DEFAULT '1.0.0' NOT NULL,
+              created_at real DEFAULT (unixepoch() * 1000) NOT NULL,
+              updated_at real DEFAULT (unixepoch() * 1000) NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS telemetry_events (
