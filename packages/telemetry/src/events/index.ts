@@ -10,6 +10,10 @@ export type { ValidationRule, ValidationSchema, ValidationResult } from './Event
 export { EventProcessor, CommonProcessors } from './EventProcessor.js';
 export type { EventTransformer, EventEnricher, ProcessorOptions } from './EventProcessor.js';
 
+// Event deduplication with cleanup
+export { createDeduplicator } from './deduplicator.js';
+export type { DeduplicatorResult } from './deduplicator.js';
+
 // Event filtering
 export { EventFilter, CommonFilters } from './EventFilter.js';
 export type { FilterPredicate, FilterRule, FilterOptions } from './EventFilter.js';
