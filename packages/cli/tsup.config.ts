@@ -16,6 +16,8 @@ export default defineConfig({
   // Externalize Node.js built-ins and large dependencies
   external: [
     "@vibe-kit/dagger",
+    "@vibe-kit/telemetry",
+    "@vibe-kit/db",
     "@dagger.io/dagger",
     "adm-zip",
     "fs-extra",
@@ -43,4 +45,10 @@ export default defineConfig({
     "tty",
     "readline",
   ],
+  esbuildOptions(options) {
+    // Suppress the direct-eval warning from dependencies
+    options.logOverride = {
+      "direct-eval": "silent",
+    };
+  },
 });
