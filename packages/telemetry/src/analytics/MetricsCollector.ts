@@ -2,9 +2,9 @@ import type {
   TelemetryEvent,
   Metrics,
   AnalyticsConfig,
-  TimeRange,
-  StorageProvider
+  TimeRange
 } from '../core/types.js';
+import type { StorageProvider } from '../storage/StorageProvider.js';
 import { AnalyticsEngine } from './AnalyticsEngine.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -217,7 +217,7 @@ export class MetricsCollector {
     // Convert snapshot to telemetry event format
     const metricEvent: TelemetryEvent = {
       sessionId: `metrics-${Date.now()}`,
-      eventType: 'metric_snapshot',
+      eventType: 'custom',
       category: 'analytics',
       action: 'snapshot',
       timestamp: snapshot.timestamp,

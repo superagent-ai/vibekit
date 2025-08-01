@@ -275,6 +275,32 @@ export class SQLiteProvider extends StorageProvider {
   }
 
   /**
+   * Convert QueryFilter to TelemetryQueryFilter
+   */
+  private convertQueryFilter(filter: QueryFilter): Partial<TelemetryQueryFilter> {
+    const dbFilter: Partial<TelemetryQueryFilter> = {};
+    
+    if (filter.sessionId) dbFilter.sessionId = filter.sessionId;
+    if (filter.eventType) dbFilter.eventType = filter.eventType as any;
+    if (filter.category) dbFilter.agentType = filter.category; // Map category to agentType
+    if (filter.action) dbFilter.mode = filter.action; // Map action to mode
+    
+    // Handle time range
+    if (filter.timeRange) {
+      dbFilter.from = filter.timeRange.start;
+      dbFilter.to = filter.timeRange.end;
+    } else {
+      if (filter.startTime) dbFilter.from = filter.startTime;
+      if (filter.endTime) dbFilter.to = filter.endTime;
+    }
+    
+    if (filter.limit) dbFilter.limit = filter.limit;
+    if (filter.offset) dbFilter.offset = filter.offset;
+    
+    return dbFilter;
+  }
+
+  /**
    * Delete events based on filter criteria
    */
   async deleteEvents(filter: QueryFilter): Promise<number> {
