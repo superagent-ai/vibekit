@@ -778,6 +778,10 @@ export class TelemetryAPIServer {
     // Use polling in test/CI environments for better reliability
     const isTestEnv = process.env.NODE_ENV === 'test' || process.env.CI || process.env.GITHUB_ACTIONS;
     
+    if (isTestEnv) {
+      this.logger.info('Using polling mode for file watching (test/CI environment)');
+    }
+    
     this.dbWatcher = chokidar.watch(dbPath, {
       ignored: /(^|[\/\\])\../, // Ignore dotfiles
       persistent: true,
