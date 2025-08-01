@@ -254,4 +254,7 @@ export interface DashboardOptions {
     methods?: string[];
     allowedHeaders?: string[];
   };
+  enableDashboard?: boolean;
+  enableWebSocket?: boolean;
+  enableDatabaseWatcher?: boolean;
 }

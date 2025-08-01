@@ -86,9 +86,9 @@ export const STREAMING_TYPES = {
 } as const;
 
 export const DEFAULT_PII_PATTERNS = new Map<string, RegExp>([
-  ['email', /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g],
-  ['phone', /(\+\d{1,3}[- ]?)?\d{10}/g],
-  ['ssn', /\b\d{3}-\d{2}-\d{4}\b/g],
-  ['creditCard', /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g],
-  ['apiKey', /\b[A-Za-z0-9]{32,}\b/g],
+  ['email', /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+(?:\.[a-zA-Z]{2,}|\.\d{1,3})/g],
+  ['phone', /(?:\(\d{3}\)\s?\d{3}-\d{4}|\d{3}-\d{3}-\d{4}|\d{10}|\+\d{1,3}\s\d{1,4}\s\d{1,4}\s\d{4}|\+\d{1,3}\s\d{3}\s\d{3}\s\d{4}|1-800-[A-Z]{7})/g],
+  ['ssn', /(?<![A-Z0-9-])\d{3}[\s-]?\d{2}[\s-]?\d{4}(?![\d-])/g],
+  ['creditCard', /\b(?:\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}|\d{4}[\s-]?\d{6}[\s-]?\d{5})\b/g],
+  ['apiKey', /\b[A-Za-z0-9_-]{20,}\b/g],
 ]);

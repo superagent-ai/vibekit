@@ -104,13 +104,24 @@ export class DrizzleTelemetryDB {
       // This avoids ESM path resolution issues with the migrate function
       console.log('📋 Skipping programmatic migrations (use drizzle-kit migrate externally)');
 
-      // Test database connection by performing a simple query
+      // Test database connection and create tables if needed
       try {
-        // This will succeed if tables exist, or create them automatically via Drizzle schema
+        // Check if tables exist
         await this.db.select().from(schema.telemetryEvents).limit(1);
         console.log('✅ Database tables verified and accessible');
       } catch (error) {
-        console.log('📊 Database tables will be created on first use (schema-first)');
+        console.log('📊 Tables do not exist, creating schema...');
+        // Create tables using raw SQL
+        try {
+          await this.createInitialSchema();
+          console.log('✅ Database schema created successfully');
+        } catch (schemaError) {
+          console.error('❌ Failed to create database schema:', schemaError);
+          throw new DrizzleTelemetryConnectionError(
+            `Failed to create database schema: ${schemaError instanceof Error ? schemaError.message : String(schemaError)}`,
+            schemaError instanceof Error ? schemaError : undefined
+          );
+        }
       }
 
       // Update metrics
@@ -131,6 +142,110 @@ export class DrizzleTelemetryDB {
         error instanceof Error ? error : undefined
       );
     }
+  }
+
+  /**
+   * Create initial database schema
+   */
+  private async createInitialSchema(): Promise<void> {
+    if (!this.sqlite) {
+      throw new Error('SQLite connection not available');
+    }
+
+    // Create tables using raw SQL
+    // Temporarily disable foreign keys to avoid issues during table creation
+    this.sqlite.pragma('foreign_keys = OFF');
+    
+    this.sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS telemetry_sessions (
+        id text PRIMARY KEY NOT NULL,
+        agent_type text NOT NULL,
+        mode text NOT NULL,
+        status text DEFAULT 'active' NOT NULL,
+        start_time real NOT NULL,
+        end_time real,
+        duration real,
+        sandbox_id text,
+        repo_url text,
+        event_count integer DEFAULT 0,
+        stream_event_count integer DEFAULT 0,
+        error_count integer DEFAULT 0,
+        metadata text,
+        version integer NOT NULL DEFAULT 1,
+        schema_version text NOT NULL DEFAULT '1.0.0',
+        created_at real NOT NULL DEFAULT (unixepoch() * 1000),
+        updated_at real NOT NULL DEFAULT (unixepoch() * 1000)
+      );
+
+      CREATE TABLE IF NOT EXISTS telemetry_events (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        session_id text NOT NULL,
+        event_type text NOT NULL,
+        agent_type text NOT NULL,
+        mode text NOT NULL,
+        prompt text NOT NULL,
+        stream_data text,
+        sandbox_id text,
+        repo_url text,
+        metadata text,
+        timestamp real NOT NULL,
+        version integer NOT NULL DEFAULT 1,
+        schema_version text NOT NULL DEFAULT '1.0.0',
+        created_at real NOT NULL DEFAULT (unixepoch() * 1000)
+      );
+
+      CREATE TABLE IF NOT EXISTS telemetry_buffers (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        event_data text NOT NULL,
+        version integer NOT NULL DEFAULT 1,
+        schema_version text NOT NULL DEFAULT '1.0.0',
+        created_at real NOT NULL DEFAULT (unixepoch() * 1000)
+      );
+
+      CREATE TABLE IF NOT EXISTS telemetry_stats (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        metric_type text NOT NULL,
+        metric_value real NOT NULL,
+        dimensions text,
+        timestamp real NOT NULL,
+        version integer NOT NULL DEFAULT 1,
+        schema_version text NOT NULL DEFAULT '1.0.0',
+        created_at real NOT NULL DEFAULT (unixepoch() * 1000)
+      );
+
+      CREATE TABLE IF NOT EXISTS telemetry_errors (
+        id integer PRIMARY KEY AUTOINCREMENT,
+        session_id text,
+        error_type text NOT NULL,
+        error_message text NOT NULL,
+        stack_trace text,
+        context text,
+        timestamp real NOT NULL,
+        version integer NOT NULL DEFAULT 1,
+        schema_version text NOT NULL DEFAULT '1.0.0',
+        created_at real NOT NULL DEFAULT (unixepoch() * 1000)
+      );
+
+      -- Create indexes for performance
+      CREATE INDEX IF NOT EXISTS idx_telemetry_sessions_start_time ON telemetry_sessions(start_time);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_sessions_agent_type ON telemetry_sessions(agent_type);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_sessions_status ON telemetry_sessions(status);
+      CREATE INDEX IF NOT EXISTS idx_sessions_version ON telemetry_sessions(version);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_events_session_id ON telemetry_events(session_id);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_events_timestamp ON telemetry_events(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_events_event_type ON telemetry_events(event_type);
+      CREATE INDEX IF NOT EXISTS idx_events_version ON telemetry_events(version);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_stats_timestamp ON telemetry_stats(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_stats_metric_type ON telemetry_stats(metric_type);
+      CREATE INDEX IF NOT EXISTS idx_stats_version ON telemetry_stats(version);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_errors_timestamp ON telemetry_errors(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_errors_session_id ON telemetry_errors(session_id);
+      CREATE INDEX IF NOT EXISTS idx_errors_version ON telemetry_errors(version);
+      CREATE INDEX IF NOT EXISTS idx_buffers_version ON telemetry_buffers(version);
+    `);
+    
+    // Re-enable foreign keys after table creation
+    this.sqlite.pragma('foreign_keys = ON');
   }
 
   /**
@@ -265,12 +380,14 @@ export class DrizzleTelemetryDB {
               start_time real NOT NULL,
               end_time real,
               duration real,
+              sandbox_id text,
               repo_url text,
-              prompt text,
               event_count integer DEFAULT 0,
-              stream_count integer DEFAULT 0,
+              stream_event_count integer DEFAULT 0,
               error_count integer DEFAULT 0,
               metadata text,
+              version integer NOT NULL DEFAULT 1,
+              schema_version text NOT NULL DEFAULT '1.0.0',
               created_at real NOT NULL DEFAULT (unixepoch() * 1000),
               updated_at real NOT NULL DEFAULT (unixepoch() * 1000)
             );

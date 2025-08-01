@@ -12,13 +12,15 @@ export class DataEncryption {
   private key?: string;
   
   constructor(config: EncryptionConfig = {}) {
+    // Don't store the key in config for security
+    const { key, ...safeConfig } = config;
     this.config = {
       algorithm: 'aes-256-ctr',
-      ...config,
+      ...safeConfig,
     };
     
     if (config.enabled) {
-      if (!config.key) {
+      if (!key) {
         // Try to get key from environment
         const envKey = process.env.TELEMETRY_ENCRYPTION_KEY;
         if (envKey) {
@@ -30,7 +32,17 @@ export class DataEncryption {
           );
         }
       } else {
-        this.key = config.key;
+        this.key = key;
+      }
+      
+      // Make key non-enumerable for security
+      if (this.key) {
+        Object.defineProperty(this, 'key', {
+          value: this.key,
+          writable: false,
+          enumerable: false,
+          configurable: false,
+        });
       }
       
       // Validate key length
@@ -56,11 +68,23 @@ export class DataEncryption {
     }
     
     if (encrypted.metadata) {
-      encrypted.metadata = {
-        ...encrypted.metadata,
-        _encrypted: true,
-        _data: this.encryptString(JSON.stringify(encrypted.metadata)),
-      };
+      try {
+        encrypted.metadata = {
+          _encrypted: true,
+          _data: this.encryptString(JSON.stringify(encrypted.metadata)),
+        };
+      } catch (error) {
+        // Handle circular references or other JSON stringify errors
+        if (error instanceof TypeError && error.message.includes('circular')) {
+          // For circular references, just mark as encrypted without data
+          encrypted.metadata = {
+            _encrypted: true,
+            _error: 'Circular reference detected - metadata not encrypted',
+          };
+        } else {
+          throw error;
+        }
+      }
     }
     
     return encrypted;

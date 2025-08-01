@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
@@ -48,11 +48,23 @@ export class TelemetryAPIServer {
     this.setupWebSocket();
   }
   
+  // Expose app for testing
+  getApp(): express.Application {
+    return this.app;
+  }
+  
+  // Get server address for testing
+  getAddress(): any {
+    return this.server.address();
+  }
+  
   async start(): Promise<void> {
     const port = this.options.port || 3000;
     
-    // Set up database file watching
-    this.setupDatabaseWatcher();
+    // Set up database file watching (unless disabled)
+    if (this.options.enableDatabaseWatcher !== false) {
+      this.setupDatabaseWatcher();
+    }
     
     return new Promise((resolve) => {
       this.server.listen(port, () => {
@@ -102,8 +114,18 @@ export class TelemetryAPIServer {
     };
     const authMiddleware = createAuthMiddleware(authConfig);
     
-    // Apply auth to all API routes except health check
-    this.app.use('/api/', authMiddleware);
+    // Apply auth to API routes except health check
+    this.app.use((req, res, next) => {
+      // Skip auth for health endpoint
+      if (req.path === '/api/health' || req.path === '/health') {
+        return next();
+      }
+      // Only apply auth to /api/ routes
+      if (req.path.startsWith('/api/')) {
+        return authMiddleware(req, res, next);
+      }
+      next();
+    });
     
     // Root endpoint - API info (no auth required)
     this.app.get('/', (req, res) => {
@@ -472,7 +494,7 @@ export class TelemetryAPIServer {
       try {
         const { format, filter } = req.body;
         const result = await this.telemetryService.export(
-          { type: format },
+          format,
           filter
         );
         
@@ -488,6 +510,34 @@ export class TelemetryAPIServer {
           message: error instanceof Error ? error.message : 'Unknown error' 
         });
       }
+    });
+    
+    // 404 handler - must be after all routes
+    this.app.use((req, res) => {
+      res.status(404).json({
+        error: 'Not Found',
+        message: `Cannot ${req.method} ${req.path}`,
+        timestamp: new Date().toISOString()
+      });
+    });
+    
+    // Error handler - must be last
+    this.app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+      this.logger.error(`API Error: ${err.message}`, { 
+        path: req.path,
+        method: req.method,
+        error: err.stack 
+      });
+      
+      // Don't expose stack traces in production
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      
+      res.status(err.status || 500).json({
+        error: err.name || 'Internal Server Error',
+        message: err.message || 'An unexpected error occurred',
+        ...(isDevelopment && { stack: err.stack }),
+        timestamp: new Date().toISOString()
+      });
     });
   }
   

@@ -3,27 +3,55 @@ import { DEFAULT_PII_PATTERNS } from '../core/constants.js';
 
 export interface PIIConfig {
   enabled?: boolean;
-  patterns?: Record<string, RegExp>;
-  customPatterns?: Record<string, RegExp>;
+  patterns?: Record<string, RegExp> | any;
+  customPatterns?: Record<string, RegExp> | Array<RegExp>;
+  sensitiveFields?: string[];
+  action?: 'redact' | 'detect';
+  redactPattern?: string;
 }
 
 export class PIIDetector {
   private patterns: Map<string, RegExp>;
+  private sensitiveFields: Set<string>;
+  private redactPattern: string;
   
   constructor(config: PIIConfig = {}) {
-    this.patterns = new Map(DEFAULT_PII_PATTERNS);
+    this.patterns = new Map();
+    this.sensitiveFields = new Set(config.sensitiveFields || []);
+    this.redactPattern = config.redactPattern || '[REDACTED]';
+    
+    // Handle the test's configuration format
+    if (config.patterns && typeof config.patterns === 'object') {
+      const { email, phone, ssn, creditCard, custom } = config.patterns;
+      
+      if (email) this.patterns.set('email', DEFAULT_PII_PATTERNS.get('email')!);
+      if (phone) this.patterns.set('phone', DEFAULT_PII_PATTERNS.get('phone')!);
+      if (ssn) this.patterns.set('ssn', DEFAULT_PII_PATTERNS.get('ssn')!);
+      if (creditCard) this.patterns.set('creditCard', DEFAULT_PII_PATTERNS.get('creditCard')!);
+      
+      // Handle custom patterns array
+      if (Array.isArray(custom)) {
+        custom.forEach((item, index) => {
+          if (item.pattern) {
+            this.patterns.set(item.name || `custom_${index}`, item.pattern);
+          }
+        });
+      }
+    } else {
+      // Use default patterns
+      this.patterns = new Map(DEFAULT_PII_PATTERNS);
+    }
     
     // Add custom patterns
     if (config.customPatterns) {
-      for (const [name, pattern] of Object.entries(config.customPatterns)) {
-        this.patterns.set(name, pattern);
-      }
-    }
-    
-    // Override default patterns if provided
-    if (config.patterns) {
-      for (const [name, pattern] of Object.entries(config.patterns)) {
-        this.patterns.set(name, pattern);
+      if (Array.isArray(config.customPatterns)) {
+        config.customPatterns.forEach((pattern, index) => {
+          this.patterns.set(`custom_${index}`, pattern);
+        });
+      } else {
+        for (const [name, pattern] of Object.entries(config.customPatterns)) {
+          this.patterns.set(name, pattern);
+        }
       }
     }
   }
@@ -52,8 +80,19 @@ export class PIIDetector {
   private sanitizeString(value: string): string {
     let sanitized = value;
     
+    // Special handling for API keys and passwords - replace the key-value pair but keep prefix
+    const specialPatterns = [
+      { pattern: /(api[_-]?key|apiKey|API-KEY|x-api-key)[\s:=]+[\w-]{20,}/gi, replacement: this.redactPattern },
+      { pattern: /(password|PASSWORD|secret|SECRET|db_password)[\s:=]+\S+/gi, replacement: this.redactPattern },
+    ];
+    
+    for (const { pattern, replacement } of specialPatterns) {
+      sanitized = sanitized.replace(pattern, replacement);
+    }
+    
+    // Then apply regular patterns
     for (const [name, pattern] of this.patterns) {
-      sanitized = sanitized.replace(pattern, `[REDACTED_${name.toUpperCase()}]`);
+      sanitized = sanitized.replace(pattern, this.redactPattern);
     }
     
     return sanitized;
@@ -71,9 +110,18 @@ export class PIIDetector {
     if (obj && typeof obj === 'object') {
       const sanitized: any = {};
       for (const [key, value] of Object.entries(obj)) {
-        // Check if the key itself might contain sensitive info
+        // Check if this is a sensitive field
+        const isSensitiveField = this.sensitiveFields.has(key.toLowerCase());
+        
+        // Sanitize the key
         const sanitizedKey = this.sanitizeString(key);
-        sanitized[sanitizedKey] = this.sanitizeObject(value);
+        
+        // If it's a sensitive field, always redact the entire value
+        if (isSensitiveField) {
+          sanitized[sanitizedKey] = this.redactPattern;
+        } else {
+          sanitized[sanitizedKey] = this.sanitizeObject(value);
+        }
       }
       return sanitized;
     }

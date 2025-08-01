@@ -6,6 +6,7 @@ import { OTLPExporter } from './formats/OTLPExporter.js';
 import { ParquetExporter } from './formats/ParquetExporter.js';
 import { writeFile, mkdir } from 'fs/promises';
 import { dirname, join } from 'path';
+import { createLogger } from '../utils/logger.js';
 
 interface ScheduleConfig {
   id: string;
@@ -59,6 +60,7 @@ export class ExportScheduler extends EventEmitter {
   private executions = new Map<string, ScheduleExecution>();
   private isRunning = false;
   private telemetryService: any;
+  private logger = createLogger('ExportScheduler');
   
   // Export format instances
   private jsonExporter = new JSONExporter();
@@ -84,7 +86,7 @@ export class ExportScheduler extends EventEmitter {
     }
     
     this.emit('started');
-    console.log('Export scheduler started');
+    this.logger.info('Export scheduler started');
   }
   
   async stop(): Promise<void> {
@@ -98,7 +100,7 @@ export class ExportScheduler extends EventEmitter {
     
     this.isRunning = false;
     this.emit('stopped');
-    console.log('Export scheduler stopped');
+    this.logger.info('Export scheduler stopped');
   }
   
   addSchedule(config: ScheduleConfig): void {
@@ -198,7 +200,7 @@ export class ExportScheduler extends EventEmitter {
     
     this.timers.set(schedule.id, timer);
     
-    console.log(`Scheduled export '${schedule.name}' for ${new Date(nextExecution).toISOString()}`);
+    this.logger.info(`Scheduled export '${schedule.name}' for ${new Date(nextExecution).toISOString()}`);
   }
   
   private async executeSchedule(schedule: ScheduleConfig): Promise<void> {
@@ -215,7 +217,7 @@ export class ExportScheduler extends EventEmitter {
     this.emit('executionStarted', execution);
     
     try {
-      console.log(`Executing export schedule: ${schedule.name}`);
+      this.logger.info(`Executing export schedule: ${schedule.name}`);
       
       // Query events based on filter
       const events = await this.telemetryService.query(schedule.filter || {});
@@ -228,7 +230,7 @@ export class ExportScheduler extends EventEmitter {
       execution.endTime = Date.now();
       execution.result = result;
       
-      console.log(`Export completed: ${schedule.name} (${events.length} events)`);
+      this.logger.info(`Export completed: ${schedule.name} (${events.length} events)`);
       
       // Send success notifications
       if (schedule.notifications?.onSuccess) {
@@ -247,7 +249,7 @@ export class ExportScheduler extends EventEmitter {
       execution.endTime = Date.now();
       execution.error = error instanceof Error ? error.message : String(error);
       
-      console.error(`Export failed: ${schedule.name}`, error);
+      this.logger.error(`Export failed: ${schedule.name}`, error);
       
       // Send failure notifications
       if (schedule.notifications?.onFailure) {
@@ -418,10 +420,10 @@ export class ExportScheduler extends EventEmitter {
         });
         
         if (!response.ok) {
-          console.warn(`Webhook notification failed: ${webhook} (${response.status})`);
+          this.logger.warn(`Webhook notification failed: ${webhook} (${response.status})`);
         }
       } catch (error) {
-        console.error(`Webhook notification error: ${webhook}`, error);
+        this.logger.error(`Webhook notification error: ${webhook}`, error);
       }
     });
     

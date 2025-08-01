@@ -49,6 +49,11 @@ export class TelemetryService extends TelemetryEventEmitter {
   private isInitialized = false;
   private maintenanceInterval?: NodeJS.Timeout;
   private logger = createLogger('TelemetryService');
+  
+  // Expose API server for testing
+  getApiServer(): TelemetryAPIServer | undefined {
+    return this.apiServer;
+  }
 
   constructor(config: Partial<TelemetryConfig>) {
     super();
@@ -430,7 +435,7 @@ export class TelemetryService extends TelemetryEventEmitter {
       sessionId,
       eventType: 'start',
       category,
-      action: 'start',
+      action,
       label,
       metadata,
     });
@@ -528,7 +533,25 @@ export class TelemetryService extends TelemetryEventEmitter {
       }
     }
     
-    return this.deduplicateEvents(results);
+    const deduplicatedResults = this.deduplicateEvents(results);
+    
+    // Decrypt results if encryption is enabled
+    if (this.securityProvider) {
+      const decryptedResults: TelemetryEvent[] = [];
+      for (const event of deduplicatedResults) {
+        try {
+          const decrypted = await this.securityProvider.decrypt(event);
+          decryptedResults.push(decrypted);
+        } catch (error) {
+          this.logger.warn(`Failed to decrypt event ${event.id}:`, error);
+          // If decryption fails, return the original event
+          decryptedResults.push(event);
+        }
+      }
+      return decryptedResults;
+    }
+    
+    return deduplicatedResults;
   }
 
   private deduplicateEvents(events: TelemetryEvent[]): TelemetryEvent[] {
@@ -581,6 +604,33 @@ export class TelemetryService extends TelemetryEventEmitter {
       default:
         throw new Error(`Unsupported export format: ${formatType}`);
     }
+  }
+
+  /**
+   * Clean old telemetry data based on retention period
+   * @param retentionDays Number of days to retain data (older data will be deleted)
+   * @returns Number of events cleaned up
+   */
+  async clean(retentionDays: number): Promise<number> {
+    if (typeof retentionDays !== 'number' || retentionDays < 0) {
+      throw new Error('Retention days must be a non-negative number');
+    }
+    
+    const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    let totalCleaned = 0;
+    
+    // Clean data from all storage providers
+    for (const provider of this.storageProviders) {
+      try {
+        const cleaned = await provider.clean(cutoffDate);
+        totalCleaned += cleaned;
+      } catch (error) {
+        this.logger.warn(`Failed to clean data from provider ${provider.name}:`, error);
+        // Continue with other providers
+      }
+    }
+    
+    return totalCleaned;
   }
 
   // Analytics methods

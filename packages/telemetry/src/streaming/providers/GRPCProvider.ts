@@ -3,6 +3,7 @@ import type { TelemetryEvent, StreamingConfig } from '../../core/types.js';
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import { EventEmitter } from 'events';
+import { createLogger } from '../../utils/logger.js';
 
 interface GRPCConfig extends StreamingConfig {
   host?: string;
@@ -28,6 +29,7 @@ export class GRPCProvider extends StreamingProvider {
   private handlers = new Map<string, Set<(data: any) => void>>();
   private eventEmitter = new EventEmitter();
   private sessionCleanupInterval?: NodeJS.Timeout;
+  private logger = createLogger('GRPCProvider');
   
   async initialize(config: GRPCConfig): Promise<void> {
     const protoPath = this.createProtoDefinition();
@@ -65,7 +67,7 @@ export class GRPCProvider extends StreamingProvider {
           reject(error);
         } else {
           this.server!.start();
-          console.log(`gRPC streaming server listening on ${host}:${port}`);
+          this.logger.info(`gRPC streaming server listening on ${host}:${port}`);
           resolve();
         }
       });
@@ -173,7 +175,7 @@ message QueryResponse {
     };
     
     this.sessions.set(sessionId, session);
-    console.log(`gRPC client ${sessionId} connected for streaming`);
+    this.logger.info(`gRPC client ${sessionId} connected for streaming`);
     
     call.on('data', (request: any) => {
       session.lastActivity = Date.now();
@@ -189,11 +191,11 @@ message QueryResponse {
     
     call.on('end', () => {
       this.sessions.delete(sessionId);
-      console.log(`gRPC client ${sessionId} disconnected from streaming`);
+      this.logger.info(`gRPC client ${sessionId} disconnected from streaming`);
     });
     
     call.on('error', (error) => {
-      console.error(`gRPC streaming error for ${sessionId}:`, error);
+      this.logger.error(`gRPC streaming error for ${sessionId}:`, error);
       this.sessions.delete(sessionId);
     });
   }
@@ -240,7 +242,7 @@ message QueryResponse {
   
   private handleClientEvent(eventData: any, session: StreamSession): void {
     // Process event from client (if needed)
-    console.log(`Received event from gRPC client ${session.id}:`, eventData);
+    this.logger.info(`Received event from gRPC client ${session.id}:`, eventData);
   }
   
   private startSessionCleanup(): void {
@@ -253,10 +255,10 @@ message QueryResponse {
           try {
             session.call.end();
           } catch (error) {
-            console.warn(`Error ending gRPC session ${sessionId}:`, error);
+            this.logger.warn(`Error ending gRPC session ${sessionId}:`, error);
           }
           this.sessions.delete(sessionId);
-          console.log(`Cleaned up inactive gRPC session ${sessionId}`);
+          this.logger.info(`Cleaned up inactive gRPC session ${sessionId}`);
         }
       }
     }, 60000); // Check every minute
@@ -280,7 +282,7 @@ message QueryResponse {
           session.lastActivity = Date.now();
         }
       } catch (error) {
-        console.warn(`Failed to stream to gRPC session ${session.id}:`, error);
+        this.logger.warn(`Failed to stream to gRPC session ${session.id}:`, error);
         // Remove failed session
         this.sessions.delete(session.id);
       }
@@ -295,7 +297,7 @@ message QueryResponse {
           session.lastActivity = Date.now();
         }
       } catch (error) {
-        console.warn(`Failed to broadcast to gRPC session ${session.id}:`, error);
+        this.logger.warn(`Failed to broadcast to gRPC session ${session.id}:`, error);
         this.sessions.delete(session.id);
       }
     }
@@ -356,7 +358,7 @@ message QueryResponse {
       try {
         session.call.end();
       } catch (error) {
-        console.warn(`Error closing gRPC session ${session.id}:`, error);
+        this.logger.warn(`Error closing gRPC session ${session.id}:`, error);
       }
     }
     this.sessions.clear();
@@ -364,7 +366,7 @@ message QueryResponse {
     if (this.server) {
       await new Promise<void>((resolve) => {
         this.server!.tryShutdown(() => {
-          console.log('gRPC streaming server shut down');
+          this.logger.info('gRPC streaming server shut down');
           resolve();
         });
       });

@@ -1,4 +1,5 @@
 import type { TelemetryEvent } from '../core/types.js';
+import { createLogger } from '../utils/logger.js';
 
 export type ErrorSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type ErrorCategory = 'storage' | 'streaming' | 'security' | 'network' | 'validation' | 'system';
@@ -32,6 +33,7 @@ export class ErrorHandler {
   private config: Required<ErrorHandlerConfig>;
   private cleanupInterval?: NodeJS.Timeout;
   private errorCounter = 0;
+  private logger = createLogger('ErrorHandler');
 
   constructor(config: ErrorHandlerConfig = {}) {
     this.config = {
@@ -113,7 +115,7 @@ export class ErrorHandler {
       try {
         await this.config.onCriticalError(telemetryError);
       } catch (alertError) {
-        console.error('Failed to send critical error alert:', alertError);
+        this.logger.error('Failed to send critical error alert:', alertError);
       }
     }
 
@@ -136,7 +138,7 @@ export class ErrorHandler {
           'critical'
         );
       } catch (alertError) {
-        console.error('Failed to send critical threshold alert:', alertError);
+        this.logger.error('Failed to send critical threshold alert:', alertError);
       }
     }
 
@@ -148,7 +150,7 @@ export class ErrorHandler {
           'high'
         );
       } catch (alertError) {
-        console.error('Failed to send high threshold alert:', alertError);
+        this.logger.error('Failed to send high threshold alert:', alertError);
       }
     }
   }
@@ -182,16 +184,16 @@ export class ErrorHandler {
 
     switch (logLevel) {
       case 'error':
-        console.error(logMessage, logContext);
+        this.logger.error(logMessage, logContext);
         break;
       case 'warn':
-        console.warn(logMessage, logContext);
+        this.logger.warn(logMessage, logContext);
         break;
       case 'info':
-        console.info(logMessage, logContext);
+        this.logger.info(logMessage, logContext);
         break;
       case 'debug':
-        console.debug(logMessage, logContext);
+        this.logger.debug(logMessage, logContext);
         break;
     }
   }
@@ -231,7 +233,7 @@ export class ErrorHandler {
     // Log cleanup if significant number of errors were removed
     const removedCount = initialCount - this.errors.length;
     if (removedCount > 0) {
-      console.warn(`[ErrorHandler] Cleaned up ${removedCount} old errors, current size: ${this.errors.length}/${this.config.maxErrors}`);
+      this.logger.warn(`[ErrorHandler] Cleaned up ${removedCount} old errors, current size: ${this.errors.length}/${this.config.maxErrors}`);
     }
   }
 

@@ -19,10 +19,11 @@ export class SQLiteProvider extends StorageProvider {
   private cleanupCounter = 0;
   private logger = createLogger('SQLiteProvider');
   
-  constructor(options: { path?: string; dbPath?: string } = {}) {
+  constructor(options: { path?: string; dbPath?: string; enableForeignKeys?: boolean } = {}) {
     super();
     this.operations = new DrizzleTelemetryOperations({
       dbPath: options.dbPath || options.path || './telemetry.db',
+      enableForeignKeys: options.enableForeignKeys !== false, // Default to true
     });
   }
   
@@ -38,17 +39,23 @@ export class SQLiteProvider extends StorageProvider {
       throw new Error('SQLiteProvider not initialized');
     }
     
-    // Convert session ID to UUID
-    const uuidSessionId = this.toUUID(event.sessionId);
-    
-    // Ensure session exists before inserting event
-    await this.ensureSession(uuidSessionId, event.category, event.action);
-    
-    const dbEvent = this.mapToDBEvent({
-      ...event,
-      sessionId: uuidSessionId,
-    });
-    await this.operations.insertEvent(dbEvent);
+    try {
+      // Convert session ID to UUID
+      const uuidSessionId = this.toUUID(event.sessionId);
+      
+      // Ensure session exists before inserting event
+      await this.ensureSession(uuidSessionId, event.category, event.action);
+      
+      const dbEvent = this.mapToDBEvent({
+        ...event,
+        sessionId: uuidSessionId,
+      });
+      await this.operations.insertEvent(dbEvent);
+    } catch (error) {
+      // Log the actual error for debugging
+      this.logger.error('Failed to store event', { error, event });
+      throw error;
+    }
   }
   
   async storeBatch(events: TelemetryEvent[]): Promise<void> {
@@ -295,10 +302,11 @@ export class SQLiteProvider extends StorageProvider {
   }
   
   private mapToDBEvent(event: TelemetryEvent): Omit<DBTelemetryEvent, 'id' | 'createdAt' | 'updatedAt'> {
-    // Merge duration and other data into metadata
+    // Merge duration, value, and other data into metadata
     const enrichedMetadata = {
       ...event.metadata,
       duration: event.duration,
+      value: event.value,
       context: event.context,
     };
     
@@ -329,7 +337,7 @@ export class SQLiteProvider extends StorageProvider {
       }
     }
     
-    const { duration, context, ...metadata } = parsedMetadata;
+    const { duration, value, context, ...metadata } = parsedMetadata;
     
     // Try to find original session ID
     let originalSessionId = dbEvent.sessionId;
@@ -349,6 +357,7 @@ export class SQLiteProvider extends StorageProvider {
       label: dbEvent.prompt || undefined,
       timestamp: dbEvent.timestamp,
       duration: duration || undefined,
+      value: value !== undefined ? value : undefined,
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       context: context || undefined,
     };

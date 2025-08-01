@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { TelemetryService } from "@vibe-kit/telemetry";
-import { initializeTelemetryDB, closeTelemetryDB, getTelemetryDB } from "@vibe-kit/db";
+import { initializeTelemetryDB, closeTelemetryDB, getTelemetryDB, DrizzleTelemetryOperations } from "@vibe-kit/db";
 import { tmpdir } from "os";
 import { join } from "path";
 import { rm, mkdir } from "fs/promises";
@@ -13,7 +13,7 @@ describe("Telemetry + DB Integration", () => {
 
   beforeEach(async () => {
     // Create a temporary directory for test database
-    tempDir = join(tmpdir(), `telemetry-db-test-${Date.now()}`);
+    tempDir = join(tmpdir(), `telemetry-db-test-${Date.now()}-${Math.random().toString(36).substring(7)}`);
     await mkdir(tempDir, { recursive: true });
     dbPath = join(tempDir, 'test-telemetry.db');
     
@@ -32,6 +32,11 @@ describe("Telemetry + DB Integration", () => {
       }],
       analytics: {
         enabled: true
+      },
+      reliability: {
+        rateLimit: {
+          enabled: false // Disable rate limiting for tests
+        }
       }
     });
     
@@ -246,23 +251,27 @@ describe("Telemetry + DB Integration", () => {
         streamFlushIntervalMs: 100,
       });
       
-      // Verify tables exist
-      const tables = db.getDb().prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
-      const tableNames = tables.map((t: any) => t.name);
+      // Verify tables exist by trying to query them
+      const operations = new DrizzleTelemetryOperations(db);
       
-      expect(tableNames).toContain('telemetry_sessions');
-      expect(tableNames).toContain('telemetry_events');
+      // Check if we can query the sessions table
+      const sessions = await operations.querySessions({ limit: 1 });
+      // Check if we can query the events table  
+      const events = await operations.queryEvents({ limit: 1 });
+      
+      // If we get here without errors, tables exist
+      expect(sessions).toBeDefined();
+      expect(events).toBeDefined();
       
       // Use telemetry service with existing DB
       const sessionId = await telemetryService.trackStart('claude', 'chat', 'Migration test');
       await telemetryService.trackEnd(sessionId, 'completed');
       
       // Verify data through direct DB access
-      const operations = db.getOperations();
-      const events = await operations.queryEvents({ sessionId });
+      const dbEvents = await operations.queryEvents({ sessionId });
       
-      expect(events).toHaveLength(2);
-      expect(events[0].sessionId).toBe(sessionId);
+      expect(dbEvents).toHaveLength(2);
+      expect(dbEvents[0].sessionId).toBe(sessionId);
     });
   });
 
@@ -332,7 +341,7 @@ describe("Telemetry + DB Integration", () => {
       }
       
       // Export as JSON
-      const jsonExport = await telemetryService.export({ type: 'json' });
+      const jsonExport = await telemetryService.export('json');
       const jsonData = JSON.parse(jsonExport);
       
       expect(jsonData.events).toBeDefined();
@@ -341,7 +350,7 @@ describe("Telemetry + DB Integration", () => {
       expect(jsonData.metadata.exportedAt).toBeDefined();
       
       // Export as CSV
-      const csvExport = await telemetryService.export({ type: 'csv' });
+      const csvExport = await telemetryService.export('csv');
       const csvLines = csvExport.split('\n');
       
       expect(csvLines[0]).toContain('id,sessionId,eventType'); // Header
@@ -349,7 +358,7 @@ describe("Telemetry + DB Integration", () => {
       
       // Export with filters
       const filteredExport = await telemetryService.export(
-        { type: 'json' },
+        'json',
         { eventType: 'stream' }
       );
       const filteredData = JSON.parse(filteredExport);

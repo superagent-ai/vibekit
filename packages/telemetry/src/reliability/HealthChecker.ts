@@ -1,5 +1,6 @@
 import type { ReliabilityManager } from './ReliabilityManager.js';
 import type { StorageProvider } from '../storage/StorageProvider.js';
+import { createLogger } from '../utils/logger.js';
 
 export interface HealthCheck {
   name: string;
@@ -33,6 +34,7 @@ export class HealthChecker {
   private lastHealthStatus?: SystemHealth;
   private checkInterval?: NodeJS.Timeout;
   private isRunning = false;
+  private logger = createLogger('HealthChecker');
   
   constructor(
     private reliabilityManager?: ReliabilityManager,
@@ -346,11 +348,11 @@ export class HealthChecker {
     this.isRunning = true;
     
     // Run initial check
-    this.runChecks().catch(console.error);
+    this.runChecks().catch(err => this.logger.error('Health check failed:', err));
     
     // Schedule periodic checks
     this.checkInterval = setInterval(() => {
-      this.runChecks().catch(console.error);
+      this.runChecks().catch(err => this.logger.error('Periodic health check failed:', err));
     }, intervalMs);
   }
   

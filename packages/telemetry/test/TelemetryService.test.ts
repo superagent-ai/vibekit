@@ -73,7 +73,7 @@ describe('TelemetryService', () => {
       expect(events[0]).toMatchObject({
         sessionId,
         category: 'agent',
-        action: 'start',
+        action: 'interactive',
         eventType: 'start',
       });
     });

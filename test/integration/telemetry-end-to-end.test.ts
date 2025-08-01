@@ -170,7 +170,7 @@ describe("Telemetry End-to-End Integration Tests", () => {
       const sessionId = await telemetryService.trackStart('claude', 'chat', 'Export test');
       await telemetryService.trackEnd(sessionId, 'completed');
 
-      const result = await telemetryService.export({ type: 'json' });
+      const result = await telemetryService.export('json');
       
       expect(result).toBeTruthy();
       expect(typeof result).toBe('string');
@@ -184,7 +184,7 @@ describe("Telemetry End-to-End Integration Tests", () => {
       const sessionId = await telemetryService.trackStart('claude', 'chat', 'CSV export test');
       await telemetryService.trackEnd(sessionId, 'completed');
 
-      const result = await telemetryService.export({ type: 'csv' });
+      const result = await telemetryService.export('csv');
       
       expect(result).toBeTruthy();
       expect(typeof result).toBe('string');

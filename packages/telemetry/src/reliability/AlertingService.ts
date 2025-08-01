@@ -1,4 +1,5 @@
 import type { TelemetryError } from './ErrorHandler.js';
+import { createLogger } from '../utils/logger.js';
 
 export interface AlertChannel {
   name: string;
@@ -43,6 +44,7 @@ export class AlertingService {
   private alerts: Alert[] = [];
   private lastAlertTimes = new Map<string, number>();
   private alertHandlers = new Map<string, (alert: Alert) => Promise<void>>();
+  private logger = createLogger('AlertingService');
   
   constructor() {
     this.setupDefaultHandlers();
@@ -56,7 +58,7 @@ export class AlertingService {
       
       const webhookUrl = channel.config.webhookUrl;
       if (!webhookUrl) {
-        console.error('Slack webhook URL not configured');
+        this.logger.error('Slack webhook URL not configured');
         return;
       }
       
@@ -84,10 +86,10 @@ export class AlertingService {
         });
         
         if (!response.ok) {
-          console.error('Failed to send Slack alert:', response.statusText);
+          this.logger.error('Failed to send Slack alert:', response.statusText);
         }
       } catch (error) {
-        console.error('Error sending Slack alert:', error);
+        this.logger.error('Error sending Slack alert:', error);
       }
     });
     
@@ -98,7 +100,7 @@ export class AlertingService {
       
       const { integrationKey, routingKey } = channel.config;
       if (!integrationKey) {
-        console.error('PagerDuty integration key not configured');
+        this.logger.error('PagerDuty integration key not configured');
         return;
       }
       
@@ -127,10 +129,10 @@ export class AlertingService {
         });
         
         if (!response.ok) {
-          console.error('Failed to send PagerDuty alert:', response.statusText);
+          this.logger.error('Failed to send PagerDuty alert:', response.statusText);
         }
       } catch (error) {
-        console.error('Error sending PagerDuty alert:', error);
+        this.logger.error('Error sending PagerDuty alert:', error);
       }
     });
     
@@ -141,7 +143,7 @@ export class AlertingService {
       
       const { url, headers = {}, method = 'POST' } = channel.config;
       if (!url) {
-        console.error('Webhook URL not configured');
+        this.logger.error('Webhook URL not configured');
         return;
       }
       
@@ -160,10 +162,10 @@ export class AlertingService {
         });
         
         if (!response.ok) {
-          console.error('Failed to send webhook alert:', response.statusText);
+          this.logger.error('Failed to send webhook alert:', response.statusText);
         }
       } catch (error) {
-        console.error('Error sending webhook alert:', error);
+        this.logger.error('Error sending webhook alert:', error);
       }
     });
     
@@ -172,8 +174,8 @@ export class AlertingService {
       const channel = this.channels.get(alert.channels[0]);
       if (!channel || channel.type !== 'email') return;
       
-      console.log('Email alerting not yet implemented. Would send to:', channel.config.recipients);
-      console.log('Alert:', alert);
+      this.logger.info('Email alerting not yet implemented. Would send to:', channel.config.recipients);
+      this.logger.info('Alert:', alert);
     });
   }
   
@@ -359,13 +361,13 @@ export class AlertingService {
         try {
           await handler(alert);
         } catch (error) {
-          console.error(`Failed to send alert to ${channel.type} channel ${channelName}:`, error);
+          this.logger.error(`Failed to send alert to ${channel.type} channel ${channelName}:`, error);
         }
       } else if (channel.type === 'custom' && channel.config.handler) {
         try {
           await channel.config.handler(alert);
         } catch (error) {
-          console.error(`Failed to send alert to custom channel ${channelName}:`, error);
+          this.logger.error(`Failed to send alert to custom channel ${channelName}:`, error);
         }
       }
     }

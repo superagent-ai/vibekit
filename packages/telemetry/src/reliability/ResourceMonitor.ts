@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import * as os from 'os';
+import { createLogger } from '../utils/logger.js';
 
 export interface ResourceThresholds {
   cpu?: {
@@ -72,6 +73,7 @@ export class ResourceMonitor extends EventEmitter {
   private lastCpuUsage = process.cpuUsage();
   private lastCpuTime = Date.now();
   private isMonitoring = false;
+  private logger = createLogger('ResourceMonitor');
   
   constructor(thresholds: ResourceThresholds = {}) {
     super();
@@ -115,7 +117,7 @@ export class ResourceMonitor extends EventEmitter {
       obs.observe({ entryTypes: ['gc'] });
     } catch (error) {
       // GC monitoring not available
-      console.debug('GC monitoring not available');
+      this.logger.debug('GC monitoring not available');
     }
   }
   
