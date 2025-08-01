@@ -775,6 +775,9 @@ export class TelemetryAPIServer {
     
     this.logger.info(`Setting up database watcher for: ${dbPath}`);
     
+    // Use polling in test/CI environments for better reliability
+    const isTestEnv = process.env.NODE_ENV === 'test' || process.env.CI || process.env.GITHUB_ACTIONS;
+    
     this.dbWatcher = chokidar.watch(dbPath, {
       ignored: /(^|[\/\\])\../, // Ignore dotfiles
       persistent: true,
@@ -782,7 +785,8 @@ export class TelemetryAPIServer {
         stabilityThreshold: 200,
         pollInterval: 100,
       },
-      usePolling: false, // Use native fs events
+      usePolling: isTestEnv, // Use polling in test/CI environments
+      interval: isTestEnv ? 100 : undefined, // Poll every 100ms in test mode
     });
     
     // Handle database changes
