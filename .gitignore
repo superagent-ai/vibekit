@@ -34,6 +34,9 @@ logs
 # claude
 .claude
 
+# VibeKit
+.vibekit
+
 # Misc
 .cache/
 .temp/

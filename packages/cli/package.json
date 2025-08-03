@@ -1,6 +1,6 @@
 {
   "name": "@vibe-kit/cli",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
