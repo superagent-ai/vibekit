@@ -1,4 +1,4 @@
-import { BaseAgent, BaseAgentConfig, AgentCommandConfig } from "./base";
+import { BaseAgent, BaseAgentConfig, AgentCommandConfig, ExecuteCommandOptions, AgentResponse, StreamCallbacks } from "./base";
 import { ModelConfig } from "./utils";
 import {
   AgentType,
@@ -7,6 +7,7 @@ import {
   ClaudeStreamCallbacks,
   Conversation,
   ModelProvider,
+  SandboxInstance,
 } from "../types";
 
 export class ClaudeAgent extends BaseAgent {
@@ -15,6 +16,7 @@ export class ClaudeAgent extends BaseAgent {
   private model?: string;
   private useOAuth: boolean;
   private tokenInitialized: boolean = false;
+  protected declare config: ClaudeConfig;
 
   private escapePrompt(prompt: string): string {
     // Escape backticks and other special characters
@@ -22,6 +24,8 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   constructor(config: ClaudeConfig) {
+    console.log('[Claude] Agent constructor called with MCP config:', !!config.mcpConfig);
+    
     const baseConfig: BaseAgentConfig = {
       githubToken: config.githubToken,
       repoUrl: config.repoUrl,
@@ -107,10 +111,16 @@ export class ClaudeAgent extends BaseAgent {
 
     const escapedPrompt = this.escapePrompt(prompt);
 
+    // Run claude from the working directory and explicitly specify the MCP config
+    let mcpConfigFlag = "";
+    if (this.config.mcpConfig) {
+      mcpConfigFlag = ` --mcp-config ${this.WORKING_DIR}/.mcp.json`;
+    }
+    
     return {
-      command: `echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}"${
+      command: `cd ${this.WORKING_DIR} && echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}"${
         mode === "ask" ? ' --disallowedTools "Edit" "Replace" "Write"' : ""
-      } --output-format stream-json --verbose --model ${
+      } --output-format stream-json --verbose${mcpConfigFlag} --model ${
         this.model || "claude-sonnet-4-20250514"
       }`,
       errorPrefix: "Claude",
@@ -155,133 +165,52 @@ export class ClaudeAgent extends BaseAgent {
     };
   }
 
-  // Override generateCode to support history and MCP tools
-  public async generateCode(
-    prompt: string,
-    mode?: "ask" | "code",
-    branch?: string,
-    history?: Conversation[],
-    callbacks?: ClaudeStreamCallbacks,
-    background?: boolean
-  ): Promise<ClaudeResponse> {
-    // Ensure token is initialized
-    await this.initializeToken();
-    
-    // Get available MCP tools
-    const availableTools = await this.getAvailableTools();
-    
-    let instruction: string;
-    if (mode === "ask") {
-      instruction =
-        "Research the repository and answer the user's questions. " +
-        "Do NOT make any changes to any files in the repository.";
-    } else {
-      instruction =
-        "Do the necessary changes to the codebase based on the users input.\n" +
-        "Don't ask any follow up questions.";
-    }
-
-    if (history && history.length > 0) {
-      instruction += `\n\nConversation history: ${history
-        .map((h) => `${h.role}\n ${h.content}`)
-        .join("\n\n")}`;
-    }
-    
-    // Add MCP tools information to instruction if available
-    if (availableTools.length > 0) {
-      const toolDescriptions = availableTools.map(tool => 
-        `- ${tool.name}: ${tool.description}`
-      ).join('\n');
-      instruction += `\n\nAvailable MCP tools:\n${toolDescriptions}\n` +
-        "You can reference these tools in your responses. Tool execution will be handled automatically.";
-    }
-    
-    // Add Claude Code system prompt when using OAuth
-    if (this.useOAuth) {
-      instruction = "You are Claude Code, Anthropic's official CLI for Claude. " + instruction;
-    }
-
-    const escapedPrompt = this.escapePrompt(prompt);
-
-    // Build allowed tools list including MCP tools
-    let allowedTools = "Edit,Write,MultiEdit,Read,Bash";
-    if (availableTools.length > 0) {
-      const mcpToolNames = availableTools.map(tool => tool.name).join(',');
-      allowedTools += `,${mcpToolNames}`;
-    }
-
-    // Override the command config with MCP-aware instruction and tools
-    const originalGetCommandConfig = this.getCommandConfig.bind(this);
-    this.getCommandConfig = (p: string, m?: "ask" | "code") => ({
-      ...originalGetCommandConfig(p, m),
-      command: `echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}"${
-        mode === "ask" ? ' --disallowedTools "Edit" "Replace" "Write"' : ""
-      } --output-format stream-json --verbose --allowedTools "${allowedTools}" --model ${
-        this.model || "claude-sonnet-4-20250514"
-      }`,
-    });
-
-    const result = await super.generateCode(
-      prompt,
-      mode,
-      branch,
-      history,
-      callbacks,
-      background
-    );
-
-    // Restore original method
-    this.getCommandConfig = originalGetCommandConfig;
-
-    // Process result for MCP tool calls if needed
-    return await this.processMCPResponse(result as ClaudeResponse, availableTools);
+  // Override onSandboxReady to set up Claude-specific MCP configuration
+  protected async onSandboxReady(sandbox: SandboxInstance): Promise<void> {
+    console.log('[Claude] onSandboxReady called');
+    await this.setupClaudeMCP(sandbox);
   }
 
-  /**
-   * Process Claude response and execute any MCP tool calls
-   */
-  private async processMCPResponse(
-    response: ClaudeResponse, 
-    availableTools: any[]
-  ): Promise<ClaudeResponse> {
-    if (!availableTools.length || !response.stdout) {
-      return response;
-    }
-
-    try {
-      // Parse the response for tool calls
-      // Note: This is a simplified implementation for CLI-based Claude
-      // In a full API implementation, you would parse tool_use blocks from the API response
+  // Helper method to set up Claude-specific MCP configuration
+  private async setupClaudeMCP(sandbox: SandboxInstance): Promise<void> {
+    console.log('[Claude] setupClaudeMCP called, hasConfig:', !!this.config.mcpConfig);
+    
+    if (!this.config.mcpConfig) return;
+    
+    // Create .mcp.json file in the sandbox for Claude CLI
+    const servers = Array.isArray(this.config.mcpConfig.servers)
+      ? this.config.mcpConfig.servers
+      : [this.config.mcpConfig.servers];
+    
+    console.log('[Claude] MCP servers:', servers);
       
-      let processedStdout = response.stdout;
-      const toolCallRegex = /\[TOOL_CALL:(\w+)\](.+?)\[\/TOOL_CALL\]/gs;
-      const toolCalls = [...response.stdout.matchAll(toolCallRegex)];
-      
-      for (const [fullMatch, toolName, argsStr] of toolCalls) {
-        try {
-          const args = JSON.parse(argsStr.trim());
-          const toolResult = await this.executeMCPTool(toolName, args);
-          
-          // Replace the tool call with the result
-          const resultText = `[TOOL_RESULT:${toolName}]${JSON.stringify(toolResult)}[/TOOL_RESULT]`;
-          processedStdout = processedStdout.replace(fullMatch, resultText);
-          
-        } catch (error) {
-          console.warn(`Failed to execute MCP tool ${toolName}:`, (error as Error)?.message || error);
-          const errorText = `[TOOL_ERROR:${toolName}]${(error as Error)?.message || error}[/TOOL_ERROR]`;
-          processedStdout = processedStdout.replace(fullMatch, errorText);
+    const mcpConfig = {
+      mcpServers: servers.reduce((acc, server) => {
+        if (server.name) {
+          acc[server.name] = {
+            command: server.command,
+            args: server.args || [],
+            env: server.env || {}
+          };
         }
-      }
+        return acc;
+      }, {} as any)
+    };
 
-      return {
-        ...response,
-        stdout: processedStdout,
-        mcpToolsUsed: toolCalls.length
-      };
-      
+    const mcpConfigJson = JSON.stringify(mcpConfig, null, 2);
+    const base64Config = Buffer.from(mcpConfigJson).toString('base64');
+    
+    console.log('[Claude] Creating .mcp.json with config:', mcpConfigJson);
+    
+    try {
+      await sandbox.commands.run(
+        `echo '${base64Config}' | base64 -d > ${this.WORKING_DIR}/.mcp.json`,
+        { timeoutMs: 5000 }
+      );
+      console.log('[Claude] Created .mcp.json in sandbox for Claude CLI');
     } catch (error) {
-      console.warn('Error processing MCP response:', (error as Error)?.message || error);
-      return response;
+      console.warn('[Claude] Failed to create .mcp.json in sandbox:', error);
     }
   }
+
 }

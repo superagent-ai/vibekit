@@ -215,6 +215,9 @@ export abstract class BaseAgent {
 
     // Initialize MCP after sandbox is ready
     await this.initializeMCP();
+    
+    // Call agent-specific setup hook
+    await this.onSandboxReady(this.sandboxInstance);
 
     return this.sandboxInstance;
   }
@@ -271,6 +274,12 @@ export abstract class BaseAgent {
   }
 
   protected abstract getEnvironmentVariables(): Record<string, string>;
+  
+  // Hook for agent-specific setup after sandbox is ready
+  protected async onSandboxReady(sandbox: SandboxInstance): Promise<void> {
+    // Default implementation does nothing
+    // Subclasses can override to perform agent-specific setup
+  }
 
   private getMkdirCommand(path: string): string {
     // Use non-sudo commands for better compatibility with Docker containers
