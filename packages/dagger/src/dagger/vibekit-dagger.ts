@@ -6,7 +6,8 @@
  */
 
 import { connect } from "@dagger.io/dagger";
-import type { Client, Container, Directory } from "@dagger.io/dagger";
+import type { Client, Container } from "@dagger.io/dagger";
+import { CacheSharingMode } from "@dagger.io/dagger";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { readFile } from "fs/promises";
@@ -409,16 +410,17 @@ class ImageResolver {
     const localTag = this.getLocalImageTag(agentType);
     const registryImage = await this.getRegistryImageName(agentType);
 
-    // Step 1: Check local cache
-    try {
-      const localImage = await this.checkLocalImage(localTag);
-      if (localImage) {
-        this.logger.info(`Using cached local image: ${localTag}`);
-        return localTag;
-      }
-    } catch (error) {
-      this.logger.debug(`Local image check failed: ${error}`);
-    }
+    // Step 1: Skip local cache check for Dagger compatibility
+    // Dagger can't use local Docker images, must pull from registry
+    // try {
+    //   const localImage = await this.checkLocalImage(localTag);
+    //   if (localImage) {
+    //     this.logger.info(`Using cached local image: ${localTag}`);
+    //     return localTag;
+    //   }
+    // } catch (error) {
+    //   this.logger.debug(`Local image check failed: ${error}`);
+    // }
 
     // Step 2: Try to pull from user's registry
     if (registryImage) {
@@ -426,9 +428,8 @@ class ImageResolver {
         await this.pullImage(registryImage);
         this.logger.info(`Successfully pulled image from registry: ${registryImage}`);
         
-        // Tag it locally for cache
-        await this.tagImage(registryImage, localTag);
-        return localTag;
+        // Return the registry image directly for Dagger
+        return registryImage;
       } catch (error) {
         this.logger.warn(`Failed to pull from registry: ${registryImage}`, error);
       }
@@ -483,17 +484,17 @@ class ImageResolver {
       // Ignore config errors
     }
 
-    // Check Docker login
+    // Use superagentai registry images by default
     const dockerInfo = await this.getDockerLoginInfo();
-    if (!dockerInfo.username && !this.config.dockerHubUser) {
-      return null;
-    }
-
-    const user = this.config.dockerHubUser || dockerInfo.username || "superagent-ai";
+    
+    // Always use a registry image - default to superagentai
+    const user = this.config.dockerHubUser || dockerInfo.username || "superagentai";
     const registry = this.config.privateRegistry || "";
     const prefix = registry ? `${registry}/` : "";
     
-    return `${prefix}${user}/vibekit-${agentType}:latest`;
+    // Use tag 1.0 for superagentai images
+    const tag = user === "superagentai" ? "1.0" : "latest";
+    return `${prefix}${user}/vibekit-${agentType}:${tag}`;
   }
 
   private async checkLocalImage(tag: string): Promise<boolean> {
@@ -543,6 +544,28 @@ class ImageResolver {
   }
 
   private async getDockerLoginInfo(): Promise<{ username?: string }> {
+    // Try docker login command to get current username
+    try {
+      // Run docker login with empty stdin to check existing credentials
+      const { stdout, stderr } = await execAsync("echo '' | docker login 2>&1");
+      const output = stdout + stderr;
+      
+      // Look for username in the output format: [Username: joedanziger]
+      const usernameMatch = output.match(/\[Username:\s*([^\]]+)\]/);
+      if (usernameMatch) {
+        return { username: usernameMatch[1].trim() };
+      }
+      
+      // Also check for older format: Username: xxx
+      const oldFormatMatch = output.match(/Username:\s*(.+)/);
+      if (oldFormatMatch) {
+        return { username: oldFormatMatch[1].trim() };
+      }
+    } catch {
+      // Ignore errors - docker login might fail
+    }
+    
+    // Fallback: Try docker info (older Docker versions)
     try {
       const { stdout } = await execAsync("docker info");
       const match = stdout.match(/Username:\s*(.+)/);
@@ -552,6 +575,17 @@ class ImageResolver {
     } catch {
       // Ignore errors
     }
+    
+    // Fallback: Check vibekit config for saved username
+    try {
+      const vibekitConfig = await this.loadVibeKitConfig();
+      if (vibekitConfig.dockerHubUser) {
+        return { username: vibekitConfig.dockerHubUser };
+      }
+    } catch {
+      // Ignore errors
+    }
+    
     return {};
   }
 
@@ -570,9 +604,10 @@ class ImageResolver {
 // Local Dagger sandbox instance implementation
 class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
   private isRunning = true;
-  private workspaceDirectory: Directory | null = null;
-  private baseContainer: Container | null = null;
+  private volumeName: string;
   private initializationPromise: Promise<void> | null = null;
+  private client: Client | null = null;
+  private workspaceContainer: Container | null = null;
   public mcpManager?: VibeKitMCPManager;
   private connectionPool: DaggerConnectionPool;
   private logger: Logger;
@@ -583,7 +618,7 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     public sandboxId: string,
     private envs?: Record<string, string>,
     private workDir?: string,
-    private dockerfilePath?: string, // Path to Dockerfile if building from source
+    private _dockerfilePath?: string, // Path to Dockerfile if building from source
     private agentType?: AgentType,
     mcpConfig?: MCPConfig,
     config?: LocalConfig
@@ -593,6 +628,13 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     this.logger = Configuration.getInstance().getLogger();
     this.connectionPool = DaggerConnectionPool.getInstance(this.logger);
     this.imageResolver = new ImageResolver(this.config, this.logger);
+    // Create a unique volume name for this sandbox to persist state
+    this.volumeName = `vibekit-${this.sandboxId}`;
+    
+    // Add a default error handler to prevent unhandled error exceptions
+    this.on('error', (err) => {
+      this.logger.error('Sandbox error:', err);
+    });
     
     // Initialize MCP manager if config is provided
     if (mcpConfig) {
@@ -632,19 +674,31 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
 
   private async ensureInitialized(): Promise<void> {
     if (!this.initializationPromise) {
-      this.initializationPromise = this.initializeBaseContainer();
+      this.initializationPromise = this.initialize();
     }
     await this.initializationPromise;
   }
 
-  private async initializeBaseContainer(): Promise<void> {
-    await connect(async (client) => {
-      // Create the base container once and store it for reuse
-      this.baseContainer = await this.createBaseContainer(
-        client,
-        this.dockerfilePath,
-        this.agentType
-      );
+  private async initialize(): Promise<void> {
+    // Create a single long-lived connection for the sandbox lifetime
+    await new Promise<void>((resolve, reject) => {
+      connect(async (client) => {
+        try {
+          this.client = client;
+          
+          // Create the workspace container once
+          this.workspaceContainer = await this.createWorkspaceContainer(client);
+          
+          resolve();
+          
+          // Keep the connection alive until sandbox is killed
+          while (this.isRunning) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } catch (error) {
+          reject(error);
+        }
+      });
     });
   }
 
@@ -677,10 +731,12 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
         };
 
         try {
-          await connect(async (client) => {
+          if (!this.client || !this.workspaceContainer) {
+            throw new Error("Sandbox not initialized");
+          }
             try {
-              // Get or create persistent workspace container using our reusable base
-              let container = await this.getWorkspaceContainer(client);
+              // Use the persistent workspace container
+              let container = this.workspaceContainer;
 
               if (options?.background) {
                 // Background execution: start and detach
@@ -688,10 +744,10 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
                   experimentalPrivilegedNesting: true,
                 });
 
-                // CRITICAL: Export the workspace directory to capture any changes
-                this.workspaceDirectory = container.directory(
-                  this.workDir || "/vibe0"
-                );
+                // Force sync to execute the container
+                await container.sync();
+
+                // Update workspace container to persist state\n                this.workspaceContainer = container;
 
                 result = {
                   exitCode: 0,
@@ -700,17 +756,15 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
                 };
               } else {
                 // Foreground execution with output
-                container = container.withExec(["sh", "-c", command]);
-
-                // CRITICAL: Export the workspace directory to capture filesystem changes
-                this.workspaceDirectory = container.directory(
-                  this.workDir || "/vibe0"
-                );
+                const execContainer = container.withExec(["sh", "-c", command]);
 
                 try {
-                  // Execute the command and get output
-                  const stdout = await container.stdout();
-                  const stderr = await container.stderr();
+                  // Execute the command and get output using the standard pattern
+                  const stdout = await execContainer.stdout();
+                  const stderr = await execContainer.stderr();
+
+                  // Update workspace container to persist state
+                  this.workspaceContainer = execContainer;
 
                   // Simulate incremental streaming by splitting into lines and emitting with delays
                   const emitIncremental = async (
@@ -786,7 +840,6 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
                 stderr: errorMessage,
               };
             }
-          });
         } catch (connectError) {
           // Handle errors from the connect function itself
           const errorMessage =
@@ -796,6 +849,9 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
           const exitCode = errorMessage.includes("exit code")
             ? parseInt(errorMessage.match(/exit code (\d+)/)?.[1] || "1")
             : 1;
+
+          // Log the error for debugging
+          this.logger.debug('Command execution failed', connectError);
 
           // Emit error event for VibeKit compatibility
           this.emit("error", errorMessage);
@@ -819,26 +875,24 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     };
   }
 
-  private async getWorkspaceContainer(
+  private async createWorkspaceContainer(
     client: Client
   ): Promise<Container> {
-    // Start with our cached base container but create a new instance for this session
-    let container = this.baseContainer;
+    // Create base container only once during initialization
+    const baseContainer = await this.createBaseContainer(
+      client,
+      this._dockerfilePath,
+      this.agentType
+    );
+    
+    // Start with base container
+    let container = baseContainer;
 
-    if (!container) {
-      throw new Error("Base container not initialized");
-    }
-
-    // If we have a saved workspace directory, restore it using withDirectory (copies content)
-    if (this.workspaceDirectory) {
-      container = container.withDirectory(
-        this.workDir || "/vibe0",
-        this.workspaceDirectory
-      );
-    } else {
-      // First time: ensure working directory exists
-      container = container.withExec(["mkdir", "-p", this.workDir || "/vibe0"]);
-    }
+    // Mount a cache volume to persist the workspace across executions
+    const cacheVolume = client.cacheVolume(this.volumeName);
+    container = container.withMountedCache(this.workDir || "/vibe0", cacheVolume, {
+      sharing: CacheSharingMode.Shared
+    });
 
     // Ensure we're in the working directory
     container = container.withWorkdir(this.workDir || "/vibe0");
@@ -848,7 +902,7 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
 
   private async createBaseContainer(
     client: Client,
-    dockerfilePath?: string,
+    _dockerfilePath?: string,
     agentType?: AgentType
   ): Promise<Container> {
     if (!agentType) {
@@ -878,31 +932,23 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
   async readFile(path: string): Promise<string> {
     await this.ensureInitialized();
 
-    let content = "";
-    await connect(async (client) => {
-      if (!this.baseContainer) {
-        throw new Error("Base container not initialized");
-      }
-
-      const container = await this.getWorkspaceContainer(client);
-      content = await container.file(path).contents();
-    });
+    if (!this.client || !this.workspaceContainer) {
+      throw new Error("Sandbox not initialized");
+    }
+    
+    const content = await this.workspaceContainer.file(path).contents();
     return content;
   }
 
   async writeFile(path: string, content: string): Promise<void> {
     await this.ensureInitialized();
 
-    await connect(async (client) => {
-      if (!this.baseContainer) {
-        throw new Error("Base container not initialized");
-      }
-
-      let container = await this.getWorkspaceContainer(client);
-      container = container.withNewFile(path, content);
-      // CRITICAL: Export the workspace directory to persist the file write
-      this.workspaceDirectory = container.directory(this.workDir || "/vibe0");
-    });
+    if (!this.client || !this.workspaceContainer) {
+      throw new Error("Sandbox not initialized");
+    }
+    
+    // Update the workspace container with the new file
+    this.workspaceContainer = this.workspaceContainer.withNewFile(path, content);
   }
 
   async kill(): Promise<void> {
@@ -916,7 +962,8 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     }
     
     this.isRunning = false;
-    this.workspaceDirectory = null;
+    this.workspaceContainer = null;
+    this.client = null;
     this.logger.debug(`Killed sandbox instance: ${this.sandboxId}`);
   }
 
@@ -1051,6 +1098,36 @@ export interface VibeKitConfig {
 export async function checkDockerLogin(): Promise<DockerLoginInfo> {
   const logger = Configuration.getInstance().getLogger();
   
+  // Try docker login command to get current username
+  try {
+    // Run docker login with empty stdin to check existing credentials
+    const { stdout, stderr } = await execAsync("echo '' | docker login 2>&1");
+    const output = stdout + stderr;
+    
+    // Look for username in the output format: [Username: joedanziger]
+    const usernameMatch = output.match(/\[Username:\s*([^\]]+)\]/);
+    if (usernameMatch) {
+      return {
+        isLoggedIn: true,
+        username: usernameMatch[1].trim(),
+        registry: "https://index.docker.io/v1/",
+      };
+    }
+    
+    // Also check for older format: Username: xxx
+    const oldFormatMatch = output.match(/Username:\s*(.+)/);
+    if (oldFormatMatch) {
+      return {
+        isLoggedIn: true,
+        username: oldFormatMatch[1].trim(),
+        registry: "https://index.docker.io/v1/",
+      };
+    }
+  } catch (error) {
+    logger.debug("Docker login check failed", error);
+  }
+  
+  // Fallback: Try docker info (older Docker versions)
   try {
     const { stdout } = await execAsync("docker info");
     const usernameMatch = stdout.match(/Username:\s*(.+)/);
@@ -1061,12 +1138,39 @@ export async function checkDockerLogin(): Promise<DockerLoginInfo> {
         registry: "https://index.docker.io/v1/",
       };
     }
-    
-    return { isLoggedIn: false };
   } catch (error) {
-    logger.debug("Docker login check failed", error);
-    return { isLoggedIn: false };
+    logger.debug("Docker info check failed", error);
   }
+  
+  // Fallback: Check Docker config file for auth
+  try {
+    const configPath = join(homedir(), ".docker", "config.json");
+    const configContent = await readFile(configPath, "utf-8");
+    const config = JSON.parse(configContent);
+    
+    // Check if there's auth for Docker Hub
+    if (config.auths && (config.auths["https://index.docker.io/v1/"] || config.auths["index.docker.io"])) {
+      // Check vibekit config for saved username
+      const vibekitConfig = await getVibeKitConfig();
+      if (vibekitConfig.dockerHubUser) {
+        return {
+          isLoggedIn: true,
+          username: vibekitConfig.dockerHubUser,
+          registry: "https://index.docker.io/v1/",
+        };
+      }
+      
+      // Auth exists but no username saved - still logged in
+      return {
+        isLoggedIn: true,
+        registry: "https://index.docker.io/v1/",
+      };
+    }
+  } catch (error) {
+    logger.debug("Docker config check failed", error);
+  }
+  
+  return { isLoggedIn: false };
 }
 
 // Get or create VibeKit configuration

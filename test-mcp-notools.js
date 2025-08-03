@@ -87,7 +87,7 @@ async function testVibeKitFullWorkflow() {
     console.log('  ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? 'SET' : 'MISSING');
     console.log('  GITHUB_TOKEN:', process.env.GITHUB_TOKEN ? process.env.GITHUB_TOKEN.substring(0, 10) + '...' : 'MISSING');
     
-    // Create local provider
+    // Create local provider - will auto-detect Docker username
     const localProvider = createLocalProvider({
       githubToken: process.env.GITHUB_TOKEN,
       preferRegistryImages: true // Use public registry images instead of building Dockerfiles
