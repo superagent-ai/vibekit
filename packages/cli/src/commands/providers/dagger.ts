@@ -12,6 +12,7 @@ import { execa } from "execa";
 import os from "os";
 import enquirer from "enquirer";
 import type { InstallConfig } from "../../utils/install.js";
+import type { RegistryManager, DockerHubRegistry } from "@vibe-kit/sdk/registry";
 
 const { prompt } = enquirer;
 
