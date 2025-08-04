@@ -137,7 +137,7 @@ export class ClaudeAgent extends BaseAgent {
     }
 
     // Build command with optional MCP config
-    let claudeCommand = `cd ${this.WORKING_DIR} && echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}" --dangerously-skip-permissions --model ${
+    let claudeCommand = `cd ${this.WORKING_DIR} && echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}" --model ${
       this.model || "claude-3-5-sonnet-20241022"
     }`;
     
