@@ -1,0 +1,305 @@
+---
+title: vibekit local list
+description: "List and filter sandbox environments"
+---
+
+## Overview
+
+The `vibekit local list` command displays all sandbox environments with their current status, configuration, and usage information. It supports filtering and multiple output formats.
+
+## Syntax
+
+```bash
+vibekit local list [options]
+vibekit local ls [options]  # alias
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--status <status>` | Filter by status: `running`, `stopped`, `paused`, `error` | All active |
+| `--agent <agent>` | Filter by agent type | All agents |
+| `--branch <branch>` | Filter by git branch | All branches |
+| `--json` | Output as JSON | Table format |
+| `--all` | Include stopped environments | Only active |
+
+## Output Format
+
+### Default Table View
+
+```
+📦 VibeKit Local Environments
+
+NAME          AGENT    STATUS    CREATED      LAST USED
+dev-env       claude   running   2024-01-15   2024-01-15
+test-suite    codex    running   2024-01-14   2024-01-15
+old-project   gemini   stopped   2024-01-10   2024-01-12
+```
+
+### JSON Output
+
+With `--json` flag:
+```json
+[
+  {
+    "id": "abc123",
+    "name": "dev-env",
+    "status": "running",
+    "agentType": "claude",
+    "branch": "main",
+    "created": "2024-01-15T10:30:00Z",
+    "lastUsed": "2024-01-15T14:45:00Z",
+    "sandboxId": "sandbox_123",
+    "workingDirectory": "/vibe0",
+    "envVars": {
+      "NODE_ENV": "development"
+    },
+    "model": "claude-3-5-sonnet-20241022"
+  }
+]
+```
+
+## Status Types
+
+| Status | Description | Color |
+|--------|-------------|-------|
+| `running` | Active and ready for commands | 🟢 Green |
+| `stopped` | Inactive but preserved | ⚪ Gray |
+| `paused` | Temporarily suspended | 🟡 Yellow |
+| `error` | Failed state | 🔴 Red |
+
+## Examples
+
+### Basic Usage
+
+List all active environments:
+```bash
+vibekit local list
+```
+
+List all environments including stopped:
+```bash
+vibekit local list --all
+```
+
+### Filtering
+
+By status:
+```bash
+# Only running environments
+vibekit local list --status running
+
+# Only stopped environments
+vibekit local list --status stopped
+```
+
+By agent:
+```bash
+# Only Claude environments
+vibekit local list --agent claude
+
+# Only Codex environments
+vibekit local list --agent codex
+```
+
+Combined filters:
+```bash
+# Running Claude environments
+vibekit local list --status running --agent claude
+
+# All Gemini environments as JSON
+vibekit local list --agent gemini --all --json
+```
+
+### Scripting
+
+Count environments:
+```bash
+# Count all running environments
+vibekit local list --status running --json | jq length
+
+# Count by agent type
+vibekit local list --json | jq 'group_by(.agentType) | map({agent: .[0].agentType, count: length})'
+```
+
+Get environment names:
+```bash
+# All environment names
+vibekit local list --json | jq -r '.[].name'
+
+# Running environment names
+vibekit local list --status running --json | jq -r '.[].name'
+```
+
+Find specific environment:
+```bash
+# Find by partial name
+vibekit local list --json | jq '.[] | select(.name | contains("dev"))'
+
+# Find recently used
+vibekit local list --json | jq 'sort_by(.lastUsed) | reverse | .[0]'
+```
+
+## Output Details
+
+### Table Columns
+
+- **NAME** - Environment identifier
+- **AGENT** - AI agent type (claude, codex, etc.)
+- **STATUS** - Current environment state
+- **CREATED** - Creation date
+- **LAST USED** - Last activity timestamp
+
+### JSON Fields
+
+- `id` - Unique environment ID
+- `name` - Environment name
+- `status` - Current status
+- `agentType` - AI agent type
+- `branch` - Git branch (if applicable)
+- `created` - ISO 8601 creation timestamp
+- `lastUsed` - ISO 8601 last used timestamp
+- `sandboxId` - Internal sandbox identifier
+- `workingDirectory` - Default working directory
+- `envVars` - Environment variables object
+- `model` - AI model being used
+- `githubToken` - Whether GitHub token is configured
+- `apiKey` - Whether API key is configured
+
+## Empty State
+
+When no environments exist:
+```
+📭 No environments found
+```
+
+When no environments match filters:
+```
+📭 No environments found matching criteria
+```
+
+## Use Cases
+
+### Cleanup Workflow
+
+Find and remove old environments:
+```bash
+# List environments older than 7 days
+vibekit local list --all --json | \
+  jq '.[] | select((now - (.lastUsed | fromdate)) > 604800) | .name' | \
+  xargs -I {} vibekit local delete {}
+```
+
+### Status Check
+
+Quick health check:
+```bash
+# Check if any environments are in error state
+if vibekit local list --status error --json | jq 'length' | grep -q '^0$'; then
+  echo "All environments healthy"
+else
+  echo "Some environments need attention"
+fi
+```
+
+### Resource Usage
+
+See resource allocation:
+```bash
+# List with environment details
+vibekit local list --json | \
+  jq '.[] | {name: .name, agent: .agentType, vars: (.envVars | keys | length)}'
+```
+
+## Performance
+
+### Large Lists
+
+For many environments:
+- Use `--json` for faster parsing
+- Apply filters to reduce output
+- Consider pagination in scripts
+
+### Caching
+
+Environment data is cached in `~/.vibekit/environments.json` for quick access.
+
+## Integration
+
+### With Other Commands
+
+Common patterns:
+```bash
+# Execute command in all running environments
+for env in $(vibekit local list --status running --json | jq -r '.[].name'); do
+  vibekit local exec -e "$env" -c "npm test"
+done
+
+# Generate in most recent environment
+latest=$(vibekit local list --json | jq -r 'sort_by(.lastUsed) | reverse | .[0].name')
+vibekit local generate -e "$latest" -p "Add error handling"
+```
+
+### CI/CD Usage
+
+```bash
+# Ensure clean state
+if [ $(vibekit local list --json | jq length) -gt 0 ]; then
+  echo "Warning: Existing environments found"
+  vibekit local delete --all --force
+fi
+
+# Create fresh environment
+vibekit local create --name ci-test --agent codex
+```
+
+## Troubleshooting
+
+### No Environments Showing
+
+```bash
+# Check all environments including stopped
+vibekit local list --all
+
+# Verify storage file exists
+ls -la ~/.vibekit/environments.json
+
+# Check if provider is initialized
+vibekit init --providers Dagger
+```
+
+### Incorrect Status
+
+```bash
+# Refresh environment status
+vibekit local status -e <env-name>
+
+# Check Docker containers
+docker ps -a | grep vibekit
+```
+
+### JSON Parse Errors
+
+```bash
+# Validate JSON output
+vibekit local list --json | jq '.'
+
+# Check for corrupted storage
+cat ~/.vibekit/environments.json | jq '.'
+```
+
+## Best Practices
+
+1. **Regular Monitoring** - Check environment status daily
+2. **Use Filters** - Narrow results for specific needs
+3. **JSON for Scripts** - Always use `--json` in automation
+4. **Clean Up** - Remove stopped environments regularly
+5. **Name Conventions** - Use patterns that work with filters
+
+## Related Commands
+
+- [`vibekit local create`](/cli/commands/local/create) - Create new environments
+- [`vibekit local status`](/cli/commands/local/status) - Detailed environment info
+- [`vibekit local delete`](/cli/commands/local/delete) - Remove environments
+- [`vibekit local exec`](/cli/commands/local/exec) - Use listed environments

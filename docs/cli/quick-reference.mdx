@@ -1,0 +1,190 @@
+---
+title: CLI Quick Reference
+description: "Quick reference card for common VibeKit CLI commands"
+---
+
+## Essential Commands
+
+### Setup & Installation
+
+```bash
+# Install VibeKit CLI globally
+npm install -g @vibe-kit/cli
+
+# Initialize providers
+vibekit init
+
+# Create your first environment
+vibekit local create --name my-env --agent claude
+```
+
+### Working with Environments
+
+```bash
+# List all environments
+vibekit local list
+
+# Create environment with specific agent
+vibekit local create --agent codex --name gpt-env
+
+# Delete environment
+vibekit local delete my-env
+
+# Check environment status
+vibekit local status -e my-env
+```
+
+### Code Generation
+
+```bash
+# Generate code with prompt
+vibekit local generate -e my-env -p "Add user authentication"
+
+# Interactive mode
+vibekit local generate -e my-env -m ask -p "How should I structure this?"
+
+# Save generated code
+vibekit local generate -e my-env -p "Create API endpoint" --save-to api.json
+```
+
+### Command Execution
+
+```bash
+# Run command in environment
+vibekit local exec -e my-env -c "npm install"
+
+# Stream output in real-time
+vibekit local exec -e my-env -c "npm run dev" --stream
+
+# Run with timeout
+vibekit local exec -e my-env -c "npm test" -t 60000
+```
+
+### Git Integration
+
+```bash
+# Create pull request
+vibekit local pr -e my-env
+
+# Create draft PR with details
+vibekit local pr -e my-env --draft --title "WIP: New feature"
+```
+
+### Interactive Access
+
+```bash
+# Connect to environment shell
+vibekit local connect -e my-env
+
+# Connect with specific shell
+vibekit local connect -e my-env --shell zsh
+
+# View logs
+vibekit local logs -e my-env --follow
+```
+
+## Common Workflows
+
+### Start a New Project
+
+```bash
+# 1. Initialize VibeKit
+vibekit init -p Dagger -a claude
+
+# 2. Create development environment
+vibekit local create --name project-dev --agent claude
+
+# 3. Set up project
+vibekit local exec -e project-dev -c "git clone https://github.com/user/repo.git"
+vibekit local exec -e project-dev -c "cd repo && npm install"
+
+# 4. Start coding with AI
+vibekit local generate -e project-dev -p "Add test coverage for auth module"
+```
+
+### Debug an Issue
+
+```bash
+# 1. Create debug environment
+vibekit local create --name debug-env --agent codex
+
+# 2. Connect to investigate
+vibekit local connect -e debug-env
+
+# 3. Or check logs
+vibekit local logs -e debug-env -n 200
+
+# 4. Run diagnostics
+vibekit local exec -e debug-env -c "npm run test:debug"
+```
+
+### Collaborative Development
+
+```bash
+# 1. Create feature branch environment
+vibekit local create --name feature-auth --agent claude \
+  --env "GITHUB_TOKEN=$GITHUB_TOKEN"
+
+# 2. Implement feature
+vibekit local generate -e feature-auth -p "Implement JWT authentication"
+
+# 3. Test implementation
+vibekit local exec -e feature-auth -c "npm test"
+
+# 4. Create pull request
+vibekit local pr -e feature-auth --title "Add JWT authentication"
+```
+
+## Environment Variables Quick Reference
+
+```bash
+# In .env file or shell
+export ANTHROPIC_API_KEY="sk-..."      # For Claude
+export OPENAI_API_KEY="sk-..."         # For Codex
+export GOOGLE_API_KEY="..."            # For Gemini
+export GROQ_API_KEY="..."              # For OpenCode
+export GITHUB_TOKEN="ghp_..."          # For Git operations
+export GITHUB_REPOSITORY="owner/repo"  # Target repository
+```
+
+## Keyboard Shortcuts
+
+When using interactive commands:
+- `↑/↓` - Navigate options
+- `Space` - Select/deselect option
+- `Enter` - Confirm selection
+- `Ctrl+C` - Cancel operation
+
+## Common Flags
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `-e, --env` | Specify environment | `-e my-env` |
+| `-c, --command` | Command to execute | `-c "npm test"` |
+| `-p, --prompt` | AI prompt | `-p "Fix the bug"` |
+| `--stream` | Real-time output | `--stream` |
+| `--json` | JSON output | `--json` |
+| `--force` | Skip confirmation | `--force` |
+| `--all` | Include all items | `--all` |
+| `-v, --verbose` | Detailed output | `--verbose` |
+
+## Exit Codes
+
+- `0` - Success
+- `1` - General error
+- `127` - Command not found
+- `130` - Interrupted (Ctrl+C)
+
+## Getting Help
+
+```bash
+# General help
+vibekit --help
+
+# Command-specific help
+vibekit local --help
+vibekit local create --help
+
+# Show version
+vibekit --version
+```

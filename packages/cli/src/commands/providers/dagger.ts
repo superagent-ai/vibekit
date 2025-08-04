@@ -106,13 +106,20 @@ export async function installLocal(
     spinner.text = "Checking Docker registry configuration...";
 
     try {
-      // Import the Docker registry functions
-      const { checkDockerLogin, setupUserDockerRegistry } = await import(
-        "@vibe-kit/dagger"
+      // Import the shared registry functions
+      const { RegistryManager, DockerHubRegistry } = await import(
+        "@vibe-kit/sdk/registry"
       );
 
+      // Create registry manager with Docker Hub
+      const dockerHubRegistry = new DockerHubRegistry();
+      const registryManager = new RegistryManager({
+        defaultRegistry: 'dockerhub',
+      });
+      registryManager.registerRegistry('dockerhub', dockerHubRegistry);
+
       // Check if user is logged into Docker Hub
-      const loginInfo = await checkDockerLogin();
+      const loginInfo = await registryManager.checkLogin();
 
       if (loginInfo.isLoggedIn && loginInfo.username) {
         spinner.succeed(`Docker login confirmed: ${loginInfo.username}`);
@@ -132,34 +139,25 @@ export async function installLocal(
             )
           );
         } else {
-          // Ask user if they want to upload images to their account
+          // Always upload images - required for Dagger
           console.log(chalk.blue("\n🐳 Docker Registry Setup"));
           console.log(
             chalk.gray(
-              "VibeKit can upload optimized agent images to your Docker Hub account."
+              "Uploading optimized agent images to your Docker Hub account..."
             )
           );
           console.log(
             chalk.gray(
-              "This enables faster startup and sharing across machines."
+              "This is required for Dagger to access and run the container images."
             )
           );
 
-          const { uploadImages: userChoice } = await prompt<{
-            uploadImages: boolean;
-          }>({
-            type: "confirm",
-            name: "uploadImages",
-            message: "Upload VibeKit images to your Docker Hub account?",
-            initial: true,
-          });
-
-          shouldUploadImages = userChoice;
+          shouldUploadImages = true;
         }
 
         if (shouldUploadImages) {
           const registrySpinner = ora(
-            "Setting up Docker registry integration..."
+            "Uploading images to Docker Hub..."
           ).start();
 
           try {
@@ -168,10 +166,10 @@ export async function installLocal(
               ['claude', 'codex', 'opencode', 'gemini', 'grok'].includes(t)
             ) as any[] : undefined;
             
-            const setupResult = await setupUserDockerRegistry(selectedAgents);
+            const setupResult = await registryManager.setupRegistry(selectedAgents);
 
             if (setupResult.success) {
-              registrySpinner.succeed("Docker registry setup completed");
+              registrySpinner.succeed("Docker images uploaded successfully");
 
               console.log(
                 chalk.green("\n🎉 Docker Registry Integration Successful!")
@@ -198,12 +196,16 @@ export async function installLocal(
                 chalk.gray("  • 📦 Public availability on Docker Hub")
               );
             } else {
-              registrySpinner.fail("Docker registry setup failed");
-              console.log(chalk.yellow(`\n⚠️ Warning: ${setupResult.error}`));
-              console.log(chalk.gray("Continuing with local image builds..."));
+              registrySpinner.fail("Failed to upload images to Docker Hub");
+              console.log(chalk.red(`\n⚠️ Error: ${setupResult.error}`));
+              console.log(
+                chalk.red(
+                  "Image upload is required for Dagger to work correctly."
+                )
+              );
             }
           } catch (registryError) {
-            registrySpinner.fail("Docker registry setup encountered an error");
+            registrySpinner.fail("Failed to upload images to Docker Hub");
             console.log(
               chalk.yellow(
                 `\n⚠️ Warning: ${
@@ -279,17 +281,16 @@ export async function installLocal(
         }
       }
     } catch (registryError) {
-      spinner.succeed("Docker available (registry setup skipped)");
+      spinner.succeed("Docker available");
+      // Show the actual error for debugging
       console.log(
         chalk.yellow(
-          `\n⚠️ Registry setup unavailable: ${
-            registryError instanceof Error
-              ? registryError.message
-              : String(registryError)
-          }`
+          `\n⚠️ Registry setup skipped: ${registryError instanceof Error ? registryError.message : String(registryError)}`
         )
       );
-      console.log(chalk.gray("Continuing with local image builds..."));
+      if (process.env.VIBEKIT_DEBUG) {
+        console.error("Full error:", registryError);
+      }
     }
 
     // Step 6: Pre-build agent images for faster startup
@@ -399,10 +400,9 @@ export async function installLocal(
     console.log(chalk.blue("\n🔧 Benefits:"));
     console.log(chalk.gray("  • ⚡ Fast startup with optimized images"));
     console.log(chalk.gray("  • 🔒 Isolated containerized environments"));
-    console.log(chalk.gray("  • 🔄 Built-in git operations and PR creation"));
     console.log(chalk.gray("  • 🌐 Cross-platform compatibility"));
     console.log(chalk.gray("  • 📦 Automatic dependency management"));
-    console.log(chalk.gray("  • 🐳 Docker Hub integration (if configured)"));
+    console.log(chalk.gray("  • 🐳 Docker Hub integration"));
 
     return true;
   } catch (error) {

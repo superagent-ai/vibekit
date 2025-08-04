@@ -6,25 +6,28 @@ Follow these steps to install and run Vibekit:
 
 ## Quick Start with CLI
 
-**Option 1**: Initialize a new project with VibeKit CLI:
+The fastest way to get started with VibeKit is using the CLI:
 
 <CodeGroup>
 
-```bash npx
-npx @vibe-kit/sdk init
+```bash npm
+# Install the CLI globally
+npm install -g @vibe-kit/cli
+
+# Initialize providers and create your first environment
+vibekit init
+vibekit local create --name my-env --agent claude
 ```
 
-```bash global
-# Install globally first
-npm install -g @vibe-kit/sdk
-
-# Then initialize
-vibekit init
+```bash npx
+# Or use npx without installation
+npx @vibe-kit/cli init
+npx @vibe-kit/cli local create --name my-env --agent claude
 ```
 
 </CodeGroup>
 
-This command will set up a new VibeKit project with all necessary dependencies and configuration files.
+This will set up VibeKit with your chosen providers and create a sandbox environment ready for AI-powered development. See the [CLI Reference](/cli) for detailed documentation.
 
 ## Basic setup
 

@@ -1,0 +1,384 @@
+---
+title: vibekit local logs
+description: "View and follow logs from sandbox environments"
+---
+
+## Overview
+
+The `vibekit local logs` command displays logs from sandbox environments, useful for debugging, monitoring operations, and understanding environment behavior.
+
+## Syntax
+
+```bash
+vibekit local logs [options]
+```
+
+## Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env <name>` | `-e` | Environment name to show logs from | Interactive prompt |
+| `--lines <number>` | `-n` | Number of lines to show | 50 |
+| `--follow` | `-f` | Follow log output (like `tail -f`) | false |
+
+## Examples
+
+### Basic Usage
+
+View last 50 lines:
+```bash
+vibekit local logs -e my-env
+```
+
+View more lines:
+```bash
+vibekit local logs -e my-env -n 100
+vibekit local logs -e my-env --lines 200
+```
+
+### Following Logs
+
+Real-time log monitoring:
+```bash
+vibekit local logs -e my-env --follow
+vibekit local logs -e my-env -f
+```
+
+Stop following with `Ctrl+C`.
+
+### Interactive Selection
+
+Choose environment interactively:
+```bash
+vibekit local logs
+# Prompts for environment selection
+```
+
+## Log Sources
+
+Logs may include:
+- System logs
+- Application output
+- Command execution history
+- Error messages
+- Debug information
+
+## Output Format
+
+```
+📜 Logs for environment: my-env
+
+📤 2024-01-15 10:30:15 [INFO] Environment initialized
+📤 2024-01-15 10:30:20 [DEBUG] Working directory set to /vibe0
+📤 2024-01-15 10:31:00 [INFO] Executing: npm install
+📤 2024-01-15 10:31:45 [INFO] npm install completed successfully
+📤 2024-01-15 10:32:00 [ERROR] Command failed: npm test
+📤 STDERR: Error: Cannot find module 'jest'
+```
+
+## Use Cases
+
+### Debugging Failed Commands
+
+```bash
+# Command fails
+vibekit local exec -e my-env -c "npm test"
+# Exit code: 1
+
+# Check what happened
+vibekit local logs -e my-env -n 100
+```
+
+### Monitoring Long Operations
+
+```bash
+# Start operation in background
+vibekit local exec -e my-env -c "npm run build" --background
+
+# Follow logs
+vibekit local logs -e my-env -f
+```
+
+### Troubleshooting Environment Issues
+
+```bash
+# Environment in error state
+vibekit local status -e my-env
+# Status: 🔴 error
+
+# Investigate with logs
+vibekit local logs -e my-env -n 200
+```
+
+### Post-Generation Review
+
+```bash
+# After code generation
+vibekit local generate -e my-env -p "Create API"
+
+# Check generation logs
+vibekit local logs -e my-env -n 50
+```
+
+## Log Analysis
+
+### Searching Logs
+
+Since logs are output to stdout, use standard tools:
+
+```bash
+# Search for errors
+vibekit local logs -e my-env -n 500 | grep -i error
+
+# Find specific pattern
+vibekit local logs -e my-env -n 1000 | grep "npm install"
+
+# Count occurrences
+vibekit local logs -e my-env -n 500 | grep -c "WARNING"
+```
+
+### Filtering by Time
+
+```bash
+# Recent logs only
+vibekit local logs -e my-env -n 100 | grep "$(date +%Y-%m-%d)"
+
+# Last hour
+vibekit local logs -e my-env -n 500 | grep "$(date +%H):"
+```
+
+### Saving Logs
+
+```bash
+# Save to file
+vibekit local logs -e my-env -n 1000 > environment-logs.txt
+
+# Save with timestamp
+vibekit local logs -e my-env -n all > logs-$(date +%Y%m%d-%H%M%S).txt
+
+# Append to existing log
+vibekit local logs -e my-env -n 100 >> debug.log
+```
+
+## Advanced Usage
+
+### Continuous Monitoring
+
+Monitor multiple environments:
+```bash
+#!/bin/bash
+# Monitor all running environments
+for env in $(vibekit local list --status running --json | jq -r '.[].name'); do
+  echo "=== Logs for $env ==="
+  vibekit local logs -e "$env" -n 20
+  echo ""
+done
+```
+
+### Log Rotation
+
+Simple log rotation script:
+```bash
+#!/bin/bash
+ENV_NAME="production-env"
+LOG_DIR="./logs"
+MAX_SIZE=10485760  # 10MB
+
+mkdir -p $LOG_DIR
+
+# Continuous logging with rotation
+while true; do
+  LOG_FILE="$LOG_DIR/vibekit-$ENV_NAME-$(date +%Y%m%d).log"
+  
+  # Check file size
+  if [ -f "$LOG_FILE" ] && [ $(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE") -gt $MAX_SIZE ]; then
+    mv "$LOG_FILE" "$LOG_FILE.$(date +%H%M%S)"
+  fi
+  
+  # Append new logs
+  vibekit local logs -e "$ENV_NAME" -n 100 >> "$LOG_FILE"
+  sleep 60
+done
+```
+
+### Error Detection
+
+Automated error detection:
+```bash
+#!/bin/bash
+# Alert on errors
+vibekit local logs -e my-env -f | while read line; do
+  if echo "$line" | grep -q "ERROR"; then
+    echo "Error detected: $line" | mail -s "VibeKit Error Alert" admin@example.com
+  fi
+done
+```
+
+## Log Patterns
+
+### Common Log Entries
+
+**Initialization**:
+```
+[INFO] Environment initialized
+[INFO] Agent: claude
+[INFO] Working directory: /vibe0
+```
+
+**Command Execution**:
+```
+[INFO] Executing: npm install
+[DEBUG] Command PID: 12345
+[INFO] Command completed with exit code: 0
+```
+
+**Errors**:
+```
+[ERROR] Command failed: npm test
+[ERROR] Exit code: 1
+[ERROR] STDERR: Test suite failed
+```
+
+**AI Generation**:
+```
+[INFO] Generating code with prompt: "Create user authentication"
+[DEBUG] Using model: claude-3-5-sonnet
+[INFO] Generation completed successfully
+```
+
+## Troubleshooting
+
+### No Logs Available
+
+```bash
+# Verify environment exists
+vibekit local list --all | grep my-env
+
+# Check if any commands were run
+vibekit local exec -e my-env -c "echo 'test log entry'"
+
+# Then check logs again
+vibekit local logs -e my-env
+```
+
+### Incomplete Logs
+
+System logs might be limited. For comprehensive logging:
+
+```bash
+# Use exec with output capture
+vibekit local exec -e my-env -c "command" --save-output full-output.json
+
+# Or redirect within environment
+vibekit local exec -e my-env -c "npm test > test.log 2>&1"
+vibekit local exec -e my-env -c "cat test.log"
+```
+
+### Follow Mode Not Working
+
+```bash
+# Ensure environment is active
+vibekit local status -e my-env
+
+# Try generating activity
+# In terminal 1:
+vibekit local logs -e my-env -f
+
+# In terminal 2:
+vibekit local exec -e my-env -c "for i in {1..10}; do echo 'Log entry '$i; sleep 1; done"
+```
+
+## Best Practices
+
+### 1. Regular Log Checks
+
+```bash
+# Quick health check
+vibekit local logs -e my-env -n 20
+
+# After failures
+vibekit local logs -e my-env -n 100 | grep -A5 -B5 ERROR
+```
+
+### 2. Log Preservation
+
+```bash
+# Before deleting environment
+vibekit local logs -e old-env -n 1000 > archived-logs/old-env-final.log
+vibekit local delete old-env
+```
+
+### 3. Debugging Workflow
+
+```bash
+# 1. Run command
+vibekit local exec -e my-env -c "npm test"
+
+# 2. If fails, check recent logs
+vibekit local logs -e my-env -n 50
+
+# 3. For more context
+vibekit local logs -e my-env -n 200 | grep -B10 -A10 "npm test"
+```
+
+### 4. Performance Monitoring
+
+```bash
+# Track execution times
+vibekit local logs -e my-env -n 500 | grep "execution time"
+
+# Monitor resource warnings
+vibekit local logs -e my-env -n 500 | grep -i "memory\|cpu\|disk"
+```
+
+## Integration Examples
+
+### CI/CD Pipeline
+
+```bash
+#!/bin/bash
+# Run tests and capture logs
+ENV_NAME="ci-test-env"
+
+# Create environment
+vibekit local create --name $ENV_NAME --agent codex
+
+# Run tests
+if ! vibekit local exec -e $ENV_NAME -c "npm test"; then
+  echo "Tests failed, collecting logs..."
+  vibekit local logs -e $ENV_NAME -n 500 > test-failure-logs.txt
+  exit 1
+fi
+
+# Cleanup
+vibekit local delete $ENV_NAME --force
+```
+
+### Development Monitoring
+
+```bash
+# Development session logger
+#!/bin/bash
+SESSION_LOG="dev-session-$(date +%Y%m%d-%H%M%S).log"
+
+echo "Starting development session logging..." > $SESSION_LOG
+
+# Follow logs in background
+vibekit local logs -e dev-env -f >> $SESSION_LOG &
+LOG_PID=$!
+
+# Do development work...
+echo "Logging to $SESSION_LOG (PID: $LOG_PID)"
+echo "Press Ctrl+C to stop logging"
+
+# Cleanup on exit
+trap "kill $LOG_PID 2>/dev/null" EXIT
+wait
+```
+
+## Related Commands
+
+- [`vibekit local status`](/cli/commands/local/status) - Check environment health
+- [`vibekit local exec`](/cli/commands/local/exec) - Generate logs by running commands
+- [`vibekit local connect`](/cli/commands/local/connect) - Interactive debugging
+- [`vibekit local list`](/cli/commands/local/list) - Find environments to check logs

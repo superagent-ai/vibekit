@@ -1,0 +1,461 @@
+---
+title: Configuration Files
+description: "Understanding and managing VibeKit CLI configuration files"
+---
+
+## Overview
+
+VibeKit uses several configuration files to store settings, environment data, and user preferences. These files enable persistent configuration across CLI sessions.
+
+## File Locations
+
+### User Configuration
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `config.json` | `~/.vibekit/config.json` | Global CLI settings |
+| `environments.json` | `~/.vibekit/environments.json` | Environment storage |
+| `auth.json` | `~/.vibekit/auth.json` | Authentication tokens |
+| `telemetry.json` | `~/.vibekit/telemetry.json` | Telemetry settings |
+
+### Project Configuration
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `.env` | Project root | Environment variables |
+| `.vibekit.json` | Project root | Project-specific settings |
+| `CLAUDE.md` | Project root | AI context documentation |
+
+## Global Configuration
+
+### ~/.vibekit/config.json
+
+Stores global CLI preferences:
+
+```json
+{
+  "version": "1.0.0",
+  "providers": {
+    "dagger": {
+      "enabled": true,
+      "preferRegistryImages": false,
+      "dockerHubUser": "username"
+    },
+    "e2b": {
+      "enabled": false,
+      "apiKey": "encrypted_key"
+    },
+    "daytona": {
+      "enabled": true,
+      "workspaceId": "default-workspace"
+    },
+    "northflank": {
+      "enabled": false,
+      "projectId": "proj_123"
+    }
+  },
+  "defaults": {
+    "agent": "claude",
+    "cpu": 2,
+    "memory": 2048,
+    "disk": 20,
+    "timeout": 30000,
+    "workingDirectory": "/vibe0"
+  },
+  "ui": {
+    "colorOutput": true,
+    "progressBars": true,
+    "confirmDeletions": true
+  }
+}
+```
+
+### Editing Configuration
+
+Using CLI commands (future feature):
+```bash
+vibekit config set defaults.agent codex
+vibekit config set defaults.memory 4096
+vibekit config get defaults
+```
+
+Manual editing:
+```bash
+# Open in editor
+vi ~/.vibekit/config.json
+
+# Validate JSON
+cat ~/.vibekit/config.json | jq '.'
+```
+
+## Environment Storage
+
+### ~/.vibekit/environments.json
+
+Stores all environment metadata:
+
+```json
+[
+  {
+    "id": "abc123def456",
+    "name": "dev-env",
+    "status": "running",
+    "agentType": "claude",
+    "branch": "feature/auth",
+    "created": "2024-01-15T10:30:00Z",
+    "lastUsed": "2024-01-15T14:45:00Z",
+    "sandboxId": "sandbox_789xyz",
+    "workingDirectory": "/vibe0",
+    "envVars": {
+      "NODE_ENV": "development",
+      "PORT": "3000"
+    },
+    "dockerImage": "vibekit/claude:latest",
+    "pid": 12345,
+    "githubToken": "encrypted_token",
+    "model": "claude-3-5-sonnet-20241022",
+    "apiKey": "encrypted_key"
+  }
+]
+```
+
+### Managing Environments
+
+Backup environments:
+```bash
+cp ~/.vibekit/environments.json ~/.vibekit/environments.backup.json
+```
+
+Export/Import environments:
+```bash
+# Export
+cat ~/.vibekit/environments.json | jq '.' > environments-export.json
+
+# Import (merge)
+jq -s '.[0] + .[1] | unique_by(.id)' \
+  ~/.vibekit/environments.json \
+  environments-import.json > ~/.vibekit/environments.new.json
+mv ~/.vibekit/environments.new.json ~/.vibekit/environments.json
+```
+
+## Project Configuration
+
+### .vibekit.json
+
+Project-specific settings that override global defaults:
+
+```json
+{
+  "name": "my-project",
+  "description": "E-commerce platform",
+  "defaults": {
+    "agent": "codex",
+    "memory": 4096,
+    "envVars": {
+      "PROJECT_NAME": "my-project",
+      "API_VERSION": "v1"
+    }
+  },
+  "scripts": {
+    "test": "npm test",
+    "build": "npm run build",
+    "deploy": "npm run deploy"
+  },
+  "requirements": {
+    "minMemory": 2048,
+    "minCpu": 2,
+    "providers": ["dagger", "e2b"]
+  }
+}
+```
+
+### Using Project Config
+
+Commands automatically detect and use project settings:
+```bash
+# Uses project defaults
+cd my-project
+vibekit local create --name feature-env
+# Automatically uses codex agent and 4096 MB memory
+```
+
+## Authentication Storage
+
+### ~/.vibekit/auth.json
+
+Stores encrypted authentication tokens:
+
+```json
+{
+  "github": {
+    "token": "encrypted_ghp_xxxx",
+    "user": "username",
+    "expires": "2024-12-31T23:59:59Z"
+  },
+  "providers": {
+    "e2b": {
+      "apiKey": "encrypted_key",
+      "teamId": "team_123"
+    },
+    "northflank": {
+      "apiToken": "encrypted_token",
+      "userId": "user_456"
+    }
+  }
+}
+```
+
+**Security Note**: Tokens are encrypted using system keychain when available.
+
+## AI Context Files
+
+### CLAUDE.md
+
+Provides context to AI agents about your project:
+
+```markdown
+# Project Context for AI Agents
+
+## Overview
+This is an e-commerce platform built with Node.js and React.
+
+## Architecture
+- Frontend: React with TypeScript
+- Backend: Express.js API
+- Database: PostgreSQL
+- Cache: Redis
+
+## Coding Standards
+- Use ESLint configuration
+- Follow Airbnb style guide
+- Write tests for all new features
+
+## Important Files
+- `/src/api/` - API endpoints
+- `/src/models/` - Database models
+- `/src/services/` - Business logic
+
+## Current Tasks
+- Implementing user authentication
+- Adding payment processing
+- Optimizing database queries
+```
+
+### Using Context Files
+
+AI agents automatically read context:
+```bash
+# Agent will understand project context
+vibekit local generate -e my-env -p "Add a new API endpoint"
+```
+
+## Configuration Precedence
+
+Settings are applied in this order (later overrides earlier):
+
+1. Built-in defaults
+2. Global config (`~/.vibekit/config.json`)
+3. Project config (`.vibekit.json`)
+4. Environment variables
+5. Command line options
+
+Example:
+```bash
+# Default: 2048 MB
+# Global config: 4096 MB
+# Project config: 8192 MB
+# Command line wins:
+vibekit local create --memory 16384
+```
+
+## Backup and Restore
+
+### Automated Backup
+
+Create backup script:
+```bash
+#!/bin/bash
+# backup-vibekit.sh
+BACKUP_DIR="$HOME/.vibekit-backups/$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+
+# Backup all config files
+cp -r ~/.vibekit/* "$BACKUP_DIR/"
+
+# Create archive
+tar -czf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
+rm -rf "$BACKUP_DIR"
+
+echo "Backup created: $BACKUP_DIR.tar.gz"
+```
+
+### Restore Configuration
+
+```bash
+# Restore from backup
+tar -xzf ~/.vibekit-backups/20240115-103000.tar.gz -C ~/.vibekit/
+```
+
+## Migration and Upgrades
+
+### Version Migration
+
+VibeKit automatically migrates configs when upgrading:
+```bash
+# Before upgrade
+cp -r ~/.vibekit ~/.vibekit-pre-upgrade
+
+# Upgrade
+npm update -g @vibe-kit/cli
+
+# Automatic migration happens on first run
+vibekit --version
+```
+
+### Manual Migration
+
+For major version changes:
+```bash
+# Export old config
+vibekit config export > old-config.json
+
+# Upgrade
+npm install -g @vibe-kit/cli@latest
+
+# Import compatible settings
+vibekit config import old-config.json
+```
+
+## Troubleshooting
+
+### Corrupted Configuration
+
+```bash
+# Check JSON validity
+for file in ~/.vibekit/*.json; do
+  echo "Checking $file"
+  jq '.' "$file" > /dev/null || echo "Invalid JSON in $file"
+done
+```
+
+### Reset Configuration
+
+```bash
+# Reset specific file
+echo '{}' > ~/.vibekit/config.json
+
+# Reset all (careful!)
+rm -rf ~/.vibekit
+vibekit init  # Recreates with defaults
+```
+
+### Permission Issues
+
+```bash
+# Fix permissions
+chmod 700 ~/.vibekit
+chmod 600 ~/.vibekit/*.json
+
+# Check ownership
+ls -la ~/.vibekit/
+```
+
+## Best Practices
+
+### 1. Regular Backups
+
+```bash
+# Add to crontab
+0 0 * * * /path/to/backup-vibekit.sh
+```
+
+### 2. Version Control
+
+Track project configs:
+```bash
+# .gitignore
+.env
+.vibekit.json  # Optional, if contains secrets
+
+# Track CLAUDE.md for team context
+git add CLAUDE.md
+```
+
+### 3. Environment Separation
+
+Use different configs for different purposes:
+```bash
+# Development
+export VIBEKIT_CONFIG_DIR=~/.vibekit-dev
+
+# Production
+export VIBEKIT_CONFIG_DIR=~/.vibekit-prod
+```
+
+### 4. Config Validation
+
+Validate before deploying:
+```bash
+#!/bin/bash
+# validate-config.sh
+for file in .vibekit.json CLAUDE.md; do
+  if [ -f "$file" ]; then
+    echo "✓ $file exists"
+  else
+    echo "✗ Missing $file"
+    exit 1
+  fi
+done
+```
+
+## Advanced Configuration
+
+### Custom Scripts
+
+Add scripts to project config:
+```json
+{
+  "scripts": {
+    "prebuild": "npm run clean",
+    "posttest": "npm run coverage",
+    "deploy": "docker build -t app . && docker push app"
+  }
+}
+```
+
+Run with:
+```bash
+vibekit local exec -e my-env -c "npm run deploy"
+```
+
+### Environment Templates
+
+Create reusable templates:
+```json
+{
+  "templates": {
+    "development": {
+      "agent": "codex",
+      "memory": 2048,
+      "envVars": {
+        "NODE_ENV": "development",
+        "DEBUG": "true"
+      }
+    },
+    "production": {
+      "agent": "claude",
+      "memory": 8192,
+      "envVars": {
+        "NODE_ENV": "production",
+        "DEBUG": "false"
+      }
+    }
+  }
+}
+```
+
+## Related Topics
+
+- [Environment Variables](/cli/environment-variables) - Runtime configuration
+- [Installation](/cli/installation) - Initial setup
+- [Quick Reference](/cli/quick-reference) - Common configurations

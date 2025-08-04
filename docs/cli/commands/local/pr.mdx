@@ -1,0 +1,363 @@
+---
+title: vibekit local pr
+description: "Create pull requests from sandbox environment changes"
+---
+
+## Overview
+
+The `vibekit local pr` command creates a pull request on GitHub from the changes made in your sandbox environment. It integrates with your GitHub repository to streamline the code review process.
+
+## Syntax
+
+```bash
+vibekit local pr [options]
+```
+
+## Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env <name>` | `-e` | Environment name to use | Interactive prompt |
+| `--title <title>` | | Pull request title | Auto-generated |
+| `--body <body>` | | Pull request description | Auto-generated |
+| `--branch <branch>` | | Target branch for PR | Repository default |
+| `--labels <labels>` | | Comma-separated list of labels | None |
+| `--draft` | | Create as draft pull request | false |
+| `--auto-merge` | | Enable auto-merge (requires repo settings) | false |
+
+## Prerequisites
+
+### Required Configuration
+
+1. **GitHub Token** - Set via environment or when creating environment:
+   ```bash
+   export GITHUB_TOKEN="ghp_xxxxxxxxxxxx"
+   # or
+   vibekit local create --github-token "ghp_xxxxxxxxxxxx"
+   ```
+
+2. **Repository** - Set via environment variable:
+   ```bash
+   export GITHUB_REPOSITORY="owner/repo"
+   ```
+
+3. **Git Configuration** - Changes must be in the sandbox environment
+
+### GitHub Token Permissions
+
+Required scopes:
+- `repo` - Full repository access
+- `write:pull_requests` - Create and manage PRs
+- `read:user` - Read user profile data
+
+## Examples
+
+### Basic Pull Request
+
+Create with auto-generated details:
+```bash
+vibekit local pr -e my-feature-env
+```
+
+Specify environment and title:
+```bash
+vibekit local pr -e auth-env --title "Add JWT authentication"
+```
+
+### Detailed Pull Request
+
+With full details:
+```bash
+vibekit local pr -e feature-env \
+  --title "Add user profile management" \
+  --body "This PR implements user profile CRUD operations with image upload support" \
+  --labels "enhancement,backend"
+```
+
+Multi-line description:
+```bash
+vibekit local pr -e feature-env \
+  --title "Implement payment processing" \
+  --body "## Changes
+- Added Stripe integration
+- Implemented webhook handlers
+- Added payment history
+
+## Testing
+- Unit tests added
+- Manual testing completed"
+```
+
+### Draft Pull Requests
+
+Create as draft for work in progress:
+```bash
+vibekit local pr -e wip-env --draft --title "WIP: Refactor authentication"
+```
+
+### Automated Workflows
+
+With auto-merge:
+```bash
+vibekit local pr -e tested-env \
+  --title "Update dependencies" \
+  --auto-merge \
+  --labels "dependencies"
+```
+
+## Pull Request Creation Process
+
+### What Happens
+
+1. **Commits Changes** - All modifications in the sandbox are committed
+2. **Pushes to Branch** - Creates/updates a branch in your repository
+3. **Creates PR** - Opens pull request via GitHub API
+4. **Adds Metadata** - Applies labels and configuration
+
+### Branch Naming
+
+Branches are automatically named:
+- Format: `vibekit-{environment}-{timestamp}`
+- Example: `vibekit-auth-env-20240115`
+
+### Commit Messages
+
+Auto-generated based on:
+- AI agent's understanding of changes
+- File modifications
+- Environment context
+
+## Working with AI-Generated PRs
+
+### AI Assistance
+
+The AI agent helps with:
+- Writing descriptive PR titles
+- Generating comprehensive descriptions
+- Suggesting appropriate labels
+- Identifying changed files
+
+### Example Workflow
+
+```bash
+# 1. Create environment
+vibekit local create --name feature-env --agent claude
+
+# 2. Generate code
+vibekit local generate -e feature-env -p "Add email verification system"
+
+# 3. Test changes
+vibekit local exec -e feature-env -c "npm test"
+
+# 4. Create PR
+vibekit local pr -e feature-env
+```
+
+## Output
+
+### Successful Creation
+
+```
+✅ Pull Request Created!
+📝 Title: Add JWT authentication system
+🔗 URL: https://github.com/owner/repo/pull/123
+🌿 Branch: vibekit-auth-env-20240115
+📊 Status: open
+#️⃣ Number: #123
+
+📄 Description:
+This PR implements JWT-based authentication with refresh tokens...
+```
+
+### PR Information
+
+The command returns:
+- PR number and URL
+- Branch name
+- Current status
+- Applied labels
+- Full description
+
+## Advanced Usage
+
+### Multiple PRs from One Environment
+
+Create separate PRs for different features:
+```bash
+# Make changes for feature A
+vibekit local generate -e dev-env -p "Implement feature A"
+vibekit local pr -e dev-env --title "Add feature A"
+
+# Make more changes for feature B
+vibekit local generate -e dev-env -p "Implement feature B"
+vibekit local pr -e dev-env --title "Add feature B" --branch feature-b
+```
+
+### PR Templates
+
+Use repository PR templates:
+```bash
+# The AI will follow your .github/pull_request_template.md
+vibekit local pr -e my-env
+```
+
+### Label Management
+
+Apply multiple labels:
+```bash
+vibekit local pr -e my-env --labels "bug,high-priority,backend"
+```
+
+Common label patterns:
+- Type: `bug`, `enhancement`, `feature`
+- Priority: `high`, `medium`, `low`
+- Component: `frontend`, `backend`, `database`
+- Status: `needs-review`, `ready`
+
+## Integration with CI/CD
+
+### Triggering Workflows
+
+PRs created by VibeKit trigger GitHub Actions:
+```bash
+# PR triggers test workflow
+vibekit local pr -e tested-env --title "Add new feature"
+
+# Check workflow status in output
+🔗 URL: https://github.com/owner/repo/pull/123
+# Click to view running checks
+```
+
+### Auto-merge Setup
+
+For auto-merge to work:
+1. Enable in repository settings
+2. Set up branch protection rules
+3. Ensure PR passes all checks
+
+```bash
+vibekit local pr -e my-env --auto-merge --labels "automerge"
+```
+
+## Best Practices
+
+### 1. Descriptive Titles
+
+```bash
+# Good
+vibekit local pr -e my-env --title "Fix SQL injection vulnerability in user search"
+
+# Too vague
+vibekit local pr -e my-env --title "Fix bug"
+```
+
+### 2. Comprehensive Descriptions
+
+Include:
+- What changed and why
+- How to test
+- Breaking changes
+- Related issues
+
+### 3. Appropriate Labels
+
+```bash
+# Bug fix
+vibekit local pr -e my-env --labels "bug,security" --title "Fix XSS vulnerability"
+
+# New feature
+vibekit local pr -e my-env --labels "enhancement,needs-docs" --title "Add OAuth support"
+```
+
+### 4. Draft for WIP
+
+```bash
+# Start as draft
+vibekit local pr -e my-env --draft --title "WIP: Redesign dashboard"
+
+# Ready for review - create new PR without --draft
+vibekit local pr -e my-env --title "Redesign dashboard"
+```
+
+## Troubleshooting
+
+### Authentication Failed
+
+```bash
+# Check token
+echo $GITHUB_TOKEN
+
+# Verify token permissions
+curl -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user
+
+# Set correct token
+export GITHUB_TOKEN="ghp_newtoken"
+```
+
+### Repository Not Found
+
+```bash
+# Check repository setting
+echo $GITHUB_REPOSITORY
+
+# Set correct repository
+export GITHUB_REPOSITORY="myorg/myrepo"
+
+# Verify access
+curl -H "Authorization: token $GITHUB_TOKEN" \
+  https://api.github.com/repos/$GITHUB_REPOSITORY
+```
+
+### No Changes to Commit
+
+```bash
+# Check for changes
+vibekit local exec -e my-env -c "git status"
+
+# Make some changes first
+vibekit local generate -e my-env -p "Add a new feature"
+
+# Then create PR
+vibekit local pr -e my-env
+```
+
+### Branch Already Exists
+
+```bash
+# Specify different branch
+vibekit local pr -e my-env --branch "feature-v2"
+
+# Or delete old branch first
+git push origin --delete old-branch
+```
+
+## GitHub Configuration
+
+### Required Repository Settings
+
+1. **Allow PR creation** from external tools
+2. **Branch protection** rules (optional)
+3. **PR templates** in `.github/` (optional)
+4. **Labels** pre-configured (optional)
+
+### Token Creation
+
+1. Go to GitHub Settings > Developer settings > Personal access tokens
+2. Generate new token (classic or fine-grained)
+3. Select required scopes
+4. Save token securely
+
+## Tips
+
+1. **Test First** - Run tests before creating PR
+2. **Review Locally** - Connect to environment to review changes
+3. **Small PRs** - Create focused, single-purpose PRs
+4. **Clear Communication** - Write clear titles and descriptions
+5. **Use Labels** - Help reviewers understand PR context
+
+## Related Commands
+
+- [`vibekit local generate`](/cli/commands/local/generate) - Generate code to include in PR
+- [`vibekit local exec`](/cli/commands/local/exec) - Test changes before PR
+- [`vibekit local connect`](/cli/commands/local/connect) - Review changes interactively
+- [`vibekit local status`](/cli/commands/local/status) - Check environment state

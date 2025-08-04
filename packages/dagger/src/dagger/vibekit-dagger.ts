@@ -174,7 +174,7 @@ export interface LocalConfig {
 }
 
 // Configuration with environment variable support
-class Configuration {
+export class Configuration {
   private static instance: Configuration;
   private config: LocalConfig;
   private logger: Logger;
@@ -379,179 +379,57 @@ const getDockerfilePathFromAgentType = (
   return agentType ? dockerfileMap[agentType] : undefined;
 };
 
-// Image resolution strategy implementation
+// Image resolution using shared infrastructure
 class ImageResolver {
-  private logger: Logger;
-  private config: LocalConfig;
+  private sharedResolver: any;
 
   constructor(config: LocalConfig, logger: Logger) {
-    this.config = config;
-    this.logger = logger;
+    // Import and use the shared ImageResolver
+    const sharedConfig = {
+      preferRegistryImages: config.preferRegistryImages,
+      pushImages: config.pushImages,
+      privateRegistry: config.privateRegistry,
+      retryAttempts: config.retryAttempts,
+      retryDelayMs: config.retryDelayMs,
+      logger,
+    };
+
+    // Use dynamic import to avoid circular dependencies
+    this.initializeSharedResolver(sharedConfig);
+  }
+
+  private async initializeSharedResolver(config: any) {
+    try {
+      const modulePath = '@vibe-kit/sdk/registry';
+      const registryModule = await import(modulePath).catch(() => null);
+      if (!registryModule) {
+        config.logger.warn("Registry module not available, using fallback image resolution");
+        return;
+      }
+      
+      const { ImageResolver: SharedImageResolver, RegistryManager, DockerHubRegistry } = registryModule;
+      
+      // Create registry manager with Docker Hub
+      const dockerHubRegistry = new DockerHubRegistry({ logger: config.logger });
+      const registryManager = new RegistryManager({
+        defaultRegistry: 'dockerhub',
+        logger: config.logger,
+      });
+      registryManager.registerRegistry('dockerhub', dockerHubRegistry);
+
+      this.sharedResolver = new SharedImageResolver(config, registryManager);
+    } catch (error) {
+      config.logger.warn("Failed to initialize shared resolver:", error);
+    }
   }
 
   async resolveImage(agentType?: AgentType): Promise<string> {
-    if (!agentType) {
-      return "ubuntu:24.04";
-    }
-
-    const localTag = this.getLocalImageTag(agentType);
-    const registryImage = await this.getRegistryImageName(agentType);
-
-    // Step 1: Check local cache
-    try {
-      const localImage = await this.checkLocalImage(localTag);
-      if (localImage) {
-        this.logger.info(`Using cached local image: ${localTag}`);
-        return localTag;
-      }
-    } catch (error) {
-      this.logger.debug(`Local image check failed: ${error}`);
-    }
-
-    // Step 2: Try to pull from user's registry
-    if (registryImage) {
-      try {
-        await this.pullImage(registryImage);
-        this.logger.info(`Successfully pulled image from registry: ${registryImage}`);
-        
-        // Tag it locally for cache
-        await this.tagImage(registryImage, localTag);
-        return localTag;
-      } catch (error) {
-        this.logger.warn(`Failed to pull from registry: ${registryImage}`, error);
-      }
-    }
-
-    // Step 3: Build locally and push to user's registry
-    const dockerfilePath = getDockerfilePathFromAgentType(agentType);
-    if (dockerfilePath && existsSync(dockerfilePath)) {
-      try {
-        // Build the image
-        await this.buildImage(dockerfilePath, localTag);
-        this.logger.info(`Built image locally: ${localTag}`);
-
-        // Push to registry if configured
-        if (this.config.pushImages && registryImage) {
-          try {
-            await this.tagImage(localTag, registryImage);
-            await this.pushImage(registryImage);
-            this.logger.info(`Pushed image to registry: ${registryImage}`);
-          } catch (pushError) {
-            this.logger.warn(`Failed to push to registry, continuing with local image`, pushError);
-          }
-        }
-
-        return localTag;
-      } catch (buildError) {
-        this.logger.error(`Failed to build image from Dockerfile`, buildError);
-        throw new ImageResolutionError(
-          `Failed to resolve image for ${agentType}`,
-          buildError instanceof Error ? buildError : undefined
-        );
-      }
-    }
-
-    // Final fallback
-    this.logger.warn(`No image available for ${agentType}, using fallback`);
-    return "ubuntu:24.04";
-  }
-
-  private getLocalImageTag(agentType: AgentType): string {
-    return `vibekit-${agentType}:latest`;
-  }
-
-  private async getRegistryImageName(agentType: AgentType): Promise<string | null> {
-    // First check config file for custom images
-    try {
-      const config = await this.loadVibeKitConfig();
-      if (config.registryImages?.[agentType]) {
-        return config.registryImages[agentType]!;
-      }
-    } catch {
-      // Ignore config errors
-    }
-
-    // Check Docker login
-    const dockerInfo = await this.getDockerLoginInfo();
-    if (!dockerInfo.username && !this.config.dockerHubUser) {
-      return null;
-    }
-
-    const user = this.config.dockerHubUser || dockerInfo.username || "superagent-ai";
-    const registry = this.config.privateRegistry || "";
-    const prefix = registry ? `${registry}/` : "";
-    
-    return `${prefix}${user}/vibekit-${agentType}:latest`;
-  }
-
-  private async checkLocalImage(tag: string): Promise<boolean> {
-    try {
-      const { stdout } = await execAsync(`docker images -q ${tag}`);
-      return stdout.trim().length > 0;
-    } catch {
-      return false;
-    }
-  }
-
-  private async pullImage(image: string): Promise<void> {
-    await retryWithBackoff(
-      async () => {
-        await execAsync(`docker pull ${image}`);
-      },
-      {
-        attempts: this.config.retryAttempts || 3,
-        delayMs: this.config.retryDelayMs || 1000,
-        logger: this.logger,
-        context: `Pulling image ${image}`
-      }
-    );
-  }
-
-  private async buildImage(dockerfilePath: string, tag: string): Promise<void> {
-    const buildCommand = `docker build -t ${tag} -f ${dockerfilePath} .`;
-    await execAsync(buildCommand, { timeout: 600000 }); // 10 minute timeout
-  }
-
-  private async tagImage(source: string, target: string): Promise<void> {
-    await execAsync(`docker tag ${source} ${target}`);
-  }
-
-  private async pushImage(image: string): Promise<void> {
-    await retryWithBackoff(
-      async () => {
-        await execAsync(`docker push ${image}`);
-      },
-      {
-        attempts: this.config.retryAttempts || 3,
-        delayMs: this.config.retryDelayMs || 1000,
-        logger: this.logger,
-        context: `Pushing image ${image}`
-      }
-    );
-  }
-
-  private async getDockerLoginInfo(): Promise<{ username?: string }> {
-    try {
-      const { stdout } = await execAsync("docker info");
-      const match = stdout.match(/Username:\s*(.+)/);
-      if (match) {
-        return { username: match[1].trim() };
-      }
-    } catch {
-      // Ignore errors
-    }
-    return {};
-  }
-
-  private async loadVibeKitConfig(): Promise<any> {
-    const configPath = join(this.config.configPath || join(homedir(), ".vibekit"), "config.json");
-    
-    if (existsSync(configPath)) {
-      const content = await readFile(configPath, "utf-8");
-      return JSON.parse(content);
+    if (!this.sharedResolver) {
+      // Fallback if shared resolver not initialized yet
+      return agentType ? `vibekit-${agentType}:latest` : "ubuntu:24.04";
     }
     
-    return {};
+    return await this.sharedResolver.resolveImage(agentType);
   }
 }
 
@@ -805,8 +683,37 @@ export async function prebuildAgentImages(
 }> {
   const config = Configuration.getInstance().get();
   const logger = Configuration.getInstance().getLogger();
-  const imageResolver = new ImageResolver(config, logger);
+  
+  // Try to use shared ImageResolver for pre-building
+  try {
+    const modulePath = '@vibe-kit/sdk/registry';
+    const registryModule = await import(modulePath).catch(() => null);
+    if (registryModule) {
+      const { ImageResolver: SharedImageResolver, RegistryManager, DockerHubRegistry } = registryModule;
+      
+      const dockerHubRegistry = new DockerHubRegistry({ logger });
+      const registryManager = new RegistryManager({
+        defaultRegistry: 'dockerhub',
+        logger,
+      });
+      registryManager.registerRegistry('dockerhub', dockerHubRegistry);
 
+      const imageResolver = new SharedImageResolver({
+        preferRegistryImages: config.preferRegistryImages,
+        pushImages: config.pushImages,
+        privateRegistry: config.privateRegistry,
+        retryAttempts: config.retryAttempts,
+        retryDelayMs: config.retryDelayMs,
+        logger,
+      }, registryManager);
+
+      return await imageResolver.prebuildImages(selectedAgents);
+    }
+  } catch (error) {
+    logger.warn("Failed to use shared image resolver, falling back to basic prebuilding:", error);
+  }
+
+  // Fallback to basic image resolution
   const allAgentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini", "grok"];
   const agentTypes = selectedAgents?.length ? selectedAgents : allAgentTypes;
   const results: Array<{
@@ -816,10 +723,11 @@ export async function prebuildAgentImages(
     source: "registry" | "dockerfile" | "cached";
   }> = [];
 
-  logger.info("Pre-caching agent images for faster startup");
+  logger.info("Pre-caching agent images for faster startup (fallback mode)");
 
   for (const agentType of agentTypes) {
     try {
+      const imageResolver = new ImageResolver(config, logger);
       await imageResolver.resolveImage(agentType);
       results.push({ agentType, success: true, source: "cached" });
     } catch (error) {
@@ -838,208 +746,24 @@ export async function prebuildAgentImages(
   };
 }
 
-// Docker login and configuration types
-export interface DockerLoginInfo {
+// Re-export types for backward compatibility
+export type DockerLoginInfo = {
   isLoggedIn: boolean;
-  username?: string;
+  username?: string | null;
   registry?: string;
-}
+};
 
-export interface VibeKitConfig {
+export type VibeKitConfig = {
   dockerHubUser?: string;
   lastImageBuild?: string;
   registryImages?: Partial<Record<AgentType, string>>;
-}
+  privateRegistry?: string;
+  preferRegistryImages?: boolean;
+  pushImages?: boolean;
+  [key: string]: any;
+};
 
-// Check if user is logged into Docker Hub
-export async function checkDockerLogin(): Promise<DockerLoginInfo> {
-  const logger = Configuration.getInstance().getLogger();
-  
-  try {
-    const { stdout } = await execAsync("docker info");
-    const usernameMatch = stdout.match(/Username:\s*(.+)/);
-    if (usernameMatch) {
-      return {
-        isLoggedIn: true,
-        username: usernameMatch[1].trim(),
-        registry: "https://index.docker.io/v1/",
-      };
-    }
-    
-    return { isLoggedIn: false };
-  } catch (error) {
-    logger.debug("Docker login check failed", error);
-    return { isLoggedIn: false };
-  }
-}
-
-// Get or create VibeKit configuration
-export async function getVibeKitConfig(): Promise<VibeKitConfig> {
-  const config = Configuration.getInstance().get();
-  const configPath = join(config.configPath || join(homedir(), ".vibekit"), "config.json");
-
-  if (existsSync(configPath)) {
-    try {
-      const content = await readFile(configPath, "utf-8");
-      return JSON.parse(content);
-    } catch {
-      return {};
-    }
-  }
-
-  return {};
-}
-
-// Save VibeKit configuration
-export async function saveVibeKitConfig(config: VibeKitConfig): Promise<void> {
-  const appConfig = Configuration.getInstance().get();
-  const configPath = join(appConfig.configPath || join(homedir(), ".vibekit"), "config.json");
-  const configDir = join(appConfig.configPath || join(homedir(), ".vibekit"));
-  
-  // Ensure directory exists
-  if (!existsSync(configDir)) {
-    const { mkdir } = await import("fs/promises");
-    await mkdir(configDir, { recursive: true });
-  }
-  
-  const { writeFile } = await import("fs/promises");
-  await writeFile(configPath, JSON.stringify(config, null, 2));
-}
-
-// Upload images to user's Docker Hub account
-export async function uploadImagesToUserAccount(
-  dockerHubUser: string,
-  selectedAgents?: AgentType[]
-): Promise<{
-  success: boolean;
-  results: Array<{
-    agentType: AgentType;
-    success: boolean;
-    error?: string;
-    imageUrl?: string;
-  }>;
-}> {
-  const logger = Configuration.getInstance().getLogger();
-  const imageResolver = new ImageResolver(Configuration.getInstance().get(), logger);
-  
-  const defaultAgentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini"];
-  const agentTypes = selectedAgents?.length ? selectedAgents : defaultAgentTypes;
-  const results: Array<{
-    agentType: AgentType;
-    success: boolean;
-    error?: string;
-    imageUrl?: string;
-  }> = [];
-
-  logger.info(`Uploading VibeKit images to ${dockerHubUser}'s Docker Hub account`);
-
-  for (const agentType of agentTypes) {
-    try {
-      logger.info(`Processing ${agentType} agent`);
-
-      // Ensure image exists locally first
-      await imageResolver.resolveImage(agentType);
-      
-      // Tag for user's account
-      const localTag = `vibekit-${agentType}:latest`;
-      const userImageTag = `${dockerHubUser}/vibekit-${agentType}:latest`;
-      
-      await execAsync(`docker tag ${localTag} ${userImageTag}`);
-      logger.info(`Tagged as ${userImageTag}`);
-
-      // Push to user's Docker Hub
-      logger.info(`Pushing ${userImageTag} to Docker Hub`);
-      await retryWithBackoff(
-        async () => {
-          await execAsync(`docker push ${userImageTag}`);
-        },
-        {
-          attempts: 3,
-          delayMs: 1000,
-          logger: logger,
-          context: `Pushing image ${userImageTag}`
-        }
-      );
-      
-      logger.info(`Successfully pushed ${userImageTag}`);
-
-      results.push({
-        agentType,
-        success: true,
-        imageUrl: userImageTag,
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to upload ${agentType} image`, error);
-      results.push({ agentType, success: false, error: errorMessage });
-    }
-  }
-
-  const successCount = results.filter(r => r.success).length;
-  logger.info(`Upload complete: ${successCount}/${agentTypes.length} images uploaded`);
-
-  return {
-    success: successCount > 0,
-    results,
-  };
-}
-
-// Docker registry setup utilities
-export async function setupUserDockerRegistry(
-  selectedAgents?: AgentType[]
-): Promise<{
-  success: boolean;
-  config?: VibeKitConfig;
-  error?: string;
-}> {
-  const logger = Configuration.getInstance().getLogger();
-
-  try {
-    logger.info("Setting up VibeKit Docker Registry Integration");
-
-    // Check Docker login
-    const loginInfo = await checkDockerLogin();
-    
-    if (!loginInfo.isLoggedIn || !loginInfo.username) {
-      return {
-        success: false,
-        error: 'Not logged into Docker Hub. Please run "docker login" first.',
-      };
-    }
-
-    logger.info(`Logged in as: ${loginInfo.username}`);
-
-    // Upload images to user's account
-    const uploadResult = await uploadImagesToUserAccount(loginInfo.username, selectedAgents);
-
-    if (!uploadResult.success) {
-      return {
-        success: false,
-        error: "Failed to upload images to Docker Hub",
-      };
-    }
-
-    // Update configuration
-    const config: VibeKitConfig = {
-      dockerHubUser: loginInfo.username,
-      lastImageBuild: new Date().toISOString(),
-      registryImages: {},
-    };
-
-    // Map successful uploads to registry images
-    for (const result of uploadResult.results) {
-      if (result.success && result.imageUrl) {
-        config.registryImages![result.agentType] = result.imageUrl;
-      }
-    }
-
-    await saveVibeKitConfig(config);
-    logger.info("Configuration saved");
-
-    return { success: true, config };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error("Failed to setup Docker registry", error);
-    return { success: false, error: errorMessage };
-  }
-}
+// Re-export functions for backward compatibility
+export { checkDockerLogin } from "./registry-integration";
+export { getVibeKitConfig, saveVibeKitConfig } from "./registry-integration";  
+export { uploadImagesToUserAccount, setupUserDockerRegistry } from "./registry-integration";

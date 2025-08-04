@@ -1,0 +1,245 @@
+---
+title: Installation
+description: "How to install and set up the VibeKit CLI on your system"
+---
+
+## Prerequisites
+
+Before installing the VibeKit CLI, ensure you have:
+
+- **Node.js** version 18.0.0 or higher
+- **npm** or **yarn** package manager
+- **Docker** installed and running (for local sandbox environments)
+- **Git** for version control operations
+
+## Installation Methods
+
+### Global Installation (Recommended)
+
+Installing globally makes the `vibekit` command available system-wide:
+
+<CodeGroup>
+```bash npm
+npm install -g @vibe-kit/cli
+```
+
+```bash yarn
+yarn global add @vibe-kit/cli
+```
+
+```bash pnpm
+pnpm add -g @vibe-kit/cli
+```
+</CodeGroup>
+
+### Project Installation
+
+For project-specific installations:
+
+<CodeGroup>
+```bash npm
+npm install --save-dev @vibe-kit/cli
+```
+
+```bash yarn
+yarn add --dev @vibe-kit/cli
+```
+
+```bash pnpm
+pnpm add -D @vibe-kit/cli
+```
+</CodeGroup>
+
+### Using npx (No Installation)
+
+Run commands without installing:
+
+```bash
+npx @vibe-kit/cli init
+npx @vibe-kit/cli local create --name my-env
+```
+
+## Verify Installation
+
+After installation, verify that the CLI is working:
+
+```bash
+# Check version
+vibekit --version
+
+# View help
+vibekit --help
+```
+
+## Post-Installation Setup
+
+### 1. Initialize Providers
+
+Run the initialization command to set up your preferred sandbox providers:
+
+```bash
+vibekit init
+```
+
+This will guide you through:
+- Selecting sandbox providers (E2B, Dagger, Daytona, Northflank)
+- Choosing AI agent templates
+- Configuring resource allocations
+
+### 2. Configure Environment Variables
+
+Create a `.env` file in your project root with your API keys:
+
+```bash
+# AI Agent API Keys
+ANTHROPIC_API_KEY=sk-ant-...      # For Claude
+OPENAI_API_KEY=sk-...              # For GPT-4/Codex
+GOOGLE_API_KEY=...                 # For Gemini
+GROQ_API_KEY=gsk_...               # For open-source models
+
+# GitHub Integration
+GITHUB_TOKEN=ghp_...               # Personal access token
+GITHUB_REPOSITORY=owner/repo       # Target repository
+
+# Provider-specific (optional)
+NORTHFLANK_PROJECT_ID=...
+DAYTONA_WORKSPACE_ID=...
+DOCKER_USERNAME=...
+```
+
+### 3. Docker Setup
+
+Ensure Docker is running:
+
+```bash
+# Check Docker status
+docker info
+
+# Start Docker daemon if needed
+# On macOS: Open Docker Desktop
+# On Linux: sudo systemctl start docker
+```
+
+## Troubleshooting Installation
+
+### Command Not Found
+
+If `vibekit` command is not found after global installation:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    # Check npm global bin directory
+    npm config get prefix
+
+    # Add to PATH (example for macOS/Linux)
+    export PATH="$(npm config get prefix)/bin:$PATH"
+
+    # Make permanent by adding to ~/.bashrc or ~/.zshrc
+    echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.bashrc
+    ```
+  </Tab>
+  <Tab title="yarn">
+    ```bash
+    # Check yarn global bin directory
+    yarn global bin
+
+    # Add to PATH
+    export PATH="$(yarn global bin):$PATH"
+    ```
+  </Tab>
+</Tabs>
+
+### Permission Errors
+
+If you encounter permission errors during global installation:
+
+```bash
+# Option 1: Use a Node version manager (recommended)
+# Install nvm: https://github.com/nvm-sh/nvm
+nvm install node
+npm install -g @vibe-kit/cli
+
+# Option 2: Change npm's default directory
+mkdir ~/.npm-global
+npm config set prefix '~/.npm-global'
+export PATH=~/.npm-global/bin:$PATH
+npm install -g @vibe-kit/cli
+```
+
+### Docker Not Running
+
+If you see Docker-related errors:
+
+```bash
+# Check if Docker is installed
+docker --version
+
+# Check if Docker daemon is running
+docker ps
+
+# Start Docker
+# macOS: Open Docker Desktop application
+# Linux: sudo systemctl start docker
+# Windows: Start Docker Desktop
+```
+
+## Platform-Specific Notes
+
+### macOS
+- Docker Desktop is recommended
+- May need to grant terminal permissions for Docker
+- Homebrew users can install Node.js with `brew install node`
+
+### Linux
+- Add your user to the docker group: `sudo usermod -aG docker $USER`
+- Log out and back in for group changes to take effect
+- Some distributions may require `sudo` for global npm installs
+
+### Windows
+- Use WSL2 for best compatibility
+- Docker Desktop with WSL2 backend is recommended
+- Run commands in WSL2 terminal, not Command Prompt
+
+## Updating the CLI
+
+To update to the latest version:
+
+<CodeGroup>
+```bash npm
+npm update -g @vibe-kit/cli
+```
+
+```bash yarn
+yarn global upgrade @vibe-kit/cli
+```
+
+```bash npx
+# npx always uses the latest version
+npx @vibe-kit/cli@latest
+```
+</CodeGroup>
+
+## Uninstalling
+
+To remove the CLI:
+
+<CodeGroup>
+```bash npm
+npm uninstall -g @vibe-kit/cli
+```
+
+```bash yarn
+yarn global remove @vibe-kit/cli
+```
+</CodeGroup>
+
+## Next Steps
+
+After installation, you're ready to:
+
+1. [Initialize your providers](/cli/commands/init) with `vibekit init`
+2. [Create your first environment](/cli/commands/local/create) with `vibekit local create`
+3. [Generate code with AI](/cli/commands/local/generate) using `vibekit local generate`
+
+For a quick overview of all commands, see the [Quick Reference](/cli/quick-reference).
