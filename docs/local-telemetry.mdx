@@ -1,0 +1,765 @@
+---
+title: 'Local Telemetry'
+description: 'Track AI agent interactions locally with built-in analytics and real-time monitoring'
+---
+
+VibeKit provides a comprehensive local telemetry system that allows you to track, analyze, and monitor your AI agent interactions directly on your machine. This system is ideal for development, debugging, and gaining insights into your agent's behavior without sending data to external services.
+
+## What is Local Telemetry?
+
+Local telemetry captures detailed information about your agent sessions including:
+
+- **Session Tracking**: Complete agent interaction sessions from start to finish
+- **Event Streaming**: Real-time capture of agent responses and streaming data  
+- **Performance Metrics**: Response times, success rates, and usage statistics
+- **Error Tracking**: Detailed error logs and failure analysis
+- **Usage Analytics**: Token consumption, model performance, and interaction patterns
+
+All data is stored locally in a SQLite database on your machine, giving you full control over your telemetry data.
+
+## Quick Start
+
+### 1. Installation
+
+The local telemetry system uses three main packages:
+
+```bash
+# Core telemetry service
+npm install @vibe-kit/telemetry
+
+# Database layer (required for local storage)
+npm install @vibe-kit/db
+
+# Real-time dashboard (optional but recommended)
+npm install @vibe-kit/dashboard
+```
+
+### 2. Basic Setup
+
+```typescript
+import { TelemetryService } from '@vibe-kit/telemetry';
+
+// Initialize local telemetry
+const telemetry = new TelemetryService({
+  serviceName: 'my-ai-app',
+  serviceVersion: '1.0.0',
+  
+  // Local SQLite storage
+  storage: [{
+    type: 'sqlite',
+    enabled: true,
+    options: {
+      path: '.vibekit/telemetry.db',
+      streamBatchSize: 100,
+      streamFlushInterval: 1000
+    }
+  }],
+  
+  // Enable analytics and API
+  analytics: {
+    enabled: true,
+    metrics: { enabled: true },
+    anomaly: { enabled: true }
+  },
+  
+  api: {
+    enabled: true,
+    port: 3000
+  }
+});
+
+await telemetry.initialize();
+```
+
+### 3. Start the Dashboard
+
+Launch the real-time dashboard to visualize your telemetry data:
+
+```bash
+# Start telemetry API with dashboard
+npx @vibe-kit/telemetry api --port 3000 --dashboard
+
+# Or start separately
+npx @vibe-kit/telemetry api --port 3000
+# In another terminal:
+npm run dev # from @vibe-kit/dashboard directory
+```
+
+Navigate to `http://localhost:5173` to view the dashboard.
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in your project root:
+
+```bash
+# Telemetry Configuration
+VIBEKIT_DB_PATH=.vibekit/telemetry.db
+TELEMETRY_API_PORT=3000
+TELEMETRY_API_ENABLED=true
+
+# Dashboard Configuration
+VITE_TELEMETRY_API_URL=http://localhost:3000
+VITE_ENABLE_ANALYTICS=true
+VITE_POLLING_INTERVAL=5000
+
+# Data Retention
+TELEMETRY_RETENTION_DAYS=30
+TELEMETRY_PRUNE_ENABLED=true
+```
+
+### Advanced Configuration
+
+```typescript
+const telemetry = new TelemetryService({
+  serviceName: 'my-ai-app',
+  serviceVersion: '1.0.0',
+  environment: process.env.NODE_ENV || 'development',
+  
+  // Local storage with automatic cleanup
+  storage: [{
+    type: 'sqlite',
+    enabled: true,
+    options: {
+      path: process.env.VIBEKIT_DB_PATH || '.vibekit/telemetry.db',
+      streamBatchSize: 200,
+      streamFlushInterval: 1000,
+      enableWAL: true,
+      enableForeignKeys: true,
+      pruneDays: 30
+    }
+  }],
+  
+  // Real-time streaming
+  streaming: {
+    enabled: true,
+    provider: 'websocket',
+    options: {
+      port: 3001,
+      cors: { origins: ['http://localhost:5173'] }
+    }
+  },
+  
+  // Analytics and monitoring
+  analytics: {
+    enabled: true,
+    metrics: {
+      enabled: true,
+      interval: 5000,
+      persistence: true
+    },
+    anomaly: {
+      enabled: true,
+      sensitivity: 'medium',
+      metrics: ['response_time', 'error_rate', 'token_usage']
+    },
+    alerts: {
+      enabled: true,
+      channels: ['console', 'webhook']
+    }
+  },
+  
+  // API server with CORS
+  api: {
+    enabled: true,
+    port: 3000,
+    host: '0.0.0.0',
+    cors: {
+      origins: ['http://localhost:5173', 'http://localhost:3000'],
+      credentials: true
+    },
+    dashboard: true
+  },
+  
+  // Security (optional for local development)
+  security: {
+    pii: {
+      enabled: true,
+      patterns: ['email', 'phone', 'ssn']
+    },
+    encryption: {
+      enabled: false // Usually disabled for local development
+    }
+  }
+});
+```
+
+## Usage with VibeKit SDK
+
+### Automatic Integration
+
+The VibeKit SDK automatically integrates with local telemetry when configured:
+
+```typescript
+import { VibeKit } from '@vibe-kit/sdk';
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: 'claude',
+    provider: 'anthropic',
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: 'claude-sonnet-4-20250514'
+  })
+  .withSandbox(e2bProvider)
+  .withTelemetry({
+    // Local telemetry configuration
+    type: 'local', // This uses the local telemetry system
+    serviceName: 'my-vibekit-app',
+    serviceVersion: '1.0.0',
+    
+    // Database configuration
+    database: {
+      path: '.vibekit/telemetry.db',
+      retentionDays: 30
+    },
+    
+    // API and dashboard
+    api: {
+      enabled: true,
+      port: 3000,
+      dashboard: true
+    },
+    
+    // Analytics
+    analytics: {
+      enabled: true,
+      realtime: true
+    }
+  });
+
+// All agent interactions are automatically tracked
+const result = await vibeKit.generateCode({
+  prompt: 'Create a React component for user authentication',
+  files: ['src/components/Login.tsx']
+});
+```
+
+### Manual Tracking
+
+You can also manually track events:
+
+```typescript
+// Start a session
+const sessionId = await telemetry.trackStart('claude', 'code', 'Create authentication component');
+
+try {
+  // Track streaming responses
+  const stream = await agent.generateStream(prompt);
+  
+  for await (const chunk of stream) {
+    await telemetry.trackStream({
+      sessionId,
+      eventType: 'stream',
+      category: 'claude',
+      action: 'code-generation',
+      streamData: chunk.content,
+      metadata: {
+        model: 'claude-sonnet-4',
+        tokens: chunk.tokens,
+        timestamp: Date.now()
+      }
+    });
+  }
+  
+  // Track completion
+  await telemetry.trackEnd(sessionId, 'completed');
+  
+} catch (error) {
+  // Track errors
+  await telemetry.trackError({
+    sessionId,
+    error: error.message,
+    stack: error.stack,
+    category: 'claude',
+    action: 'code-generation'
+  });
+  
+  await telemetry.trackEnd(sessionId, 'failed');
+}
+```
+
+## Database Layer (@vibe-kit/db)
+
+The database layer provides the SQLite storage foundation for local telemetry.
+
+### Schema
+
+The local telemetry database includes these main tables:
+
+- **telemetry_sessions**: Session tracking with metadata
+- **telemetry_events**: Individual events and streaming data
+- **telemetry_stats**: Pre-computed statistics and metrics
+- **telemetry_errors**: Error tracking with stack traces
+- **telemetry_buffers**: Stream event buffering for performance
+
+### Database Operations
+
+```typescript
+import { DrizzleTelemetryOperations } from '@vibe-kit/db';
+
+// Direct database access
+const operations = new DrizzleTelemetryOperations({
+  dbPath: '.vibekit/telemetry.db',
+  enableWAL: true,
+  enableForeignKeys: true,
+  pruneDays: 30
+});
+
+await operations.initialize();
+
+// Query sessions
+const sessions = await operations.querySessions({
+  agentType: 'claude',
+  status: 'active',
+  fromTime: Date.now() - 86400000, // Last 24 hours
+  limit: 50
+});
+
+// Get detailed session with events
+const sessionDetails = await operations.getSessionWithEvents('session-123');
+
+// Query events with filters
+const events = await operations.queryEvents({
+  sessionId: 'session-123',
+  eventType: 'stream',
+  category: 'claude',
+  limit: 1000,
+  offset: 0
+});
+
+// Get statistics
+const stats = await operations.getStatistics();
+console.log('Total events:', stats.totalEvents);
+console.log('Active sessions:', stats.totalSessions);
+console.log('Event breakdown:', stats.eventBreakdown);
+```
+
+### Database Maintenance
+
+```typescript
+// Clean old data
+const deletedEvents = await operations.deleteEventsBefore(
+  Date.now() - 30 * 24 * 60 * 60 * 1000 // 30 days ago
+);
+
+// Optimize database
+await operations.vacuum();
+await operations.analyze();
+await operations.reindex();
+
+// Get performance metrics
+const metrics = operations.getMetrics();
+console.log('Query metrics:', metrics);
+```
+
+## Dashboard (@vibe-kit/dashboard)
+
+The dashboard provides a real-time web interface for monitoring your telemetry data.
+
+### Features
+
+- **📊 Real-time Metrics**: Live updates of session count, event rates, and performance
+- **🔍 Session Browser**: Browse and search through agent sessions
+- **📈 Analytics Charts**: Visual charts showing usage patterns and trends
+- **⚡ Live Monitoring**: WebSocket-powered real-time updates
+- **🎯 Event Filtering**: Filter events by type, agent, time range, and more
+- **📱 Responsive Design**: Works on desktop and mobile
+
+### Starting the Dashboard
+
+```bash
+# Option 1: Integrated with telemetry API
+npx @vibe-kit/telemetry api --port 3000 --dashboard --dashboard-port 5173
+
+# Option 2: Standalone dashboard
+cd packages/dashboard
+npm install
+npm run dev
+
+# Option 3: Using the CLI helper
+vibekit dashboard --telemetry-port 3000
+```
+
+### Dashboard Configuration
+
+Create `packages/dashboard/.env.local`:
+
+```bash
+# API Configuration
+VITE_TELEMETRY_API_URL=http://localhost:3000
+VITE_WS_URL=ws://localhost:3000
+
+# Feature Flags
+VITE_ENABLE_ANALYTICS=true
+VITE_ENABLE_EXPORT=true
+VITE_ENABLE_DARK_MODE=true
+
+# Performance
+VITE_POLLING_INTERVAL=5000
+VITE_CHART_ANIMATION=true
+VITE_MAX_EVENTS_DISPLAY=1000
+```
+
+### Custom Dashboard Components
+
+You can extend the dashboard with custom components:
+
+```tsx
+// Custom widget example
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMetrics } from '@/hooks/use-telemetry-api';
+
+export function TokenUsageWidget() {
+  const { data: metrics, isLoading } = useMetrics();
+  
+  if (isLoading) return <div>Loading...</div>;
+  
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Token Usage</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">
+          {metrics?.tokenUsage?.total?.toLocaleString()}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {metrics?.tokenUsage?.rate} tokens/min
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+## CLI Commands
+
+The telemetry package includes a comprehensive CLI for managing your local telemetry:
+
+### Starting Services
+
+```bash
+# Start API server
+npx @vibe-kit/telemetry api --port 3000
+
+# Start with dashboard
+npx @vibe-kit/telemetry api --port 3000 --dashboard
+
+# Start with custom database path
+VIBEKIT_DB_PATH=/custom/path/telemetry.db npx @vibe-kit/telemetry api --port 3000
+```
+
+### Querying Data
+
+```bash
+# Query recent events
+npx @vibe-kit/telemetry query --since 1h --format table
+
+# Query specific agent
+npx @vibe-kit/telemetry query --category claude --limit 100
+
+# Get session details
+npx @vibe-kit/telemetry session <session-id> --with-events
+
+# List active sessions
+npx @vibe-kit/telemetry sessions --status active
+```
+
+### Analytics and Insights
+
+```bash
+# Get metrics overview
+npx @vibe-kit/telemetry metrics --format json
+
+# Performance analysis
+npx @vibe-kit/telemetry analytics performance --since 24h
+
+# Detect anomalies
+npx @vibe-kit/telemetry analytics anomalies --sensitivity high
+```
+
+### Data Export
+
+```bash
+# Export to JSON
+npx @vibe-kit/telemetry export --format json --output ./exports/data.json
+
+# Export to CSV
+npx @vibe-kit/telemetry export --format csv --output ./exports/data.csv
+
+# Export specific time range
+npx @vibe-kit/telemetry export --since 2024-01-01 --until 2024-01-31 --format json
+```
+
+### Maintenance
+
+```bash
+# Clean old data (30+ days)
+npx @vibe-kit/telemetry clean --days 30
+
+# Optimize database
+npx @vibe-kit/telemetry optimize
+
+# Health check
+npx @vibe-kit/telemetry health --detailed
+```
+
+## Data Analysis Examples
+
+### Session Analysis
+
+```typescript
+// Find longest running sessions
+const longSessions = await operations.querySessions({
+  orderBy: 'duration',
+  order: 'desc',
+  limit: 10
+});
+
+// Get error rate by agent type
+const stats = await operations.getStatistics();
+const errorRates = Object.entries(stats.agentBreakdown).map(([agent, data]) => ({
+  agent,
+  errorRate: data.errors / data.total * 100
+}));
+
+// Find peak usage hours
+const events = await operations.queryEvents({
+  fromTime: Date.now() - 7 * 24 * 60 * 60 * 1000, // Last week
+});
+
+const hourlyUsage = events.reduce((acc, event) => {
+  const hour = new Date(event.timestamp).getHours();
+  acc[hour] = (acc[hour] || 0) + 1;
+  return acc;
+}, {});
+```
+
+### Performance Monitoring
+
+```typescript
+// Track response times
+const sessions = await operations.querySessions({
+  fromTime: Date.now() - 24 * 60 * 60 * 1000,
+  includeDuration: true
+});
+
+const avgResponseTime = sessions
+  .filter(s => s.duration)
+  .reduce((acc, s) => acc + s.duration, 0) / sessions.length;
+
+// Monitor token usage
+const events = await operations.queryEvents({
+  eventType: 'stream',
+  fromTime: Date.now() - 24 * 60 * 60 * 1000
+});
+
+const totalTokens = events
+  .reduce((acc, event) => {
+    const tokens = event.metadata?.tokens || 0;
+    return acc + tokens;
+  }, 0);
+```
+
+## Best Practices
+
+### 1. Database Management
+
+```typescript
+// Set up automatic cleanup
+const telemetry = new TelemetryService({
+  storage: [{
+    type: 'sqlite',
+    options: {
+      pruneDays: 30, // Auto-delete old data
+      maxSizeMB: 500, // Limit database size
+      enableWAL: true, // Better concurrency
+      streamBatchSize: 200 // Optimize streaming
+    }
+  }]
+});
+
+// Periodic maintenance
+setInterval(async () => {
+  await operations.vacuum();
+  await operations.analyze();
+}, 24 * 60 * 60 * 1000); // Daily
+```
+
+### 2. Performance Optimization
+
+```typescript
+// Use batching for high-volume events
+const batcher = telemetry.createBatcher({
+  batchSize: 100,
+  flushInterval: 1000
+});
+
+// Batch stream events instead of individual tracking
+for (const chunk of streamChunks) {
+  batcher.add({
+    sessionId,
+    eventType: 'stream',
+    streamData: chunk.content,
+    metadata: { tokens: chunk.tokens }
+  });
+}
+```
+
+### 3. Error Handling
+
+```typescript
+// Graceful telemetry failures
+class SafeTelemetry {
+  async track(event: TelemetryEvent): Promise<void> {
+    try {
+      await this.telemetry.track(event);
+    } catch (error) {
+      // Log but don't fail the main application
+      console.warn('Telemetry tracking failed:', error);
+      
+      // Optionally buffer for retry
+      this.failedEvents.push(event);
+    }
+  }
+}
+```
+
+### 4. Privacy and Security
+
+```typescript
+// Enable PII detection for user data
+const telemetry = new TelemetryService({
+  security: {
+    pii: {
+      enabled: true,
+      patterns: ['email', 'phone', 'ssn', 'api_key'],
+      customDetectors: [{
+        name: 'custom_id',
+        pattern: /CUS-\d{8}/g,
+        replacement: '[REDACTED_CUSTOMER_ID]'
+      }]
+    },
+    redaction: {
+      enabled: true,
+      fields: ['password', 'token', 'secret']
+    }
+  }
+});
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### Database Locked Error
+```bash
+# Stop all processes using the database
+killall node
+
+# Remove WAL files
+rm .vibekit/telemetry.db-wal
+rm .vibekit/telemetry.db-shm
+
+# Restart telemetry service
+npx @vibe-kit/telemetry api --port 3000
+```
+
+#### High Memory Usage
+```typescript
+// Limit buffer sizes
+const telemetry = new TelemetryService({
+  storage: [{
+    type: 'sqlite',
+    options: {
+      streamBatchSize: 50, // Reduce batch size
+      streamFlushInterval: 500, // Flush more frequently
+      maxBufferSize: 1000 // Limit buffer
+    }
+  }]
+});
+```
+
+#### Dashboard Connection Issues
+```bash
+# Check API server is running
+curl http://localhost:3000/health
+
+# Verify CORS configuration
+# Add dashboard URL to CORS origins in telemetry config
+```
+
+### Debug Mode
+
+Enable debug logging to troubleshoot issues:
+
+```bash
+# Environment variable
+DEBUG=vibekit:telemetry:* npx @vibe-kit/telemetry api --port 3000
+
+# Or in code
+const telemetry = new TelemetryService({
+  debug: true,
+  logLevel: 'debug'
+});
+```
+
+## Migration from External Telemetry
+
+If you're switching from an external telemetry service:
+
+### 1. Export Existing Data
+```bash
+# Export from your current system
+your-telemetry-tool export --format json --output existing-data.json
+```
+
+### 2. Import to Local System
+```typescript
+// Import existing data
+const existingData = JSON.parse(fs.readFileSync('existing-data.json', 'utf8'));
+
+for (const event of existingData.events) {
+  await telemetry.track({
+    ...event,
+    timestamp: new Date(event.timestamp).getTime()
+  });
+}
+```
+
+### 3. Update Configuration
+```typescript
+// Replace external config
+const telemetry = new TelemetryService({
+  // Remove external provider config
+  // storage: [{ type: 'datadog', ... }],
+  
+  // Add local storage
+  storage: [{
+    type: 'sqlite',
+    enabled: true,
+    options: { path: '.vibekit/telemetry.db' }
+  }]
+});
+```
+
+## Next Steps
+
+Once you have local telemetry set up:
+
+1. **Explore the Dashboard**: Use the real-time dashboard to monitor your agents
+2. **Set Up Alerts**: Configure anomaly detection and alerting
+3. **Create Reports**: Use the CLI to generate usage and performance reports
+4. **Optimize Performance**: Use telemetry data to improve your agent implementations
+5. **Export Data**: Regularly export data for backup and analysis
+
+For advanced use cases, consider:
+- Setting up automated reports with cron jobs
+- Integrating with external monitoring systems via OTLP export
+- Creating custom dashboard widgets for specific metrics
+- Implementing custom plugins for specialized tracking needs
+
+---
+
+Local telemetry gives you complete control over your AI agent monitoring and analytics while keeping all data on your machine. It's perfect for development, debugging, and understanding your agent's behavior patterns.

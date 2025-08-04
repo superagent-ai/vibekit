@@ -37,6 +37,7 @@
               "streaming",
               "session-management",
               "secrets",
+              "local-telemetry",
               "open-telemetry"
             ]
           },
