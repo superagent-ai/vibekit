@@ -19,28 +19,28 @@ VibeKit provides built-in support for [OpenTelemetry](https://opentelemetry.io/)
 ### Using withTelemetry
 
 ```typescript
-import { VibeKit } from "@vibe-kit/sdk";
+import { VibeKit } from '@vibe-kit/sdk';
 
 const vibeKit = new VibeKit()
   .withAgent({
-    type: "claude",
-    provider: "anthropic",
+    type: 'claude',
+    provider: 'anthropic',
     apiKey: process.env.ANTHROPIC_API_KEY!,
-    model: "claude-sonnet-4-20250514",
+    model: 'claude-sonnet-4-20250514',
   })
   .withSandbox(e2bProvider)
   .withTelemetry({
-    isEnabled: true,
-    endpoint: "https://test-otel-endpoint.com/v1/traces",
-    serviceName: "test-vibekit",
-    serviceVersion: "1.0.0",
+    type: 'remote',
+    endpoint: 'https://test-otel-endpoint.com/v1/traces',
+    serviceName: 'test-vibekit',
+    serviceVersion: '1.0.0',
     headers: {
-      Authorization: "Bearer test-token",
+      Authorization: 'Bearer test-token',
     },
     timeout: 5000,
     samplingRatio: 1.0,
     resourceAttributes: {
-      environment: "test",
+      environment: 'test',
     },
   });
 ```
@@ -50,36 +50,36 @@ const vibeKit = new VibeKit()
 To enable OpenTelemetry in VibeKit, add the `telemetry` configuration to your `VibeConfig`:
 
 ```typescript
-import { VibeKit, VibeConfig } from "@vibe-kit/sdk";
+import { VibeKit, VibeConfig } from '@vibe-kit/sdk';
 
 const config: VibeConfig = {
   agent: {
-    type: "codex",
+    type: 'codex',
     model: {
-      apiKey: "sk-proj-****",
+      apiKey: 'sk-proj-****',
     },
   },
   environment: {
     e2b: {
-      apiKey: "e2b_****",
+      apiKey: 'e2b_****',
     },
   },
   github: {
-    token: "ghp_****",
-    repository: "superagent-ai/vibekit",
+    token: 'ghp_****',
+    repository: 'superagent-ai/vibekit',
   },
   telemetry: {
-    isEnabled: true,
-    endpoint: "https://test-otel-endpoint.com/v1/traces",
-    serviceName: "test-vibekit",
-    serviceVersion: "1.0.0",
+    type: 'remote',
+    endpoint: 'https://test-otel-endpoint.com/v1/traces',
+    serviceName: 'test-vibekit',
+    serviceVersion: '1.0.0',
     headers: {
-      Authorization: "Bearer test-token",
+      Authorization: 'Bearer test-token',
     },
     timeout: 5000,
     samplingRatio: 1.0,
     resourceAttributes: {
-      environment: "test",
+      environment: 'test',
     },
   },
 };
@@ -91,14 +91,29 @@ const vibeKit = new VibeKit(config);
 
 | Option | Type | Description | Default |
 |--------|------|-------------|---------|
-| `isEnabled` | `boolean` | Enable/disable telemetry collection | `false` |
-| `endpoint` | `string` | OTLP endpoint URL for trace export | - |
-| `serviceName` | `string` | Name of your service for identification | `"vibekit"` |
-| `serviceVersion` | `string` | Version of your service | `"1.0.0"` |
+| `type` | `string` | Must be `'remote'` for OpenTelemetry export | - |
+| `endpoint` | `string` | OTLP endpoint URL for trace export (required) | - |
+| `serviceName` | `string` | Name of your service for identification | `'vibekit'` |
+| `serviceVersion` | `string` | Version of your service | `'1.0.0'` |
 | `headers` | `object` | Custom headers for the OTLP exporter | `{}` |
 | `timeout` | `number` | Timeout for trace export in milliseconds | `30000` |
 | `samplingRatio` | `number` | Sampling ratio (0.0 to 1.0) | `1.0` |
 | `resourceAttributes` | `object` | Additional resource attributes | `{}` |
+
+### Backward Compatibility
+
+The new `type` field is fully backward compatible:
+
+```typescript
+// ✅ New recommended approach
+.withTelemetry({ type: 'remote', endpoint: '...' })
+
+// ✅ Still works (legacy approach)  
+.withTelemetry({ isEnabled: true, endpoint: '...' })
+
+// ❌ This combination won't work as expected
+.withTelemetry({ isEnabled: false, type: 'remote' })  // type takes precedence
+```
 
 ## Supported Backends
 

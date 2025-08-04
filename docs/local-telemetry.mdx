@@ -36,15 +36,88 @@ npm install @vibe-kit/dashboard
 
 ### 2. Basic Setup
 
+The easiest way to get started is with the VibeKit SDK using the `.withTelemetry()` builder pattern:
+
+```typescript
+import { VibeKit } from '@vibe-kit/sdk';
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: 'claude',
+    provider: 'anthropic',
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: 'claude-sonnet-4-20250514'
+  })
+  .withSandbox(e2bProvider)
+  .withTelemetry({
+    type: 'local'
+  });
+
+// All agent interactions are automatically tracked
+const result = await vibeKit.generateCode({
+  prompt: 'Create a user authentication system',
+  files: ['src/auth/login.ts']
+});
+```
+
+### Sensible Defaults
+
+When you specify `type: 'local'`, these defaults are automatically applied:
+
+```typescript
+{
+  type: 'local',
+  serviceName: 'vibekit-local',        // or from package.json name
+  serviceVersion: 'dev',               // or from package.json version
+  database: {
+    path: '.vibekit/telemetry.db',     // SQLite file location
+    retentionDays: 0,                  // Keep data forever (no auto-cleanup)
+    enableWAL: true,                   // Better performance
+    batchSize: 100                     // Optimal batch size
+  },
+  api: {
+    enabled: true,                     // Enable HTTP API
+    port: 3000,                        // Default port
+    dashboard: true,                   // Enable integrated dashboard
+    cors: true                         // Allow dashboard access
+  },
+  analytics: {
+    enabled: true,                     // Enable analytics
+    realtime: true,                    // Real-time updates
+    metrics: true                      // Collect metrics
+  }
+}
+```
+
+### Custom Configuration
+
+Override defaults only when needed:
+
+```typescript
+.withTelemetry({
+  type: 'local',
+  serviceName: 'my-complex-project',   // Custom service name
+  database: {
+    path: '/custom/path/telemetry.db', // Custom database location
+    retentionDays: 30                  // Auto-cleanup after 30 days (optional)
+  },
+  api: {
+    port: 4000                         // Custom port
+  }
+})
+```
+
+### Alternative: Direct TelemetryService Setup
+
+For advanced use cases, you can use the `TelemetryService` directly:
+
 ```typescript
 import { TelemetryService } from '@vibe-kit/telemetry';
 
-// Initialize local telemetry
 const telemetry = new TelemetryService({
   serviceName: 'my-ai-app',
   serviceVersion: '1.0.0',
   
-  // Local SQLite storage
   storage: [{
     type: 'sqlite',
     enabled: true,
@@ -55,7 +128,6 @@ const telemetry = new TelemetryService({
     }
   }],
   
-  // Enable analytics and API
   analytics: {
     enabled: true,
     metrics: { enabled: true },
@@ -187,9 +259,9 @@ const telemetry = new TelemetryService({
 
 ## Usage with VibeKit SDK
 
-### Automatic Integration
+### Using withTelemetry
 
-The VibeKit SDK automatically integrates with local telemetry when configured:
+The VibeKit SDK integrates seamlessly with local telemetry using the same builder pattern as OpenTelemetry:
 
 ```typescript
 import { VibeKit } from '@vibe-kit/sdk';
@@ -203,28 +275,29 @@ const vibeKit = new VibeKit()
   })
   .withSandbox(e2bProvider)
   .withTelemetry({
-    // Local telemetry configuration
-    type: 'local', // This uses the local telemetry system
+    type: 'local',
     serviceName: 'my-vibekit-app',
     serviceVersion: '1.0.0',
-    
-    // Database configuration
     database: {
       path: '.vibekit/telemetry.db',
-      retentionDays: 30
+      retentionDays: 30,
+      enableWAL: true,
+      batchSize: 100
     },
-    
-    // API and dashboard
     api: {
       enabled: true,
       port: 3000,
-      dashboard: true
+      dashboard: true,
+      cors: true
     },
-    
-    // Analytics
     analytics: {
       enabled: true,
-      realtime: true
+      realtime: true,
+      anomalyDetection: true
+    },
+    resourceAttributes: {
+      environment: process.env.NODE_ENV || 'development',
+      version: process.env.APP_VERSION || '1.0.0'
     }
   });
 
@@ -233,6 +306,149 @@ const result = await vibeKit.generateCode({
   prompt: 'Create a React component for user authentication',
   files: ['src/components/Login.tsx']
 });
+```
+
+### Multiple Telemetry Destinations
+
+You can easily send telemetry data to multiple destinations by chaining multiple `.withTelemetry()` calls:
+
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: 'claude',
+    provider: 'anthropic',
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: 'claude-sonnet-4-20250514'
+  })
+  .withSandbox(e2bProvider)
+  // Local telemetry for development and debugging
+  .withTelemetry({
+    type: 'local'
+  })
+  // Remote telemetry for production monitoring
+  .withTelemetry({
+    type: 'remote',
+    endpoint: process.env.OTLP_ENDPOINT!,
+    serviceName: 'my-app-prod',
+    serviceVersion: '1.0.0',
+    headers: {
+      Authorization: `Bearer ${process.env.OTLP_TOKEN}`
+    },
+    samplingRatio: 0.1, // Sample 10% in production
+    resourceAttributes: {
+      environment: 'production'
+    }
+  });
+```
+
+### Configuration Object Method
+
+Alternatively, you can configure local telemetry using the configuration object approach:
+
+```typescript
+import { VibeKit, VibeConfig } from '@vibe-kit/sdk';
+
+const config: VibeConfig = {
+  agent: {
+    type: 'claude',
+    provider: 'anthropic',
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: 'claude-sonnet-4-20250514'
+  },
+  environment: {
+    e2b: {
+      apiKey: process.env.E2B_API_KEY!
+    }
+  },
+  telemetry: [
+    {
+      type: 'local'
+    }
+  ]
+};
+
+const vibeKit = new VibeKit(config);
+```
+
+## Configuration Options
+
+### Local Telemetry Configuration
+
+| Option | Type | Required | Description | Default |
+|--------|------|----------|-------------|---------|
+| `type` | `string` | ✅ | Must be `'local'` for local telemetry | - |
+| `serviceName` | `string` | ❌ | Name of your service for identification | `'vibekit-local'` |
+| `serviceVersion` | `string` | ❌ | Version of your service | `'dev'` |
+| `database` | `object` | ❌ | Database configuration options | See below |
+| `api` | `object` | ❌ | API server configuration | See below |
+| `analytics` | `object` | ❌ | Analytics and monitoring settings | See below |
+| `resourceAttributes` | `object` | ❌ | Additional resource attributes | `{}` |
+
+### Database Configuration (all optional)
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `path` | `string` | Path to SQLite database file | `.vibekit/telemetry.db` |
+| `retentionDays` | `number` | Days to retain data (0 = forever) | `0` |
+| `enableWAL` | `boolean` | Enable WAL mode for better performance | `true` |
+| `batchSize` | `number` | Event batch size for performance | `100` |
+| `flushInterval` | `number` | Flush interval in milliseconds | `1000` |
+| `maxSizeMB` | `number` | Maximum database size in MB | `100` |
+
+**⚠️ Data Retention Note**: By default, your telemetry data is kept forever (`retentionDays: 0`). Only set a retention period if you want automatic cleanup:
+
+```typescript
+database: {
+  retentionDays: 30  // Auto-delete data older than 30 days
+}
+```
+
+### API Configuration (all optional)
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `enabled` | `boolean` | Enable HTTP API server | `true` |
+| `port` | `number` | Port for API server | `3000` |
+| `host` | `string` | Host to bind API server | `localhost` |
+| `dashboard` | `boolean` | Enable integrated dashboard | `true` |
+| `cors` | `boolean \| object` | CORS configuration | `true` |
+
+### Analytics Configuration (all optional)
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `enabled` | `boolean` | Enable analytics processing | `true` |
+| `realtime` | `boolean` | Enable real-time analytics | `true` |
+| `anomalyDetection` | `boolean` | Enable anomaly detection | `false` |
+| `metrics` | `boolean` | Enable metrics collection | `true` |
+| `retention` | `number` | Analytics data retention (days) | `7` |
+
+### Comparison with Remote Telemetry
+
+| Feature | Local Telemetry | Remote Telemetry |
+|---------|----------------|-----------------|
+| **Configuration** | `type: 'local'` | `type: 'remote'` |
+| **Data Storage** | Local SQLite database | Remote OTLP endpoint |
+| **Setup Complexity** | Minimal - just specify `type: 'local'` | Requires endpoint configuration |
+| **Real-time Dashboard** | Built-in dashboard available | Requires external tools |
+| **Data Control** | Complete local control | Data sent to external service |
+| **Performance** | High-performance local storage | Network-dependent |
+| **Scalability** | Single machine | Distributed systems |
+| **Use Case** | Development, debugging, local analysis | Production monitoring, distributed tracing |
+
+### Backward Compatibility
+
+The new `type` field is fully backward compatible:
+
+```typescript
+// ✅ New recommended approach
+.withTelemetry({ type: 'local', ... })
+
+// ✅ Still works (legacy approach)
+.withTelemetry({ isEnabled: true, localStore: { isEnabled: true } })
+
+// ❌ This combination won't work as expected
+.withTelemetry({ isEnabled: true, type: 'local' })  // type takes precedence
 ```
 
 ### Manual Tracking
@@ -440,14 +656,14 @@ The telemetry package includes a comprehensive CLI for managing your local telem
 ### Starting Services
 
 ```bash
-# Start API server
-npx @vibe-kit/telemetry api --port 3000
+# Minimal setup - starts API + dashboard with defaults
+npx @vibe-kit/telemetry api --dashboard
 
-# Start with dashboard
-npx @vibe-kit/telemetry api --port 3000 --dashboard
+# Custom port
+npx @vibe-kit/telemetry api --port 4000 --dashboard
 
-# Start with custom database path
-VIBEKIT_DB_PATH=/custom/path/telemetry.db npx @vibe-kit/telemetry api --port 3000
+# Custom database location
+VIBEKIT_DB_PATH=/custom/path/telemetry.db npx @vibe-kit/telemetry api --dashboard
 ```
 
 ### Querying Data
@@ -495,15 +711,17 @@ npx @vibe-kit/telemetry export --since 2024-01-01 --until 2024-01-31 --format js
 ### Maintenance
 
 ```bash
-# Clean old data (30+ days)
+# Clean old data (only if you want to delete data)
 npx @vibe-kit/telemetry clean --days 30
 
-# Optimize database
+# Optimize database (safe - doesn't delete data)
 npx @vibe-kit/telemetry optimize
 
 # Health check
 npx @vibe-kit/telemetry health --detailed
 ```
+
+**⚠️ Note**: The `clean` command permanently deletes data. By default, local telemetry keeps all data forever.
 
 ## Data Analysis Examples
 

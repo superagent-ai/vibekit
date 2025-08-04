@@ -207,8 +207,8 @@ export class TelemetryService extends EventEmitter {
     };
 
     this.retentionConfig = {
-      maxAgeDays: config.localStore?.pruneDays || 30,
-      maxSizeMB: config.localStore?.maxSizeMB || 100,
+      maxAgeDays: config.database?.retentionDays || config.localStore?.pruneDays || 0, // Default: keep forever
+      maxSizeMB: config.database?.maxSizeMB || config.localStore?.maxSizeMB || 100,
       compressionEnabled: true,
     };
 
@@ -218,16 +218,19 @@ export class TelemetryService extends EventEmitter {
 
     this.logger.info('TelemetryService initialized', {
       sessionId: this.sessionId,
-      isEnabled: this.config.isEnabled,
+      type: this.config.type,
+      isEnabled: this.config.isEnabled, // deprecated but kept for backward compatibility
       localStoreEnabled: this.config.localStore?.isEnabled,
     });
 
-    if (this.config.isEnabled) {
+    // Handle telemetry initialization based on type
+    if (this.config.type === 'remote' || (this.config.isEnabled && !this.config.type)) {
+      // Initialize OpenTelemetry for 'remote' type or legacy isEnabled=true
       this.initializeOpenTelemetry();
     }
 
-    // Initialize local storage if configured (non-blocking)
-    if (this.config.localStore?.isEnabled) {
+    // Initialize local storage for 'local' type or legacy localStore config
+    if (this.config.type === 'local' || this.config.localStore?.isEnabled) {
       this.initializeDrizzleDB().catch(error => {
         this.logger.warn('Local telemetry storage initialization failed', { error: error.message });
       });
@@ -252,6 +255,15 @@ export class TelemetryService extends EventEmitter {
   private shouldSample(): boolean {
     if (this.config.samplingRatio === undefined) return true;
     return Math.random() < this.config.samplingRatio;
+  }
+
+  private isTelemetryEnabled(): boolean {
+    // Check new type-based configuration first
+    if (this.config.type) {
+      return this.config.type === 'local' || this.config.type === 'remote';
+    }
+    // Fall back to legacy isEnabled for backward compatibility
+    return this.config.isEnabled === true;
   }
 
   private initializeOpenTelemetry(): void {
@@ -321,7 +333,8 @@ export class TelemetryService extends EventEmitter {
     prompt: string,
     metadata?: Record<string, any>
   ): Promise<void> {
-    if (!this.config.isEnabled) {
+    // Check if telemetry is enabled (either by type or legacy isEnabled)
+    if (!this.isTelemetryEnabled()) {
       return;
     }
 
@@ -424,7 +437,7 @@ export class TelemetryService extends EventEmitter {
     repoUrl?: string,
     metadata?: Record<string, any>
   ): Promise<void> {
-    if (!this.config.isEnabled) {
+    if (!this.isTelemetryEnabled()) {
       return;
     }
 
@@ -520,7 +533,7 @@ export class TelemetryService extends EventEmitter {
     repoUrl?: string,
     metadata?: Record<string, any>
   ): Promise<void> {
-    if (!this.config.isEnabled) {
+    if (!this.isTelemetryEnabled()) {
       return;
     }
 
@@ -614,7 +627,7 @@ export class TelemetryService extends EventEmitter {
     error: string,
     metadata?: Record<string, any>
   ): Promise<void> {
-    if (!this.config.isEnabled) {
+    if (!this.isTelemetryEnabled()) {
       return;
     }
 
@@ -721,7 +734,12 @@ export class TelemetryService extends EventEmitter {
       console.log('✅ Drizzle telemetry components loaded');
       
       // Phase 2: Actually initialize the database
-      const dbPath = resolve(this.config.localStore?.path || '.vibekit/telemetry.db');
+      // Use new database config if available, fallback to legacy localStore config
+      const dbPath = resolve(
+        this.config.database?.path || 
+        this.config.localStore?.path || 
+        '.vibekit/telemetry.db'
+      );
       
       // Initialize database with Drizzle
       const database = new BetterSQLite3(dbPath);
@@ -1561,9 +1579,11 @@ export class TelemetryService extends EventEmitter {
     if (!this.dbOps) return;
 
     try {
-      // Clean up old records
-      const cutoffTime = Date.now() - (this.retentionConfig.maxAgeDays * 24 * 60 * 60 * 1000);
-      await this.dbOps.deleteOldRecords?.(cutoffTime);
+      // Only clean up old records if retention is configured (> 0)
+      if (this.retentionConfig.maxAgeDays > 0) {
+        const cutoffTime = Date.now() - (this.retentionConfig.maxAgeDays * 24 * 60 * 60 * 1000);
+        await this.dbOps.deleteOldRecords?.(cutoffTime);
+      }
 
       // Check database size and compress if needed
       const dbStats = await this.dbOps.getDatabaseStats?.();
