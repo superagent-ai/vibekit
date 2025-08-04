@@ -40,19 +40,4 @@ logs
 # Misc
 .cache/
 .temp/
-test-codex.ts
-test-pr.ts
-test-claude.ts
-test-codex-gemini.ts
-test-daytona.ts
-test-package.ts
-test-envs.ts
-test-run-tests.ts
-test-togetherai.ts
-test-opencode.ts
-test-gemini.ts
-test-northflank.ts
-test-nextjs.ts
-test-working-dir.ts
-.cluso/config.json
-.inngest/main.db
+test-mcp/

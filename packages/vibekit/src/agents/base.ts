@@ -8,7 +8,10 @@ import {
   SandboxInstance,
   SandboxProvider,
   LabelOptions,
+  MCPConfig,
+  MCPTool,
 } from "../types";
+import { VibeKitMCPManager } from '../mcp/manager.js';
 
 // StreamingBuffer class to handle chunked JSON data
 class StreamingBuffer {
@@ -103,13 +106,8 @@ export interface BaseAgentConfig {
   sandboxId?: string;
   telemetry?: any;
   workingDirectory?: string;
-  // Local MCP server configuration
-  localMCP?: {
-    enabled: boolean;
-    environment?: any; // Environment from @vibe-kit/dagger
-    serverType?: "stdio" | "transport";
-    autoStart?: boolean;
-  };
+
+  mcpConfig?: MCPConfig;
 }
 
 export interface StreamCallbacks {
@@ -176,7 +174,8 @@ export abstract class BaseAgent {
   protected lastPrompt?: string;
   protected currentBranch?: string;
   protected readonly WORKING_DIR: string;
-  protected mcpServerInstance?: any; // MCPServerInstance from local-mcp.ts
+
+  private mcpManager?: VibeKitMCPManager;
 
   constructor(config: BaseAgentConfig) {
     this.config = config;
@@ -214,55 +213,18 @@ export abstract class BaseAgent {
       );
     }
 
-    // Initialize local MCP server if configured (after sandbox is created)
-    if (this.config.localMCP?.enabled && this.config.localMCP.autoStart) {
-      await this.initializeLocalMCPServer();
-      await this.createAgentSession();
-    }
+    // Initialize MCP after sandbox is ready
+    await this.initializeMCP();
+    
+    // Call agent-specific setup hook
+    await this.onSandboxReady(this.sandboxInstance);
 
     return this.sandboxInstance;
   }
 
-  /**
-   * Initialize local MCP server for this agent
-   */
-  protected async initializeLocalMCPServer(): Promise<void> {
-    if (!this.config.localMCP?.enabled || !this.sandboxInstance) {
-      return;
-    }
 
-    try {
-      // Dynamically import to avoid circular dependencies
-      const { initializeMCPForAgent } = await import("./local-mcp");
 
-      const agentType = this.getAgentType();
-      this.mcpServerInstance = await initializeMCPForAgent(
-        this.sandboxInstance,
-        agentType
-      );
 
-      console.log(`MCP server initialized for ${agentType} agent`);
-    } catch (error) {
-      console.warn(`Failed to initialize MCP server: ${error}`);
-      // Don't throw - MCP is optional
-    }
-  }
-
-  /**
-   * Get MCP server URL if available
-   */
-  protected getMCPServerURL(): string | undefined {
-    return this.mcpServerInstance?.serverUrl;
-  }
-
-  /**
-   * Check if local MCP is enabled and running
-   */
-  protected isLocalMCPEnabled(): boolean {
-    return !!(
-      this.config.localMCP?.enabled && this.mcpServerInstance?.isRunning
-    );
-  }
 
   /**
    * Create and register agent session
@@ -289,7 +251,7 @@ export abstract class BaseAgent {
       createAgentSession(
         this.getAgentType(),
         mockEnvironment,
-        this.mcpServerInstance,
+        undefined, // MCP server instance no longer needed
         this
       );
     } catch (error) {
@@ -301,18 +263,23 @@ export abstract class BaseAgent {
    * Update agent activity in session
    */
   protected updateActivity(metadata?: any): void {
-    if (this.config.localMCP?.enabled) {
-      try {
-        import("./session-manager").then(({ updateAgentActivity }) => {
-          updateAgentActivity(this, metadata);
-        });
-      } catch (error) {
-        // Silently ignore session tracking errors
-      }
+    // Session tracking is optional
+    try {
+      import("./session-manager").then(({ updateAgentActivity }) => {
+        updateAgentActivity(this, metadata);
+      });
+    } catch (error) {
+      // Silently ignore session tracking errors
     }
   }
 
   protected abstract getEnvironmentVariables(): Record<string, string>;
+  
+  // Hook for agent-specific setup after sandbox is ready
+  protected async onSandboxReady(sandbox: SandboxInstance): Promise<void> {
+    // Default implementation does nothing
+    // Subclasses can override to perform agent-specific setup
+  }
 
   private getMkdirCommand(path: string): string {
     // Use non-sudo commands for better compatibility with Docker containers
@@ -321,15 +288,10 @@ export abstract class BaseAgent {
   }
 
   public async killSandbox() {
-    // Clean up MCP server first
-    if (this.mcpServerInstance && this.sandboxInstance) {
-      try {
-        const { cleanupMCPForSandbox } = await import("./local-mcp");
-        await cleanupMCPForSandbox(this.sandboxInstance.sandboxId);
-        this.mcpServerInstance = undefined;
-      } catch (error) {
-        console.warn(`Failed to cleanup MCP server: ${error}`);
-      }
+    // Clean up MCP manager first
+    if (this.mcpManager) {
+      await this.mcpManager.cleanup();
+      this.mcpManager = undefined;
     }
 
     if (this.sandboxInstance) {
@@ -479,16 +441,26 @@ export abstract class BaseAgent {
           callbacks?.onUpdate?.(
             `{"type": "git", "output": "Cloning repository: ${this.config.repoUrl}"}`
           );
-          // Clone directly into the working directory, not into a subdirectory
-          await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git clone https://x-access-token:${this.config.githubToken}@github.com/${this.config.repoUrl}.git .`,
-            { timeoutMs: 3600000, background: background || false }
-          );
+          try {
+            // Clone directly into the working directory, not into a subdirectory
+            await sbx.commands.run(
+              `cd ${this.WORKING_DIR} && git clone https://x-access-token:${this.config.githubToken}@github.com/${this.config.repoUrl}.git .`,
+              { timeoutMs: 3600000, background: background || false }
+            );
 
-          await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git config user.name "github-actions[bot]" && git config user.email "github-actions[bot]@users.noreply.github.com"`,
-            { timeoutMs: 60000, background: background || false }
-          );
+            await sbx.commands.run(
+              `cd ${this.WORKING_DIR} && git config user.name "github-actions[bot]" && git config user.email "github-actions[bot]@users.noreply.github.com"`,
+              { timeoutMs: 60000, background: background || false }
+            );
+          } catch (gitError) {
+            const errorMessage = `Git clone failed: ${gitError instanceof Error ? gitError.message : String(gitError)}`;
+            console.error(errorMessage);
+            callbacks?.onUpdate?.(
+              `{"type": "git", "output": "${errorMessage}", "error": true}`
+            );
+            callbacks?.onError?.(errorMessage);
+            // Continue execution instead of throwing - allow code generation to proceed without git repository
+          }
         }
       } else if (this.config.sandboxId) {
         callbacks?.onUpdate?.(
@@ -756,20 +728,27 @@ export abstract class BaseAgent {
     // Escape any quotes in the commit message to prevent shell parsing issues
     const escapedCommitMessage = commitMessage.replace(/"/g, '\\"');
 
-    const checkout = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git checkout -b ${_branchName} && git add -A && git commit -m "${escapedCommitMessage}"`,
-      {
-        timeoutMs: 3600000,
-      }
-    );
+    let checkout;
+    try {
+      checkout = await sbx.commands.run(
+        `cd ${this.WORKING_DIR} && git checkout -b ${_branchName} && git add -A && git commit -m "${escapedCommitMessage}"`,
+        {
+          timeoutMs: 3600000,
+        }
+      );
 
-    // Push the branch to GitHub
-    await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git push origin ${_branchName}`,
-      {
-        timeoutMs: 3600000,
-      }
-    );
+      // Push the branch to GitHub
+      await sbx.commands.run(
+        `cd ${this.WORKING_DIR} && git push origin ${_branchName}`,
+        {
+          timeoutMs: 3600000,
+        }
+      );
+    } catch (gitError) {
+      const errorMessage = `Git operations failed during PR creation: ${gitError instanceof Error ? gitError.message : String(gitError)}`;
+      console.error(errorMessage);
+      throw new Error(errorMessage);
+    }
 
     // Extract commit SHA from checkout output
     const commitMatch = checkout?.stdout.match(/\[[\w-]+ ([a-f0-9]+)\]/);
@@ -927,5 +906,37 @@ export abstract class BaseAgent {
         `Failed to add label '${labelName}' to PR #${prNumber}: ${addLabelResponse.status} ${errorText}`
       );
     }
+  }
+
+  // MCP Integration Methods
+  protected async initializeMCP(): Promise<void> {
+    if (!this.config.mcpConfig) return;
+
+    this.mcpManager = new VibeKitMCPManager();
+    
+    const servers = Array.isArray(this.config.mcpConfig.servers)
+      ? this.config.mcpConfig.servers
+      : [this.config.mcpConfig.servers];
+
+    await this.mcpManager.initialize(servers);
+  }
+
+  // Add tool access methods
+  async getAvailableTools(): Promise<MCPTool[]> {
+    if (!this.mcpManager) return [];
+    return await this.mcpManager.listTools();
+  }
+
+  async executeMCPTool(toolName: string, args: any): Promise<any> {
+    if (!this.mcpManager) {
+      throw new Error('MCP not configured for this agent');
+    }
+    
+    const result = await this.mcpManager.executeTool(toolName, args);
+    if (result.isError) {
+      throw new Error(`MCP tool error: ${result.content}`);
+    }
+    
+    return result.content;
   }
 }

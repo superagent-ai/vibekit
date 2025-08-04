@@ -10,6 +10,8 @@ export default defineConfig({
     "agents/gemini": "src/agents/gemini.ts",
     "agents/opencode": "src/agents/opencode.ts",
     "agents/utils": "src/agents/utils.ts",
+    "mcp/types": "src/mcp/types.ts",
+    "mcp/manager": "src/mcp/manager.ts",
   },
   format: ["esm", "cjs"],
   dts: true,
@@ -17,4 +19,5 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   outDir: "dist",
+  external: ["@vibe-kit/dagger"],
 });

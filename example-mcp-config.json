@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "time-mcp": {
+      "command": "npx",
+      "args": ["-y", "time-mcp"],
+      "env": {}
+    },
+    "example-server": {
+      "command": "/path/to/server",
+      "args": ["--config", "production"],
+      "env": {
+        "API_KEY": "your-api-key",
+        "ENV": "production"
+      }
+    }
+  }
+}

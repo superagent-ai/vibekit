@@ -1,4 +1,4 @@
-import { BaseAgent, BaseAgentConfig, AgentCommandConfig } from "./base";
+import { BaseAgent, BaseAgentConfig, AgentCommandConfig, ExecuteCommandOptions, AgentResponse, StreamCallbacks } from "./base";
 import { ModelConfig } from "./utils";
 import {
   AgentType,
@@ -7,6 +7,7 @@ import {
   ClaudeStreamCallbacks,
   Conversation,
   ModelProvider,
+  SandboxInstance,
 } from "../types";
 
 export class ClaudeAgent extends BaseAgent {
@@ -15,6 +16,7 @@ export class ClaudeAgent extends BaseAgent {
   private model?: string;
   private useOAuth: boolean;
   private tokenInitialized: boolean = false;
+  protected declare config: ClaudeConfig;
 
   private escapePrompt(prompt: string): string {
     // Escape backticks and other special characters
@@ -22,6 +24,8 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   constructor(config: ClaudeConfig) {
+    console.log('[Claude] Agent constructor called with MCP config:', !!config.mcpConfig);
+    
     const baseConfig: BaseAgentConfig = {
       githubToken: config.githubToken,
       repoUrl: config.repoUrl,
@@ -30,6 +34,7 @@ export class ClaudeAgent extends BaseAgent {
       sandboxId: config.sandboxId,
       telemetry: config.telemetry,
       workingDirectory: config.workingDirectory,
+      mcpConfig: config.mcpConfig,
     };
 
     super(baseConfig);
@@ -106,12 +111,43 @@ export class ClaudeAgent extends BaseAgent {
 
     const escapedPrompt = this.escapePrompt(prompt);
 
+    // Setup MCP config file before running claude if needed
+    let setupCommand = "";
+    if (this.config.mcpConfig && !this.mcpSetupComplete) {
+      const mcpConfig: Record<string, any> = {
+        mcpServers: {}
+      };
+      
+      const servers = Array.isArray(this.config.mcpConfig.servers)
+        ? this.config.mcpConfig.servers
+        : [this.config.mcpConfig.servers];
+      
+      for (const server of servers) {
+        if (server.name && server.command) {
+          mcpConfig.mcpServers[server.name] = {
+            command: server.command,
+            args: server.args || []
+          };
+        }
+      }
+      
+      const mcpConfigJson = JSON.stringify(mcpConfig, null, 2).replace(/'/g, "'\"'\"'");
+      setupCommand = `echo '${mcpConfigJson}' > ${this.WORKING_DIR}/.mcp.json && `;
+      this.mcpSetupComplete = true;
+    }
+
+    // Build command with optional MCP config
+    let claudeCommand = `cd ${this.WORKING_DIR} && echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}" --model ${
+      this.model || "claude-3-5-sonnet-20241022"
+    }`;
+    
+    // Add MCP config if available
+    if (this.config.mcpConfig) {
+      claudeCommand += ` --mcp-config ${this.WORKING_DIR}/.mcp.json`;
+    }
+
     return {
-      command: `echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}"${
-        mode === "ask" ? ' --disallowedTools "Edit" "Replace" "Write"' : ""
-      } --output-format stream-json --verbose --model ${
-        this.model || "claude-sonnet-4-20250514"
-      }`,
+      command: setupCommand + claudeCommand,
       errorPrefix: "Claude",
       labelName: "claude",
       labelColor: "FF6B35",
@@ -154,64 +190,15 @@ export class ClaudeAgent extends BaseAgent {
     };
   }
 
-  // Override generateCode to support history in the instruction
-  public async generateCode(
-    prompt: string,
-    mode?: "ask" | "code",
-    branch?: string,
-    history?: Conversation[],
-    callbacks?: ClaudeStreamCallbacks,
-    background?: boolean
-  ): Promise<ClaudeResponse> {
-    // Ensure token is initialized
-    await this.initializeToken();
-    let instruction: string;
-    if (mode === "ask") {
-      instruction =
-        "Research the repository and answer the user's questions. " +
-        "Do NOT make any changes to any files in the repository.";
-    } else {
-      instruction =
-        "Do the necessary changes to the codebase based on the users input.\n" +
-        "Don't ask any follow up questions.";
-    }
-
-    if (history && history.length > 0) {
-      instruction += `\n\nConversation history: ${history
-        .map((h) => `${h.role}\n ${h.content}`)
-        .join("\n\n")}`;
-    }
-    
-    // Add Claude Code system prompt when using OAuth
-    if (this.useOAuth) {
-      instruction = "You are Claude Code, Anthropic's official CLI for Claude. " + instruction;
-    }
-
-    const escapedPrompt = this.escapePrompt(prompt);
-
-    // Override the command config with history-aware instruction
-    const originalGetCommandConfig = this.getCommandConfig.bind(this);
-    this.getCommandConfig = (p: string, m?: "ask" | "code") => ({
-      ...originalGetCommandConfig(p, m),
-      command: `echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}"${
-        mode === "ask" ? ' --disallowedTools "Edit" "Replace" "Write"' : ""
-      } --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model ${
-        this.model || "claude-sonnet-4-20250514"
-      }`,
-    });
-
-    const result = await super.generateCode(
-      prompt,
-      mode,
-      branch,
-      history,
-      callbacks,
-      background
-    );
-
-    // Restore original method
-    this.getCommandConfig = originalGetCommandConfig;
-
-    return result as ClaudeResponse;
+  // Override onSandboxReady to set up Claude-specific MCP configuration
+  protected async onSandboxReady(sandbox: SandboxInstance): Promise<void> {
+    console.log('[Claude] onSandboxReady called');
+    // Don't setup MCP here - it interferes with git clone
+    // MCP setup will happen later when needed
   }
+
+  private mcpSetupComplete = false;
+
+
+
 }

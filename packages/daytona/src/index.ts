@@ -3,6 +3,8 @@ import {
   DaytonaConfig as DaytonaSDKConfig,
   Sandbox,
 } from "@daytonaio/sdk";
+import { VibeKitMCPManager } from "@vibe-kit/vibekit/mcp/manager";
+import type { MCPConfig, MCPTool, MCPToolResult } from "@vibe-kit/vibekit";
 
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {
@@ -28,18 +30,27 @@ export interface SandboxCommands {
 export interface SandboxInstance {
   sandboxId: string;
   commands: SandboxCommands;
+  mcpManager?: VibeKitMCPManager;
   kill(): Promise<void>;
   pause(): Promise<void>;
   getHost(port: number): Promise<string>;
+  // MCP-related methods
+  initializeMCP?(mcpConfig: MCPConfig): Promise<void>;
+  getAvailableTools?(): Promise<MCPTool[]>;
+  executeMCPTool?(toolName: string, args: any): Promise<MCPToolResult>;
 }
 
 export interface SandboxProvider {
   create(
     envs?: Record<string, string>,
     agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
-    workingDirectory?: string
+    workingDirectory?: string,
+    mcpConfig?: MCPConfig
   ): Promise<SandboxInstance>;
-  resume(sandboxId: string): Promise<SandboxInstance>;
+  resume(
+    sandboxId: string,
+    mcpConfig?: MCPConfig
+  ): Promise<SandboxInstance>;
 }
 
 export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
@@ -48,6 +59,7 @@ export interface DaytonaConfig {
   apiKey: string;
   image?: string;
   serverUrl?: string;
+  mcpConfig?: MCPConfig;
 }
 
 // Helper function to get Docker image based on agent type
@@ -68,12 +80,21 @@ const getDockerImageFromAgentType = (agentType?: AgentType) => {
 
 // Daytona implementation
 class DaytonaSandboxInstance implements SandboxInstance {
+  public mcpManager?: VibeKitMCPManager;
+  
   constructor(
     private workspace: Sandbox, // Daytona workspace object
     private daytona: Daytona, // Daytona client
     public sandboxId: string,
-    private envs?: Record<string, string> // Store environment variables
-  ) {}
+    private envs?: Record<string, string>, // Store environment variables
+    mcpConfig?: MCPConfig
+  ) {
+    if (mcpConfig) {
+      this.initializeMCP(mcpConfig).catch(error => {
+        console.error('Failed to initialize MCP in Daytona sandbox:', error);
+      });
+    }
+  }
 
   get commands(): SandboxCommands {
     return {
@@ -156,6 +177,8 @@ class DaytonaSandboxInstance implements SandboxInstance {
   }
 
   async kill(): Promise<void> {
+    // Cleanup MCP before killing sandbox
+    await this.cleanupMCP();
     if (this.daytona && this.workspace) {
       await this.daytona.delete(this.workspace);
     }
@@ -172,6 +195,36 @@ class DaytonaSandboxInstance implements SandboxInstance {
     const previewLink = await this.workspace.getPreviewLink(port);
     return previewLink.url;
   }
+
+  async initializeMCP(mcpConfig: MCPConfig): Promise<void> {
+    if (!mcpConfig.servers || mcpConfig.servers.length === 0) {
+      return;
+    }
+
+    this.mcpManager = new VibeKitMCPManager();
+    await this.mcpManager.initialize(mcpConfig.servers);
+  }
+
+  async getAvailableTools(): Promise<MCPTool[]> {
+    if (!this.mcpManager) {
+      return [];
+    }
+    return await this.mcpManager.listTools();
+  }
+
+  async executeMCPTool(toolName: string, args: any): Promise<MCPToolResult> {
+    if (!this.mcpManager) {
+      throw new Error('MCP not initialized in Daytona sandbox');
+    }
+    return await this.mcpManager.executeTool(toolName, args);
+  }
+
+  private async cleanupMCP(): Promise<void> {
+    if (this.mcpManager) {
+      await this.mcpManager.cleanup();
+      this.mcpManager = undefined;
+    }
+  }
 }
 
 export class DaytonaSandboxProvider implements SandboxProvider {
@@ -180,7 +233,8 @@ export class DaytonaSandboxProvider implements SandboxProvider {
   async create(
     envs?: Record<string, string>,
     agentType?: AgentType,
-    workingDirectory?: string
+    workingDirectory?: string,
+    mcpConfig?: MCPConfig
   ): Promise<SandboxInstance> {
     try {
       // Dynamic import to avoid dependency issues if daytona-sdk is not installed
@@ -214,7 +268,9 @@ export class DaytonaSandboxProvider implements SandboxProvider {
         );
       }
 
-      return new DaytonaSandboxInstance(workspace, daytona, workspace.id, envs);
+      // Use MCP config from parameters or fallback to provider config
+      const finalMCPConfig = mcpConfig || this.config.mcpConfig;
+      return new DaytonaSandboxInstance(workspace, daytona, workspace.id, envs, finalMCPConfig);
     } catch (error) {
       if (
         error instanceof Error &&
@@ -232,7 +288,10 @@ export class DaytonaSandboxProvider implements SandboxProvider {
     }
   }
 
-  async resume(sandboxId: string): Promise<SandboxInstance> {
+  async resume(
+    sandboxId: string,
+    mcpConfig?: MCPConfig
+  ): Promise<SandboxInstance> {
     try {
       const daytonaConfig: DaytonaSDKConfig = {
         apiKey: this.config.apiKey,
@@ -244,11 +303,14 @@ export class DaytonaSandboxProvider implements SandboxProvider {
       // Resume workspace by ID
       const workspace = await daytona.get(sandboxId);
 
+      // Use MCP config from parameters or fallback to provider config
+      const finalMCPConfig = mcpConfig || this.config.mcpConfig;
       return new DaytonaSandboxInstance(
         workspace,
         daytona,
         sandboxId,
-        undefined
+        undefined,
+        finalMCPConfig
       );
     } catch (error) {
       throw new Error(
