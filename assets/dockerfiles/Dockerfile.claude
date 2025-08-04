@@ -2,7 +2,7 @@
 FROM ubuntu:22.04
 
 # Install curl and git, update package list
-RUN apt-get update && apt-get install -y curl git ripgrep
+RUN apt-get update && apt-get install -y curl git ripgrep sudo
 
 # Install Node.js 24.x
 RUN curl -sL https://deb.nodesource.com/setup_24.x | bash - && apt-get install -y nodejs
@@ -10,5 +10,24 @@ RUN curl -sL https://deb.nodesource.com/setup_24.x | bash - && apt-get install -
 # Confirm installations
 RUN node -v && npm -v && git --version
 
-# Install Claude Code globalliy
-RUN npm install -g @anthropic-ai/claude-code@latest
+# Install Claude Code globally with cache busting
+RUN npm cache clean --force && npm install -g @anthropic-ai/claude-code@latest
+
+# Verify Claude installation and version
+RUN claude --version
+
+# Create a non-root user to avoid --dangerously-skip-permissions security restrictions
+RUN useradd -m -s /bin/bash claude_user
+
+# Create and set proper ownership for the working directory
+RUN mkdir -p /vibe0 && chown claude_user:claude_user /vibe0
+
+# Create a wrapper for Claude CLI that handles ownership and runs as claude_user
+RUN printf '#!/bin/bash\nchown -R claude_user:claude_user /vibe0 2>/dev/null || true\nexec su claude_user -c "cd /vibe0 && /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js '"'"'$@'"'"'"\n' > /usr/local/bin/claude-wrapper && \
+    chmod +x /usr/local/bin/claude-wrapper
+
+# Remove the symlink and replace with our wrapper
+RUN rm /usr/bin/claude && \
+    mv /usr/local/bin/claude-wrapper /usr/bin/claude
+
+WORKDIR /vibe0

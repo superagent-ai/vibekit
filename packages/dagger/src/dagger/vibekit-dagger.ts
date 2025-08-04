@@ -888,11 +888,15 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     // Start with base container
     let container = baseContainer;
 
-    // Mount a cache volume to persist the workspace across executions
-    const cacheVolume = client.cacheVolume(this.volumeName);
-    container = container.withMountedCache(this.workDir || "/vibe0", cacheVolume, {
-      sharing: CacheSharingMode.Shared
-    });
+    // For Claude agent, skip cache volume to avoid permission issues
+    // Claude container runs as root but switches to claude_user for Claude CLI execution
+    if (this.agentType !== "claude") {
+      // Mount a cache volume to persist the workspace across executions
+      const cacheVolume = client.cacheVolume(this.volumeName);
+      container = container.withMountedCache(this.workDir || "/vibe0", cacheVolume, {
+        sharing: CacheSharingMode.Shared
+      });
+    }
 
     // Ensure we're in the working directory
     container = container.withWorkdir(this.workDir || "/vibe0");

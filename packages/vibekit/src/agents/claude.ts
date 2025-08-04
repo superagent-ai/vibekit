@@ -111,18 +111,43 @@ export class ClaudeAgent extends BaseAgent {
 
     const escapedPrompt = this.escapePrompt(prompt);
 
-    // Run claude from the working directory and explicitly specify the MCP config
-    let mcpConfigFlag = "";
-    if (this.config.mcpConfig) {
-      mcpConfigFlag = ` --mcp-config ${this.WORKING_DIR}/.mcp.json`;
+    // Setup MCP config file before running claude if needed
+    let setupCommand = "";
+    if (this.config.mcpConfig && !this.mcpSetupComplete) {
+      const mcpConfig: Record<string, any> = {
+        mcpServers: {}
+      };
+      
+      const servers = Array.isArray(this.config.mcpConfig.servers)
+        ? this.config.mcpConfig.servers
+        : [this.config.mcpConfig.servers];
+      
+      for (const server of servers) {
+        if (server.name && server.command) {
+          mcpConfig.mcpServers[server.name] = {
+            command: server.command,
+            args: server.args || []
+          };
+        }
+      }
+      
+      const mcpConfigJson = JSON.stringify(mcpConfig, null, 2).replace(/'/g, "'\"'\"'");
+      setupCommand = `echo '${mcpConfigJson}' > ${this.WORKING_DIR}/.mcp.json && `;
+      this.mcpSetupComplete = true;
     }
+
+    // Build command with optional MCP config
+    let claudeCommand = `cd ${this.WORKING_DIR} && echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}" --dangerously-skip-permissions --model ${
+      this.model || "claude-3-5-sonnet-20241022"
+    }`;
     
+    // Add MCP config if available
+    if (this.config.mcpConfig) {
+      claudeCommand += ` --mcp-config ${this.WORKING_DIR}/.mcp.json`;
+    }
+
     return {
-      command: `cd ${this.WORKING_DIR} && echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}"${
-        mode === "ask" ? ' --disallowedTools "Edit" "Replace" "Write"' : ""
-      } --output-format stream-json --verbose${mcpConfigFlag} --model ${
-        this.model || "claude-sonnet-4-20250514"
-      }`,
+      command: setupCommand + claudeCommand,
       errorPrefix: "Claude",
       labelName: "claude",
       labelColor: "FF6B35",
@@ -168,49 +193,12 @@ export class ClaudeAgent extends BaseAgent {
   // Override onSandboxReady to set up Claude-specific MCP configuration
   protected async onSandboxReady(sandbox: SandboxInstance): Promise<void> {
     console.log('[Claude] onSandboxReady called');
-    await this.setupClaudeMCP(sandbox);
+    // Don't setup MCP here - it interferes with git clone
+    // MCP setup will happen later when needed
   }
 
-  // Helper method to set up Claude-specific MCP configuration
-  private async setupClaudeMCP(sandbox: SandboxInstance): Promise<void> {
-    console.log('[Claude] setupClaudeMCP called, hasConfig:', !!this.config.mcpConfig);
-    
-    if (!this.config.mcpConfig) return;
-    
-    // Create .mcp.json file in the sandbox for Claude CLI
-    const servers = Array.isArray(this.config.mcpConfig.servers)
-      ? this.config.mcpConfig.servers
-      : [this.config.mcpConfig.servers];
-    
-    console.log('[Claude] MCP servers:', servers);
-      
-    const mcpConfig = {
-      mcpServers: servers.reduce((acc, server) => {
-        if (server.name) {
-          acc[server.name] = {
-            command: server.command,
-            args: server.args || [],
-            env: server.env || {}
-          };
-        }
-        return acc;
-      }, {} as any)
-    };
+  private mcpSetupComplete = false;
 
-    const mcpConfigJson = JSON.stringify(mcpConfig, null, 2);
-    const base64Config = Buffer.from(mcpConfigJson).toString('base64');
-    
-    console.log('[Claude] Creating .mcp.json with config:', mcpConfigJson);
-    
-    try {
-      await sandbox.commands.run(
-        `echo '${base64Config}' | base64 -d > ${this.WORKING_DIR}/.mcp.json`,
-        { timeoutMs: 5000 }
-      );
-      console.log('[Claude] Created .mcp.json in sandbox for Claude CLI');
-    } catch (error) {
-      console.warn('[Claude] Failed to create .mcp.json in sandbox:', error);
-    }
-  }
+
 
 }

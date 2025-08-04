@@ -55,9 +55,23 @@ async function testMCPDirect() {
       console.log('📤 Output:');
       // Parse streaming JSON output
       const lines = stdout.split('\n').filter(line => line.trim());
+      let mcpServers = [];
+      let tools = [];
+      
       for (const line of lines) {
         try {
           const data = JSON.parse(line);
+          
+          // Check for system init message
+          if (data.type === 'system' && data.subtype === 'init') {
+            mcpServers = data.mcp_servers || [];
+            tools = data.tools || [];
+            console.log('🔧 System init:');
+            console.log('  MCP Servers:', mcpServers);
+            console.log('  Tools:', tools.length, 'available');
+            console.log('  MCP-specific tools:', tools.filter(t => t.includes('time') || t.includes('current')).join(', ') || 'None found');
+          }
+          
           if (data.content) {
             process.stdout.write(data.content);
           }
