@@ -161,7 +161,7 @@ export class VibeKit extends EventEmitter {
     }
 
     // Initialize telemetry service if configured
-    if (this.options.telemetry && (this.options.telemetry.type || this.options.telemetry.enabled)) {
+    if (this.options.telemetry && (this.options.telemetry.type || this.options.telemetry.isEnabled)) {
       this.telemetryService = new VibeKitTelemetryAdapter({
         ...this.options.telemetry,
         serviceVersion: getPackageVersion(),
@@ -180,8 +180,8 @@ export class VibeKit extends EventEmitter {
       sandboxProvider: this.options.sandbox,
       secrets: this.options.secrets,
       workingDirectory: this.options.workingDirectory,
-      telemetry: (this.options.telemetry?.type || this.options.telemetry?.enabled)
-        ? { isEnabled: true, sessionId: this.options.telemetry.sessionId }
+      telemetry: (this.options.telemetry?.type || this.options.telemetry?.isEnabled)
+        ? { isEnabled: true }
         : undefined,
       sandboxId: this.options.sandboxId,
     };

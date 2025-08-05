@@ -26,17 +26,20 @@ export class VibeKitTelemetryAdapter {
           }
         }],
         
-        api: config.api || {
+        api: {
           enabled: true,
           port: 3000,
           dashboard: true,
           cors: true,
+          ...config.api,
         },
         
-        analytics: config.analytics || {
+        analytics: {
           enabled: true,
-          realtime: true,
-          metrics: true,
+          metrics: {
+            enabled: true,
+          },
+          ...(config.analytics && typeof config.analytics === 'object' && config.analytics.metrics !== true ? config.analytics : {}),
         },
         
         security: {
@@ -75,7 +78,7 @@ export class VibeKitTelemetryAdapter {
       
       // Add resource attributes if provided
       if (config.resourceAttributes) {
-        telemetryConfig.resourceAttributes = config.resourceAttributes;
+        (telemetryConfig as any).resourceAttributes = config.resourceAttributes;
       }
       
       this.telemetry = new TelemetryService(telemetryConfig);
