@@ -13,7 +13,7 @@
     "build": "tsup",
     "build:types": "tsup --dts-only",
     "dev": "tsup --watch",
-    "test": "vitest",
+    "test": "echo 'No tests in @vibe-kit/dagger'",
     "type-check": "tsc --noEmit"
   },
   "keywords": [

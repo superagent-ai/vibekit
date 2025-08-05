@@ -30,7 +30,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup src/index.ts --watch",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "echo 'No tests in @vibe-kit/sdk'"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",

@@ -22,7 +22,13 @@
       "cache": true
     },
     "test": {
-      "dependsOn": ["build"],
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "env": ["NODE_ENV", "CI"],
+      "cache": false
+    },
+    "//#test": {
+      "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
       "env": ["NODE_ENV", "CI"],
       "cache": false

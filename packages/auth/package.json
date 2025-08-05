@@ -24,7 +24,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup src/index.ts --watch",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "echo 'No tests in @vibe-kit/auth'"
   },
   "devDependencies": {
     "@types/node": "^22.15.18",

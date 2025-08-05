@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts",
     "dev": "tsup src/index.ts --watch",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "echo 'No tests in @vibe-kit/cloudflare'"
   },
   "peerDependencies": {
     "@vibe-kit/sdk": "*"

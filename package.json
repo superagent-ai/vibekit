@@ -18,7 +18,10 @@
         "build:packages": "turbo build --filter='./packages/*'",
         "dev": "turbo dev",
         "type-check": "turbo type-check",
-        "test": "turbo test",
+        "test": "vitest",
+        "test:watch": "vitest",
+        "test:run": "vitest run",
+        "test:turbo": "turbo test",
         "lint": "turbo lint",
         "clean": "turbo clean"
     },
