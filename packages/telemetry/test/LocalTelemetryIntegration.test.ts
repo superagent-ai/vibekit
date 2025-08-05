@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { TelemetryService } from "../src/TelemetryService.js";
+
+// Restore real fs module for this integration test
+vi.unmock('fs');
+vi.unmock('fs/promises');
+import { TelemetryService } from "../src/core/TelemetryService.js";
 import { DrizzleTelemetryOperations } from "@vibe-kit/db";
 import { rm, mkdir } from "fs/promises";
 import { join } from "path";
