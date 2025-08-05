@@ -1,7 +1,7 @@
 import { execa } from "execa";
 import ora from "ora";
 import chalk from "chalk";
-import { AGENT_TEMPLATES } from "../constants/enums.js";
+import { AGENT_TEMPLATES } from "@vibe-kit/sdk";
 
 export type InstallConfig = {
   cpu: number;
@@ -80,7 +80,7 @@ export async function installTemplates(options: {
     // Filter templates based on selection (default to all if none specified)
     const templatesToInstall =
       options.selectedTemplates && options.selectedTemplates.length > 0
-        ? AGENT_TEMPLATES.filter((template) =>
+        ? AGENT_TEMPLATES.filter((template: any) =>
             options.selectedTemplates!.includes(template.name)
           )
         : AGENT_TEMPLATES;

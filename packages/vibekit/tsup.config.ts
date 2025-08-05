@@ -11,7 +11,7 @@ export default defineConfig({
     "agents/grok": "src/agents/grok.ts",
     "agents/opencode": "src/agents/opencode.ts",
     "agents/utils": "src/agents/utils.ts",
-    "infra/index": "src/infra/index.ts",
+    "services/index": "src/services/index.ts",
     "registry/index": "src/registry/index.ts",
   },
   format: ["esm", "cjs"],

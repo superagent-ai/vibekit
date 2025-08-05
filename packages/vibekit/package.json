@@ -16,10 +16,10 @@
       "import": "./dist/agents/*.js",
       "require": "./dist/agents/*.cjs"
     },
-    "./infra": {
-      "types": "./dist/infra/index.d.ts",
-      "import": "./dist/infra/index.js",
-      "require": "./dist/infra/index.cjs"
+    "./services": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js",
+      "require": "./dist/services/index.cjs"
     },
     "./registry": {
       "types": "./dist/registry/index.d.ts",

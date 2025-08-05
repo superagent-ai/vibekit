@@ -5,9 +5,10 @@
  * user account management, and registry setup.
  */
 
-import { DockerClient, type DockerLoginInfo } from '../infra/docker-client';
-import { ConfigManager, type AgentType, type VibeKitConfig } from '../infra/config-manager';
+import { DockerClient, type DockerLoginInfo } from '../services/docker-client';
+import { ConfigManager, type AgentType, type VibeKitConfig } from '../services/config-manager';
 import { RegistryProvider, type RegistryResult, type ImageUploadResult } from './registry-manager';
+import { AGENT_LIST } from '../constants';
 
 export interface DockerHubConfig {
   retryAttempts?: number;
@@ -88,7 +89,7 @@ export class DockerHubRegistry implements RegistryProvider {
     dockerHubUser: string,
     selectedAgents?: AgentType[]
   ): Promise<RegistryResult> {
-    const defaultAgentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini"];
+    const defaultAgentTypes = AGENT_LIST;
     const agentTypes = selectedAgents?.length ? selectedAgents : defaultAgentTypes;
     const results: ImageUploadResult[] = [];
 

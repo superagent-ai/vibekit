@@ -9,8 +9,9 @@ import { readFile, writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { AgentType } from '../constants';
 
-export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
+export { AgentType };
 
 export interface VibeKitConfig {
   dockerHubUser?: string;
