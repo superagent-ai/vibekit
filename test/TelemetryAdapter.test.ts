@@ -409,4 +409,132 @@ describe('VibeKitTelemetryAdapter', () => {
       expect(advancedEvent?.action).toBe('direct-usage');
     });
   });
+
+  describe('legacy compatibility', () => {
+    it('should default to remote telemetry when type is not specified', () => {
+      // Create adapter with legacy configuration (no type field)
+      const adapter = new VibeKitTelemetryAdapter({
+        endpoint: 'https://telemetry.example.com',
+        headers: { 'x-api-key': 'test-key' },
+        serviceName: 'legacy-test',
+        serviceVersion: '1.0.0',
+      } as any);
+
+      // Get the underlying telemetry service to verify configuration
+      const telemetryService = adapter.getUnderlyingService();
+      const config = (telemetryService as any).config;
+      
+      // Verify it's configured for remote telemetry (OTLP)
+      expect(config.storage).toBeDefined();
+      expect(config.storage[0].type).toBe('otlp');
+      expect(config.storage[0].options.endpoint).toBe('https://telemetry.example.com');
+      expect(config.storage[0].options.headers).toEqual({ 'x-api-key': 'test-key' });
+      expect(config.serviceName).toBe('legacy-test');
+    });
+
+    it('should respect explicit local type', () => {
+      // Create adapter with explicit local type
+      const adapter = new VibeKitTelemetryAdapter({
+        type: 'local',
+        database: {
+          path: '/tmp/test-telemetry.db',
+        },
+        serviceVersion: '1.0.0',
+      });
+
+      // Get the underlying telemetry service to verify configuration
+      const telemetryService = adapter.getUnderlyingService();
+      const config = (telemetryService as any).config;
+      
+      // Verify it's configured for local telemetry (SQLite)
+      expect(config.storage).toBeDefined();
+      expect(config.storage[0].type).toBe('sqlite');
+      expect(config.storage[0].options.path).toBe('/tmp/test-telemetry.db');
+      expect(config.serviceName).toBe('vibekit-local');
+    });
+
+    it('should respect explicit remote type', () => {
+      // Create adapter with explicit remote type
+      const adapter = new VibeKitTelemetryAdapter({
+        type: 'remote',
+        endpoint: 'https://telemetry.example.com',
+        headers: { 'x-api-key': 'test-key' },
+        serviceName: 'remote-test',
+        serviceVersion: '1.0.0',
+      });
+
+      // Get the underlying telemetry service to verify configuration
+      const telemetryService = adapter.getUnderlyingService();
+      const config = (telemetryService as any).config;
+      
+      // Verify it's configured for remote telemetry (OTLP)
+      expect(config.storage).toBeDefined();
+      expect(config.storage[0].type).toBe('otlp');
+      expect(config.storage[0].options.endpoint).toBe('https://telemetry.example.com');
+      expect(config.serviceName).toBe('remote-test');
+    });
+
+    it('should treat unknown telemetry types as remote', () => {
+      // Create adapter with unknown type
+      const adapter = new VibeKitTelemetryAdapter({
+        type: 'invalid' as any,
+        endpoint: 'https://telemetry.example.com',
+        serviceVersion: '1.0.0',
+      });
+
+      // Get the underlying telemetry service to verify configuration
+      const telemetryService = adapter.getUnderlyingService();
+      const config = (telemetryService as any).config;
+      
+      // Verify it defaults to remote telemetry (OTLP)
+      expect(config.storage).toBeDefined();
+      expect(config.storage[0].type).toBe('otlp');
+    });
+
+    it('should use default service name for legacy remote configuration', () => {
+      // Create adapter with minimal legacy configuration
+      const adapter = new VibeKitTelemetryAdapter({
+        endpoint: 'https://telemetry.example.com',
+        serviceVersion: '1.0.0',
+      } as any);
+
+      // Get the underlying telemetry service to verify configuration
+      const telemetryService = adapter.getUnderlyingService();
+      const config = (telemetryService as any).config;
+      
+      // Verify default service name
+      expect(config.serviceName).toBe('vibekit');
+    });
+
+    it('should use default values for local configuration', () => {
+      const adapter = new VibeKitTelemetryAdapter({
+        type: 'local',
+        serviceVersion: '1.0.0',
+      });
+
+      // Get the underlying telemetry service to verify configuration
+      const telemetryService = adapter.getUnderlyingService();
+      const config = (telemetryService as any).config;
+      
+      // Verify defaults
+      expect(config.serviceName).toBe('vibekit-local');
+      expect(config.storage[0].options.path).toBe('.vibekit/telemetry.db');
+    });
+
+    it('should handle missing endpoint for legacy remote configuration', () => {
+      // Try to create adapter without endpoint for remote telemetry
+      const adapter = new VibeKitTelemetryAdapter({
+        serviceName: 'test',
+        serviceVersion: '1.0.0',
+      } as any);
+      
+      // Check if it falls back to SQLite when no endpoint is provided
+      const telemetryService = adapter.getUnderlyingService();
+      const config = (telemetryService as any).config;
+      
+      // Should fall back to sqlite when no endpoint is provided
+      expect(config.storage[0].type).toBe('sqlite');
+      expect(config.storage[0].options.path).toBe('.vibekit/telemetry.db');
+    });
+  });
 });
