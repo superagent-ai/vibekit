@@ -36,18 +36,7 @@ export interface VibeKitOptions {
     token: string;
     repository: string;
   };
-  telemetry?: {
-    enabled: boolean;
-    sessionId?: string;
-    localStore?: {
-      isEnabled?: boolean;
-      path?: string;
-      streamBatchSize?: number;
-      streamFlushIntervalMs?: number;
-    };
-    endpoint?: string;
-    headers?: Record<string, string>;
-  };
+  telemetry?: TelemetryConfig;
   workingDirectory?: string;
   secrets?: Record<string, string>;
   sandboxId?: string;
@@ -109,18 +98,7 @@ export class VibeKit extends EventEmitter {
     return this;
   }
 
-  withTelemetry(config: { 
-    enabled: boolean; 
-    sessionId?: string;
-    localStore?: {
-      isEnabled?: boolean;
-      path?: string;
-      streamBatchSize?: number;
-      streamFlushIntervalMs?: number;
-    };
-    endpoint?: string;
-    headers?: Record<string, string>;
-  }): this {
+  withTelemetry(config: TelemetryConfig): this {
     this.options.telemetry = config;
     return this;
   }
@@ -182,24 +160,10 @@ export class VibeKit extends EventEmitter {
       );
     }
 
-    // Initialize telemetry service if enabled
-    if (this.options.telemetry?.enabled) {
-      const telemetryConfig: TelemetryConfig = {
-        isEnabled: true,
-        localStore: {
-          isEnabled: true,
-          path: this.options.telemetry.localStore?.path || '.vibekit/telemetry.db',
-          streamBatchSize: this.options.telemetry.localStore?.streamBatchSize || 50,
-          streamFlushIntervalMs: this.options.telemetry.localStore?.streamFlushIntervalMs || 1000,
-        },
-        endpoint: this.options.telemetry.endpoint,
-        headers: this.options.telemetry.headers,
-        serviceName: 'vibekit',
-        serviceVersion: '1.0.0',
-      };
-
+    // Initialize telemetry service if configured
+    if (this.options.telemetry && (this.options.telemetry.type || this.options.telemetry.enabled)) {
       this.telemetryService = new VibeKitTelemetryAdapter({
-        ...telemetryConfig,
+        ...this.options.telemetry,
         serviceVersion: getPackageVersion(),
       });
       await this.telemetryService.initialize();
@@ -216,7 +180,7 @@ export class VibeKit extends EventEmitter {
       sandboxProvider: this.options.sandbox,
       secrets: this.options.secrets,
       workingDirectory: this.options.workingDirectory,
-      telemetry: this.options.telemetry?.enabled
+      telemetry: (this.options.telemetry?.type || this.options.telemetry?.enabled)
         ? { isEnabled: true, sessionId: this.options.telemetry.sessionId }
         : undefined,
       sandboxId: this.options.sandboxId,

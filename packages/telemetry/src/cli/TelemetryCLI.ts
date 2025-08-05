@@ -32,7 +32,7 @@ program
       type: 'sqlite',
       enabled: true,
       options: {
-        path: './.telemetry/data.db',
+        path: process.env.TELEMETRY_DB_PATH || '.vibekit/telemetry.db',
       }
     }
   ],
@@ -96,7 +96,7 @@ program
         config = {
           serviceName: 'telemetry-dashboard',
           serviceVersion: '0.0.1',
-          storage: [{ type: 'sqlite', enabled: true, options: { path: './.telemetry/data.db' } }],
+          storage: [{ type: 'sqlite', enabled: true, options: { path: process.env.TELEMETRY_DB_PATH || '.vibekit/telemetry.db' } }],
           analytics: { enabled: true },
         };
       }
@@ -149,7 +149,7 @@ program
         config = {
           serviceName: 'telemetry-query',
           serviceVersion: '0.0.1',
-          storage: [{ type: 'sqlite', enabled: true, options: { path: './.telemetry/data.db' } }],
+          storage: [{ type: 'sqlite', enabled: true, options: { path: process.env.TELEMETRY_DB_PATH || '.vibekit/telemetry.db' } }],
         };
       }
       
@@ -215,7 +215,7 @@ program
         config = {
           serviceName: 'telemetry-export',
           serviceVersion: '0.0.1',
-          storage: [{ type: 'sqlite', enabled: true, options: { path: './.telemetry/data.db' } }],
+          storage: [{ type: 'sqlite', enabled: true, options: { path: process.env.TELEMETRY_DB_PATH || '.vibekit/telemetry.db' } }],
         };
       }
       
@@ -264,7 +264,7 @@ program
         config = {
           serviceName: 'telemetry-health',
           serviceVersion: '0.0.1',
-          storage: [{ type: 'sqlite', enabled: true, options: { path: './.telemetry/data.db' } }],
+          storage: [{ type: 'sqlite', enabled: true, options: { path: process.env.TELEMETRY_DB_PATH || '.vibekit/telemetry.db' } }],
         };
       }
       
