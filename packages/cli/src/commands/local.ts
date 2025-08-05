@@ -683,8 +683,7 @@ export async function generateCommand(options: {
     const telemetryEnabled = getEnv("VIBEKIT_TELEMETRY_ENABLED") === "true";
     if (telemetryEnabled) {
       vibekit.withTelemetry({
-        enabled: true,
-        sessionId: getEnv("VIBEKIT_TELEMETRY_SESSION_ID"),
+        isEnabled: true,
       });
     }
 
@@ -1061,8 +1060,7 @@ export async function createPullRequestCommand(options: {
     const telemetryEnabled = getEnv("VIBEKIT_TELEMETRY_ENABLED") === "true";
     if (telemetryEnabled) {
       vibekit.withTelemetry({
-        enabled: true,
-        sessionId: getEnv("VIBEKIT_TELEMETRY_SESSION_ID"),
+        isEnabled: true,
       });
     }
 
