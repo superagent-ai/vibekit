@@ -138,7 +138,9 @@ export async function initCommand(
     console.log(chalk.yellow("📋 Requirements:"));
     console.log(chalk.gray("  • Internet connection"));
     console.log(chalk.gray("  • Docker installed and running"));
-    console.log(chalk.gray("  • Account on at least one sandbox provider\n"));
+    console.log(chalk.gray("  • EITHER:"));
+    console.log(chalk.gray("    - Account on a cloud sandbox provider"));
+    console.log(chalk.gray("    - Dagger (for local sandboxes via Docker Hub)\n"));
 
     // Parse CLI options
     let providers: SANDBOX_PROVIDERS[] = [];
