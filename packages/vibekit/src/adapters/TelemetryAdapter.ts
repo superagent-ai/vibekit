@@ -5,8 +5,10 @@ export class VibeKitTelemetryAdapter {
   private telemetry: TelemetryService;
   
   constructor(config: VibeKitTelemetryConfig & { serviceVersion: string }) {
-    // Handle new type-based configuration
-    if (config.type === 'local') {
+    // Default to 'remote' for backward compatibility
+    const telemetryType = config.type || 'remote';
+
+    if (telemetryType === 'local') {
       // Use local telemetry with SQLite
       const telemetryConfig: Partial<TelemetryConfig> = {
         serviceName: config.serviceName || 'vibekit-local',
@@ -51,8 +53,8 @@ export class VibeKitTelemetryAdapter {
       };
       
       this.telemetry = new TelemetryService(telemetryConfig);
-    } else if (config.type === 'remote') {
-      // Use remote telemetry with OTLP
+    } else {
+      // Default to remote telemetry (telemetryType === 'remote' or any other value)
       const telemetryConfig: Partial<TelemetryConfig> = {
         serviceName: config.serviceName || 'vibekit',
         serviceVersion: config.serviceVersion,
@@ -78,69 +80,6 @@ export class VibeKitTelemetryAdapter {
       if (config.resourceAttributes) {
         (telemetryConfig as any).resourceAttributes = config.resourceAttributes;
       }
-      
-      this.telemetry = new TelemetryService(telemetryConfig);
-    } else {
-      // Legacy configuration support
-      const telemetryConfig: Partial<TelemetryConfig> = {
-        serviceName: 'vibekit',
-        serviceVersion: config.serviceVersion,
-        environment: 'development',
-        
-        storage: [
-          // If SQLite is disabled, use memory provider for testing
-          ...(config.localStore?.isEnabled === false ? [{
-            type: 'memory' as const,
-            enabled: true,
-          }] : [{
-            type: 'sqlite' as const,
-            enabled: config.localStore?.isEnabled ?? true,
-            options: {
-              path: config.localStore?.path || '.vibekit/telemetry.db',
-              streamBatchSize: config.localStore?.streamBatchSize || 100,
-              streamFlushInterval: config.localStore?.streamFlushIntervalMs || 5000,
-              streamBuffering: true,
-            }
-          }]),
-          ...(config.endpoint ? [{
-            type: 'otlp' as const,
-            enabled: true,
-            options: {
-              endpoint: config.endpoint,
-              headers: config.headers || {},
-              batchSize: 100,
-              timeout: 5000,
-            }
-          }] : [])
-        ],
-        
-        streaming: {
-          enabled: false, // Disable by default for compatibility
-          type: 'websocket' as const,
-          port: 3001,
-        },
-        
-        security: {
-          pii: {
-            enabled: false, // Disable PII detection for better compatibility
-          },
-          encryption: {
-            enabled: false,
-          },
-          retention: {
-            enabled: true,
-            maxAge: 30, // 30 days
-          },
-        },
-        
-        api: {
-          enabled: false, // Enable via CLI commands
-        },
-        
-        analytics: {
-          enabled: true,
-        },
-      };
       
       this.telemetry = new TelemetryService(telemetryConfig);
     }
