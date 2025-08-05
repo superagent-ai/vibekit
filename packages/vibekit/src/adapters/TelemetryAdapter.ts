@@ -28,19 +28,17 @@ export class VibeKitTelemetryAdapter {
         
         api: {
           enabled: true,
-          port: 3000,
-          dashboard: true,
-          cors: true,
-          ...config.api,
-        },
+          port: config.api?.port || 3000,
+          dashboard: config.api?.dashboard ?? true,
+          cors: config.api?.cors ?? true,
+        } as any,
         
         analytics: {
           enabled: true,
           metrics: {
             enabled: true,
           },
-          ...(config.analytics && typeof config.analytics === 'object' && config.analytics.metrics !== true ? config.analytics : {}),
-        },
+        } as any,
         
         security: {
           pii: {
