@@ -259,7 +259,7 @@ export async function installLocal(
             type: "confirm",
             name: "setupNow",
             message: "Set up Docker Hub integration now?",
-            initial: false,
+            initial: true,
           });
 
           if (setupNow) {

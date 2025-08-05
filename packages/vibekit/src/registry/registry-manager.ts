@@ -5,7 +5,7 @@
  * supporting multiple registry providers (Docker Hub, ECR, GCR, etc.)
  */
 
-import { type AgentType } from '../infra/config-manager';
+import { type AgentType } from '../services/config-manager';
 
 export interface ImageUploadResult {
   agentType: AgentType;

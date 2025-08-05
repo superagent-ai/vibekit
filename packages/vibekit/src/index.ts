@@ -1,6 +1,9 @@
 // Slim core export with dynamic imports
 export { VibeKit } from "./core/vibekit";
 
+// Constants exports
+export * from "./constants";
+
 // Essential type exports only
 export type {
   AgentType,
@@ -31,6 +34,11 @@ export const createOpenCodeAgent = async () => {
 export const createGeminiAgent = async () => {
   const { GeminiAgent } = await import("./agents/gemini");
   return GeminiAgent;
+};
+
+export const createGrokAgent = async () => {
+  const { GrokAgent } = await import("./agents/grok");
+  return GrokAgent;
 };
 
 export const createTelemetryService = async () => {

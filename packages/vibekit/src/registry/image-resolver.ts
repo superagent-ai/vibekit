@@ -6,9 +6,10 @@
  */
 
 import { existsSync } from "fs";
-import { DockerClient } from '../infra/docker-client';
-import { ConfigManager, type AgentType } from '../infra/config-manager';
+import { DockerClient } from '../services/docker-client';
+import { ConfigManager, type AgentType } from '../services/config-manager';
 import { RegistryManager } from './registry-manager';
+import { AGENT_LIST, AGENT_TYPES } from '../constants';
 
 export interface ImageResolverConfig {
   preferRegistryImages?: boolean;
@@ -37,11 +38,11 @@ const getDockerfilePathFromAgentType = (agentType?: AgentType): string | undefin
   if (!agentType) return undefined;
   
   const dockerfileMap: Record<AgentType, string> = {
-    claude: "assets/dockerfiles/Dockerfile.claude",
-    codex: "assets/dockerfiles/Dockerfile.codex",
-    opencode: "assets/dockerfiles/Dockerfile.opencode",
-    gemini: "assets/dockerfiles/Dockerfile.gemini",
-    grok: "assets/dockerfiles/Dockerfile.grok"
+    [AGENT_TYPES.CLAUDE]: "assets/dockerfiles/Dockerfile.claude",
+    [AGENT_TYPES.CODEX]: "assets/dockerfiles/Dockerfile.codex",
+    [AGENT_TYPES.OPENCODE]: "assets/dockerfiles/Dockerfile.opencode",
+    [AGENT_TYPES.GEMINI]: "assets/dockerfiles/Dockerfile.gemini",
+    [AGENT_TYPES.GROK]: "assets/dockerfiles/Dockerfile.grok"
   };
   
   return dockerfileMap[agentType];
@@ -182,8 +183,7 @@ export class ImageResolver {
       source: "registry" | "dockerfile" | "cached";
     }>;
   }> {
-    const allAgentTypes: AgentType[] = ["claude", "codex", "opencode", "gemini", "grok"];
-    const agentTypes = selectedAgents?.length ? selectedAgents : allAgentTypes;
+    const agentTypes = selectedAgents?.length ? selectedAgents : AGENT_LIST;
     const results: Array<{
       agentType: AgentType;
       success: boolean;
@@ -225,8 +225,7 @@ export class ImageResolver {
    * Get available agent types that have Dockerfiles
    */
   getAvailableAgentTypes(): AgentType[] {
-    const allTypes: AgentType[] = ["claude", "codex", "opencode", "gemini", "grok"];
-    return allTypes.filter(type => {
+    return AGENT_LIST.filter(type => {
       const dockerfilePath = getDockerfilePathFromAgentType(type);
       return dockerfilePath && existsSync(dockerfilePath);
     });

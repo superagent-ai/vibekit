@@ -10,7 +10,7 @@ export default defineConfig({
     "agents/gemini": "src/agents/gemini.ts",
     "agents/opencode": "src/agents/opencode.ts",
     "agents/utils": "src/agents/utils.ts",
-    "infra/index": "src/infra/index.ts",
+    "services/index": "src/services/index.ts",
     "registry/index": "src/registry/index.ts",
   },
   format: ["esm", "cjs"],
