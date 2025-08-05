@@ -37,6 +37,9 @@ logs
 # VibeKit
 .vibekit
 
+# Turborepo
+.turbo/
+
 # Misc
 .cache/
 .temp/

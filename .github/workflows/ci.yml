@@ -18,6 +18,12 @@ jobs:
           cache: 'npm'
       - run: npm install -g npm@latest
       - run: npm ci
+      - uses: actions/cache@v3
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
       - run: npm run type-check
 
   test:
@@ -42,5 +48,11 @@ jobs:
           cache: 'npm'
       - run: npm install -g npm@latest
       - run: npm ci
+      - uses: actions/cache@v3
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
       - run: npm run build
       - run: npm test -- --coverage
