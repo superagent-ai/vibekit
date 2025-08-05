@@ -16,8 +16,9 @@ describe('VibeKitTelemetryAdapter', () => {
     
     adapter = new VibeKitTelemetryAdapter({
       serviceVersion: '1.0.0',
-      localStore: {
-        isEnabled: false, // Disable SQLite for tests
+      type: 'local', // Use local telemetry for tests
+      database: {
+        path: testDbPath,
       },
     });
 
@@ -38,8 +39,9 @@ describe('VibeKitTelemetryAdapter', () => {
     it('should initialize successfully', async () => {
       const newAdapter = new VibeKitTelemetryAdapter({
         serviceVersion: '1.0.0',
-        localStore: {
-          isEnabled: false, // Disable SQLite for tests
+        type: 'local', // Use local telemetry for tests
+        database: {
+          path: join(tmpdir(), `test-init-${Date.now()}.db`),
         },
       });
 
@@ -50,14 +52,12 @@ describe('VibeKitTelemetryAdapter', () => {
     it('should configure storage providers correctly', async () => {
       const newAdapter = new VibeKitTelemetryAdapter({
         serviceVersion: '1.0.0',
-        localStore: {
-          isEnabled: true,
+        type: 'local',
+        database: {
           path: join(tmpdir(), `test-config-${Date.now()}.db`),
-          streamBatchSize: 50,
-          streamFlushIntervalMs: 2000,
+          batchSize: 50,
+          flushInterval: 2000,
         },
-        endpoint: 'http://localhost:4318/v1/traces',
-        headers: { 'x-custom': 'header' },
       });
 
       await expect(newAdapter.initialize()).resolves.not.toThrow();
@@ -250,6 +250,7 @@ describe('VibeKitTelemetryAdapter', () => {
     it('should handle minimal VibeKit config', async () => {
       const minimalAdapter = new VibeKitTelemetryAdapter({
         serviceVersion: '1.0.0',
+        type: 'local', // Use local telemetry by default
       });
 
       await expect(minimalAdapter.initialize()).resolves.not.toThrow();
@@ -259,13 +260,11 @@ describe('VibeKitTelemetryAdapter', () => {
     it('should handle config with OTLP endpoint', async () => {
       const otlpAdapter = new VibeKitTelemetryAdapter({
         serviceVersion: '1.0.0',
+        type: 'remote', // Explicitly use remote telemetry
         endpoint: 'http://localhost:4318/v1/traces',
         headers: {
           'Authorization': 'Bearer test-token',
           'x-custom-header': 'value',
-        },
-        localStore: {
-          isEnabled: false,
         },
       });
 
@@ -276,10 +275,8 @@ describe('VibeKitTelemetryAdapter', () => {
     it('should handle disabled local storage', async () => {
       const noLocalAdapter = new VibeKitTelemetryAdapter({
         serviceVersion: '1.0.0',
+        type: 'remote',
         endpoint: 'http://localhost:4318/v1/traces', // Need at least one storage provider
-        localStore: {
-          isEnabled: false,
-        },
       });
 
       await expect(noLocalAdapter.initialize()).resolves.not.toThrow();
@@ -393,8 +390,23 @@ describe('VibeKitTelemetryAdapter', () => {
         metadata: { customField: 'value' }
       });
 
+      // Flush any pending events before querying
+      await underlyingService.flush();
+      
+      // Wait a bit for database writes to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const events = await underlyingService.query({ sessionId });
-      expect(events.some(e => e.eventType === 'custom')).toBe(true);
+      
+      // Verify we have events for this session
+      expect(events.length).toBeGreaterThan(1);
+      expect(events.some(e => e.sessionId === sessionId)).toBe(true);
+      
+      // Check that the metadata was preserved (since custom event type gets mapped to 'start')
+      const advancedEvent = events.find(e => e.metadata?.customField === 'value');
+      expect(advancedEvent).toBeDefined();
+      expect(advancedEvent?.category).toBe('advanced');
+      expect(advancedEvent?.action).toBe('direct-usage');
     });
   });
 });

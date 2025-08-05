@@ -55,22 +55,45 @@ export class VibeKitTelemetryAdapter {
       this.telemetry = new TelemetryService(telemetryConfig);
     } else {
       // Default to remote telemetry (telemetryType === 'remote' or any other value)
-      const telemetryConfig: Partial<TelemetryConfig> = {
-        serviceName: config.serviceName || 'vibekit',
-        serviceVersion: config.serviceVersion,
-        environment: 'production',
-        
-        storage: [{
+      const storage: any[] = [];
+      
+      // Add OTLP storage if endpoint is provided
+      if (config.endpoint) {
+        storage.push({
           type: 'otlp' as const,
           enabled: true,
           options: {
-            endpoint: config.endpoint!,
+            endpoint: config.endpoint,
             headers: config.headers || {},
             batchSize: 100,
             timeout: config.timeout || 5000,
           }
-        }],
-        
+        });
+      }
+      
+      // If no endpoint is provided and localStore is not explicitly disabled, add SQLite as fallback
+      if (!config.endpoint && config.localStore?.isEnabled !== false) {
+        storage.push({
+          type: 'sqlite' as const,
+          enabled: true,
+          options: {
+            path: config.localStore?.path || '.vibekit/telemetry.db',
+            streamBatchSize: config.localStore?.streamBatchSize || 100,
+            streamFlushInterval: config.localStore?.streamFlushIntervalMs || 1000,
+          }
+        });
+      }
+      
+      // If no storage is configured, throw an error
+      if (storage.length === 0) {
+        throw new Error('At least one storage provider must be configured. Provide an OTLP endpoint or enable local storage.');
+      }
+      
+      const telemetryConfig: Partial<TelemetryConfig> = {
+        serviceName: config.serviceName || 'vibekit',
+        serviceVersion: config.serviceVersion,
+        environment: 'production',
+        storage,
         analytics: {
           enabled: true,
         },

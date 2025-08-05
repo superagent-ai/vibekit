@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs'
 import { ScrollArea } from './components/ui/scroll-area'
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover'
 
-import { Activity, Zap, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { Activity, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 
 function Dashboard() {
   const [activeTab, setActiveTab] = useState('overview')
