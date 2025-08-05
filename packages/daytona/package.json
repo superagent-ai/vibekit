@@ -2,6 +2,7 @@
   "name": "@vibe-kit/daytona",
   "version": "0.0.2",
   "type": "module",
+  "description": "Daytona integration for VibeKit sandbox environments",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -16,15 +17,25 @@
     "dev": "tsup src/index.ts --watch",
     "type-check": "tsc --noEmit"
   },
-  "peerDependencies": {
-    "@vibe-kit/sdk": "*"
+  "author": "Superagent-AI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/superagent-ai/vibekit.git",
+    "directory": "packages/daytona"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@daytonaio/sdk": "^0.22.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.18",
     "tsup": "^8.4.0",
     "typescript": "^5.8.3"
   },
-  "dependencies": {
-    "@daytonaio/sdk": "^0.22.1"
+  "peerDependencies": {
+    "@vibe-kit/sdk": "*"
   }
 }

@@ -113,10 +113,18 @@ vi.mock("child_process", async () => {
 vi.mock("fs/promises", () => ({
   readFile: vi.fn().mockResolvedValue("{}"),
   writeFile: vi.fn().mockResolvedValue(undefined),
+  mkdir: vi.fn().mockResolvedValue(undefined),
+  rm: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("fs", () => ({
   existsSync: vi.fn().mockReturnValue(true),
+  statSync: vi.fn().mockReturnValue({
+    size: 1024 * 1024, // 1MB mock size
+    isFile: () => true,
+    isDirectory: () => false,
+    mtime: new Date(),
+  }),
 }));
 
 // Mock util.promisify for exec operations

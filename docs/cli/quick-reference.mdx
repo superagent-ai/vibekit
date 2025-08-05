@@ -135,6 +135,26 @@ vibekit local exec -e feature-auth -c "npm test"
 vibekit local pr -e feature-auth --title "Add JWT authentication"
 ```
 
+### Monitor with Dashboard
+
+```bash
+# 1. Start dashboard environment
+vibekit dashboard
+
+# 2. Create monitored environment
+vibekit local create --name monitored-env --agent claude
+
+# 3. Generate code (telemetry auto-enabled)
+vibekit local generate -e monitored-env -p "Build user service"
+
+# 4. View in dashboard
+# Open http://localhost:3001 to see:
+# - Real-time code generation progress
+# - Performance metrics
+# - Error tracking
+# - Session details
+```
+
 ## Environment Variables Quick Reference
 
 ```bash
@@ -175,6 +195,46 @@ When using interactive commands:
 - `127` - Command not found
 - `130` - Interrupted (Ctrl+C)
 
+## Telemetry & Monitoring
+
+### Quick Commands
+
+```bash
+# Start complete dashboard environment (recommended)
+vibekit dashboard
+
+# Start with custom ports
+vibekit dashboard --port 8080 --telemetry-port 8081
+
+# Initialize telemetry config
+telemetry init
+
+# Start API server only
+telemetry api --port 3000
+
+# Query events
+telemetry query --limit 10
+
+# Export data
+telemetry export --format csv --output data.csv
+
+# Check health
+telemetry health
+```
+
+### Database Management
+
+```bash
+# Generate migrations
+npm run db:generate
+
+# Apply migrations  
+npm run db:migrate
+
+# Open database studio
+npm run db:studio
+```
+
 ## Getting Help
 
 ```bash
@@ -184,6 +244,10 @@ vibekit --help
 # Command-specific help
 vibekit local --help
 vibekit local create --help
+
+# Telemetry help
+telemetry --help
+telemetry query --help
 
 # Show version
 vibekit --version

@@ -1,0 +1,315 @@
+---
+title: Telemetry Commands
+description: "Command reference for VibeKit telemetry system"
+---
+
+The telemetry package provides a comprehensive CLI for managing telemetry data, running the API server, and monitoring your applications.
+
+## Installation
+
+The telemetry CLI is included when you install the telemetry package:
+
+```bash
+npm install @vibe-kit/telemetry
+```
+
+## Commands
+
+### `telemetry init`
+
+Initialize telemetry configuration in your project.
+
+```bash
+telemetry init [options]
+```
+
+#### Options
+
+- `-c, --config <path>` - Configuration file path (default: `./telemetry.config.js`)
+
+#### Example
+
+```bash
+# Create default configuration
+telemetry init
+
+# Create configuration at custom location
+telemetry init --config ./config/telemetry.config.js
+```
+
+Creates a configuration file with sensible defaults that you can customize.
+
+### `telemetry api`
+
+Start the telemetry API server for real-time monitoring and analytics.
+
+```bash
+telemetry api [options]
+```
+
+#### Options
+
+- `-p, --port <port>` - API server port (default: `3000`)
+- `-c, --config <path>` - Configuration file path (default: `./telemetry.config.js`)
+
+#### Example
+
+```bash
+# Start API server on default port
+telemetry api
+
+# Start on custom port
+telemetry api --port 4000
+
+# Use custom configuration
+telemetry api --config ./config/telemetry.config.js
+```
+
+The API server provides:
+- REST endpoints for querying telemetry data
+- WebSocket support for real-time streaming
+- Integration with the telemetry dashboard
+
+### `telemetry query`
+
+Query telemetry events from the database.
+
+```bash
+telemetry query [options]
+```
+
+#### Options
+
+- `-c, --category <category>` - Filter by category
+- `-a, --action <action>` - Filter by action
+- `-s, --session <sessionId>` - Filter by session ID
+- `-t, --type <eventType>` - Filter by event type
+- `-l, --limit <limit>` - Limit results (default: `100`)
+- `--config <path>` - Configuration file path (default: `./telemetry.config.js`)
+- `--format <format>` - Output format: `json` or `table` (default: `table`)
+
+#### Example
+
+```bash
+# Query all events (table format)
+telemetry query
+
+# Query specific category
+telemetry query --category "code-generation"
+
+# Query by session with JSON output
+telemetry query --session abc123 --format json
+
+# Complex query
+telemetry query --category "api" --action "request" --type "start" --limit 50
+```
+
+### `telemetry export`
+
+Export telemetry data to various formats.
+
+```bash
+telemetry export [options]
+```
+
+#### Options
+
+- `-f, --format <format>` - Export format: `json` or `csv` (default: `json`)
+- `-o, --output <file>` - Output file path
+- `-c, --category <category>` - Filter by category
+- `-s, --session <sessionId>` - Filter by session ID
+- `--config <path>` - Configuration file path (default: `./telemetry.config.js`)
+
+#### Example
+
+```bash
+# Export all data to JSON
+telemetry export --output telemetry-data.json
+
+# Export specific category to CSV
+telemetry export --category "errors" --format csv --output errors.csv
+
+# Export session data
+telemetry export --session abc123 --output session-abc123.json
+```
+
+### `telemetry health`
+
+Check the health status of the telemetry system.
+
+```bash
+telemetry health [options]
+```
+
+#### Options
+
+- `--config <path>` - Configuration file path (default: `./telemetry.config.js`)
+
+#### Example
+
+```bash
+# Check system health
+telemetry health
+```
+
+Shows:
+- Overall system status
+- Storage provider status
+- Streaming status
+- Analytics status
+- Last update timestamp
+
+## Configuration
+
+The telemetry system uses a JavaScript configuration file. Here's an example:
+
+```javascript
+// telemetry.config.js
+export default {
+  serviceName: 'my-service',
+  serviceVersion: '1.0.0',
+  environment: 'production',
+  
+  storage: [
+    {
+      type: 'sqlite',
+      enabled: true,
+      options: {
+        path: process.env.TELEMETRY_DB_PATH || '.vibekit/telemetry.db',
+        retentionDays: 30,
+        enableWAL: true,
+      }
+    }
+  ],
+  
+  streaming: {
+    enabled: true,
+    type: 'websocket',
+    port: 3001,
+  },
+  
+  analytics: {
+    enabled: true,
+    realtime: true,
+    metrics: true,
+  },
+  
+  security: {
+    pii: {
+      enabled: true,
+      patterns: [
+        { name: 'email', regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g },
+        { name: 'ssn', regex: /\b\d{3}-\d{2}-\d{4}\b/g }
+      ]
+    },
+    encryption: {
+      enabled: false,
+    }
+  },
+  
+  api: {
+    port: 3000,
+    cors: true,
+    rateLimit: {
+      enabled: true,
+      maxRequests: 1000,
+      windowMs: 60000
+    }
+  }
+};
+```
+
+## Environment Variables
+
+The telemetry system respects these environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TELEMETRY_DB_PATH` | Path to SQLite database | `.vibekit/telemetry.db` |
+| `TELEMETRY_API_PORT` | API server port | `3000` |
+| `TELEMETRY_ALLOWED_ORIGINS` | CORS allowed origins | `*` |
+| `NODE_ENV` | Environment mode | `development` |
+
+## Database Management
+
+While the telemetry package handles its own database operations, you can manage the underlying database using the `@vibe-kit/db` package scripts:
+
+```bash
+# Run migrations
+npm run migrate
+
+# Generate new migration
+npm run migrate:generate
+
+# Open database studio
+npm run db:studio
+```
+
+## Integration with Dashboard
+
+The telemetry API server integrates seamlessly with the `@vibe-kit/dashboard` package:
+
+1. Start the telemetry API server:
+   ```bash
+   telemetry api --port 3000
+   ```
+
+2. In another terminal, start the dashboard:
+   ```bash
+   cd packages/dashboard
+   npm run dev
+   ```
+
+3. Open http://localhost:3001 to view the dashboard
+
+## Examples
+
+### Basic Telemetry Setup
+
+```bash
+# 1. Initialize configuration
+telemetry init
+
+# 2. Start API server
+telemetry api
+
+# 3. Query recent events
+telemetry query --limit 10
+
+# 4. Check system health
+telemetry health
+```
+
+### Production Monitoring
+
+```bash
+# 1. Create production config
+telemetry init --config ./config/telemetry.prod.js
+
+# 2. Start API with custom port
+telemetry api --config ./config/telemetry.prod.js --port 8080
+
+# 3. Export daily reports
+telemetry export --format csv --output ./reports/$(date +%Y-%m-%d).csv
+```
+
+### Debugging Sessions
+
+```bash
+# 1. Find problematic session
+telemetry query --type error --limit 50
+
+# 2. Export full session data
+telemetry export --session <session-id> --output debug-session.json
+
+# 3. Query specific session events
+telemetry query --session <session-id> --format json
+```
+
+## Tips
+
+1. **Performance**: Use filters when querying to reduce data transfer
+2. **Storage**: Configure retention policies to manage database size
+3. **Security**: Enable PII detection in production environments
+4. **Monitoring**: Use the health command in monitoring scripts
+5. **Integration**: Combine with the dashboard for visual analytics

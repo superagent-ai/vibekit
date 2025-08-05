@@ -103,11 +103,16 @@ export DOCKER_USERNAME="myusername"
 | `VIBEKIT_TELEMETRY_ENABLED` | Enable telemetry collection | `false` |
 | `VIBEKIT_TELEMETRY_SESSION_ID` | Custom session ID for telemetry | Auto-generated |
 | `VIBEKIT_TELEMETRY_ENDPOINT` | Telemetry endpoint URL | VibeKit default |
+| `TELEMETRY_DB_PATH` | Path to telemetry database | `.vibekit/telemetry.db` |
+| `TELEMETRY_API_PORT` | API server port | `3000` |
+| `TELEMETRY_ALLOWED_ORIGINS` | CORS allowed origins | `*` |
 
 Example:
 ```bash
 export VIBEKIT_TELEMETRY_ENABLED="true"
 export VIBEKIT_TELEMETRY_SESSION_ID="my-session-123"
+export TELEMETRY_DB_PATH="/var/lib/vibekit/telemetry.db"
+export TELEMETRY_API_PORT="3000"
 ```
 
 ## Default Settings

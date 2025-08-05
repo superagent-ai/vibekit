@@ -1,0 +1,328 @@
+---
+title: Dashboard Commands  
+description: "Running and managing the VibeKit telemetry dashboard"
+---
+
+The `@vibe-kit/dashboard` package provides a real-time web interface for monitoring telemetry data.
+
+## Installation
+
+```bash
+npm install @vibe-kit/dashboard
+```
+
+## Commands
+
+### `npm run dev`
+
+Start the dashboard in development mode with hot reload.
+
+```bash
+npm run dev
+```
+
+Options:
+- Runs on port 3001 by default
+- Hot module replacement enabled
+- Source maps for debugging
+
+### `npm run build`
+
+Build the dashboard for production deployment.
+
+```bash
+npm run build
+```
+
+This command:
+- Type checks the code
+- Bundles and optimizes assets
+- Outputs to `dist/` directory
+
+### `npm run preview`
+
+Preview the production build locally.
+
+```bash
+npm run preview
+```
+
+Useful for:
+- Testing production build
+- Performance verification
+- Deployment validation
+
+## Quick Start
+
+### Basic Setup
+
+```bash
+# 1. Start telemetry API server
+cd packages/telemetry
+telemetry api --port 3000
+
+# 2. Start dashboard
+cd packages/dashboard  
+npm run dev
+
+# 3. Open browser
+open http://localhost:3001
+```
+
+### Production Deployment
+
+```bash
+# 1. Build dashboard
+npm run build
+
+# 2. Serve dist/ folder
+npx serve dist -p 3001
+
+# Or use any static file server
+```
+
+## Features
+
+### Real-Time Monitoring
+
+- Live event streaming via WebSocket
+- Auto-updating charts and metrics
+- Session tracking
+- Error monitoring
+
+### Analytics Views
+
+- **Overview**: System health and key metrics
+- **Sessions**: Browse and analyze user sessions
+- **Events**: Detailed event logs with filtering
+- **Errors**: Error tracking and diagnostics
+- **Performance**: Response times and throughput
+
+### Interactive Features
+
+- Click on any session to see details
+- Filter events by type, category, or time
+- Export data for further analysis
+- Real-time search across all data
+
+## Configuration
+
+### API Connection
+
+The dashboard connects to the telemetry API server. Configure the connection:
+
+```typescript
+// In your environment or configuration
+const API_URL = process.env.VITE_API_URL || 'http://localhost:3000';
+```
+
+### Environment Variables
+
+Create a `.env` file in the dashboard directory:
+
+```bash
+# API Configuration
+VITE_API_URL=http://localhost:3000
+VITE_WS_URL=ws://localhost:3000
+
+# Feature Flags
+VITE_ENABLE_EXPORT=true
+VITE_ENABLE_REALTIME=true
+```
+
+## Dashboard Components
+
+### Session Detail View
+
+Shows comprehensive information about a session:
+- Timeline of events
+- Performance metrics
+- Error logs
+- User actions
+
+### Event Stream
+
+Real-time event viewer with:
+- Color-coded event types
+- Expandable event details
+- JSON metadata viewer
+- Time-based filtering
+
+### Analytics Charts
+
+Interactive charts showing:
+- Events over time
+- Category distribution
+- Performance trends
+- Error rates
+
+## Customization
+
+### Themes
+
+The dashboard uses Tailwind CSS and supports customization:
+
+```css
+/* In src/index.css */
+:root {
+  --primary: 240 5.9% 10%;
+  --secondary: 240 4.8% 95.9%;
+  --accent: 240 5% 64.9%;
+}
+```
+
+### Adding Custom Views
+
+Create new components in `src/components/`:
+
+```tsx
+// src/components/CustomMetric.tsx
+import { Card } from './ui/card';
+
+export function CustomMetric({ data }) {
+  return (
+    <Card>
+      <h3>Custom Metric</h3>
+      <p>{data.value}</p>
+    </Card>
+  );
+}
+```
+
+## Integration Examples
+
+### With Docker
+
+```dockerfile
+# Dockerfile
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
+```
+
+### With PM2
+
+```javascript
+// ecosystem.config.js
+module.exports = {
+  apps: [{
+    name: 'telemetry-dashboard',
+    script: 'serve',
+    args: 'dist -p 3001',
+    env: {
+      NODE_ENV: 'production'
+    }
+  }]
+};
+```
+
+### With Nginx
+
+```nginx
+server {
+  listen 80;
+  server_name dashboard.example.com;
+  
+  location / {
+    root /var/www/dashboard;
+    try_files $uri /index.html;
+  }
+  
+  location /api {
+    proxy_pass http://localhost:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+  }
+}
+```
+
+## Performance Tips
+
+1. **Enable compression** on your web server
+2. **Use CDN** for static assets
+3. **Configure caching** headers appropriately
+4. **Limit real-time updates** in high-traffic scenarios
+5. **Use pagination** for large datasets
+
+## Troubleshooting
+
+### Connection Issues
+
+If dashboard can't connect to API:
+
+```bash
+# Check API is running
+curl http://localhost:3000/health
+
+# Verify CORS settings
+# API should allow dashboard origin
+```
+
+### Performance Problems
+
+For slow dashboard:
+
+1. Check browser console for errors
+2. Verify API response times
+3. Reduce real-time update frequency
+4. Enable production build
+
+### Build Errors
+
+If build fails:
+
+```bash
+# Clear cache and reinstall
+rm -rf node_modules dist
+npm install
+npm run build
+```
+
+## Development
+
+### Project Structure
+
+```
+dashboard/
+├── src/
+│   ├── components/     # React components
+│   ├── hooks/         # Custom React hooks
+│   ├── lib/           # Utilities
+│   ├── App.tsx        # Main app component
+│   └── main.tsx       # Entry point
+├── public/            # Static assets
+└── index.html         # HTML template
+```
+
+### Adding Features
+
+1. Create component in `src/components/`
+2. Add route in `App.tsx` if needed
+3. Use `useTelemetryApi` hook for data
+4. Follow existing patterns for consistency
+
+### Testing
+
+```bash
+# Run type checking
+npm run type-check
+
+# Run linting
+npm run lint
+```
+
+## Security Considerations
+
+1. **Authentication**: Implement auth if exposing publicly
+2. **Rate Limiting**: Configure on API server
+3. **CORS**: Restrict origins in production
+4. **HTTPS**: Always use in production
+5. **Input Validation**: Sanitize user inputs

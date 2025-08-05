@@ -1,3 +1,4 @@
+import { LocalStoreConfig } from "./types/telemetry-storage";
 import { ProviderType } from './constants/providers';
 import { AgentType } from './constants/agents';
 
@@ -64,9 +65,11 @@ export type SecretsConfig = {
 
 // TELEMETRY
 export type TelemetryConfig = {
-  /** Enable or disable telemetry */
-  isEnabled: boolean;
-  /** OTLP HTTP endpoint for traces (e.g., "https://api.honeycomb.io/v1/traces") */
+  /** Telemetry type - 'local' for local SQLite storage or 'remote' for OTLP export */
+  type?: 'local' | 'remote';
+  /** Enable or disable telemetry (deprecated - use type field instead) */
+  isEnabled?: boolean;
+  /** OTLP HTTP endpoint for traces (e.g., "https://api.honeycomb.io/v1/traces") - required for type: 'remote' */
   endpoint?: string;
   /** Service name for resource attributes (defaults to "vibekit") */
   serviceName?: string;
@@ -80,6 +83,92 @@ export type TelemetryConfig = {
   samplingRatio?: number;
   /** Additional resource attributes to include in telemetry data */
   resourceAttributes?: Record<string, string>;
+  /** Local storage configuration for telemetry data (deprecated - use database field for type: 'local') */
+  localStore?: LocalStoreConfig;
+  
+  // Local telemetry specific options (when type: 'local')
+  /** Database configuration for local telemetry */
+  database?: {
+    /** Path to SQLite database file */
+    path?: string;
+    /** Days to retain data (0 = forever, default: 0) */
+    retentionDays?: number;
+    /** Enable WAL mode for better performance */
+    enableWAL?: boolean;
+    /** Event batch size for performance */
+    batchSize?: number;
+    /** Flush interval in milliseconds */
+    flushInterval?: number;
+    /** Maximum database size in MB */
+    maxSizeMB?: number;
+  };
+  
+  /** API server configuration for local telemetry */
+  api?: {
+    /** Enable HTTP API server */
+    enabled?: boolean;
+    /** Port for API server */
+    port?: number;
+    /** Host to bind API server */
+    host?: string;
+    /** Enable integrated dashboard */
+    dashboard?: boolean;
+    /** CORS configuration */
+    cors?: boolean | object;
+  };
+  
+  /** Analytics configuration for local telemetry */
+  analytics?: {
+    /** Enable analytics processing */
+    enabled?: boolean;
+    /** Enable real-time analytics */
+    realtime?: boolean;
+    /** Enable anomaly detection */
+    anomalyDetection?: boolean;
+    /** Enable metrics collection */
+    metrics?: boolean;
+    /** Analytics data retention (days) */
+    retention?: number;
+  };
+  /** Production-ready configuration options */
+  production?: {
+    /** Enable PII detection and scrubbing */
+    piiDetection?: {
+      enabled: boolean;
+      customPatterns?: Array<{ name: string; regex: string; replacement: string }>;
+    };
+    /** Rate limiting configuration */
+    rateLimiting?: {
+      enabled: boolean;
+      requestsPerMinute?: number;
+      streamRequestsPerMinute?: number;
+    };
+    /** Circuit breaker configuration */
+    circuitBreaker?: {
+      enabled: boolean;
+      failureThreshold?: number;
+      timeoutMs?: number;
+    };
+    /** Alerting configuration */
+    alerting?: {
+      enabled: boolean;
+      errorRateThreshold?: number;
+      channels?: Array<'console' | 'webhook' | 'email'>;
+      webhookUrl?: string;
+    };
+    /** Health check configuration */
+    healthChecks?: {
+      enabled: boolean;
+      intervalMs?: number;
+      timeoutMs?: number;
+    };
+    /** Metrics configuration */
+    metrics?: {
+      enabled: boolean;
+      retentionDays?: number;
+      aggregationIntervalMs?: number;
+    };
+  };
 };
 
 export type VibeKitConfig = {

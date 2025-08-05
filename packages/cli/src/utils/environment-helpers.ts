@@ -139,8 +139,7 @@ export async function createVibeKitFromEnvironment(
   // Add telemetry if enabled
   if (cliConfig.telemetry.enabled) {
     vibekit.withTelemetry({
-      enabled: true,
-      sessionId: cliConfig.telemetry.sessionId,
+      isEnabled: true,
     });
   }
 
