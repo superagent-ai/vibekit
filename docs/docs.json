@@ -38,7 +38,8 @@
               "session-management",
               "secrets",
               "local-telemetry",
-              "open-telemetry"
+              "open-telemetry",
+              "dashboard"
             ]
           },
           {
@@ -102,7 +103,8 @@
             "group": "Commands",
             "pages": [
               "cli/commands/init",
-              "cli/commands/local"
+              "cli/commands/local",
+              "cli/commands/dashboard-integrated"
             ]
           },
           {
@@ -117,6 +119,14 @@
               "cli/commands/local/status",
               "cli/commands/local/logs",
               "cli/commands/local/delete"
+            ]
+          },
+          {
+            "group": "Telemetry & Monitoring",
+            "pages": [
+              "cli/commands/telemetry",
+              "cli/commands/database",
+              "cli/commands/dashboard"
             ]
           },
           {

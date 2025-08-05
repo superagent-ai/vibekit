@@ -1,0 +1,273 @@
+---
+title: vibekit dashboard
+description: "Start the complete VibeKit dashboard environment with a single command"
+---
+
+The `vibekit dashboard` command provides an all-in-one solution to start the complete telemetry monitoring environment, including the API server, database, and web dashboard.
+
+## Overview
+
+This command automatically:
+1. Starts the telemetry API server
+2. Configures the database connection
+3. Launches the dashboard web interface
+4. Opens your browser (optional)
+5. Manages all processes together
+
+## Usage
+
+```bash
+vibekit dashboard [options]
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-p, --port <port>` | Dashboard UI port | `3001` |
+| `-t, --telemetry-port <port>` | Telemetry API port | `3000` |
+| `-d, --db-path <path>` | Database file path | `.vibekit/telemetry.db` |
+| `--no-open` | Do not open browser automatically | Opens browser |
+
+## Examples
+
+### Basic Usage
+
+Start with default settings:
+
+```bash
+vibekit dashboard
+```
+
+This will:
+- Start telemetry API on port 3000
+- Start dashboard UI on port 3001
+- Use database at `.vibekit/telemetry.db`
+- Open browser automatically
+
+### Custom Ports
+
+Use different ports:
+
+```bash
+vibekit dashboard --port 8080 --telemetry-port 8081
+```
+
+### Custom Database
+
+Specify database location:
+
+```bash
+vibekit dashboard --db-path /var/lib/vibekit/telemetry.db
+```
+
+### Headless Mode
+
+Start without opening browser:
+
+```bash
+vibekit dashboard --no-open
+```
+
+## What It Does
+
+### 1. Environment Setup
+
+- Creates `.vibekit` directory if it doesn't exist
+- Validates database path
+- Ensures all required packages are built
+
+### 2. Telemetry API Server
+
+Starts the telemetry API server with:
+- REST API endpoints
+- WebSocket support for real-time data
+- Database connection configured
+- CORS enabled for dashboard access
+
+### 3. Dashboard UI
+
+Launches the web dashboard with:
+- Real-time telemetry visualization
+- Session browsing and analysis
+- Event filtering and search
+- Performance metrics
+- Error tracking
+
+### 4. Process Management
+
+- Monitors all child processes
+- Handles graceful shutdown on Ctrl+C
+- Cleans up resources properly
+- Shows consolidated logs
+
+## Output
+
+When running, you'll see:
+
+```
+ℹ️  Starting VibeKit Dashboard environment...
+ℹ️  Using database: /path/to/.vibekit/telemetry.db
+ℹ️  Starting Telemetry API Server...
+ℹ️  Waiting for Telemetry server on port 3000...
+✅ Telemetry API Server running on http://localhost:3000
+ℹ️  Starting Dashboard UI...
+ℹ️  Waiting for Dashboard on port 3001...
+✅ Dashboard UI running on http://localhost:3001
+ℹ️  Opening Dashboard in browser...
+
+🚀 VibeKit Dashboard Environment Ready!
+
+📊 Telemetry API: http://localhost:3000
+🎨 Dashboard UI:  http://localhost:3001
+💾 Database:      /path/to/.vibekit/telemetry.db
+
+Press Ctrl+C to stop all services
+```
+
+## Logging
+
+The command shows prefixed logs from both services:
+
+```
+[Telemetry] Initializing telemetry service...
+[Telemetry] Starting API server...
+[Dashboard] VITE v5.0.0 ready in 423 ms
+[Dashboard] ➜  Local: http://localhost:3001/
+```
+
+## Prerequisites
+
+Before running, ensure:
+
+1. **Built packages**: The telemetry package must be built
+   ```bash
+   cd packages/telemetry && npm run build
+   ```
+
+2. **Dependencies installed**: All packages have dependencies installed
+   ```bash
+   npm install
+   ```
+
+3. **Database exists**: The database will be created automatically if it doesn't exist
+
+## Troubleshooting
+
+### Port Already in Use
+
+If ports are occupied:
+
+```bash
+# Use different ports
+vibekit dashboard --port 3002 --telemetry-port 3003
+
+# Or kill existing processes
+lsof -ti:3000 | xargs kill
+lsof -ti:3001 | xargs kill
+```
+
+### Package Not Found
+
+If packages aren't found:
+
+```bash
+# Ensure you're in the workspace root
+cd /path/to/vibekit
+
+# Build required packages
+npm run build
+```
+
+### Database Errors
+
+For database issues:
+
+```bash
+# Check database path permissions
+ls -la .vibekit/
+
+# Use a different database location
+vibekit dashboard --db-path /tmp/telemetry.db
+```
+
+### Process Won't Stop
+
+If processes hang on shutdown:
+
+```bash
+# Force kill all node processes (careful!)
+pkill -f "node.*telemetry"
+pkill -f "vite"
+```
+
+## Integration with Development
+
+### Development Workflow
+
+```bash
+# 1. Start dashboard environment
+vibekit dashboard
+
+# 2. In another terminal, create a local environment
+vibekit local create --name dev-env --agent claude
+
+# 3. Generate code with telemetry enabled
+vibekit local generate -e dev-env -p "Create a REST API"
+
+# 4. View telemetry in dashboard
+# Open http://localhost:3001
+```
+
+### Production Setup
+
+For production, run services separately:
+
+```bash
+# Start telemetry API with PM2
+pm2 start telemetry-api.js --name telemetry-api
+
+# Serve dashboard as static files
+npm run build && npx serve dist
+```
+
+## Tips
+
+1. **Performance**: The dashboard updates in real-time. For high-traffic scenarios, consider increasing the telemetry port buffer size.
+
+2. **Multiple Instances**: You can run multiple dashboard instances with different databases:
+   ```bash
+   vibekit dashboard --port 3001 --db-path dev.db
+   vibekit dashboard --port 4001 --db-path prod.db
+   ```
+
+3. **Docker**: For containerized environments:
+   ```dockerfile
+   FROM node:18
+   WORKDIR /app
+   COPY . .
+   RUN npm install && npm run build
+   EXPOSE 3000 3001
+   CMD ["vibekit", "dashboard"]
+   ```
+
+4. **Debugging**: Enable debug logging:
+   ```bash
+   DEBUG=* vibekit dashboard
+   ```
+
+## Related Commands
+
+- [`telemetry api`](/cli/commands/telemetry#telemetry-api) - Start just the API server
+- [`npm run dev`](/cli/commands/dashboard#npm-run-dev) - Start just the dashboard UI
+- [`vibekit local`](/cli/commands/local) - Manage local environments
+
+## Next Steps
+
+After starting the dashboard:
+
+1. Create environments with telemetry enabled
+2. Monitor real-time agent activity
+3. Analyze performance metrics
+4. Export data for reporting
+5. Set up alerts for errors

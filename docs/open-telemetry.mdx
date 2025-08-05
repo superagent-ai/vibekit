@@ -143,3 +143,75 @@ Each trace includes relevant metadata such as:
 - Success/failure status
 - Agent model information
 - Environment details
+
+## Visualizing with Dashboard
+
+While OpenTelemetry data is typically viewed in external systems like Jaeger or Datadog, you can also use the VibeKit dashboard for local visualization:
+
+```bash
+# Start dashboard with OTLP proxy
+vibekit dashboard --telemetry-port 3000
+
+# Configure telemetry to use both local and remote
+const vibekit = new VibeKit()
+  .withTelemetry({
+    type: 'remote',
+    endpoint: 'https://otlp.example.com/v1/traces',
+    // Also enable local API for dashboard
+    api: {
+      enabled: true,
+      port: 3000,
+      otlpProxy: true
+    }
+  });
+```
+
+This hybrid approach allows you to:
+- View real-time data locally during development
+- Export production data to your observability platform
+- Debug issues with the familiar VibeKit dashboard interface
+
+## Best Practices
+
+1. **Use semantic span names**: Make traces easy to understand
+2. **Add relevant attributes**: Include context that helps debugging
+3. **Sample in production**: Use sampling to control data volume
+4. **Secure your endpoints**: Always use HTTPS and authentication
+5. **Monitor export errors**: Set up alerts for failed exports
+
+## Troubleshooting
+
+### Traces Not Appearing
+
+1. Check endpoint connectivity:
+   ```bash
+   curl -X POST https://your-endpoint/v1/traces
+   ```
+
+2. Verify authentication headers are correct
+
+3. Check VibeKit logs for export errors
+
+4. Ensure sampling ratio isn't too low
+
+### Performance Impact
+
+If telemetry impacts performance:
+- Reduce sampling ratio
+- Increase batch size
+- Use async export
+- Consider local buffering
+
+## Next Steps
+
+- [Dashboard](/dashboard) - Visual monitoring and management interface
+- [Local Telemetry](/local-telemetry) - Local-only telemetry option
+- [CLI Commands](/cli/commands/telemetry) - Telemetry CLI reference
+- Explore your chosen backend's documentation for advanced queries
+
+## Related Resources
+
+- [OpenTelemetry Documentation](https://opentelemetry.io/docs/)
+- [OTLP Specification](https://opentelemetry.io/docs/specs/otlp/)
+- [Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/)
+- [VibeKit Telemetry API](/api-reference/telemetry)

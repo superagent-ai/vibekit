@@ -1,0 +1,313 @@
+---
+title: Database Commands
+description: "Database management commands for VibeKit telemetry"
+---
+
+The `@vibe-kit/db` package provides database management utilities for the telemetry system using Drizzle ORM.
+
+## Installation
+
+The database utilities are included with the db package:
+
+```bash
+npm install @vibe-kit/db
+```
+
+## Database Scripts
+
+### `npm run db:generate`
+
+Generate SQL migration files from schema changes.
+
+```bash
+npm run db:generate
+```
+
+This command:
+- Compares current schema with database state
+- Generates migration SQL files
+- Updates migration metadata
+
+### `npm run db:migrate`
+
+Apply pending migrations to the database.
+
+```bash
+npm run db:migrate
+```
+
+This command:
+- Runs all pending migrations
+- Updates migration history
+- Ensures database schema is up-to-date
+
+### `npm run db:studio`
+
+Open Drizzle Studio for visual database management.
+
+```bash
+npm run db:studio
+```
+
+Features:
+- Browse tables and data
+- Execute queries
+- Manage schema
+- Export data
+
+### `npm run migrate`
+
+Run custom migration script with additional options.
+
+```bash
+npm run migrate
+```
+
+This uses the TypeScript migration script at `scripts/migrate.ts`.
+
+### `npm run migrate:generate`
+
+Generate migrations with custom logic.
+
+```bash
+npm run migrate:generate
+```
+
+This uses the TypeScript script at `scripts/generate-migration.ts`.
+
+### `npm run migrate:push`
+
+Push schema changes directly to database (development only).
+
+```bash
+npm run migrate:push
+```
+
+⚠️ **Warning**: This bypasses migrations and directly updates the database schema. Use only in development.
+
+### `npm run migrate:drop`
+
+Drop migrations or tables.
+
+```bash
+npm run migrate:drop
+```
+
+⚠️ **Warning**: This is a destructive operation. Always backup your data first.
+
+## Database Configuration
+
+The database configuration is managed through `drizzle.config.ts`:
+
+```typescript
+import { defineConfig } from 'drizzle-kit';
+
+export default defineConfig({
+  schema: './src/schema.ts',
+  out: './migrations',
+  dialect: 'sqlite',
+  dbCredentials: {
+    url: process.env.TELEMETRY_DB_PATH || '.vibekit/telemetry.db',
+  },
+});
+```
+
+## Schema Overview
+
+The telemetry database includes these main tables:
+
+### telemetry_sessions
+- Tracks user sessions
+- Links events to sessions
+- Stores session metadata
+
+### telemetry_events
+- Core event storage
+- Supports all event types
+- Indexed for fast queries
+
+### telemetry_errors
+- Error tracking
+- Stack traces
+- Error context
+
+### telemetry_stats
+- Aggregated statistics
+- Performance metrics
+- Usage analytics
+
+### telemetry_buffers
+- Event buffering
+- Batch processing
+- Reliability support
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TELEMETRY_DB_PATH` | Database file path | `.vibekit/telemetry.db` |
+| `NODE_ENV` | Environment mode | `development` |
+
+## Common Workflows
+
+### Initial Setup
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Generate initial migrations
+npm run db:generate
+
+# 3. Apply migrations
+npm run db:migrate
+
+# 4. Verify with studio
+npm run db:studio
+```
+
+### Schema Updates
+
+```bash
+# 1. Modify schema in src/schema.ts
+
+# 2. Generate migration
+npm run db:generate
+
+# 3. Review generated SQL in migrations/
+
+# 4. Apply migration
+npm run db:migrate
+```
+
+### Development Workflow
+
+```bash
+# 1. Make schema changes
+
+# 2. Push changes directly (dev only)
+npm run migrate:push
+
+# 3. Open studio to verify
+npm run db:studio
+```
+
+### Production Deployment
+
+```bash
+# 1. Generate migrations in development
+npm run db:generate
+
+# 2. Commit migration files
+
+# 3. In production, run migrations
+npm run db:migrate
+```
+
+## Database Operations
+
+The `DrizzleTelemetryOperations` class provides programmatic access:
+
+```typescript
+import { DrizzleTelemetryOperations } from '@vibe-kit/db';
+
+const operations = new DrizzleTelemetryOperations({
+  dbPath: './telemetry.db',
+  enableWAL: true,
+});
+
+await operations.initialize();
+
+// Insert events
+await operations.insertEvent({
+  sessionId: 'uuid',
+  eventType: 'start',
+  category: 'api',
+  action: 'request',
+  metadata: { url: '/api/data' }
+});
+
+// Query events
+const events = await operations.getEvents({
+  category: 'api',
+  limit: 100
+});
+```
+
+## Performance Optimization
+
+### Write-Ahead Logging (WAL)
+
+Enable WAL mode for better concurrency:
+
+```typescript
+const operations = new DrizzleTelemetryOperations({
+  enableWAL: true, // Recommended
+});
+```
+
+### Batch Operations
+
+Use batch inserts for better performance:
+
+```typescript
+await operations.batchInsertEvents(events, {
+  batchSize: 1000,
+  onProgress: (processed, total) => {
+    console.log(`Processed ${processed}/${total}`);
+  }
+});
+```
+
+### Data Retention
+
+Configure automatic data pruning:
+
+```typescript
+const operations = new DrizzleTelemetryOperations({
+  pruneDays: 30, // Keep 30 days of data
+});
+```
+
+## Troubleshooting
+
+### Migration Conflicts
+
+If migrations fail:
+
+```bash
+# 1. Check current state
+npm run db:studio
+
+# 2. Review failed migration
+cat migrations/0001_failed_migration.sql
+
+# 3. Fix and regenerate
+npm run db:generate
+```
+
+### Performance Issues
+
+For slow queries:
+
+1. Check indexes are properly created
+2. Enable WAL mode
+3. Use batch operations
+4. Configure retention policies
+
+### Database Locks
+
+If database is locked:
+
+1. Ensure no other processes are accessing it
+2. Check for hanging connections
+3. Restart telemetry services
+
+## Best Practices
+
+1. **Always backup** before running migrations in production
+2. **Test migrations** in development first
+3. **Use transactions** for data consistency
+4. **Monitor database size** and configure retention
+5. **Enable WAL mode** for concurrent access
+6. **Review generated SQL** before applying migrations

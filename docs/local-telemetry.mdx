@@ -962,11 +962,32 @@ const telemetry = new TelemetryService({
 });
 ```
 
+## Visualizing with Dashboard
+
+The easiest way to explore your telemetry data is through the built-in dashboard:
+
+```bash
+# Start everything with one command
+vibekit dashboard
+
+# Or start components separately
+telemetry api --port 3000
+cd packages/dashboard && npm run dev
+```
+
+The dashboard provides:
+- **Real-time monitoring** of agent activities
+- **Session analysis** with detailed timelines
+- **Performance metrics** and charts
+- **Error tracking** and debugging tools
+
+See the [Dashboard guide](/dashboard) for detailed information.
+
 ## Next Steps
 
 Once you have local telemetry set up:
 
-1. **Explore the Dashboard**: Use the real-time dashboard to monitor your agents
+1. **Explore the Dashboard**: Start with `vibekit dashboard` to visualize your data
 2. **Set Up Alerts**: Configure anomaly detection and alerting
 3. **Create Reports**: Use the CLI to generate usage and performance reports
 4. **Optimize Performance**: Use telemetry data to improve your agent implementations
@@ -977,6 +998,13 @@ For advanced use cases, consider:
 - Integrating with external monitoring systems via OTLP export
 - Creating custom dashboard widgets for specific metrics
 - Implementing custom plugins for specialized tracking needs
+
+## Related Resources
+
+- [Dashboard](/dashboard) - Visual monitoring and management interface
+- [OpenTelemetry Integration](/open-telemetry) - Export to external systems
+- [CLI Commands](/cli/commands/telemetry) - Command reference
+- [Database Management](/cli/commands/database) - Database operations
 
 ---
 
