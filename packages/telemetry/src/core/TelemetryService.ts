@@ -111,6 +111,12 @@ export class TelemetryService extends TelemetryEventEmitter {
       this.startMaintenanceTasks();
       
       this.isInitialized = true;
+      
+      // Load historical data into analytics AFTER everything is initialized
+      if (this.config.analytics?.enabled && this.analyticsEngine) {
+        await this.loadHistoricalDataForAnalytics();
+      }
+      
       this.emit('initialized');
     } catch (error) {
       throw new Error(`Failed to initialize telemetry service: ${error instanceof Error ? error.message : String(error)}`);
@@ -229,6 +235,34 @@ export class TelemetryService extends TelemetryEventEmitter {
     this.realtimeAnalytics.on('metrics', (metrics) => {
       this.emit('analytics:realtime', metrics);
     });
+  }
+
+  private async loadHistoricalDataForAnalytics(): Promise<void> {
+    try {
+      this.logger.info('Starting to load historical data for analytics...');
+      this.logger.info(`Storage providers available: ${this.storageProviders.length}`);
+      
+      // Query recent events (last 24 hours by default)
+      const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+      this.logger.info(`Querying events from ${new Date(oneDayAgo).toISOString()} to ${new Date().toISOString()}`);
+      
+      // First try without timeRange to see if that's the issue
+      const historicalEvents = await this.query({
+        limit: 1000 // Start with a smaller limit to avoid memory issues
+      });
+      
+      this.logger.info(`Query returned ${historicalEvents.length} events`);
+      
+      // Process historical events through analytics engine
+      for (const event of historicalEvents) {
+        await this.analyticsEngine!.process(event);
+      }
+      
+      this.logger.info(`Loaded ${historicalEvents.length} historical events into analytics engine`);
+    } catch (error) {
+      this.logger.warn('Failed to load historical events for analytics:', error);
+      // Continue without historical data - not critical for operation
+    }
   }
 
   private startMaintenanceTasks(): void {
@@ -640,7 +674,65 @@ export class TelemetryService extends TelemetryEventEmitter {
     if (!this.analyticsEngine) {
       throw new Error('Analytics is not enabled');
     }
-    return this.analyticsEngine.getMetrics(timeRange);
+    
+    // First try to get metrics from analytics engine
+    const engineMetrics = await this.analyticsEngine.getMetrics(timeRange);
+    
+    // If no events in analytics engine, query database directly
+    if (engineMetrics.events.total === 0) {
+      try {
+        const filter: QueryFilter = {};
+        if (timeRange) {
+          filter.timeRange = timeRange;
+        }
+        
+        const events = await this.query({ ...filter, limit: 10000 });
+        
+        // Calculate metrics from queried events
+        const eventsByType: Record<string, number> = {};
+        const eventsByCategory: Record<string, number> = {};
+        const sessions = new Set<string>();
+        const completedSessions = new Set<string>();
+        const erroredSessions = new Set<string>();
+        
+        for (const event of events) {
+          eventsByType[event.eventType] = (eventsByType[event.eventType] || 0) + 1;
+          eventsByCategory[event.category] = (eventsByCategory[event.category] || 0) + 1;
+          sessions.add(event.sessionId);
+          
+          if (event.eventType === 'end') {
+            completedSessions.add(event.sessionId);
+          }
+          
+          if (event.eventType === 'error') {
+            erroredSessions.add(event.sessionId);
+          }
+        }
+        
+        return {
+          events: {
+            total: events.length,
+            byType: eventsByType,
+            byCategory: eventsByCategory,
+          },
+          sessions: {
+            active: sessions.size - completedSessions.size - erroredSessions.size,
+            completed: completedSessions.size,
+            errored: erroredSessions.size,
+          },
+          performance: {
+            avgDuration: 0,
+            p95Duration: 0,
+            errorRate: erroredSessions.size / Math.max(sessions.size, 1),
+          },
+        };
+      } catch (error) {
+        this.logger.warn('Failed to query events for metrics fallback:', error);
+        return engineMetrics;
+      }
+    }
+    
+    return engineMetrics;
   }
 
   async getInsights(options?: InsightOptions): Promise<Insights> {

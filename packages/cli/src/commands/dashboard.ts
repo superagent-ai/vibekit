@@ -1,11 +1,37 @@
 import { Command } from "commander";
 import { spawn, ChildProcess } from "child_process";
-import { join, dirname } from "path";
-import { existsSync, mkdirSync } from "fs";
+import { join, dirname, resolve } from "path";
+import { existsSync, mkdirSync, readFileSync } from "fs";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+function findPackageRoot(startDir: string = __dirname): string {
+  let currentDir = resolve(startDir);
+  
+  // Walk up the directory tree looking for the workspace root
+  while (currentDir !== dirname(currentDir)) {
+    const packageJsonPath = join(currentDir, 'package.json');
+    
+    if (existsSync(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+        // Check if this is the workspace root
+        if (packageJson.name === 'vibekit-workspace' || packageJson.workspaces) {
+          return currentDir;
+        }
+      } catch (error) {
+        // Continue searching if JSON parsing fails
+      }
+    }
+    
+    currentDir = dirname(currentDir);
+  }
+  
+  // Fallback to current working directory if not found
+  return process.cwd();
+}
 
 interface DashboardOptions {
   port?: string;
@@ -91,17 +117,21 @@ export async function dashboardCommand(options: DashboardOptions): Promise<void>
   const processes: ChildProcess[] = [];
   const dashboardPort = parseInt(options.port || '3001');
   const telemetryPort = parseInt(options.telemetryPort || '3000');
-  const dbPath = options.dbPath || join(process.cwd(), '.vibekit/telemetry.db');
+  const packageRoot = findPackageRoot();
+  const dbPath = options.dbPath || join(packageRoot, '.vibekit/telemetry.db');
   
   try {
-    // Ensure .vibekit directory exists
-    const vibkitDir = join(process.cwd(), '.vibekit');
+    // Ensure .vibekit directory exists at package root
+    const vibkitDir = join(packageRoot, '.vibekit');
     if (!existsSync(vibkitDir)) {
       mkdirSync(vibkitDir, { recursive: true });
       DashboardLogger.success('Created .vibekit directory');
     }
     
     DashboardLogger.info('Starting VibeKit Dashboard environment...');
+    // Ensure dbPath is absolute
+    const absoluteDbPath = resolve(dbPath);
+    DashboardLogger.info(`Using database: ${absoluteDbPath}`);
     
     // 1. Find the dashboard directory first (needed for paths)
     // Find the dashboard directory relative to where the command is run
@@ -141,7 +171,7 @@ export async function dashboardCommand(options: DashboardOptions): Promise<void>
       env: {
         ...process.env,
         PORT: telemetryPort.toString(),
-        TELEMETRY_DB_PATH: dbPath,
+        TELEMETRY_DB_PATH: absoluteDbPath,
         NODE_ENV: 'development'
       },
       stdio: ['ignore', 'pipe', 'pipe']
@@ -226,7 +256,7 @@ export async function dashboardCommand(options: DashboardOptions): Promise<void>
     console.log('\n🚀 VibeKit Dashboard Environment Ready!\n');
     console.log(`📊 Telemetry API: http://localhost:${telemetryPort}`);
     console.log(`🎨 Dashboard UI:  http://localhost:${dashboardPort}`);
-    console.log(`💾 Database:      ${dbPath}`);
+    console.log(`💾 Database:      ${absoluteDbPath}`);
     console.log('\nPress Ctrl+C to stop all services\n');
     
     // Handle graceful shutdown
