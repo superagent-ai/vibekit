@@ -126,7 +126,8 @@ export async function initCommand(
     console.log(chalk.yellow("📋 Requirements:"));
     console.log(chalk.gray("  • Internet connection"));
     console.log(chalk.gray("  • Docker installed and running"));
-    console.log(chalk.gray("  • Account on at least one sandbox provider\n"));
+    console.log(chalk.gray("  • Account on at least one sandbox provider"));
+    console.log(chalk.gray("    (Not required if using Dagger with Docker Hub)\n"));
 
     // Parse CLI options
     let providers: SANDBOX_PROVIDERS[] = [];
