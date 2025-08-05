@@ -375,43 +375,6 @@ export class TelemetryAPIServer {
       }
     });
     
-    // Test event endpoint
-    this.app.post('/test-event', async (req, res) => {
-      try {
-        const eventData = req.body || {};
-        
-        const testEvent = {
-          type: eventData.type || 'test',
-          data: {
-            ...eventData,
-            testId: `test-${Date.now()}`,
-            source: 'dashboard',
-            timestamp: new Date().toISOString()
-          }
-        };
-        
-        // Broadcast to connected clients
-        this.io.to('events').emit('update:event', testEvent);
-        this.io.to('metrics').emit('update:metrics', { 
-          testEvent: true, 
-          timestamp: new Date().toISOString() 
-        });
-        
-        res.json({
-          success: true,
-          message: 'Test event broadcasted successfully',
-          event: testEvent,
-          timestamp: new Date().toISOString()
-        });
-      } catch (error) {
-        res.status(500).json({ 
-          error: 'Failed to trigger test event',
-          message: error instanceof Error ? error.message : 'Unknown error',
-          timestamp: new Date().toISOString()
-        });
-      }
-    });
-    
     // Session events endpoint with validation
     this.app.get('/sessions/:sessionId/events', 
       validateParams(sessionIdParamSchema),

@@ -143,33 +143,6 @@ function Dashboard() {
                 </span>
               </div>
 
-              {/* Test Event Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    const response = await fetch('http://localhost:3000/test-event', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ 
-                        type: 'dashboard_test',
-                        timestamp: new Date().toISOString(),
-                        message: 'Dashboard test event'
-                      })
-                    })
-                    if (response.ok) {
-                      console.log('✅ Test event sent')
-                    }
-                  } catch (error) {
-                    console.error('❌ Test event failed:', error)
-                  }
-                }}
-              >
-                <Zap className="w-4 h-4 mr-2" />
-                Test Event
-              </Button>
-
               {/* Refresh Button */}
               <Button
                 variant="outline"
