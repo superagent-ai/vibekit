@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import chokidar from 'chokidar';
 import { resolve, normalize, isAbsolute } from 'path';
-import type { DashboardOptions, TimeRange } from '../core/types.js';
+import type { DashboardOptions, TimeRange, TelemetryEvent } from '../core/types.js';
 import { createAuthMiddleware, type AuthConfig } from './middleware/auth.js';
 import { getEnvVar } from '../utils/env-validator.js';
 import { 
@@ -427,10 +427,36 @@ export class TelemetryAPIServer {
             offset: Number(offset)
           });
           
+          // Transform events to match dashboard expectations
+          const transformedEvents = events.map((event: TelemetryEvent) => {
+            // For stream events, the metadata often contains the actual data
+            let streamData = null;
+            if (event.eventType === 'stream' && event.metadata) {
+              streamData = JSON.stringify(event.metadata);
+            }
+            
+            return {
+              id: event.id ? parseInt(event.id) : 0,
+              sessionId: event.sessionId,
+              eventType: event.eventType,
+              agentType: event.category || 'unknown',
+              mode: event.action || 'unknown',
+              prompt: event.label || 'Unknown operation',
+              streamData: streamData,
+              sandboxId: event.metadata?.sandboxId || null,
+              repoUrl: event.metadata?.repoUrl || null,
+              metadata: event.metadata ? JSON.stringify(event.metadata) : null,
+              timestamp: event.timestamp,
+              createdAt: event.timestamp,
+              version: 1,
+              schemaVersion: '1.0.0'
+            };
+          });
+          
           res.json({
             sessionId,
-            events,
-            count: events.length,
+            events: transformedEvents,
+            count: transformedEvents.length,
             timestamp: new Date().toISOString()
           });
         } catch (error) {
