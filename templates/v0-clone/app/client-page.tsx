@@ -4,13 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
 
 import { api } from "@/convex/_generated/api";
 
 import ChatForm from "@/components/chat/chat-form";
 import TemplatesSection from "@/components/templates-section";
 import LoginDialog from "@/components/login-dialog";
+import { Footer } from "@/components/footer";
 import { createSessionAction } from "./actions/vibekit";
 import { Repo } from "./actions/github";
 import { templates } from "@/config";
@@ -99,57 +99,7 @@ export default function ClientPage() {
         <div className="flex flex-col gap-y-8">
           <TemplatesSection onSelect={handleTemplateSelect} />
         </div>
-        <footer className="mt-auto py-8 text-center justify-end">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            <Link href="/sessions" className="hover:underline">
-              Sessions{" "}
-            </Link>
-            •{" "}
-            <Link href="/settings" className="hover:underline">
-              Settings{" "}
-            </Link>
-            •{" "}
-            <a href="/billing" className="hover:underline">
-              Billing
-            </a>{" "}
-            •{" "}
-            <a
-              href="https://vibekit.sh/privacy-policy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:underline"
-            >
-              Privacy
-            </a>{" "}
-            •{" "}
-            <a
-              href="https://vibekit.sh/terms-of-service"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:underline"
-            >
-              Terms
-            </a>{" "}
-            •{" "}
-            <a
-              href="https://x.com/vibekit_sh"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:underline"
-            >
-              X
-            </a>{" "}
-            •{" "}
-            <a
-              href="https://github.com/superagent-ai/vibekit/tree/main/templates/v0-clone"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:underline"
-            >
-              GitHub
-            </a>
-          </p>
-        </footer>
+        <Footer />
       </div>
     </>
   );
