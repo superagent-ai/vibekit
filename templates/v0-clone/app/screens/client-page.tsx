@@ -11,8 +11,8 @@ import { api } from "@/convex/_generated/api";
 import ChatForm from "@/components/chat/chat-form";
 import TemplatesSection from "@/components/templates-section";
 import LoginDialog from "@/components/login-dialog";
-import { createSessionAction } from "./actions/vibekit";
-import { Repo } from "./actions/github";
+import { createSessionAction } from "../actions/vibekit";
+import { Repo } from "../actions/github";
 import { templates } from "@/config";
 
 export default function ClientPage() {

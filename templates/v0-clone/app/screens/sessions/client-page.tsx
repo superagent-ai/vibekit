@@ -32,7 +32,7 @@ import { Loader, SearchIcon, XIcon, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Id } from "@/convex/_generated/dataModel";
-import { deleteSessionAction } from "../actions/vibekit";
+import { deleteSessionAction } from "../../actions/vibekit";
 
 const ITEMS_PER_PAGE = 15;
 
