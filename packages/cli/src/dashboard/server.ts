@@ -29,7 +29,7 @@ class DashboardServer {
       console.log(chalk.blue(`🚀 Starting analytics dashboard on port ${this.port}...`));
 
       // Dashboard directory path - use the source directory
-      const dashboardDir = join(process.cwd(), 'src', 'dashboard');
+      const dashboardDir = join(process.cwd(), 'packages', 'cli', 'src', 'dashboard');
 
       // Start dashboard using npm run dev
       this.process = spawn('npm', ['run', 'dev', '--', '--port', this.port.toString()], {
