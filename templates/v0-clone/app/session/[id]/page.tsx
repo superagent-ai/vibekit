@@ -1,1 +1,0 @@
-export { default } from '../../screens/session/[id]/page'; 
