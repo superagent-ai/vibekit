@@ -9,6 +9,11 @@ export async function getManager(): Promise<MCPClientManager> {
     
     manager = new MCPClientManager({
       configPath: process.env.MCP_CONFIG_PATH,
+      // Maintain backward compatibility with .vibekit directory
+      configDir: '.vibekit',
+      configFileName: 'mcp-servers.json',
+      clientName: 'vibekit-mcp-client',
+      metadataKey: '_vibekit_metadata',
       autoConnect: false,
     });
     

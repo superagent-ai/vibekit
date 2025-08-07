@@ -11,10 +11,12 @@ export class MCPClient extends EventEmitter<ClientEvents> {
   private server: MCPServer;
   private connected: boolean = false;
   private transport: any = null;
+  private clientName: string;
 
-  constructor(server: MCPServer) {
+  constructor(server: MCPServer, options?: { clientName?: string }) {
     super();
     this.server = server;
+    this.clientName = options?.clientName || process.env.MCP_CLIENT_NAME || 'mcp-client';
   }
 
   async connect(): Promise<void> {
@@ -25,7 +27,7 @@ export class MCPClient extends EventEmitter<ClientEvents> {
     try {
       this.client = new Client(
         {
-          name: 'vibekit-mcp-client',
+          name: this.clientName,
           version: '0.0.1',
         },
         {

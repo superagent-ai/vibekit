@@ -3,6 +3,10 @@ export * from './tools';
 
 export interface MCPClientConfig {
   configPath?: string;
+  configDir?: string;
+  configFileName?: string;
+  clientName?: string;
+  metadataKey?: string;
   autoConnect?: boolean;
   reconnectAttempts?: number;
   reconnectDelay?: number;

@@ -35,7 +35,12 @@ export class MCPClientManager extends EventEmitter<ManagerEvents> {
       ...config,
     };
     
-    this.configStore = new ConfigStore(config.configPath);
+    this.configStore = new ConfigStore({
+      configPath: config.configPath,
+      configDir: config.configDir,
+      configFileName: config.configFileName,
+      metadataKey: config.metadataKey,
+    });
     this.queue = new PQueue({ concurrency: 5 });
   }
 
@@ -110,7 +115,9 @@ export class MCPClientManager extends EventEmitter<ManagerEvents> {
     await this.updateServerStatus(serverId, 'connecting');
 
     try {
-      const client = new MCPClient(server);
+      const client = new MCPClient(server, { 
+        clientName: this.config.clientName 
+      });
       
       // Set up event listeners
       client.on('connected', () => {

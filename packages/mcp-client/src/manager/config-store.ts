@@ -6,12 +6,29 @@ import type { MCPServer, ServerCreateInput, StdioConfig, HttpConfig } from '../t
 export class ConfigStore {
   private configPath: string;
   private metadataPath: string;
+  private metadataKey: string;
   private servers: Map<string, MCPServer> = new Map();
   private saveDebounceTimer: NodeJS.Timeout | null = null;
 
-  constructor(configPath?: string) {
-    this.configPath = configPath || join(homedir(), '.vibekit', 'mcp-servers.json');
+  constructor(options?: {
+    configPath?: string;
+    configDir?: string;
+    configFileName?: string;
+    metadataKey?: string;
+  }) {
+    const defaultConfigDir = process.env.MCP_CONFIG_DIR || '.vibekit';
+    const defaultConfigFileName = 'servers.json';
+    
+    if (options?.configPath) {
+      this.configPath = options.configPath;
+    } else {
+      const configDir = options?.configDir || defaultConfigDir;
+      const configFileName = options?.configFileName || defaultConfigFileName;
+      this.configPath = join(homedir(), configDir, configFileName);
+    }
+    
     this.metadataPath = this.configPath.replace('.json', '.metadata.json');
+    this.metadataKey = options?.metadataKey || '_metadata';
   }
 
   async initialize(): Promise<void> {
@@ -41,7 +58,7 @@ export class ConfigStore {
         metadata = JSON.parse(metadataData);
       } catch {
         // Check if metadata is in the old location (inside main config)
-        metadata = parsed._vibekit_metadata || {};
+        metadata = parsed[this.metadataKey] || {};
       }
       
       // Support multiple formats:
@@ -51,7 +68,7 @@ export class ConfigStore {
       let serversData = parsed.mcpServers || parsed.servers;
       
       // If neither mcpServers nor servers exists, check if it's the direct format
-      if (!serversData && !parsed._vibekit_metadata && typeof parsed === 'object') {
+      if (!serversData && !parsed[this.metadataKey] && typeof parsed === 'object') {
         // It's the direct object format, wrap it
         serversData = parsed;
       }
@@ -75,7 +92,7 @@ export class ConfigStore {
           // New object format (mcpServers or direct object)
           for (const [name, config] of Object.entries(serversData)) {
             // Skip metadata if it's still in the main file
-            if (name === '_vibekit_metadata') continue;
+            if (name === this.metadataKey) continue;
             
             const serverMetadata = metadata[name] || {};
             const configData = config as any;
