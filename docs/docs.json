@@ -65,7 +65,7 @@
         ]
       },
       {
-        "tab": "API Reference",
+        "tab": "API",
         "groups": [
           {
             "group": "VibeKit",
@@ -124,6 +124,33 @@
             "pages": [
               "cli/environment-variables",
               "cli/configuration-files"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "MCP",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "mcp/introduction",
+              "mcp/quickstart"
+            ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "mcp/tools/projects",
+              "mcp/tools/project-management",
+              "mcp/tools/current-project"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "mcp/claude-desktop",
+              "mcp/deployment"
             ]
           }
         ]

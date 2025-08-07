@@ -1,0 +1,271 @@
+---
+title: Quick Start
+description: "Get up and running with VibeKit MCP in minutes"
+---
+
+## One-Click Install
+
+### Cursor
+
+Install VibeKit MCP in Cursor with one click:
+
+<a 
+  href="cursor://anysphere.cursor-deeplink/mcp/install?name=vibekit&config=eyJjb21tYW5kIjoibnB4IC15IEB2aWJlLWtpdC9tY3Atc2VydmVyIiwiZW52Ijp7fX0%3D"
+  style={{
+    display: 'inline-block',
+    padding: '10px 20px',
+    backgroundColor: '#000',
+    color: '#fff',
+    textDecoration: 'none',
+    borderRadius: '6px',
+    fontWeight: '500',
+    fontSize: '14px'
+  }}
+>
+  Add to Cursor
+</a>
+
+## Manual Setup
+
+The VibeKit MCP server can be used with any MCP-compatible client. The server will be automatically downloaded and run using npx - no installation required!
+
+### MCP Configuration
+
+Add this configuration to your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "npx",
+      "args": ["-y", "@vibe-kit/mcp-server"],
+      "env": {}
+    }
+  }
+}
+```
+
+<Note>
+  The `-y` flag tells npx to automatically install the package if it's not already cached. If you have other MCP servers configured, add VibeKit alongside them in the `mcpServers` object.
+</Note>
+
+
+## Claude Desktop Setup
+
+If you're using Claude Desktop specifically, here's how to set it up:
+
+### Step 1: Locate Configuration File
+
+Find your Claude Desktop configuration file:
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    ~/Library/Application Support/Claude/claude_desktop_config.json
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```bash
+    %APPDATA%\Claude\claude_desktop_config.json
+    ```
+  </Tab>
+  <Tab title="Linux">
+    ```bash
+    ~/.config/Claude/claude_desktop_config.json
+    ```
+  </Tab>
+</Tabs>
+
+### Step 2: Add Configuration
+
+Add the MCP configuration shown above to your `claude_desktop_config.json` file.
+
+### Step 3: Restart Claude Desktop
+
+Restart Claude Desktop to load the new configuration.
+
+## Verify Installation
+
+Once configured, you can verify the MCP server is working by asking your AI assistant:
+
+```
+"List my VibeKit projects"
+```
+
+The assistant should respond with a list of your projects (or indicate no projects exist yet).
+
+## First Project
+
+Create your first project using your AI assistant:
+
+```
+"Create a new VibeKit project called 'my-app' at /path/to/my-app"
+```
+
+The assistant will use the MCP tools to:
+1. Create the project in the VibeKit registry
+2. Set it as the current project
+3. Confirm the creation
+
+## Basic Commands
+
+Here are some example requests you can make to your AI assistant:
+
+### List Projects
+```
+"Show me all my VibeKit projects"
+"List active projects"
+"Search for projects tagged with 'react'"
+```
+
+### Manage Projects
+```
+"Create a project called 'api' at ./backend"
+"Update the description of project 'my-app'"
+"Archive the old-website project"
+```
+
+### Switch Context
+```
+"Switch to the frontend project"
+"What's my current project?"
+"Clear the current project selection"
+```
+
+## Local Development
+
+For local development of the MCP server:
+
+### Clone and Build
+
+```bash
+# Clone the repository
+git clone https://github.com/superagent-ai/vibekit
+cd vibekit
+
+# Install dependencies
+npm install
+
+# Build the MCP server
+npm run build --workspace=packages/mcp-server
+```
+
+### Configure for Local Development
+
+Update your MCP client config to use the local build:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "node",
+      "args": ["/absolute/path/to/vibekit/packages/mcp-server/dist/index.js"],
+      "env": {}
+    }
+  }
+}
+```
+
+### Development Mode
+
+Run in watch mode for development:
+
+```bash
+npm run dev --workspace=packages/mcp-server
+```
+
+
+## Alternative Transports
+
+### Stdio (Default)
+
+The default configuration uses stdio transport, which works with most desktop MCP clients:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "npx",
+      "args": ["-y", "@vibe-kit/mcp-server"]
+    }
+  }
+}
+```
+
+### HTTP Stream
+
+For web-based clients or remote access, use HTTP stream transport:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@vibe-kit/mcp-server",
+        "--transport", "http-stream",
+        "--port", "8080"
+      ]
+    }
+  }
+}
+```
+
+Then connect your client to: `http://localhost:8080/mcp`
+
+## Troubleshooting
+
+### Server Not Found
+
+If your MCP client can't find the VibeKit server:
+
+1. Check the configuration file path is correct
+2. Ensure the JSON syntax is valid
+3. Restart your MCP client completely
+4. Check the client's logs for error messages
+
+### Permission Errors
+
+If you encounter permission errors:
+
+```bash
+# Ensure the projects directory exists and is writable
+mkdir -p ~/.vibekit
+chmod 755 ~/.vibekit
+```
+
+### Debug Mode
+
+Enable debug logging by setting the environment variable:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "npx",
+      "args": ["-y", "@vibe-kit/mcp-server"],
+      "env": {
+        "DEBUG": "vibekit:*"
+      }
+    }
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Tool Reference" icon="wrench" href="/mcp/tools/projects">
+    Learn about all available MCP tools
+  </Card>
+  <Card title="Project Management" icon="folder" href="/cli/commands/projects">
+    Explore the CLI project management features
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/mcp/deployment">
+    Deploy the MCP server for team access
+  </Card>
+  <Card title="Configuration" icon="cog" href="/mcp/claude-desktop">
+    Advanced Claude Desktop configuration
+  </Card>
+</CardGroup>
