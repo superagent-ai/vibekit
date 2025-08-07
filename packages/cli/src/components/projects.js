@@ -1,5 +1,6 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
+import path from 'path';
 import {
   getAllProjects,
   getProject,
@@ -60,69 +61,111 @@ export async function showProject(id) {
   }
 }
 
-export async function addProject() {
+export async function addProject(name, folder, description) {
   try {
     console.log(chalk.blue('➕ Add New Project'));
     console.log(chalk.gray('─'.repeat(50)));
     
-    const answers = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'name',
-        message: 'Project name:',
-        validate: (input) => input.trim() ? true : 'Project name is required'
-      },
-      {
-        type: 'input',
-        name: 'gitRepoPath',
-        message: 'Git repository path:',
-        validate: (input) => input.trim() ? true : 'Git repository path is required'
-      },
-      {
-        type: 'input',
-        name: 'description',
-        message: 'Description (optional):'
-      },
-      {
-        type: 'input',
-        name: 'tags',
-        message: 'Tags (comma separated, optional):'
-      },
-      {
-        type: 'input',
-        name: 'setupScript',
-        message: 'Setup script (optional):',
-        default: ''
-      },
-      {
-        type: 'input',
-        name: 'devScript',
-        message: 'Development script (optional):',
-        default: ''
-      },
-      {
-        type: 'input',
-        name: 'cleanupScript',
-        message: 'Cleanup script (optional):',
-        default: ''
-      },
-      {
-        type: 'list',
-        name: 'status',
-        message: 'Project status:',
-        choices: ['active', 'archived'],
-        default: 'active'
+    let projectData = {};
+    
+    // If name is provided, use command-line arguments
+    if (name) {
+      // Validate that folder is also provided
+      if (!folder) {
+        console.error(chalk.red('Error: When providing a project name, you must also provide a folder path'));
+        console.log(chalk.gray('Usage: vibekit projects add <name> <folder> [description]'));
+        console.log(chalk.gray('  Use "." for current directory'));
+        return;
       }
-    ]);
-    
-    // Process tags
-    const tags = answers.tags ? 
-      answers.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) : [];
-    
-    const projectData = {
-      ...answers,
-      tags
-    };
+      
+      // Use current directory if folder is '.', otherwise use the provided folder
+      // Convert relative paths to absolute paths
+      let gitRepoPath;
+      if (folder === '.') {
+        gitRepoPath = process.cwd();
+      } else if (path.isAbsolute(folder)) {
+        gitRepoPath = folder;
+      } else {
+        gitRepoPath = path.resolve(process.cwd(), folder);
+      }
+      
+      projectData = {
+        name: name,
+        gitRepoPath: gitRepoPath,
+        description: description || '',
+        tags: [],
+        setupScript: '',
+        devScript: '',
+        cleanupScript: '',
+        status: 'active'
+      };
+      
+      console.log(chalk.gray(`Project Name: ${name}`));
+      console.log(chalk.gray(`Project Path: ${gitRepoPath}`));
+      if (description) {
+        console.log(chalk.gray(`Description: ${description}`));
+      }
+    } else {
+      // Interactive mode - ask all questions
+      const answers = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'name',
+          message: 'Project name:',
+          validate: (input) => input.trim() ? true : 'Project name is required'
+        },
+        {
+          type: 'input',
+          name: 'gitRepoPath',
+          message: 'Git repository path:',
+          validate: (input) => input.trim() ? true : 'Git repository path is required'
+        },
+        {
+          type: 'input',
+          name: 'description',
+          message: 'Description (optional):'
+        },
+        {
+          type: 'input',
+          name: 'tags',
+          message: 'Tags (comma separated, optional):'
+        },
+        {
+          type: 'input',
+          name: 'setupScript',
+          message: 'Setup script (optional):',
+          default: ''
+        },
+        {
+          type: 'input',
+          name: 'devScript',
+          message: 'Development script (optional):',
+          default: ''
+        },
+        {
+          type: 'input',
+          name: 'cleanupScript',
+          message: 'Cleanup script (optional):',
+          default: ''
+        },
+        {
+          type: 'list',
+          name: 'status',
+          message: 'Project status:',
+          choices: ['active', 'archived'],
+          default: 'active'
+        }
+      ]);
+      
+      // Process tags
+      const tags = answers.tags ? 
+        answers.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) : [];
+      
+      projectData = {
+        ...answers,
+        tags
+      };
+    }
     
     // Validate the project data
     const errors = await validateProjectData(projectData);
@@ -137,14 +180,21 @@ export async function addProject() {
     console.log(chalk.gray(`Project ID: ${project.id}`));
     
     // Ask if they want to select this project
-    const { selectProject } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'selectProject',
-        message: 'Set this as your current project?',
-        default: true
-      }
-    ]);
+    // In non-interactive mode (when name is provided), default to yes
+    let selectProject = false;
+    if (name) {
+      selectProject = true;
+    } else {
+      const answer = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'selectProject',
+          message: 'Set this as your current project?',
+          default: true
+        }
+      ]);
+      selectProject = answer.selectProject;
+    }
     
     if (selectProject) {
       await selectProjectById(project.id);
@@ -250,17 +300,125 @@ export async function editProject(id) {
   }
 }
 
-export async function removeProject(id) {
+export async function removeMultipleProjects(idsOrNames, byName = false) {
   try {
-    if (!id) {
-      console.error(chalk.red('Project ID is required'));
+    if (!idsOrNames || idsOrNames.length === 0) {
+      console.error(chalk.red('At least one project ID or name is required'));
       return;
     }
     
-    const project = await getProject(id);
-    if (!project) {
-      console.error(chalk.red(`Project not found: ${id}`));
+    // If only one project, use the single removal function for backward compatibility
+    if (idsOrNames.length === 1) {
+      return await removeProject(idsOrNames[0], byName);
+    }
+    
+    // Collect all projects to be deleted
+    const projectsToDelete = [];
+    const notFound = [];
+    
+    for (const idOrName of idsOrNames) {
+      let project;
+      if (byName) {
+        // Search for project by name
+        const projects = await getAllProjects();
+        project = projects.find(p => p.name === idOrName);
+        if (!project) {
+          notFound.push(`name: ${idOrName}`);
+        }
+      } else {
+        // Search by ID
+        project = await getProject(idOrName);
+        if (!project) {
+          notFound.push(`ID: ${idOrName}`);
+        }
+      }
+      
+      if (project) {
+        projectsToDelete.push(project);
+      }
+    }
+    
+    // Report not found projects
+    if (notFound.length > 0) {
+      console.error(chalk.red('The following projects were not found:'));
+      notFound.forEach(item => console.error(chalk.red(`  • ${item}`)));
+      
+      if (projectsToDelete.length === 0) {
+        return;
+      }
+      console.log('');
+    }
+    
+    // Display all projects to be deleted
+    console.log(chalk.yellow(`⚠️ Delete ${projectsToDelete.length} Project${projectsToDelete.length > 1 ? 's' : ''}:`));
+    console.log(chalk.gray('─'.repeat(50)));
+    
+    projectsToDelete.forEach(project => {
+      console.log(chalk.yellow(`• ${project.name} (${project.id})`));
+      if (project.description) {
+        console.log(chalk.gray(`  ${project.description}`));
+      }
+    });
+    console.log('');
+    
+    const { confirmDelete } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirmDelete',
+        message: chalk.red(`Are you sure you want to delete ${projectsToDelete.length} project${projectsToDelete.length > 1 ? 's' : ''}?`),
+        default: false
+      }
+    ]);
+    
+    if (!confirmDelete) {
+      console.log(chalk.gray('Delete cancelled'));
       return;
+    }
+    
+    // Delete all projects
+    let successCount = 0;
+    for (const project of projectsToDelete) {
+      try {
+        await deleteProject(project.id);
+        successCount++;
+        console.log(chalk.green(`✅ Deleted: ${project.name}`));
+      } catch (error) {
+        console.error(chalk.red(`❌ Failed to delete ${project.name}: ${error.message}`));
+      }
+    }
+    
+    if (successCount > 0) {
+      console.log(chalk.green(`\n✅ Successfully deleted ${successCount} project${successCount > 1 ? 's' : ''}!`));
+    }
+    
+  } catch (error) {
+    console.error(chalk.red('Failed to delete projects:'), error.message);
+  }
+}
+
+export async function removeProject(idOrName, byName = false) {
+  try {
+    if (!idOrName) {
+      console.error(chalk.red('Project ID or name is required'));
+      return;
+    }
+    
+    let project;
+    if (byName) {
+      // Search for project by name
+      const projects = await getAllProjects();
+      project = projects.find(p => p.name === idOrName);
+      if (!project) {
+        console.error(chalk.red(`Project not found with name: ${idOrName}`));
+        return;
+      }
+    } else {
+      // Search by ID
+      project = await getProject(idOrName);
+      if (!project) {
+        console.error(chalk.red(`Project not found with ID: ${idOrName}`));
+        return;
+      }
     }
     
     console.log(chalk.yellow(`⚠️ Delete Project: ${project.name}`));
@@ -282,7 +440,7 @@ export async function removeProject(id) {
       return;
     }
     
-    await deleteProject(id);
+    await deleteProject(project.id);
     console.log(chalk.green('✅ Project deleted successfully!'));
     
   } catch (error) {

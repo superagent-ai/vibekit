@@ -23,6 +23,7 @@ import {
   addProject,
   editProject,
   removeProject,
+  removeMultipleProjects,
   selectProjectById,
   showCurrentProject
 } from './components/projects.js';
@@ -710,11 +711,20 @@ projectsCommand
   });
 
 projectsCommand
-  .command('add')
+  .command('add [name] [folder] [description...]')
   .alias('create')
-  .description('Add a new project (interactive)')
-  .action(async () => {
-    await addProject();
+  .description('Add a new project (interactive or with args)')
+  .helpOption('-h, --help', 'Display help for command')
+  .addHelpText('after', `
+Examples:
+  vibekit projects add                     # Interactive mode
+  vibekit projects add myproject . "A cool project"   # Add current dir as project
+  vibekit projects add myapp /path/to/app  # Add specific path
+  vibekit projects add webapp ./webapp "My web application"`)
+  .action(async (name, folder, descriptionParts) => {
+    // Join description parts if multiple words were provided
+    const description = descriptionParts ? descriptionParts.join(' ') : undefined;
+    await addProject(name, folder, description);
   });
 
 projectsCommand
@@ -734,12 +744,20 @@ projectsCommand
   });
 
 projectsCommand
-  .command('delete <id>')
+  .command('delete <idsOrNames...>')
   .alias('remove')
   .alias('rm')
-  .description('Delete project')
-  .action(async (id) => {
-    await removeProject(id);
+  .description('Delete one or more projects by ID or name')
+  .option('-n, --name', 'Treat arguments as project names instead of IDs')
+  .addHelpText('after', `
+Examples:
+  vibekit projects delete abc123              # Delete single project by ID
+  vibekit projects delete abc123 def456       # Delete multiple projects by ID
+  vibekit projects remove -n myproject        # Delete by name
+  vibekit projects rm -n project1 project2    # Delete multiple by name
+  vibekit projects rm -n "My Project" test    # Delete multiple with spaces in names`)
+  .action(async (idsOrNames, options) => {
+    await removeMultipleProjects(idsOrNames, options.name || false);
   });
 
 projectsCommand
