@@ -46,7 +46,7 @@ export async function PUT(
     
     const project = await updateProject(params.id, {
       name: body.name,
-      gitRepoPath: body.gitRepoPath,
+      projectRoot: body.projectRoot,
       setupScript: body.setupScript,
       devScript: body.devScript,
       cleanupScript: body.cleanupScript,

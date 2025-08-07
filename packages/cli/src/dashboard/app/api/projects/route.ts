@@ -27,12 +27,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Validate required fields
-    if (!body.name || !body.gitRepoPath) {
+    if (!body.name || !body.projectRoot) {
       return NextResponse.json(
         { 
           success: false,
           data: null,
-          message: 'Name and gitRepoPath are required' 
+          message: 'Name and projectRoot are required' 
         },
         { status: 400 }
       );
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     
     const project = await createProject({
       name: body.name,
-      gitRepoPath: body.gitRepoPath,
+      projectRoot: body.projectRoot,
       setupScript: body.setupScript || '',
       devScript: body.devScript || '',
       cleanupScript: body.cleanupScript || '',

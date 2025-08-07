@@ -152,17 +152,17 @@ export async function validateProjectData(projectData, allowNonExistent = false)
     errors.push('Project name is required');
   }
   
-  if (!projectData.gitRepoPath || !projectData.gitRepoPath.trim()) {
-    errors.push('Git repository path is required');
+  if (!projectData.projectRoot || !projectData.projectRoot.trim()) {
+    errors.push('Project root path is required');
   } else if (!allowNonExistent) {
     // Check if the path exists (only if not allowing non-existent paths)
     try {
-      const stats = await fs.stat(projectData.gitRepoPath);
+      const stats = await fs.stat(projectData.projectRoot);
       if (!stats.isDirectory()) {
-        errors.push('Git repository path must be a directory');
+        errors.push('Project root path must be a directory');
       }
     } catch (error) {
-      errors.push(`Git repository path does not exist: ${projectData.gitRepoPath}`);
+      errors.push(`Project root path does not exist: ${projectData.projectRoot}`);
     }
   }
   
@@ -177,18 +177,18 @@ export function formatProjectsTable(projects) {
   // Calculate column widths
   const maxIdLength = Math.max(6, ...projects.map(p => p.id.length));
   const maxNameLength = Math.max(20, ...projects.map(p => p.name.length));
-  const maxPathLength = Math.max(30, ...projects.map(p => p.gitRepoPath.length));
+  const maxPathLength = Math.max(30, ...projects.map(p => (p.projectRoot || '').length));
   const maxStatusLength = Math.max(8, ...projects.map(p => p.status.length));
   
   // Create header
-  const header = `${'ID'.padEnd(maxIdLength)} | ${'Name'.padEnd(maxNameLength)} | ${'Repository Path'.padEnd(maxPathLength)} | ${'Status'.padEnd(maxStatusLength)}`;
+  const header = `${'ID'.padEnd(maxIdLength)} | ${'Name'.padEnd(maxNameLength)} | ${'Project Root'.padEnd(maxPathLength)} | ${'Status'.padEnd(maxStatusLength)}`;
   const separator = '-'.repeat(header.length);
   
   // Create rows
   const rows = projects.map(project => {
     const id = project.id.padEnd(maxIdLength);
     const name = truncate(project.name, maxNameLength).padEnd(maxNameLength);
-    const path = truncate(project.gitRepoPath, maxPathLength).padEnd(maxPathLength);
+    const path = truncate(project.projectRoot || '', maxPathLength).padEnd(maxPathLength);
     const status = project.status.padEnd(maxStatusLength);
     
     return `${id} | ${name} | ${path} | ${status}`;
@@ -201,7 +201,7 @@ export function formatProjectDetails(project) {
   const lines = [
     `ID: ${project.id}`,
     `Name: ${project.name}`,
-    `Git Repository: ${project.gitRepoPath}`,
+    `Project Root: ${project.projectRoot}`,
     `Status: ${project.status}`,
     `Created: ${new Date(project.createdAt).toLocaleString()}`,
     `Updated: ${new Date(project.updatedAt).toLocaleString()}`

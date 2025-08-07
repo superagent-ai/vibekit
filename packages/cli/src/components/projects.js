@@ -83,18 +83,18 @@ export async function addProject(name, folder, description) {
       
       // Use current directory if folder is '.', otherwise use the provided folder
       // Convert relative paths to absolute paths
-      let gitRepoPath;
+      let projectRoot;
       if (folder === '.') {
-        gitRepoPath = process.cwd();
+        projectRoot = process.cwd();
       } else if (path.isAbsolute(folder)) {
-        gitRepoPath = folder;
+        projectRoot = folder;
       } else {
-        gitRepoPath = path.resolve(process.cwd(), folder);
+        projectRoot = path.resolve(process.cwd(), folder);
       }
       
       projectData = {
         name: name,
-        gitRepoPath: gitRepoPath,
+        projectRoot: projectRoot,
         description: description || '',
         tags: [],
         setupScript: '',
@@ -104,7 +104,7 @@ export async function addProject(name, folder, description) {
       };
       
       console.log(chalk.gray(`Project Name: ${name}`));
-      console.log(chalk.gray(`Project Path: ${gitRepoPath}`));
+      console.log(chalk.gray(`Project Path: ${projectRoot}`));
       if (description) {
         console.log(chalk.gray(`Description: ${description}`));
       }
@@ -119,9 +119,9 @@ export async function addProject(name, folder, description) {
         },
         {
           type: 'input',
-          name: 'gitRepoPath',
-          message: 'Git repository path:',
-          validate: (input) => input.trim() ? true : 'Git repository path is required'
+          name: 'projectRoot',
+          message: 'Project root path:',
+          validate: (input) => input.trim() ? true : 'Project root path is required'
         },
         {
           type: 'input',
@@ -171,12 +171,12 @@ export async function addProject(name, folder, description) {
     }
     
     // Check if the path exists
-    const pathDoesExist = await pathExists(projectData.gitRepoPath);
+    const pathDoesExist = await pathExists(projectData.projectRoot);
     let shouldCreatePath = false;
     let shouldInitGit = false;
     
     if (!pathDoesExist) {
-      console.log(chalk.yellow(`\n⚠️  Directory does not exist: ${projectData.gitRepoPath}`));
+      console.log(chalk.yellow(`\n⚠️  Directory does not exist: ${projectData.projectRoot}`));
       
       // Ask if they want to create it
       const { confirmCreate } = await inquirer.prompt([
@@ -197,7 +197,7 @@ export async function addProject(name, folder, description) {
       shouldInitGit = true;
     } else {
       // Check if it's already a git repository
-      const isGitRepo = await pathExists(path.join(projectData.gitRepoPath, '.git'));
+      const isGitRepo = await pathExists(path.join(projectData.projectRoot, '.git'));
       
       if (!isGitRepo) {
         const { confirmInitGit } = await inquirer.prompt([
@@ -215,8 +215,8 @@ export async function addProject(name, folder, description) {
     // Create directory if needed
     if (shouldCreatePath) {
       try {
-        await fs.ensureDir(projectData.gitRepoPath);
-        console.log(chalk.green(`✅ Created directory: ${projectData.gitRepoPath}`));
+        await fs.ensureDir(projectData.projectRoot);
+        console.log(chalk.green(`✅ Created directory: ${projectData.projectRoot}`));
       } catch (error) {
         console.error(chalk.red(`Failed to create directory: ${error.message}`));
         return;
@@ -226,17 +226,17 @@ export async function addProject(name, folder, description) {
     // Initialize git repository if needed
     if (shouldInitGit) {
       try {
-        execSync('git init', { cwd: projectData.gitRepoPath, stdio: 'pipe' });
+        execSync('git init', { cwd: projectData.projectRoot, stdio: 'pipe' });
         console.log(chalk.green(`✅ Initialized git repository`));
         
         // Create initial commit if directory is new
         if (shouldCreatePath) {
           // Create a simple README file
-          const readmePath = path.join(projectData.gitRepoPath, 'README.md');
+          const readmePath = path.join(projectData.projectRoot, 'README.md');
           await fs.writeFile(readmePath, `# ${projectData.name}\n\n${projectData.description || 'A new project managed by VibeKit'}\n`);
           
-          execSync('git add README.md', { cwd: projectData.gitRepoPath, stdio: 'pipe' });
-          execSync('git commit -m "Initial commit"', { cwd: projectData.gitRepoPath, stdio: 'pipe' });
+          execSync('git add README.md', { cwd: projectData.projectRoot, stdio: 'pipe' });
+          execSync('git commit -m "Initial commit"', { cwd: projectData.projectRoot, stdio: 'pipe' });
           console.log(chalk.green(`✅ Created initial commit with README.md`));
         }
       } catch (error) {
@@ -309,10 +309,10 @@ export async function editProject(id) {
       },
       {
         type: 'input',
-        name: 'gitRepoPath',
-        message: 'Git repository path:',
-        default: project.gitRepoPath,
-        validate: (input) => input.trim() ? true : 'Git repository path is required'
+        name: 'projectRoot',
+        message: 'Project root path:',
+        default: project.projectRoot,
+        validate: (input) => input.trim() ? true : 'Project root path is required'
       },
       {
         type: 'input',
@@ -542,12 +542,12 @@ export async function selectProjectById(id) {
     await setCurrentProject(project);
     
     console.log(chalk.green(`✅ Selected project: ${project.name}`));
-    console.log(chalk.blue(`📂 Repository: ${project.gitRepoPath}`));
+    console.log(chalk.blue(`📂 Project Root: ${project.projectRoot}`));
     
     // Try to change to the project directory
     try {
-      process.chdir(project.gitRepoPath);
-      console.log(chalk.gray(`Working directory changed to: ${project.gitRepoPath}`));
+      process.chdir(project.projectRoot);
+      console.log(chalk.gray(`Working directory changed to: ${project.projectRoot}`));
     } catch (error) {
       console.log(chalk.yellow(`⚠️ Could not change to project directory: ${error.message}`));
     }
@@ -568,7 +568,7 @@ export async function showCurrentProject() {
     }
     
     console.log(chalk.green(`Current Project: ${currentProject.name}`));
-    console.log(chalk.blue(`Repository: ${currentProject.gitRepoPath}`));
+    console.log(chalk.blue(`Project Root: ${currentProject.projectRoot}`));
     console.log(chalk.gray(`Project ID: ${currentProject.id}`));
     
   } catch (error) {

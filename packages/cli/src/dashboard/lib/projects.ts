@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 export interface Project {
   id: string;
   name: string;
-  gitRepoPath: string;
+  projectRoot: string;
   setupScript?: string;
   devScript?: string;
   cleanupScript?: string;
@@ -119,7 +119,7 @@ export async function deleteProject(id: string): Promise<boolean> {
   return true;
 }
 
-export async function getProjectByRepoPath(gitRepoPath: string): Promise<Project | null> {
+export async function getProjectByRepoPath(repoPath: string): Promise<Project | null> {
   const projects = await getAllProjects();
-  return projects.find(p => p.gitRepoPath === gitRepoPath) || null;
+  return projects.find(p => p.projectRoot === repoPath) || null;
 }
