@@ -728,11 +728,12 @@ Examples:
   });
 
 projectsCommand
-  .command('show <id>')
+  .command('show <idOrName>')
   .alias('view')
   .description('Show project details')
-  .action(async (id) => {
-    await showProject(id);
+  .option('-n, --name', 'Show by project name instead of ID')
+  .action(async (idOrName, options) => {
+    await showProject(idOrName, options.name || false);
   });
 
 projectsCommand
