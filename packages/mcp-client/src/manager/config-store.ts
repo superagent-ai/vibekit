@@ -238,35 +238,107 @@ export class ConfigStore {
   }
 
   async exportConfig(): Promise<string> {
+    const mcpServers: Record<string, any> = {};
+    
+    for (const server of this.servers.values()) {
+      const { id, description, status, lastConnected, createdAt, updatedAt, toolCount, resourceCount, promptCount, ...config } = server;
+      
+      // Build server config in the new format
+      const serverConfig: any = {
+        command: config.command,
+        args: config.args
+      };
+      
+      // Add optional fields
+      if (config.env) {
+        serverConfig.env = config.env;
+      }
+      
+      if (config.cwd) {
+        serverConfig.cwd = config.cwd;
+      }
+      
+      if (config.transport === 'sse' && config.url) {
+        serverConfig.url = config.url;
+      }
+      
+      if (config.transport === 'http' && config.baseUrl) {
+        serverConfig.baseUrl = config.baseUrl;
+        if (config.headers) {
+          serverConfig.headers = config.headers;
+        }
+      }
+      
+      mcpServers[server.name] = serverConfig;
+    }
+    
     const data = {
-      version: '1.0.0',
-      servers: Array.from(this.servers.values()),
-      exportedAt: new Date().toISOString(),
+      mcpServers: mcpServers
     };
 
     return JSON.stringify(data, null, 2);
   }
 
-  async importConfig(jsonData: string): Promise<void> {
+  async importConfig(jsonData: string, merge: boolean = true): Promise<void> {
     try {
       const parsed = JSON.parse(jsonData);
       
-      if (!parsed.servers || !Array.isArray(parsed.servers)) {
-        throw new Error('Invalid config format');
+      // Support both old and new formats
+      let serversToImport: any = {};
+      
+      if (parsed.mcpServers) {
+        // New format
+        serversToImport = parsed.mcpServers;
+      } else if (parsed.servers && Array.isArray(parsed.servers)) {
+        // Old format - convert to new format temporarily
+        for (const server of parsed.servers) {
+          const { id, description, status, lastConnected, createdAt, updatedAt, toolCount, resourceCount, promptCount, ...config } = server;
+          serversToImport[server.name] = config;
+        }
+      } else {
+        throw new Error('Invalid config format - expected mcpServers object or servers array');
       }
 
-      // Clear existing servers
-      this.servers.clear();
+      // If not merging, clear existing servers
+      if (!merge) {
+        this.servers.clear();
+      }
 
-      // Import new servers
-      for (const server of parsed.servers) {
-        if (server.lastConnected) {
-          server.lastConnected = new Date(server.lastConnected);
+      // Import servers from the new mcpServers format
+      for (const [name, config] of Object.entries(serversToImport)) {
+        // Check if server already exists (by name)
+        const existingServer = Array.from(this.servers.values()).find(s => s.name === name);
+        
+        if (existingServer && merge) {
+          // Update existing server config
+          Object.assign(existingServer, {
+            ...config,
+            name,
+            updatedAt: new Date(),
+            status: 'inactive' // Reset status on import
+          });
+        } else {
+          // Create new server
+          const id = this.generateId();
+          const now = new Date();
+          
+          // Determine transport type
+          let transport: 'stdio' | 'sse' | 'http' = 'stdio';
+          if ((config as any).url) transport = 'sse';
+          if ((config as any).baseUrl) transport = 'http';
+          
+          const server: MCPServer = {
+            id,
+            name,
+            transport,
+            status: 'inactive',
+            createdAt: now,
+            updatedAt: now,
+            ...(config as any)
+          };
+          
+          this.servers.set(id, server);
         }
-        server.createdAt = new Date(server.createdAt || Date.now());
-        server.updatedAt = new Date(server.updatedAt || Date.now());
-        server.status = 'inactive'; // Reset status
-        this.servers.set(server.id, server);
       }
 
       await this.save();

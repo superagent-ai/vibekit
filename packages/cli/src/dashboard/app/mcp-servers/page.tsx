@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Download, Upload, RefreshCw } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Download, Upload, RefreshCw, Search, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MCPServerCard } from "@/components/mcp/server-card";
 import { ServerForm } from "@/components/mcp/server-form";
@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface MCPServer {
   id: string;
@@ -35,10 +37,43 @@ export default function MCPServersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("name");
 
   useEffect(() => {
     fetchServers();
   }, []);
+
+  const filteredAndSortedServers = useMemo(() => {
+    let filtered = servers.filter(server => {
+      const matchesSearch = server.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (server.description?.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      const matchesStatus = statusFilter === "all" || server.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
+
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "status":
+          return a.status.localeCompare(b.status);
+        case "tools":
+          return (b.toolCount || 0) - (a.toolCount || 0);
+        case "lastConnected":
+          if (!a.lastConnected) return 1;
+          if (!b.lastConnected) return -1;
+          return new Date(b.lastConnected).getTime() - new Date(a.lastConnected).getTime();
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  }, [servers, searchTerm, statusFilter, sortBy]);
 
   const fetchServers = async () => {
     try {
@@ -247,6 +282,71 @@ export default function MCPServersPage() {
           </div>
         </div>
 
+        {/* Filters and Search */}
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          {/* Search Box */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Search servers..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 h-9"
+            />
+          </div>
+          
+          {/* Status Filter */}
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px] h-9 shrink-0">
+              <Filter className="mr-2 h-4 w-4" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="error">Error</SelectItem>
+              <SelectItem value="connecting">Connecting</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Sort Options */}
+          <div className="flex items-center rounded-md bg-muted p-1 shrink-0">
+            <Button
+              variant={sortBy === 'name' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setSortBy('name')}
+              className="h-7 px-3 rounded-sm text-xs font-medium"
+            >
+              Name
+            </Button>
+            <Button
+              variant={sortBy === 'status' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setSortBy('status')}
+              className="h-7 px-3 rounded-sm text-xs font-medium"
+            >
+              Status
+            </Button>
+            <Button
+              variant={sortBy === 'tools' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setSortBy('tools')}
+              className="h-7 px-3 rounded-sm text-xs font-medium"
+            >
+              Tools
+            </Button>
+            <Button
+              variant={sortBy === 'lastConnected' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setSortBy('lastConnected')}
+              className="h-7 px-3 rounded-sm text-xs font-medium"
+            >
+              Recent
+            </Button>
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -264,9 +364,22 @@ export default function MCPServersPage() {
               Add Your First Server
             </Button>
           </div>
+        ) : filteredAndSortedServers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-lg">
+            <p className="text-muted-foreground mb-4">No servers match your filters</p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchTerm("");
+                setStatusFilter("all");
+              }}
+            >
+              Clear Filters
+            </Button>
+          </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {servers.map((server) => (
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {filteredAndSortedServers.map((server) => (
               <MCPServerCard
                 key={server.id}
                 server={server}

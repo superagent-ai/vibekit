@@ -80,20 +80,20 @@ export function MCPServerCard({
 
   return (
     <Card className="relative hover:shadow-lg transition-shadow">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-1 pt-3">
         <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <CardTitle className="text-lg">{server.name}</CardTitle>
+          <div className="space-y-0.5 min-w-0 flex-1">
+            <CardTitle className="text-sm font-medium">{server.name}</CardTitle>
             {server.description && (
-              <CardDescription className="text-sm">
+              <CardDescription className="text-xs line-clamp-1">
                 {server.description}
               </CardDescription>
             )}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreVertical className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                <MoreVertical className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -119,46 +119,37 @@ export function MCPServerCard({
           </DropdownMenu>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-2 pt-2 pb-3">
         <div className="flex items-center justify-between">
           <ServerStatusBadge status={server.status} />
-          <span className="text-xs text-muted-foreground">
-            {server.transport.toUpperCase()}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="text-center">
+              <p className="text-sm font-semibold whitespace-nowrap">{server.toolCount || 0} tools</p>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {server.transport.toUpperCase()}
+            </span>
+          </div>
         </div>
 
         {server.error && server.status === 'error' && (
-          <div className="rounded-md bg-red-50 dark:bg-red-900/10 p-2">
+          <div className="rounded-md bg-red-50 dark:bg-red-900/10 p-1.5">
             <p className="text-xs text-red-600 dark:text-red-400">
               {server.error}
             </p>
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div>
-            <p className="text-2xl font-semibold">{server.toolCount || 0}</p>
-            <p className="text-xs text-muted-foreground">Tools</p>
-          </div>
-          <div>
-            <p className="text-2xl font-semibold">{server.resourceCount || 0}</p>
-            <p className="text-xs text-muted-foreground">Resources</p>
-          </div>
-          <div>
-            <p className="text-2xl font-semibold">{server.promptCount || 0}</p>
-            <p className="text-xs text-muted-foreground">Prompts</p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t">
-          <span className="text-xs text-muted-foreground">
-            Last connected: {formatLastConnected(server.lastConnected)}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground truncate">
+            {formatLastConnected(server.lastConnected)}
           </span>
           <Button 
             size="sm" 
             variant={server.status === 'active' ? 'destructive' : 'default'}
             onClick={handleToggleConnection}
             disabled={isLoading || server.status === 'connecting'}
+            className="h-7 px-2 text-xs shrink-0"
           >
             {server.status === 'active' ? (
               <>
