@@ -53,6 +53,13 @@ export async function createProject(data: ProjectCreateInput): Promise<Project> 
   const config = await readProjectsConfig();
   const now = new Date().toISOString();
   
+  // Calculate rank for new project (add to end)
+  const existingProjects = Object.values(config.projects);
+  const maxRank = existingProjects.reduce((max, p) => {
+    const rank = p.rank ?? 0;
+    return rank > max ? rank : max;
+  }, 0);
+  
   const project: Project = {
     id: generateProjectId(),
     name: data.name,
@@ -63,6 +70,7 @@ export async function createProject(data: ProjectCreateInput): Promise<Project> 
     tags: data.tags || [],
     description: data.description || '',
     status: data.status || 'active',
+    rank: data.rank ?? (maxRank + 1),
     createdAt: now,
     updatedAt: now
   };

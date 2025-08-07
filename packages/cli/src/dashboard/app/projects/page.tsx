@@ -1,7 +1,24 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw } from "lucide-react";
+import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProjectCard } from "@/components/project-card";
@@ -29,6 +46,121 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
+interface SortableRowProps {
+  project: Project;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+  onEdit: (project: Project) => void;
+  onDelete: (id: string) => void;
+}
+
+function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: SortableRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: project.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <TableRow 
+      ref={setNodeRef}
+      style={style}
+      className={`hover:bg-muted/50 transition-colors cursor-pointer ${
+        isSelected ? 'bg-primary/5' : ''
+      } ${isDragging ? 'shadow-lg' : ''}`}
+      onClick={() => onSelect(project.id)}
+    >
+      <TableCell className="w-10">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab hover:cursor-grabbing touch-none"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </TableCell>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+          {isSelected && (
+            <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
+          )}
+          <div>
+            <div>{project.name}</div>
+            {project.description && (
+              <div className="text-xs text-muted-foreground mt-1">
+                {project.description}
+              </div>
+            )}
+          </div>
+        </div>
+      </TableCell>
+      <TableCell>
+        <code className="text-xs">{project.projectRoot}</code>
+      </TableCell>
+      <TableCell>
+        <Badge 
+          variant={project.status === 'active' ? 'default' : 'secondary'}
+          className={project.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-green-100' : ''}
+        >
+          {project.status}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-wrap gap-1">
+          {project.tags?.slice(0, 2).map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs">
+              {tag}
+            </Badge>
+          ))}
+          {project.tags && project.tags.length > 2 && (
+            <Badge variant="outline" className="text-xs">
+              +{project.tags.length - 2}
+            </Badge>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-sm text-muted-foreground">
+        {new Date(project.createdAt).toLocaleDateString()}
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(project);
+            }}
+          >
+            Edit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(project.id);
+            }}
+            className="text-destructive hover:text-destructive"
+          >
+            Delete
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
@@ -39,12 +171,24 @@ export default function ProjectsPage() {
   const [lastModified, setLastModified] = useState<string | null>(null);
   const [currentProjectLastModified, setCurrentProjectLastModified] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isReordering, setIsReordering] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'list'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('projectsViewMode') as 'card' | 'list') || 'card';
     }
     return 'card';
   });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const handleViewModeChange = (mode: 'card' | 'list') => {
     setViewMode(mode);
@@ -53,20 +197,27 @@ export default function ProjectsPage() {
     }
   };
 
-  // Filter projects based on search query
+  // Filter and sort projects based on search query and rank
   const filteredProjects = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return projects;
+    let filtered = projects;
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = projects.filter(project => 
+        project.name.toLowerCase().includes(query) ||
+        project.description?.toLowerCase().includes(query) ||
+        project.projectRoot.toLowerCase().includes(query) ||
+        project.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+        project.status.toLowerCase().includes(query)
+      );
     }
     
-    const query = searchQuery.toLowerCase();
-    return projects.filter(project => 
-      project.name.toLowerCase().includes(query) ||
-      project.description?.toLowerCase().includes(query) ||
-      project.projectRoot.toLowerCase().includes(query) ||
-      project.tags?.some(tag => tag.toLowerCase().includes(query)) ||
-      project.status.toLowerCase().includes(query)
-    );
+    // Sort by rank (lower rank = higher priority)
+    return filtered.sort((a, b) => {
+      const rankA = a.rank ?? Number.MAX_SAFE_INTEGER;
+      const rankB = b.rank ?? Number.MAX_SAFE_INTEGER;
+      return rankA - rankB;
+    });
   }, [projects, searchQuery]);
 
   const fetchProjects = async (skipLoadingState = false) => {
@@ -275,6 +426,59 @@ export default function ProjectsPage() {
     }
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = filteredProjects.findIndex((p) => p.id === active.id);
+    const newIndex = filteredProjects.findIndex((p) => p.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    // Reorder the projects locally
+    const reorderedProjects = arrayMove(filteredProjects, oldIndex, newIndex);
+    
+    // Update ranks based on new order
+    const updatedProjects = reorderedProjects.map((project, index) => ({
+      ...project,
+      rank: index
+    }));
+
+    // Update local state immediately for responsive UI
+    setProjects(updatedProjects);
+    setIsReordering(true);
+
+    // Update the ranks in the backend
+    try {
+      const response = await fetch('/api/projects/reorder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projects: updatedProjects.map(p => ({ id: p.id, rank: p.rank }))
+        }),
+      });
+      
+      if (response.ok) {
+        // Show success briefly
+        setTimeout(() => setIsReordering(false), 500);
+      } else {
+        throw new Error('Failed to reorder');
+      }
+    } catch (error) {
+      console.error('Failed to update project order:', error);
+      setIsReordering(false);
+      // Refresh to get the correct state from backend
+      await fetchProjects(true);
+    }
+  };
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -307,6 +511,9 @@ export default function ProjectsPage() {
               <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
               {isRefreshing && (
                 <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+              {isReordering && (
+                <span className="text-sm text-green-600 animate-pulse">✓ Order saved</span>
               )}
             </div>
             <p className="text-muted-foreground">
@@ -413,100 +620,44 @@ export default function ProjectsPage() {
             ))}
           </div>
         ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Path</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Tags</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProjects.map((project) => (
-                  <TableRow 
-                    key={project.id} 
-                    className={`hover:bg-muted/50 transition-colors cursor-pointer ${
-                      currentProject?.id === project.id ? 'bg-primary/5' : ''
-                    }`}
-                    onClick={() => handleSelectProject(project.id)}
-                  >
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {currentProject?.id === project.id && (
-                          <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
-                        )}
-                        <div>
-                          <div>{project.name}</div>
-                          {project.description && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {project.description}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <code className="text-xs">{project.projectRoot}</code>
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={project.status === 'active' ? 'default' : 'secondary'}
-                        className={project.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-green-100' : ''}
-                      >
-                        {project.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {project.tags?.slice(0, 2).map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                        {project.tags && project.tags.length > 2 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{project.tags.length - 2}
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(project.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingProject(project);
-                          }}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteProject(project.id);
-                          }}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Path</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Tags</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  <SortableContext
+                    items={filteredProjects.map(p => p.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {filteredProjects.map((project) => (
+                      <SortableTableRow
+                        key={project.id}
+                        project={project}
+                        isSelected={currentProject?.id === project.id}
+                        onSelect={handleSelectProject}
+                        onEdit={setEditingProject}
+                        onDelete={handleDeleteProject}
+                      />
+                    ))}
+                  </SortableContext>
+                </TableBody>
+              </Table>
+            </div>
+          </DndContext>
         )}
 
         {showForm && (

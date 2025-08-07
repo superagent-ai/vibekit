@@ -10,6 +10,7 @@ export interface Project {
   tags?: string[];
   description?: string;
   status: 'active' | 'archived';
+  rank?: number;
 }
 
 export interface ProjectsConfig {
@@ -26,6 +27,7 @@ export interface ProjectCreateInput {
   tags?: string[];
   description?: string;
   status?: 'active' | 'archived';
+  rank?: number;
 }
 
 export interface ProjectUpdateInput {
@@ -37,4 +39,5 @@ export interface ProjectUpdateInput {
   tags?: string[];
   description?: string;
   status?: 'active' | 'archived';
+  rank?: number;
 }
