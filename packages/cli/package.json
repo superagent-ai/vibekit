@@ -5,8 +5,7 @@
   "main": "dist/cli.js",
   "type": "module",
   "bin": {
-    "vibekit": "./dist/cli.js",
-    "vk": "./dist/cli.js"
+    "vibekit": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsup",
