@@ -6,6 +6,7 @@ import { execSync } from 'child_process';
 import {
   getAllProjects,
   getProject,
+  getProjectByName,
   createProject,
   updateProject,
   deleteProject,
@@ -13,7 +14,7 @@ import {
   getCurrentProject,
   clearCurrentProject,
   validateProjectData,
-  formatProjectsTable,
+  formatProjectsTableWithColor,
   formatProjectDetails,
   pathExists
 } from '../utils/projects.js';
@@ -37,7 +38,7 @@ export async function listProjects() {
       console.log('');
     }
     
-    console.log(formatProjectsTable(projects, currentProject));
+    console.log(formatProjectsTableWithColor(projects, currentProject));
   } catch (error) {
     console.error(chalk.red('Failed to list projects:'), error.message);
   }
@@ -53,8 +54,7 @@ export async function showProject(idOrName, byName = false) {
     let project;
     if (byName) {
       // Search for project by name
-      const projects = await getAllProjects();
-      project = projects.find(p => p.name === idOrName);
+      project = await getProjectByName(idOrName);
       if (!project) {
         console.error(chalk.red(`Project not found with name: ${idOrName}`));
         return;
@@ -410,8 +410,7 @@ export async function removeMultipleProjects(idsOrNames, byName = false) {
       let project;
       if (byName) {
         // Search for project by name
-        const projects = await getAllProjects();
-        project = projects.find(p => p.name === idOrName);
+        project = await getProjectByName(idOrName);
         if (!project) {
           notFound.push(`name: ${idOrName}`);
         }
@@ -496,8 +495,7 @@ export async function removeProject(idOrName, byName = false) {
     let project;
     if (byName) {
       // Search for project by name
-      const projects = await getAllProjects();
-      project = projects.find(p => p.name === idOrName);
+      project = await getProjectByName(idOrName);
       if (!project) {
         console.error(chalk.red(`Project not found with name: ${idOrName}`));
         return;
@@ -548,8 +546,7 @@ export async function selectProjectById(idOrName, byName = false) {
     let project;
     if (byName) {
       // Search for project by name
-      const projects = await getAllProjects();
-      project = projects.find(p => p.name === idOrName);
+      project = await getProjectByName(idOrName);
       if (!project) {
         console.error(chalk.red(`Project not found with name: ${idOrName}`));
         return;
