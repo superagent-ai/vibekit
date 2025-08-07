@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Download, Upload, RefreshCw, Search, Filter } from "lucide-react";
+import { Plus, Download, Upload, RefreshCw, Search, Filter, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MCPServerCard } from "@/components/mcp/server-card";
 import { ServerForm } from "@/components/mcp/server-form";
@@ -227,7 +227,7 @@ export default function MCPServersPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">MCP Servers</h1>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground hidden sm:block">
               Manage your Model Context Protocol servers and their tools
             </p>
           </div>
@@ -237,18 +237,36 @@ export default function MCPServersPage() {
               variant="outline"
               size="sm"
               onClick={fetchServers}
+              className="hidden sm:inline-flex"
             >
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchServers}
+              className="sm:hidden h-8 w-8 p-0"
+            >
+              <RefreshCw className="h-4 w-4" />
             </Button>
             
             <Button
               variant="outline"
               size="sm"
               onClick={handleExport}
+              className="hidden sm:inline-flex"
             >
               <Download className="mr-2 h-4 w-4" />
               Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              className="sm:hidden h-8 w-8 p-0"
+            >
+              <Download className="h-4 w-4" />
             </Button>
             
             <label>
@@ -256,10 +274,21 @@ export default function MCPServersPage() {
                 variant="outline"
                 size="sm"
                 asChild
+                className="hidden sm:inline-flex"
               >
                 <span>
                   <Upload className="mr-2 h-4 w-4" />
                   Import
+                </span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="sm:hidden h-8 w-8 p-0"
+              >
+                <span>
+                  <Upload className="h-4 w-4" />
                 </span>
               </Button>
               <input
@@ -275,75 +304,129 @@ export default function MCPServersPage() {
                 setEditingServer(null);
                 setIsFormOpen(true);
               }}
+              className="hidden sm:inline-flex"
             >
               <Plus className="mr-2 h-4 w-4" />
               Add Server
+            </Button>
+            <Button
+              onClick={() => {
+                setEditingServer(null);
+                setIsFormOpen(true);
+              }}
+              className="sm:hidden h-8 w-8 p-0"
+            >
+              <Plus className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
         {/* Filters and Search */}
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          {/* Search Box */}
-          <div className="relative flex-1">
+        <div className="flex flex-col gap-3">
+          {/* Search Box - Full Width on Mobile */}
+          <div className="relative sm:hidden">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Search servers..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 h-9"
+              className="pl-10 h-9 w-full"
             />
           </div>
           
-          {/* Status Filter */}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px] h-9 shrink-0">
-              <Filter className="mr-2 h-4 w-4" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-              <SelectItem value="error">Error</SelectItem>
-              <SelectItem value="connecting">Connecting</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Mobile: Status and Sort on Same Line */}
+          <div className="flex sm:hidden gap-2 items-center">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px] h-9 shrink-0">
+                <Filter className="mr-2 h-4 w-4" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+                <SelectItem value="connecting">Connecting</SelectItem>
+              </SelectContent>
+            </Select>
 
-          {/* Sort Options */}
-          <div className="flex items-center rounded-md bg-muted p-1 shrink-0">
-            <Button
-              variant={sortBy === 'name' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setSortBy('name')}
-              className="h-7 px-3 rounded-sm text-xs font-medium"
-            >
-              Name
-            </Button>
-            <Button
-              variant={sortBy === 'status' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setSortBy('status')}
-              className="h-7 px-3 rounded-sm text-xs font-medium"
-            >
-              Status
-            </Button>
-            <Button
-              variant={sortBy === 'tools' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setSortBy('tools')}
-              className="h-7 px-3 rounded-sm text-xs font-medium"
-            >
-              Tools
-            </Button>
-            <Button
-              variant={sortBy === 'lastConnected' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setSortBy('lastConnected')}
-              className="h-7 px-3 rounded-sm text-xs font-medium"
-            >
-              Recent
-            </Button>
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[140px] h-9 shrink-0">
+                <ArrowUpDown className="mr-2 h-4 w-4" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectItem value="name">Name</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+                <SelectItem value="tools">Tools</SelectItem>
+                <SelectItem value="lastConnected">Recent</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Desktop: All on Same Line */}
+          <div className="hidden sm:flex gap-3 items-center">
+            {/* Search Box */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Search servers..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 h-9"
+              />
+            </div>
+            
+            {/* Status Filter */}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px] h-9 shrink-0">
+                <Filter className="mr-2 h-4 w-4" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+                <SelectItem value="connecting">Connecting</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Sort Options - Desktop Button Group */}
+            <div className="flex items-center rounded-md bg-muted p-1 shrink-0">
+              <Button
+                variant={sortBy === 'name' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSortBy('name')}
+                className="h-7 px-3 rounded-sm text-xs font-medium"
+              >
+                Name
+              </Button>
+              <Button
+                variant={sortBy === 'status' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSortBy('status')}
+                className="h-7 px-3 rounded-sm text-xs font-medium"
+              >
+                Status
+              </Button>
+              <Button
+                variant={sortBy === 'tools' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSortBy('tools')}
+                className="h-7 px-3 rounded-sm text-xs font-medium"
+              >
+                Tools
+              </Button>
+              <Button
+                variant={sortBy === 'lastConnected' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSortBy('lastConnected')}
+                className="h-7 px-3 rounded-sm text-xs font-medium"
+              >
+                Recent
+              </Button>
+            </div>
           </div>
         </div>
 
