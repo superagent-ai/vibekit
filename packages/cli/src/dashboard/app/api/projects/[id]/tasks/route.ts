@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProject } from '@/lib/projects';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { createTaskmasterProvider } from '@vibe-kit/taskmaster';
 
 export async function GET(
   request: NextRequest,
@@ -20,28 +19,27 @@ export async function GET(
       );
     }
     
-    // Construct the path to the tasks.json file
-    const tasksFilePath = path.join(project.projectRoot, '.taskmaster', 'tasks', 'tasks.json');
+    // Create taskmaster provider
+    const provider = createTaskmasterProvider({
+      projectRoot: project.projectRoot,
+    });
     
     try {
-      // Check if file exists
-      await fs.access(tasksFilePath);
-      
-      // Read and parse the tasks file
-      const fileContent = await fs.readFile(tasksFilePath, 'utf-8');
-      const tasksData = JSON.parse(fileContent);
+      // Get tasks using the provider
+      const tasksData = await provider.getTasks();
       
       // Return the full tasks data structure with all tags
       return NextResponse.json({
         success: true,
         data: tasksData,
       });
-    } catch (fileError) {
+    } catch (error) {
       // File doesn't exist or can't be read
-      console.error('Error reading tasks file:', fileError);
+      console.error('Error reading tasks file:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to read tasks file';
       return NextResponse.json({
         success: false,
-        error: `No tasks file found at ${tasksFilePath}. Make sure Taskmaster is initialized for this project.`,
+        error: errorMessage,
         data: {
           tasks: [],
           metadata: {},

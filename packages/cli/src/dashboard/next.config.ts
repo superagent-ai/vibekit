@@ -9,8 +9,8 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Configure webpack to resolve @vibe-kit/projects
-  webpack: (config) => {
+  // Configure webpack to resolve @vibe-kit/projects and handle native modules
+  webpack: (config, { isServer }) => {
     if (!config.resolve) {
       config.resolve = {};
     }
@@ -25,6 +25,20 @@ const nextConfig: NextConfig = {
     if (!config.resolve.extensions) {
       config.resolve.extensions = ['.js', '.jsx', '.ts', '.tsx', '.json'];
     }
+    
+    // Handle native modules and external dependencies
+    if (!isServer) {
+      // Don't bundle these modules for the client
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        chokidar: false,
+      };
+    }
+    
+    // Ignore fsevents (macOS file watching) 
+    config.externals = [...(config.externals || []), 'fsevents'];
     
     return config;
   },

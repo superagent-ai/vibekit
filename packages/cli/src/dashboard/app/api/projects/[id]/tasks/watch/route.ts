@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProject } from '@/lib/projects';
-import * as chokidar from 'chokidar';
-import * as path from 'path';
+import { createTaskmasterProvider, SSEManager } from '@vibe-kit/taskmaster';
 
 export async function GET(
   request: NextRequest,
@@ -19,8 +18,10 @@ export async function GET(
     );
   }
   
-  // Construct the path to the tasks.json file
-  const tasksFilePath = path.join(project.projectRoot, '.taskmaster', 'tasks', 'tasks.json');
+  // Create taskmaster provider
+  const provider = createTaskmasterProvider({
+    projectRoot: project.projectRoot,
+  });
   
   // Create a readable stream for SSE
   const stream = new ReadableStream({
@@ -34,17 +35,12 @@ export async function GET(
         )
       );
       
-      // Set up file watcher
-      const watcher = chokidar.watch(tasksFilePath, {
-        persistent: true,
-        ignoreInitial: true,
-      });
-      
-      watcher.on('change', () => {
+      // Set up file watcher using the provider
+      const unsubscribe = provider.watchTasks((event) => {
         try {
           controller.enqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ type: 'tasks-updated', projectId })}\n\n`
+              `data: ${JSON.stringify({ ...event, projectId })}\n\n`
             )
           );
         } catch (error) {
@@ -52,18 +48,9 @@ export async function GET(
         }
       });
       
-      watcher.on('error', (error) => {
-        console.error('Watcher error:', error);
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`
-          )
-        );
-      });
-      
       // Clean up on connection close
       request.signal.addEventListener('abort', () => {
-        watcher.close();
+        unsubscribe();
         controller.close();
       });
       

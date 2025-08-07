@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProject } from '@/lib/projects';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { createTaskmasterProvider } from '@vibe-kit/taskmaster';
 
 export async function POST(
   request: NextRequest,
@@ -36,62 +35,18 @@ export async function POST(
       );
     }
     
-    // Construct the path to the tasks.json file
-    const tasksFilePath = path.join(project.projectRoot, '.taskmaster', 'tasks', 'tasks.json');
+    // Create taskmaster provider
+    const provider = createTaskmasterProvider({
+      projectRoot: project.projectRoot,
+    });
     
     try {
-      // Read the current tasks file
-      const fileContent = await fs.readFile(tasksFilePath, 'utf-8');
-      const tasksData = JSON.parse(fileContent);
-      
-      // Find and update the task
-      let taskFound = false;
-      const targetTag = tag || 'master'; // Default to 'master' if no tag specified
-      
-      if (tasksData[targetTag] && tasksData[targetTag].tasks) {
-        for (const task of tasksData[targetTag].tasks) {
-          if (task.id === taskId) {
-            task.status = status;
-            taskFound = true;
-            break;
-          }
-        }
-      }
-      
-      if (!taskFound) {
-        // Try to find in all tags if not found in specified tag
-        for (const tagKey in tasksData) {
-          if (tasksData[tagKey] && tasksData[tagKey].tasks) {
-            for (const task of tasksData[tagKey].tasks) {
-              if (task.id === taskId) {
-                task.status = status;
-                taskFound = true;
-                break;
-              }
-            }
-            if (taskFound) break;
-          }
-        }
-      }
-      
-      if (!taskFound) {
-        return NextResponse.json(
-          { success: false, error: 'Task not found' },
-          { status: 404 }
-        );
-      }
-      
-      // Update the metadata for the relevant tag
-      if (tasksData[targetTag] && tasksData[targetTag].metadata) {
-        tasksData[targetTag].metadata.updated = new Date().toISOString();
-      }
-      
-      // Write the updated data back to the file
-      await fs.writeFile(
-        tasksFilePath,
-        JSON.stringify(tasksData, null, 2),
-        'utf-8'
-      );
+      // Update task using the provider
+      await provider.updateTask({
+        taskId,
+        status,
+        tag: tag || 'master',
+      });
       
       return NextResponse.json({
         success: true,

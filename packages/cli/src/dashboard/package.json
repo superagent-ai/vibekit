@@ -25,6 +25,7 @@
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
     "@vibe-kit/projects": "^0.0.1",
+    "@vibe-kit/taskmaster": "^0.0.1",
     "chokidar": "^4.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
