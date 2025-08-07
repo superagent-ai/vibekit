@@ -11,6 +11,7 @@ export interface Project {
   description?: string;
   status: 'active' | 'archived';
   rank?: number;
+  priority?: 'high' | 'medium' | 'low';
 }
 
 export interface ProjectsConfig {
@@ -28,6 +29,7 @@ export interface ProjectCreateInput {
   description?: string;
   status?: 'active' | 'archived';
   rank?: number;
+  priority?: 'high' | 'medium' | 'low';
 }
 
 export interface ProjectUpdateInput {
@@ -40,4 +42,5 @@ export interface ProjectUpdateInput {
   description?: string;
   status?: 'active' | 'archived';
   rank?: number;
+  priority?: 'high' | 'medium' | 'low';
 }

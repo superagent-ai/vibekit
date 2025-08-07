@@ -25,7 +25,8 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
     cleanupScript: project?.cleanupScript || '',
     description: project?.description || '',
     tags: project?.tags?.join(', ') || '',
-    status: project?.status || 'active'
+    status: project?.status || 'active',
+    priority: project?.priority || 'medium'
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,7 +82,7 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Project Name *</Label>
                 <Input
@@ -91,6 +92,19 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
                   placeholder="My Awesome Project"
                   required
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority</Label>
+                <select
+                  id="priority"
+                  value={formData.priority}
+                  onChange={(e) => handleInputChange('priority', e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>

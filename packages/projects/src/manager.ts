@@ -71,6 +71,7 @@ export async function createProject(data: ProjectCreateInput): Promise<Project> 
     description: data.description || '',
     status: data.status || 'active',
     rank: data.rank ?? (maxRank + 1),
+    priority: data.priority || 'medium',
     createdAt: now,
     updatedAt: now
   };

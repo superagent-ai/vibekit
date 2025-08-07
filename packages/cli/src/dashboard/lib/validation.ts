@@ -66,6 +66,11 @@ export function validateProjectInput(data: any) {
     errors.push('Invalid status. Must be "active" or "archived"');
   }
   
+  // Validate priority
+  if (data.priority && !['high', 'medium', 'low'].includes(data.priority)) {
+    errors.push('Invalid priority. Must be "high", "medium", or "low"');
+  }
+  
   return {
     isValid: errors.length === 0,
     errors
@@ -83,6 +88,7 @@ export function sanitizeProjectData(data: any) {
     tags: Array.isArray(data.tags) 
       ? data.tags.slice(0, 20).map(tag => sanitizeString(tag, 50))
       : [],
-    status: ['active', 'archived'].includes(data.status) ? data.status : 'active'
+    status: ['active', 'archived'].includes(data.status) ? data.status : 'active',
+    priority: ['high', 'medium', 'low'].includes(data.priority) ? data.priority : 'medium'
   };
 }

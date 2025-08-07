@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical } from "lucide-react";
+import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical, ArrowUpDown } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -104,18 +104,38 @@ function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: S
           </div>
         </div>
       </TableCell>
-      <TableCell>
-        <code className="text-xs">{project.projectRoot}</code>
+      <TableCell className="hidden md:table-cell">
+        <code className="text-xs truncate block max-w-[200px]">{project.projectRoot}</code>
       </TableCell>
       <TableCell>
-        <Badge 
-          variant={project.status === 'active' ? 'default' : 'secondary'}
-          className={project.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-green-100' : ''}
-        >
-          {project.status}
-        </Badge>
+        <div className="flex gap-1.5">
+          {project.priority && (
+            <Badge 
+              variant={
+                project.priority === 'high' ? 'destructive' : 
+                project.priority === 'low' ? 'secondary' : 
+                'default'
+              }
+              className={`h-5 text-[10px] px-1.5 ${
+                project.priority === 'high' ? 'bg-red-100 text-red-800 hover:bg-red-100' : 
+                project.priority === 'low' ? '' : 
+                'bg-yellow-100 text-yellow-800 hover:bg-yellow-100'
+              }`}
+            >
+              {project.priority[0].toUpperCase()}
+            </Badge>
+          )}
+          <Badge 
+            variant={project.status === 'active' ? 'default' : 'secondary'}
+            className={`h-5 text-[10px] px-1.5 ${
+              project.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-green-100' : ''
+            }`}
+          >
+            {project.status === 'active' ? '✓' : 'AR'}
+          </Badge>
+        </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden lg:table-cell">
         <div className="flex flex-wrap gap-1">
           {project.tags?.slice(0, 2).map((tag) => (
             <Badge key={tag} variant="outline" className="text-xs">
@@ -129,7 +149,7 @@ function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: S
           )}
         </div>
       </TableCell>
-      <TableCell className="text-sm text-muted-foreground">
+      <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
         {new Date(project.createdAt).toLocaleDateString()}
       </TableCell>
       <TableCell className="text-right">
@@ -172,6 +192,7 @@ export default function ProjectsPage() {
   const [currentProjectLastModified, setCurrentProjectLastModified] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
+  const [sortBy, setSortBy] = useState<'rank' | 'priority' | 'alphabetical'>('rank');
   const [viewMode, setViewMode] = useState<'card' | 'list'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('projectsViewMode') as 'card' | 'list') || 'card';
@@ -197,7 +218,7 @@ export default function ProjectsPage() {
     }
   };
 
-  // Filter and sort projects based on search query and rank
+  // Filter and sort projects based on search query and selected sort option
   const filteredProjects = useMemo(() => {
     let filtered = projects;
     
@@ -212,13 +233,33 @@ export default function ProjectsPage() {
       );
     }
     
-    // Sort by rank (lower rank = higher priority)
+    // Sort based on selected option
     return filtered.sort((a, b) => {
-      const rankA = a.rank ?? Number.MAX_SAFE_INTEGER;
-      const rankB = b.rank ?? Number.MAX_SAFE_INTEGER;
-      return rankA - rankB;
+      switch (sortBy) {
+        case 'rank':
+          // Sort by rank (lower rank = higher priority)
+          const rankA = a.rank ?? Number.MAX_SAFE_INTEGER;
+          const rankB = b.rank ?? Number.MAX_SAFE_INTEGER;
+          return rankA - rankB;
+          
+        case 'priority':
+          // Sort by priority (high > medium > low)
+          const priorityOrder = { high: 0, medium: 1, low: 2 };
+          const priorityA = priorityOrder[a.priority || 'medium'];
+          const priorityB = priorityOrder[b.priority || 'medium'];
+          if (priorityA !== priorityB) return priorityA - priorityB;
+          // If same priority, sort by name
+          return a.name.localeCompare(b.name);
+          
+        case 'alphabetical':
+          // Sort alphabetically by name
+          return a.name.localeCompare(b.name);
+          
+        default:
+          return 0;
+      }
     });
-  }, [projects, searchQuery]);
+  }, [projects, searchQuery, sortBy]);
 
   const fetchProjects = async (skipLoadingState = false) => {
     try {
@@ -504,11 +545,11 @@ export default function ProjectsPage() {
         </div>
       </header>
 
-      <div className="flex-1 space-y-4 p-4 pt-0">
-        <div className="flex items-center justify-between">
+      <div className="flex-1 space-y-4 p-2 sm:p-4 pt-0">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Projects</h2>
               {isRefreshing && (
                 <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
               )}
@@ -516,31 +557,62 @@ export default function ProjectsPage() {
                 <span className="text-sm text-green-600 animate-pulse">✓ Order saved</span>
               )}
             </div>
-            <p className="text-muted-foreground">
-              Manage your development projects and their configurations. Updates in real-time.
+            <p className="text-sm sm:text-base text-muted-foreground hidden sm:block">
+              Manage your development projects and their configurations.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap lg:flex-nowrap items-center gap-2">
             {/* Search Box */}
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-48 lg:w-64 order-last sm:order-none">
               <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search projects..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 pl-8 pr-8 text-sm"
+                className="h-8 pl-8 pr-8 text-sm"
               />
               {searchQuery && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="absolute right-0.5 top-1/2 h-7 w-7 -translate-y-1/2 p-0"
+                  className="absolute right-0.5 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
                   onClick={() => setSearchQuery('')}
                 >
                   <X className="h-3 w-3" />
                 </Button>
               )}
+            </div>
+            
+            {/* Sort Options */}
+            <div className="flex items-center rounded-md bg-muted p-1">
+              <Button
+                variant={sortBy === 'rank' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSortBy('rank')}
+                className="h-7 px-3 rounded-sm text-xs font-medium"
+                title="Sort by custom rank (drag to reorder)"
+              >
+                Rank
+              </Button>
+              <Button
+                variant={sortBy === 'priority' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSortBy('priority')}
+                className="h-7 px-3 rounded-sm text-xs font-medium"
+                title="Sort by priority"
+              >
+                Priority
+              </Button>
+              <Button
+                variant={sortBy === 'alphabetical' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSortBy('alphabetical')}
+                className="h-7 px-3 rounded-sm text-xs font-medium"
+                title="Sort alphabetically"
+              >
+                Alpha
+              </Button>
             </div>
             
             {/* View Toggle */}
@@ -564,9 +636,9 @@ export default function ProjectsPage() {
             </div>
             
             {/* New Project Button */}
-            <Button onClick={() => setShowForm(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Project
+            <Button onClick={() => setShowForm(true)} size="sm" className="h-8">
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              New
             </Button>
           </div>
         </div>
@@ -607,7 +679,7 @@ export default function ProjectsPage() {
             </Button>
           </div>
         ) : viewMode === 'card' ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredProjects.map((project) => (
               <ProjectCard
                 key={project.id}
@@ -619,7 +691,7 @@ export default function ProjectsPage() {
               />
             ))}
           </div>
-        ) : (
+        ) : sortBy === 'rank' ? (
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -631,10 +703,10 @@ export default function ProjectsPage() {
                   <TableRow>
                     <TableHead className="w-10"></TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead>Path</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Tags</TableHead>
-                    <TableHead>Created</TableHead>
+                    <TableHead className="hidden md:table-cell">Path</TableHead>
+                    <TableHead className="w-20">Status</TableHead>
+                    <TableHead className="hidden lg:table-cell">Tags</TableHead>
+                    <TableHead className="hidden sm:table-cell">Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -658,6 +730,121 @@ export default function ProjectsPage() {
               </Table>
             </div>
           </DndContext>
+        ) : (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="hidden md:table-cell">Path</TableHead>
+                  <TableHead className="w-20">Status</TableHead>
+                  <TableHead className="hidden lg:table-cell">Tags</TableHead>
+                  <TableHead className="hidden sm:table-cell">Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredProjects.map((project) => (
+                  <TableRow 
+                    key={project.id} 
+                    className={`hover:bg-muted/50 transition-colors cursor-pointer ${
+                      currentProject?.id === project.id ? 'bg-primary/5' : ''
+                    }`}
+                    onClick={() => handleSelectProject(project.id)}
+                  >
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {currentProject?.id === project.id && (
+                          <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
+                        )}
+                        <div>
+                          <div>{project.name}</div>
+                          {project.description && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {project.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <code className="text-xs truncate block max-w-[200px]">{project.projectRoot}</code>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1.5">
+                        {project.priority && (
+                          <Badge 
+                            variant={
+                              project.priority === 'high' ? 'destructive' : 
+                              project.priority === 'low' ? 'secondary' : 
+                              'default'
+                            }
+                            className={`h-5 text-[10px] px-1.5 ${
+                              project.priority === 'high' ? 'bg-red-100 text-red-800 hover:bg-red-100' : 
+                              project.priority === 'low' ? '' : 
+                              'bg-yellow-100 text-yellow-800 hover:bg-yellow-100'
+                            }`}
+                          >
+                            {project.priority[0].toUpperCase()}
+                          </Badge>
+                        )}
+                        <Badge 
+                          variant={project.status === 'active' ? 'default' : 'secondary'}
+                          className={`h-5 text-[10px] px-1.5 ${
+                            project.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-green-100' : ''
+                          }`}
+                        >
+                          {project.status === 'active' ? '✓' : 'AR'}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <div className="flex flex-wrap gap-1">
+                        {project.tags?.slice(0, 2).map((tag) => (
+                          <Badge key={tag} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {project.tags && project.tags.length > 2 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{project.tags.length - 2}
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
+                      {new Date(project.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingProject(project);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteProject(project.id);
+                          }}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
 
         {showForm && (

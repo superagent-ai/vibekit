@@ -3,10 +3,11 @@ import { getProject, updateProject, deleteProject } from '@/lib/projects';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const project = await getProject(params.id);
+    const { id } = await params;
+    const project = await getProject(id);
     
     if (!project) {
       return NextResponse.json(
@@ -39,12 +40,13 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     
-    const project = await updateProject(params.id, {
+    const project = await updateProject(id, {
       name: body.name,
       projectRoot: body.projectRoot,
       setupScript: body.setupScript,
@@ -52,7 +54,8 @@ export async function PUT(
       cleanupScript: body.cleanupScript,
       tags: body.tags,
       description: body.description,
-      status: body.status
+      status: body.status,
+      priority: body.priority
     });
     
     if (!project) {
@@ -86,10 +89,11 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const success = await deleteProject(params.id);
+    const { id } = await params;
+    const success = await deleteProject(id);
     
     if (!success) {
       return NextResponse.json(

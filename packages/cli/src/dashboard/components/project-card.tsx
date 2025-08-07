@@ -77,9 +77,29 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
           )}
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Badge variant="secondary" className={getStatusColor(project.status)}>
-                {project.status}
+            <div className="flex items-center gap-1.5">
+              {project.priority && (
+                <Badge 
+                  variant={
+                    project.priority === 'high' ? 'destructive' : 
+                    project.priority === 'low' ? 'secondary' : 
+                    'default'
+                  }
+                  className={`h-5 text-[10px] px-1.5 ${
+                    project.priority === 'high' ? 'bg-red-100 text-red-800' : 
+                    project.priority === 'low' ? '' : 
+                    'bg-yellow-100 text-yellow-800'
+                  }`}
+                >
+                  {project.priority === 'high' ? 'H' : 
+                   project.priority === 'medium' ? 'M' : 'L'}
+                </Badge>
+              )}
+              <Badge 
+                variant="secondary" 
+                className={`h-5 text-[10px] px-1.5 ${getStatusColor(project.status)}`}
+              >
+                {project.status === 'active' ? '✓' : 'AR'}
               </Badge>
             </div>
             
