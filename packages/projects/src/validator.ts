@@ -1,5 +1,6 @@
 import { pathExists } from './storage';
 import type { ProjectCreateInput, ProjectUpdateInput } from './types';
+import { randomBytes } from 'crypto';
 
 /**
  * Validates project data for creation or update
@@ -44,8 +45,7 @@ export async function validateProjectData(
  * Generates a unique project ID
  */
 export function generateProjectId(): string {
-  const crypto = require('crypto');
-  return crypto.randomBytes(4).toString('hex');
+  return randomBytes(4).toString('hex');
 }
 
 /**

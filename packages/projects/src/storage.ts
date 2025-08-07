@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import { promises as fs } from 'fs';
 import path from 'path';
 import { 
   VIBEKIT_DIR, 
@@ -12,12 +12,16 @@ import type { Project, ProjectsConfig } from './types';
  * Ensures the .vibekit directory and projects.json file exist
  */
 export async function ensureProjectsFile(): Promise<void> {
-  if (!await fs.pathExists(VIBEKIT_DIR)) {
-    await fs.ensureDir(VIBEKIT_DIR);
+  try {
+    await fs.access(VIBEKIT_DIR);
+  } catch {
+    await fs.mkdir(VIBEKIT_DIR, { recursive: true });
   }
   
-  if (!await fs.pathExists(PROJECTS_FILE)) {
-    await fs.writeJson(PROJECTS_FILE, DEFAULT_PROJECTS_CONFIG, { spaces: 2 });
+  try {
+    await fs.access(PROJECTS_FILE);
+  } catch {
+    await fs.writeFile(PROJECTS_FILE, JSON.stringify(DEFAULT_PROJECTS_CONFIG, null, 2));
   }
 }
 
@@ -28,7 +32,8 @@ export async function readProjectsConfig(): Promise<ProjectsConfig> {
   await ensureProjectsFile();
   
   try {
-    return await fs.readJson(PROJECTS_FILE);
+    const data = await fs.readFile(PROJECTS_FILE, 'utf-8');
+    return JSON.parse(data);
   } catch (error) {
     console.error('Failed to read projects config:', error);
     return DEFAULT_PROJECTS_CONFIG;
@@ -40,7 +45,7 @@ export async function readProjectsConfig(): Promise<ProjectsConfig> {
  */
 export async function writeProjectsConfig(config: ProjectsConfig): Promise<void> {
   await ensureProjectsFile();
-  await fs.writeJson(PROJECTS_FILE, config, { spaces: 2 });
+  await fs.writeFile(PROJECTS_FILE, JSON.stringify(config, null, 2));
 }
 
 /**
@@ -48,9 +53,9 @@ export async function writeProjectsConfig(config: ProjectsConfig): Promise<void>
  */
 export async function readCurrentProject(): Promise<Project | null> {
   try {
-    if (await fs.pathExists(CURRENT_PROJECT_FILE)) {
-      return await fs.readJson(CURRENT_PROJECT_FILE);
-    }
+    await fs.access(CURRENT_PROJECT_FILE);
+    const data = await fs.readFile(CURRENT_PROJECT_FILE, 'utf-8');
+    return JSON.parse(data);
   } catch (error) {
     console.error('Failed to read current project:', error);
   }
@@ -61,7 +66,7 @@ export async function readCurrentProject(): Promise<Project | null> {
  * Writes the current project to disk
  */
 export async function writeCurrentProject(project: Project): Promise<void> {
-  await fs.writeJson(CURRENT_PROJECT_FILE, project, { spaces: 2 });
+  await fs.writeFile(CURRENT_PROJECT_FILE, JSON.stringify(project, null, 2));
 }
 
 /**
@@ -69,10 +74,9 @@ export async function writeCurrentProject(project: Project): Promise<void> {
  */
 export async function clearCurrentProject(): Promise<void> {
   try {
-    if (await fs.pathExists(CURRENT_PROJECT_FILE)) {
-      await fs.remove(CURRENT_PROJECT_FILE);
-    }
+    await fs.unlink(CURRENT_PROJECT_FILE);
   } catch (error) {
+    // File doesn't exist or other error - that's fine for clearing
     console.error('Failed to clear current project:', error);
   }
 }
@@ -82,7 +86,8 @@ export async function clearCurrentProject(): Promise<void> {
  */
 export async function pathExists(filePath: string): Promise<boolean> {
   try {
-    return await fs.pathExists(filePath);
+    await fs.access(filePath);
+    return true;
   } catch {
     return false;
   }
