@@ -1,5 +1,6 @@
-// Client
+// Client (both versions for backward compatibility)
 export { ChatClient } from './client/ChatClient';
+export { ChatClientV2, type IProvider, type IStorage, type IToolAdapter } from './client/ChatClientV2';
 export * from './client/streaming';
 
 // Providers
@@ -8,6 +9,7 @@ export { BaseProvider, type AuthStatus } from './providers/base';
 
 // Storage
 export { ChatStorage } from './storage/ChatStorage';
+export { MemoryStorage } from './storage/MemoryStorage';
 export { type StorageInterface } from './storage/StorageInterface';
 
 // Adapters
@@ -26,3 +28,9 @@ export * from './utils/session-manager';
 
 // Config
 export { productionConfig } from './config/production';
+
+// Factory functions for dependency injection
+export * from './factory';
+
+// Plugin system for extensibility  
+export * from './plugins';
