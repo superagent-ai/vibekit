@@ -761,11 +761,12 @@ Examples:
   });
 
 projectsCommand
-  .command('select <id>')
+  .command('select <idOrName>')
   .alias('use')
   .description('Select project and change to its directory')
-  .action(async (id) => {
-    await selectProjectById(id);
+  .option('-n, --name', 'Select by project name instead of ID')
+  .action(async (idOrName, options) => {
+    await selectProjectById(idOrName, options.name || false);
   });
 
 projectsCommand

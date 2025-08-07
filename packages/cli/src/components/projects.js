@@ -526,17 +526,29 @@ export async function removeProject(idOrName, byName = false) {
   }
 }
 
-export async function selectProjectById(id) {
+export async function selectProjectById(idOrName, byName = false) {
   try {
-    if (!id) {
-      console.error(chalk.red('Project ID is required'));
+    if (!idOrName) {
+      console.error(chalk.red('Project ID or name is required'));
       return;
     }
     
-    const project = await getProject(id);
-    if (!project) {
-      console.error(chalk.red(`Project not found: ${id}`));
-      return;
+    let project;
+    if (byName) {
+      // Search for project by name
+      const projects = await getAllProjects();
+      project = projects.find(p => p.name === idOrName);
+      if (!project) {
+        console.error(chalk.red(`Project not found with name: ${idOrName}`));
+        return;
+      }
+    } else {
+      // Search by ID
+      project = await getProject(idOrName);
+      if (!project) {
+        console.error(chalk.red(`Project not found with ID: ${idOrName}`));
+        return;
+      }
     }
     
     await setCurrentProject(project);
