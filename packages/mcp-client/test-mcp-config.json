@@ -1,0 +1,81 @@
+{
+  "version": "1.0.0",
+  "servers": [
+    {
+      "id": "mcp_1754587850861_9knld64px",
+      "name": "Task Master AI Test",
+      "description": "Testing npx connection with task-master-ai",
+      "transport": "stdio",
+      "config": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "--package=task-master-ai",
+          "task-master-ai"
+        ],
+        "env": {}
+      },
+      "status": "connecting",
+      "createdAt": "2025-08-07T17:30:50.861Z",
+      "updatedAt": "2025-08-07T17:30:50.861Z"
+    },
+    {
+      "id": "mcp_1754587903347_8744lbjci",
+      "name": "Task Master AI Test",
+      "description": "Testing npx connection with task-master-ai",
+      "transport": "stdio",
+      "config": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "--package=task-master-ai",
+          "task-master-ai"
+        ],
+        "env": {}
+      },
+      "status": "connecting",
+      "createdAt": "2025-08-07T17:31:43.347Z",
+      "updatedAt": "2025-08-07T17:31:43.347Z"
+    },
+    {
+      "id": "mcp_1754588449531_q86a1sczn",
+      "name": "Task Master AI Test",
+      "description": "Testing npx connection with task-master-ai",
+      "transport": "stdio",
+      "config": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "--package=task-master-ai",
+          "task-master-ai"
+        ],
+        "env": {
+          "ANTHROPIC_API_KEY": "test-key"
+        }
+      },
+      "status": "connecting",
+      "createdAt": "2025-08-07T17:40:49.531Z",
+      "updatedAt": "2025-08-07T17:40:49.531Z"
+    },
+    {
+      "id": "mcp_1754588594600_76blae1mh",
+      "name": "Task Master AI Test",
+      "description": "Testing npx connection with task-master-ai",
+      "transport": "stdio",
+      "config": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "--package=task-master-ai",
+          "task-master-ai"
+        ],
+        "env": {
+          "ANTHROPIC_API_KEY": "test-key"
+        }
+      },
+      "status": "connecting",
+      "createdAt": "2025-08-07T17:43:14.600Z",
+      "updatedAt": "2025-08-07T17:43:14.600Z"
+    }
+  ]
+}
