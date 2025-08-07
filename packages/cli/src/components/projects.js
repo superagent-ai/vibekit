@@ -37,7 +37,7 @@ export async function listProjects() {
       console.log('');
     }
     
-    console.log(formatProjectsTable(projects));
+    console.log(formatProjectsTable(projects, currentProject));
   } catch (error) {
     console.error(chalk.red('Failed to list projects:'), error.message);
   }
