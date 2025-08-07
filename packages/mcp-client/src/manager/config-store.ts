@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
-import type { MCPServer, ServerCreateInput } from '../types/server';
+import type { MCPServer, ServerCreateInput, StdioConfig, HttpConfig } from '../types/server';
 
 export class ConfigStore {
   private configPath: string;
@@ -241,32 +241,30 @@ export class ConfigStore {
     const mcpServers: Record<string, any> = {};
     
     for (const server of this.servers.values()) {
-      const { id, description, status, lastConnected, createdAt, updatedAt, toolCount, resourceCount, promptCount, ...config } = server;
-      
       // Build server config in the new format
-      const serverConfig: any = {
-        command: config.command,
-        args: config.args
-      };
+      const serverConfig: any = {};
       
-      // Add optional fields
-      if (config.env) {
-        serverConfig.env = config.env;
+      // Handle stdio transport
+      if (server.transport === 'stdio') {
+        const config = server.config as StdioConfig;
+        serverConfig.command = config.command;
+        if (config.args) serverConfig.args = config.args;
+        if (config.env) serverConfig.env = config.env;
+        if (config.cwd) serverConfig.cwd = config.cwd;
       }
-      
-      if (config.cwd) {
-        serverConfig.cwd = config.cwd;
-      }
-      
-      if (config.transport === 'sse' && config.url) {
+      // Handle SSE transport (uses HttpConfig but exports as url)
+      else if (server.transport === 'sse') {
+        const config = server.config as HttpConfig;
         serverConfig.url = config.url;
+        if (config.headers) serverConfig.headers = config.headers;
+        if (config.timeout) serverConfig.timeout = config.timeout;
       }
-      
-      if (config.transport === 'http' && config.baseUrl) {
-        serverConfig.baseUrl = config.baseUrl;
-        if (config.headers) {
-          serverConfig.headers = config.headers;
-        }
+      // Handle HTTP transport
+      else if (server.transport === 'http') {
+        const config = server.config as HttpConfig;
+        serverConfig.baseUrl = config.url; // HttpConfig uses 'url' but we export as 'baseUrl'
+        if (config.headers) serverConfig.headers = config.headers;
+        if (config.timeout) serverConfig.timeout = config.timeout;
       }
       
       mcpServers[server.name] = serverConfig;
@@ -310,10 +308,42 @@ export class ConfigStore {
         const existingServer = Array.from(this.servers.values()).find(s => s.name === name);
         
         if (existingServer && merge) {
-          // Update existing server config
+          // Update existing server config - rebuild the config properly
+          const configData = config as any;
+          let serverConfig: StdioConfig | HttpConfig;
+          let transport: 'stdio' | 'sse' | 'http' = 'stdio';
+          
+          if (configData.url && !configData.baseUrl) {
+            // SSE transport
+            transport = 'sse';
+            serverConfig = {
+              url: configData.url,
+              ...(configData.headers && { headers: configData.headers }),
+              ...(configData.timeout && { timeout: configData.timeout })
+            };
+          } else if (configData.baseUrl) {
+            // HTTP transport
+            transport = 'http';
+            serverConfig = {
+              url: configData.baseUrl,
+              ...(configData.headers && { headers: configData.headers }),
+              ...(configData.timeout && { timeout: configData.timeout })
+            };
+          } else {
+            // stdio transport
+            transport = 'stdio';
+            serverConfig = {
+              command: configData.command,
+              ...(configData.args && { args: configData.args }),
+              ...(configData.env && { env: configData.env }),
+              ...(configData.cwd && { cwd: configData.cwd })
+            };
+          }
+          
           Object.assign(existingServer, {
-            ...config,
             name,
+            transport,
+            config: serverConfig,
             updatedAt: new Date(),
             status: 'inactive' // Reset status on import
           });
@@ -322,19 +352,47 @@ export class ConfigStore {
           const id = this.generateId();
           const now = new Date();
           
-          // Determine transport type
+          // Determine transport type and build proper config
           let transport: 'stdio' | 'sse' | 'http' = 'stdio';
-          if ((config as any).url) transport = 'sse';
-          if ((config as any).baseUrl) transport = 'http';
+          let serverConfig: StdioConfig | HttpConfig;
+          
+          const configData = config as any;
+          
+          if (configData.url && !configData.baseUrl) {
+            // SSE transport
+            transport = 'sse';
+            serverConfig = {
+              url: configData.url,
+              ...(configData.headers && { headers: configData.headers }),
+              ...(configData.timeout && { timeout: configData.timeout })
+            };
+          } else if (configData.baseUrl) {
+            // HTTP transport
+            transport = 'http';
+            serverConfig = {
+              url: configData.baseUrl,
+              ...(configData.headers && { headers: configData.headers }),
+              ...(configData.timeout && { timeout: configData.timeout })
+            };
+          } else {
+            // stdio transport
+            transport = 'stdio';
+            serverConfig = {
+              command: configData.command,
+              ...(configData.args && { args: configData.args }),
+              ...(configData.env && { env: configData.env }),
+              ...(configData.cwd && { cwd: configData.cwd })
+            };
+          }
           
           const server: MCPServer = {
             id,
             name,
             transport,
+            config: serverConfig,
             status: 'inactive',
             createdAt: now,
             updatedAt: now,
-            ...(config as any)
           };
           
           this.servers.set(id, server);
