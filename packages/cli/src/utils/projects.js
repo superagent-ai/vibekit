@@ -136,7 +136,16 @@ export async function clearCurrentProject() {
   }
 }
 
-export async function validateProjectData(projectData) {
+export async function pathExists(filePath) {
+  try {
+    await fs.stat(filePath);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+export async function validateProjectData(projectData, allowNonExistent = false) {
   const errors = [];
   
   if (!projectData.name || !projectData.name.trim()) {
@@ -145,8 +154,8 @@ export async function validateProjectData(projectData) {
   
   if (!projectData.gitRepoPath || !projectData.gitRepoPath.trim()) {
     errors.push('Git repository path is required');
-  } else {
-    // Check if the path exists
+  } else if (!allowNonExistent) {
+    // Check if the path exists (only if not allowing non-existent paths)
     try {
       const stats = await fs.stat(projectData.gitRepoPath);
       if (!stats.isDirectory()) {

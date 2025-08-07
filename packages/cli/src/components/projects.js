@@ -1,6 +1,8 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import path from 'path';
+import fs from 'fs-extra';
+import { execSync } from 'child_process';
 import {
   getAllProjects,
   getProject,
@@ -12,7 +14,8 @@ import {
   clearCurrentProject,
   validateProjectData,
   formatProjectsTable,
-  formatProjectDetails
+  formatProjectDetails,
+  pathExists
 } from '../utils/projects.js';
 
 export async function listProjects() {
@@ -167,8 +170,83 @@ export async function addProject(name, folder, description) {
       };
     }
     
-    // Validate the project data
-    const errors = await validateProjectData(projectData);
+    // Check if the path exists
+    const pathDoesExist = await pathExists(projectData.gitRepoPath);
+    let shouldCreatePath = false;
+    let shouldInitGit = false;
+    
+    if (!pathDoesExist) {
+      console.log(chalk.yellow(`\n⚠️  Directory does not exist: ${projectData.gitRepoPath}`));
+      
+      // Ask if they want to create it
+      const { confirmCreate } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'confirmCreate',
+          message: 'Would you like to create this directory and initialize a git repository?',
+          default: true
+        }
+      ]);
+      
+      if (!confirmCreate) {
+        console.log(chalk.gray('Project creation cancelled'));
+        return;
+      }
+      
+      shouldCreatePath = true;
+      shouldInitGit = true;
+    } else {
+      // Check if it's already a git repository
+      const isGitRepo = await pathExists(path.join(projectData.gitRepoPath, '.git'));
+      
+      if (!isGitRepo) {
+        const { confirmInitGit } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'confirmInitGit',
+            message: 'This directory is not a git repository. Would you like to initialize git?',
+            default: true
+          }
+        ]);
+        shouldInitGit = confirmInitGit;
+      }
+    }
+    
+    // Create directory if needed
+    if (shouldCreatePath) {
+      try {
+        await fs.ensureDir(projectData.gitRepoPath);
+        console.log(chalk.green(`✅ Created directory: ${projectData.gitRepoPath}`));
+      } catch (error) {
+        console.error(chalk.red(`Failed to create directory: ${error.message}`));
+        return;
+      }
+    }
+    
+    // Initialize git repository if needed
+    if (shouldInitGit) {
+      try {
+        execSync('git init', { cwd: projectData.gitRepoPath, stdio: 'pipe' });
+        console.log(chalk.green(`✅ Initialized git repository`));
+        
+        // Create initial commit if directory is new
+        if (shouldCreatePath) {
+          // Create a simple README file
+          const readmePath = path.join(projectData.gitRepoPath, 'README.md');
+          await fs.writeFile(readmePath, `# ${projectData.name}\n\n${projectData.description || 'A new project managed by VibeKit'}\n`);
+          
+          execSync('git add README.md', { cwd: projectData.gitRepoPath, stdio: 'pipe' });
+          execSync('git commit -m "Initial commit"', { cwd: projectData.gitRepoPath, stdio: 'pipe' });
+          console.log(chalk.green(`✅ Created initial commit with README.md`));
+        }
+      } catch (error) {
+        console.error(chalk.yellow(`⚠️  Git initialization warning: ${error.message}`));
+        // Continue anyway - git init failure shouldn't stop project creation
+      }
+    }
+    
+    // Now validate with allowNonExistent=false since we've handled creation
+    const errors = await validateProjectData(projectData, false);
     if (errors.length > 0) {
       console.error(chalk.red('Validation errors:'));
       errors.forEach(error => console.error(chalk.red(`  • ${error}`)));
@@ -284,8 +362,8 @@ export async function editProject(id) {
       tags
     };
     
-    // Validate the project data
-    const errors = await validateProjectData(projectData);
+    // Validate the project data (allow non-existent for edit, since we're not creating)
+    const errors = await validateProjectData(projectData, false);
     if (errors.length > 0) {
       console.error(chalk.red('Validation errors:'));
       errors.forEach(error => console.error(chalk.red(`  • ${error}`)));
