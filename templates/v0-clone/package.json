@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:inngest": "inngest dev",
+    "dev:full": "concurrently \"npm run dev\" \"npm run dev:inngest\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -56,6 +58,7 @@
     "eslint-config-next": "15.3.4",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "concurrently": "^9.1.0"
   }
 }
