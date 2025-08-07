@@ -1,0 +1,385 @@
+---
+title: vibekit projects
+description: "Manage development projects and workspaces"
+---
+
+## Overview
+
+The `vibekit projects` command provides a complete project management system for organizing your development workspaces. It allows you to create, manage, and switch between different projects, each with their own configurations, scripts, and metadata.
+
+## Syntax
+
+```bash
+vibekit projects <subcommand> [options]
+```
+
+## Subcommands
+
+| Subcommand | Aliases | Description |
+|------------|---------|-------------|
+| `list` | `ls` | List all projects |
+| `add` | `create` | Add a new project |
+| `show` | `view` | Show project details |
+| `edit` | `update` | Edit project configuration |
+| `delete` | `remove` | Delete one or more projects |
+| `select` | `use` | Select a project and change to its directory |
+| `current` | - | Show currently selected project |
+
+## Global Options
+
+These options can be used with various subcommands:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--name` | `-n` | Use project name instead of ID for operations |
+| `--help` | `-h` | Show help for the command |
+
+## Commands
+
+### list / ls
+
+List all registered projects with their current status.
+
+```bash
+vibekit projects list
+vibekit projects ls
+```
+
+**Output Example:**
+```
+📂 VibeKit Projects
+──────────────────────────────────────────────────
+Current Project: my-app (abc123)
+
+  ID       | Name         | Project Root           | Status  
+----------------------------------------------------------------
+  abc123   | my-app       | /home/user/my-app      | active  
+▸ def456   | api-service  | /home/user/api         | active  
+  ghi789   | old-project  | /home/user/old         | archived
+```
+
+The `▸` indicator shows the currently selected project.
+
+### add / create
+
+Add a new project to the registry. Can be used interactively or with arguments.
+
+#### Interactive Mode
+
+```bash
+vibekit projects add
+```
+
+You'll be prompted for:
+- Project name
+- Project root directory
+- Description (optional)
+- Setup script (optional)
+- Dev script (optional)
+- Cleanup script (optional)
+- Tags (optional)
+
+#### Direct Mode
+
+```bash
+vibekit projects add <name> <folder> [description]
+```
+
+**Examples:**
+
+```bash
+# Add current directory as a project
+vibekit projects add "my-app" . "My awesome application"
+
+# Add a specific directory
+vibekit projects add "api-service" /home/user/projects/api "Backend API service"
+
+# Add with just name and path
+vibekit projects add "frontend" ./frontend-app
+```
+
+**Options:**
+- If the specified directory doesn't exist, you'll be prompted to create it
+- Automatically initializes a git repository if requested
+- Sets the new project as current after creation
+
+### show / view
+
+Display detailed information about a specific project.
+
+```bash
+vibekit projects show <id>
+vibekit projects show -n <name>
+```
+
+**Examples:**
+
+```bash
+# Show by ID
+vibekit projects show abc123
+
+# Show by name
+vibekit projects show -n my-app
+```
+
+**Output Example:**
+```
+📂 Project Details
+──────────────────────────────────────────────────
+ID: abc123
+Name: my-app
+Project Root: /home/user/projects/my-app
+Status: active
+Description: My awesome application
+Tags: typescript, react, frontend
+Setup Script: npm install
+Dev Script: npm run dev
+Cleanup Script: npm run clean
+Created: 1/15/2024, 10:30:00 AM
+Updated: 1/20/2024, 3:45:00 PM
+```
+
+### edit / update
+
+Edit an existing project's configuration interactively.
+
+```bash
+vibekit projects edit <id>
+```
+
+**Example:**
+
+```bash
+vibekit projects edit abc123
+```
+
+You'll be presented with an interactive menu to modify:
+- Project name
+- Project root directory
+- Description
+- Scripts (setup, dev, cleanup)
+- Tags
+- Status (active/archived)
+
+Press Enter without typing to keep the current value for any field.
+
+### delete / remove
+
+Delete one or more projects from the registry.
+
+```bash
+vibekit projects delete <id> [id2] [id3] ...
+vibekit projects delete -n <name> [name2] [name3] ...
+```
+
+**Examples:**
+
+```bash
+# Delete by ID
+vibekit projects delete abc123
+
+# Delete by name
+vibekit projects delete -n old-project
+
+# Delete multiple projects
+vibekit projects delete abc123 def456 ghi789
+
+# Delete multiple by name
+vibekit projects delete -n project1 project2 project3
+```
+
+**Confirmation:**
+- You'll be prompted to confirm before deletion
+- If deleting the current project, it will be unselected
+
+### select / use
+
+Select a project as current and change to its directory.
+
+```bash
+vibekit projects select <id>
+vibekit projects select -n <name>
+```
+
+**Examples:**
+
+```bash
+# Select by ID
+vibekit projects select abc123
+
+# Select by name
+vibekit projects select -n my-app
+```
+
+**Actions performed:**
+1. Sets the project as current
+2. Changes working directory to the project root
+3. Shows confirmation message
+
+**Output Example:**
+```
+✅ Selected project: my-app
+📂 Project Root: /home/user/projects/my-app
+Working directory changed to: /home/user/projects/my-app
+```
+
+### current
+
+Display information about the currently selected project.
+
+```bash
+vibekit projects current
+```
+
+**Output Example:**
+```
+📂 Current Project
+──────────────────────────────────────────────────
+Name: my-app (abc123)
+Path: /home/user/projects/my-app
+Status: active
+Last Updated: 2 hours ago
+```
+
+If no project is selected:
+```
+No project currently selected
+Use "vibekit projects select <id>" to select a project
+```
+
+## Project Configuration
+
+Projects are stored in `~/.vibekit/projects.json` with the following structure:
+
+```json
+{
+  "version": "1.0.0",
+  "projects": {
+    "abc123": {
+      "id": "abc123",
+      "name": "my-app",
+      "projectRoot": "/home/user/projects/my-app",
+      "status": "active",
+      "description": "My awesome application",
+      "tags": ["typescript", "react"],
+      "setupScript": "npm install",
+      "devScript": "npm run dev",
+      "cleanupScript": "npm run clean",
+      "createdAt": "2024-01-15T10:30:00Z",
+      "updatedAt": "2024-01-20T15:45:00Z"
+    }
+  }
+}
+```
+
+The current project is stored separately in `~/.vibekit/current-project.json`.
+
+## Use Cases
+
+### Development Workflow
+
+```bash
+# Add your projects
+vibekit projects add "frontend" ./apps/frontend "React frontend"
+vibekit projects add "backend" ./apps/backend "Node.js API"
+vibekit projects add "docs" ./documentation "Project docs"
+
+# List all projects
+vibekit projects list
+
+# Switch between projects
+vibekit projects select -n frontend
+# Now in frontend directory, run commands
+npm run dev
+
+# Switch to backend
+vibekit projects select -n backend
+# Now in backend directory
+npm start
+```
+
+### Project Templates
+
+Use scripts to standardize project setup:
+
+```bash
+# Add project with setup scripts
+vibekit projects add "new-api" ./new-api
+
+# During interactive setup, specify:
+# Setup script: npm install && npm run db:setup
+# Dev script: docker-compose up -d && npm run dev
+# Cleanup script: docker-compose down && npm run clean
+```
+
+### Archiving Projects
+
+Keep old projects in the registry but mark them as archived:
+
+```bash
+# Edit project status
+vibekit projects edit old-project-id
+# Choose "status" and set to "archived"
+
+# Archived projects still appear in lists but are visually distinct
+```
+
+### Project Organization with Tags
+
+```bash
+# Add projects with tags during creation
+vibekit projects add "customer-api" ./apis/customer
+# Add tags: microservice, nodejs, postgres
+
+vibekit projects add "order-api" ./apis/order  
+# Add tags: microservice, nodejs, mongodb
+
+# Later, you can identify related projects by their tags
+```
+
+## Tips and Best Practices
+
+1. **Use descriptive names**: Choose project names that are easy to remember and type
+2. **Organize with tags**: Use consistent tags across related projects
+3. **Document with descriptions**: Add meaningful descriptions for future reference
+4. **Leverage scripts**: Define setup/dev/cleanup scripts to standardize workflows
+5. **Archive don't delete**: Mark old projects as archived rather than deleting them
+6. **Relative paths**: Use relative paths (like `.`) when adding projects from within their directories
+
+## Integration with Other Commands
+
+The projects system integrates with other VibeKit commands:
+
+- **Dashboard**: View and manage projects via the web UI with `vibekit dashboard`
+- **Analytics**: Project-specific analytics and metrics
+- **Settings**: Per-project settings and configurations
+
+## Troubleshooting
+
+### Project Not Found
+
+```bash
+# If you get "Project not found", check:
+vibekit projects list  # Verify the project exists
+vibekit projects show <id>  # Check the exact ID
+```
+
+### Cannot Change Directory
+
+If selecting a project fails to change directory:
+- Verify the project root path exists
+- Check you have permission to access the directory
+- Update the project path if it has moved: `vibekit projects edit <id>`
+
+### Corrupted Project File
+
+If projects.json becomes corrupted:
+1. Backup current file: `cp ~/.vibekit/projects.json ~/.vibekit/projects.backup.json`
+2. Fix JSON syntax errors manually
+3. Or start fresh: `rm ~/.vibekit/projects.json` (will create new empty file)
+
+## Related Commands
+
+- [`vibekit dashboard`](/cli/commands/dashboard) - Web UI for project management
+- [`vibekit settings`](/cli/commands/settings) - Global and per-project settings
+- [`vibekit init`](/cli/commands/init) - Initialize VibeKit in a project
