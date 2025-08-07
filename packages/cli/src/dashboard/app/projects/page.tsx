@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, LayoutGrid, List } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Plus, LayoutGrid, List, Search, X, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ProjectCard } from "@/components/project-card";
 import { ProjectForm } from "@/components/project-form";
 import type { Project } from "@/lib/projects";
@@ -30,9 +31,11 @@ import { Badge } from "@/components/ui/badge";
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'card' | 'list'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('projectsViewMode') as 'card' | 'list') || 'card';
@@ -46,6 +49,22 @@ export default function ProjectsPage() {
       localStorage.setItem('projectsViewMode', mode);
     }
   };
+
+  // Filter projects based on search query
+  const filteredProjects = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return projects;
+    }
+    
+    const query = searchQuery.toLowerCase();
+    return projects.filter(project => 
+      project.name.toLowerCase().includes(query) ||
+      project.description?.toLowerCase().includes(query) ||
+      project.projectRoot.toLowerCase().includes(query) ||
+      project.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+      project.status.toLowerCase().includes(query)
+    );
+  }, [projects, searchQuery]);
 
   const fetchProjects = async () => {
     try {
@@ -61,8 +80,21 @@ export default function ProjectsPage() {
     }
   };
 
+  const fetchCurrentProject = async () => {
+    try {
+      const response = await fetch('/api/projects/current');
+      const data = await response.json();
+      if (data.success && data.data) {
+        setCurrentProject(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch current project:', error);
+    }
+  };
+
   useEffect(() => {
     fetchProjects();
+    fetchCurrentProject();
   }, []);
 
   const handleCreateProject = async (projectData: any) => {
@@ -121,6 +153,25 @@ export default function ProjectsPage() {
     }
   };
 
+  const handleSelectProject = async (projectId: string) => {
+    try {
+      const response = await fetch('/api/projects/current', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ projectId }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentProject(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to select project:', error);
+    }
+  };
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -155,6 +206,29 @@ export default function ProjectsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Search Box */}
+            <div className="relative w-64">
+              <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search projects..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 pl-8 pr-8 text-sm"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0.5 top-1/2 h-7 w-7 -translate-y-1/2 p-0"
+                  onClick={() => setSearchQuery('')}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            
+            {/* View Toggle */}
             <div className="flex items-center rounded-md bg-muted p-1">
               <Button
                 variant={viewMode === 'card' ? 'secondary' : 'ghost'}
@@ -173,11 +247,29 @@ export default function ProjectsPage() {
                 <List className="h-3.5 w-3.5" />
               </Button>
             </div>
+            
+            {/* New Project Button */}
             <Button onClick={() => setShowForm(true)}>
               <Plus className="mr-2 h-4 w-4" />
               New Project
             </Button>
           </div>
+        </div>
+
+        {/* Show current project and filter results */}
+        <div className="flex items-center justify-between">
+          {currentProject && (
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle className="h-4 w-4 text-primary" />
+              <span className="text-muted-foreground">Current project:</span>
+              <span className="font-medium">{currentProject.name}</span>
+            </div>
+          )}
+          {searchQuery && filteredProjects.length !== projects.length && (
+            <p className="text-sm text-muted-foreground ml-auto">
+              Showing {filteredProjects.length} of {projects.length} projects
+            </p>
+          )}
         </div>
 
         {isLoading ? (
@@ -192,14 +284,23 @@ export default function ProjectsPage() {
               Create your first project
             </Button>
           </div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 space-y-2">
+            <p className="text-muted-foreground">No projects match your search</p>
+            <Button variant="outline" size="sm" onClick={() => setSearchQuery('')}>
+              Clear search
+            </Button>
+          </div>
         ) : viewMode === 'card' ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
+            {filteredProjects.map((project) => (
               <ProjectCard
                 key={project.id}
                 project={project}
+                isSelected={currentProject?.id === project.id}
                 onEdit={(project) => setEditingProject(project)}
                 onDelete={(id) => handleDeleteProject(id)}
+                onSelect={(id) => handleSelectProject(id)}
               />
             ))}
           </div>
@@ -217,16 +318,27 @@ export default function ProjectsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {projects.map((project) => (
-                  <TableRow key={project.id} className="hover:bg-muted/50 transition-colors">
+                {filteredProjects.map((project) => (
+                  <TableRow 
+                    key={project.id} 
+                    className={`hover:bg-muted/50 transition-colors cursor-pointer ${
+                      currentProject?.id === project.id ? 'bg-primary/5' : ''
+                    }`}
+                    onClick={() => handleSelectProject(project.id)}
+                  >
                     <TableCell className="font-medium">
-                      <div>
-                        <div>{project.name}</div>
-                        {project.description && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {project.description}
-                          </div>
+                      <div className="flex items-center gap-2">
+                        {currentProject?.id === project.id && (
+                          <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
                         )}
+                        <div>
+                          <div>{project.name}</div>
+                          {project.description && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {project.description}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -262,14 +374,20 @@ export default function ProjectsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setEditingProject(project)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingProject(project);
+                          }}
                         >
                           Edit
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteProject(project.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteProject(project.id);
+                          }}
                           className="text-destructive hover:text-destructive"
                         >
                           Delete

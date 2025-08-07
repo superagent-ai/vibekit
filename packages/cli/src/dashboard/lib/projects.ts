@@ -23,6 +23,7 @@ export interface ProjectsConfig {
 }
 
 const PROJECTS_FILE = path.join(os.homedir(), '.vibekit', 'projects.json');
+const CURRENT_PROJECT_FILE = path.join(os.homedir(), '.vibekit', 'current-project.json');
 
 export async function ensureProjectsFile(): Promise<void> {
   const vibeskitDir = path.dirname(PROJECTS_FILE);
@@ -122,4 +123,19 @@ export async function deleteProject(id: string): Promise<boolean> {
 export async function getProjectByRepoPath(repoPath: string): Promise<Project | null> {
   const projects = await getAllProjects();
   return projects.find(p => p.projectRoot === repoPath) || null;
+}
+
+export async function getCurrentProject(): Promise<Project | null> {
+  try {
+    if (await fs.pathExists(CURRENT_PROJECT_FILE)) {
+      return await fs.readJson(CURRENT_PROJECT_FILE);
+    }
+  } catch (error) {
+    console.error('Failed to read current project:', error);
+  }
+  return null;
+}
+
+export async function setCurrentProject(project: Project): Promise<void> {
+  await fs.writeJson(CURRENT_PROJECT_FILE, project, { spaces: 2 });
 }

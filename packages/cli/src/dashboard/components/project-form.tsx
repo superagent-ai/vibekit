@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DirectoryBrowser } from "@/components/directory-browser";
 import type { Project } from "@/lib/projects";
 
 interface ProjectFormProps {
@@ -28,6 +29,7 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDirectoryBrowser, setShowDirectoryBrowser] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +58,11 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleDirectorySelect = (path: string) => {
+    handleInputChange('projectRoot', path);
+    setShowDirectoryBrowser(false);
   };
 
   return (
@@ -101,13 +108,28 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
 
             <div className="space-y-2">
               <Label htmlFor="projectRoot">Project Root *</Label>
-              <Input
-                id="projectRoot"
-                value={formData.projectRoot}
-                onChange={(e) => handleInputChange('projectRoot', e.target.value)}
-                placeholder="/path/to/your/project"
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="projectRoot"
+                  value={formData.projectRoot}
+                  onChange={(e) => handleInputChange('projectRoot', e.target.value)}
+                  placeholder="/path/to/your/project"
+                  required
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowDirectoryBrowser(true)}
+                  title="Browse for folder"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Enter the absolute path to your project folder
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -174,6 +196,14 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
           </form>
         </CardContent>
       </Card>
+      
+      {showDirectoryBrowser && (
+        <DirectoryBrowser
+          onSelect={handleDirectorySelect}
+          onCancel={() => setShowDirectoryBrowser(false)}
+          initialPath={formData.projectRoot}
+        />
+      )}
     </div>
   );
 }

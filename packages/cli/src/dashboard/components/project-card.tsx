@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit, Trash2, FolderOpen, GitBranch, Calendar, Tag } from "lucide-react";
+import { Edit, Trash2, FolderOpen, GitBranch, Calendar, Tag, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,11 +8,13 @@ import type { Project } from "@/lib/projects";
 
 interface ProjectCardProps {
   project: Project;
+  isSelected?: boolean;
   onEdit: (project: Project) => void;
   onDelete: (id: string) => void;
+  onSelect?: (id: string) => void;
 }
 
-export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
+export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onSelect }: ProjectCardProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
@@ -22,17 +24,28 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
   };
 
   return (
-    <Card className="group hover:shadow-md transition-shadow">
+    <Card 
+      className={`group hover:shadow-md transition-all cursor-pointer ${
+        isSelected ? 'ring-2 ring-primary shadow-md' : ''
+      }`}
+      onClick={() => onSelect?.(project.id)}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium flex items-center">
           <FolderOpen className="mr-2 h-4 w-4" />
           {project.name}
+          {isSelected && (
+            <CheckCircle className="ml-2 h-4 w-4 text-primary" />
+          )}
         </CardTitle>
         <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onEdit(project)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(project);
+            }}
             className="h-8 w-8 p-0"
           >
             <Edit className="h-3 w-3" />
@@ -40,7 +53,10 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onDelete(project.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(project.id);
+            }}
             className="h-8 w-8 p-0 hover:text-destructive"
           >
             <Trash2 className="h-3 w-3" />
