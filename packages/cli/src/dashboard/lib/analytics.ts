@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 
@@ -48,7 +48,9 @@ export interface AnalyticsSummary {
 export async function getAnalyticsData(days = 7, agentName?: string): Promise<AnalyticsSession[]> {
   const analyticsDir = path.join(os.homedir(), '.vibekit', 'analytics');
   
-  if (!await fs.pathExists(analyticsDir)) {
+  try {
+    await fs.access(analyticsDir);
+  } catch {
     return [];
   }
   
