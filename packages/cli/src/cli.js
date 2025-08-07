@@ -17,6 +17,15 @@ import React from 'react';
 import { render } from 'ink';
 import Settings from './components/settings.js';
 import { setupAliases } from './utils/aliases.js';
+import {
+  listProjects,
+  showProject,
+  addProject,
+  editProject,
+  removeProject,
+  selectProjectById,
+  showCurrentProject
+} from './components/projects.js';
 
 const program = new Command();
 
@@ -676,6 +685,76 @@ program
         console.log(chalk.yellow('⚠ Could not clean Docker resources (Docker may not be installed)'));
       }
     }
+  });
+
+// Projects commands
+const projectsCommand = program
+  .command('projects')
+  .description('Manage development projects');
+
+projectsCommand
+  .command('list')
+  .alias('ls')
+  .description('List all projects')
+  .action(async () => {
+    await listProjects();
+  });
+
+// Default action for 'projects' without subcommand - list projects
+projectsCommand
+  .action(async (_, command) => {
+    // If no subcommand was provided, list projects
+    if (command.args.length === 0) {
+      await listProjects();
+    }
+  });
+
+projectsCommand
+  .command('add')
+  .alias('create')
+  .description('Add a new project (interactive)')
+  .action(async () => {
+    await addProject();
+  });
+
+projectsCommand
+  .command('show <id>')
+  .alias('view')
+  .description('Show project details')
+  .action(async (id) => {
+    await showProject(id);
+  });
+
+projectsCommand
+  .command('edit <id>')
+  .alias('update')
+  .description('Edit project (interactive)')
+  .action(async (id) => {
+    await editProject(id);
+  });
+
+projectsCommand
+  .command('delete <id>')
+  .alias('remove')
+  .alias('rm')
+  .description('Delete project')
+  .action(async (id) => {
+    await removeProject(id);
+  });
+
+projectsCommand
+  .command('select <id>')
+  .alias('use')
+  .description('Select project and change to its directory')
+  .action(async (id) => {
+    await selectProjectById(id);
+  });
+
+projectsCommand
+  .command('current')
+  .description('Show currently selected project')
+  .action(async () => {
+    await showCurrentProject();
   });
 
 if (process.argv.length === 2) {
