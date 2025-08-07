@@ -16,13 +16,12 @@ import type { Project } from "@/lib/projects";
 interface ProjectCardProps {
   project: Project;
   isSelected?: boolean;
-  hasTaskmaster?: boolean;
   onEdit: (project: Project) => void;
   onDelete: (id: string) => void;
   onSelect?: (id: string) => void;
 }
 
-export function ProjectCard({ project, isSelected = false, hasTaskmaster = false, onEdit, onDelete, onSelect }: ProjectCardProps) {
+export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onSelect }: ProjectCardProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
@@ -47,27 +46,25 @@ export function ProjectCard({ project, isSelected = false, hasTaskmaster = false
           )}
         </CardTitle>
         <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {hasTaskmaster && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    asChild
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Link href={`/projects/${project.id}/kanban`} className="h-8 w-8 p-0">
-                      <Kanban className="h-3 w-3" />
-                    </Link>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>View Taskmaster Kanban</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  asChild
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Link href={`/projects/${project.id}/kanban`} className="h-8 w-8 p-0">
+                    <Kanban className="h-3 w-3" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View Taskmaster Kanban</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

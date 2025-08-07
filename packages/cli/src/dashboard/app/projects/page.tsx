@@ -50,13 +50,12 @@ import { Badge } from "@/components/ui/badge";
 interface SortableRowProps {
   project: Project;
   isSelected: boolean;
-  hasTaskmaster: boolean;
   onSelect: (id: string) => void;
   onEdit: (project: Project) => void;
   onDelete: (id: string) => void;
 }
 
-function SortableTableRow({ project, isSelected, hasTaskmaster, onSelect, onEdit, onDelete }: SortableRowProps) {
+function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: SortableRowProps) {
   const {
     attributes,
     listeners,
@@ -156,18 +155,16 @@ function SortableTableRow({ project, isSelected, hasTaskmaster, onSelect, onEdit
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-1">
-          {hasTaskmaster && (
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Link href={`/projects/${project.id}/kanban`}>
-                <Kanban className="h-4 w-4" />
-              </Link>
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Link href={`/projects/${project.id}/kanban`}>
+              <Kanban className="h-4 w-4" />
+            </Link>
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -207,7 +204,6 @@ export default function ProjectsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [sortBy, setSortBy] = useState<'rank' | 'priority' | 'alphabetical'>('rank');
-  const [taskmasterStatus, setTaskmasterStatus] = useState<Record<string, boolean>>({});
   const [viewMode, setViewMode] = useState<'card' | 'list'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('projectsViewMode') as 'card' | 'list') || 'card';
@@ -327,22 +323,10 @@ export default function ProjectsPage() {
     }
   };
 
-  const fetchTaskmasterStatus = async () => {
-    try {
-      const response = await fetch('/api/projects/taskmaster-status');
-      const data = await response.json();
-      if (data.success) {
-        setTaskmasterStatus(data.data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch taskmaster status:', error);
-    }
-  };
 
   useEffect(() => {
     fetchProjects();
     fetchCurrentProject();
-    fetchTaskmasterStatus();
   }, []);
   
   // Set up Server-Sent Events for real-time updates
@@ -379,7 +363,6 @@ export default function ProjectsPage() {
           } else if (data.type === 'projects-updated' || data.type === 'projects-cleared') {
             // Fetch updated projects
             fetchProjects(true);
-            fetchTaskmasterStatus();
           } else if (data.type === 'current-project-updated' || data.type === 'current-project-cleared') {
             // Fetch updated current project
             fetchCurrentProject();
@@ -714,7 +697,6 @@ export default function ProjectsPage() {
                 key={project.id}
                 project={project}
                 isSelected={currentProject?.id === project.id}
-                hasTaskmaster={taskmasterStatus[project.id] || false}
                 onEdit={(project) => setEditingProject(project)}
                 onDelete={(id) => handleDeleteProject(id)}
                 onSelect={(id) => handleSelectProject(id)}
@@ -750,7 +732,6 @@ export default function ProjectsPage() {
                         key={project.id}
                         project={project}
                         isSelected={currentProject?.id === project.id}
-                        hasTaskmaster={taskmasterStatus[project.id] || false}
                         onSelect={handleSelectProject}
                         onEdit={setEditingProject}
                         onDelete={handleDeleteProject}
@@ -848,18 +829,16 @@ export default function ProjectsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        {taskmasterStatus[project.id] && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            asChild
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Link href={`/projects/${project.id}/kanban`}>
-                              <Kanban className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          asChild
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Link href={`/projects/${project.id}/kanban`}>
+                            <Kanban className="h-4 w-4" />
+                          </Link>
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
