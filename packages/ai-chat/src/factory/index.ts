@@ -3,7 +3,7 @@
  * This allows users to mix and match different implementations
  */
 
-import { ChatClientV2, IProvider, IStorage, IToolAdapter } from '../client/ChatClientV2';
+import { ChatClient, IProvider, IStorage, IToolAdapter } from '../client/ChatClient';
 import { ChatClientOptions } from '../types';
 
 export interface ChatFactoryConfig {
@@ -42,7 +42,7 @@ export async function createProvider(
   switch (type) {
     case 'claude': {
       const { ClaudeProvider } = await import('../providers/claude');
-      return new ClaudeProvider(options);
+      return new ClaudeProvider();
     }
     
     case 'openai': {
@@ -180,7 +180,7 @@ export async function createFeatures(config: ChatFactoryConfig['features']) {
  */
 export async function createChatClient(
   config: ChatFactoryConfig = {}
-): Promise<ChatClientV2> {
+): Promise<ChatClient> {
   // Set defaults based on environment
   const environment = config.environment || 'development';
   const defaults = environment === 'production' ? {
@@ -222,7 +222,7 @@ export async function createChatClient(
   ]);
   
   // Create client with dependencies
-  return new ChatClientV2(
+  return new ChatClient(
     {
       provider,
       storage,
@@ -236,7 +236,7 @@ export async function createChatClient(
 /**
  * Convenience function for creating a minimal client
  */
-export async function createMinimalChatClient(): Promise<ChatClientV2> {
+export async function createMinimalChatClient(): Promise<ChatClient> {
   return createChatClient({
     provider: 'claude',
     storage: 'memory',
@@ -248,7 +248,7 @@ export async function createMinimalChatClient(): Promise<ChatClientV2> {
 /**
  * Convenience function for creating a production client
  */
-export async function createProductionChatClient(): Promise<ChatClientV2> {
+export async function createProductionChatClient(): Promise<ChatClient> {
   return createChatClient({
     environment: 'production',
   });

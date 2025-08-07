@@ -11,21 +11,7 @@ interface UseChatOptions {
   onFinish?: (message: ChatMessage) => void;
 }
 
-export function useChat(options: UseChatOptions = {}): {
-  sessionId: string | undefined;
-  createNewSession: () => Promise<any>;
-  loadSession: (id: string) => Promise<any>;
-  deleteSession: (id: string) => Promise<void>;
-  messages: ChatMessage[];
-  input: string;
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  handleSubmit: (e?: React.FormEvent) => Promise<void>;
-  isLoading: boolean;
-  error: Error | undefined;
-  stop: () => void;
-  reload: any;
-  append: any;
-} {
+export function useChat(options: UseChatOptions = {}) {
   const {
     sessionId: initialSessionId,
     api = '/api/chat',
@@ -34,32 +20,22 @@ export function useChat(options: UseChatOptions = {}): {
   } = options;
 
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);
-  const [input, setInput] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const {
-    messages,
-    submit,
-    isLoading,
-    error,
-    setMessages,
-    stop: aiStop,
-    regenerate,
-    sendMessage,
-  } = useAIChat({
-    api,
-    body: {
-      sessionId,
-    },
+  // Use the AI SDK's useChat hook
+  const aiChatResult = useAIChat({
     onError: (error) => {
       console.error('Chat error:', error);
       onError?.(error);
     },
-    onFinish: ({ message }) => {
-      if (message) {
+    onFinish: (data) => {
+      if (data?.message) {
+        const msg = data.message as any;
         const chatMessage: ChatMessage = {
-          role: message.role as any,
-          content: typeof message.content === 'string' ? message.content : '',
+          role: msg.role as any,
+          content: msg.content && typeof msg.content === 'string' 
+            ? msg.content 
+            : '',
           timestamp: new Date().toISOString(),
         };
         onFinish?.(chatMessage);
@@ -67,9 +43,22 @@ export function useChat(options: UseChatOptions = {}): {
     },
   });
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-  }, []);
+  // Extract properties with defaults for those that might not exist
+  const {
+    messages = [],
+    error,
+    setMessages,
+    stop: aiStop,
+  } = aiChatResult;
+
+  // These properties exist on the latest AI SDK
+  const append = (aiChatResult as any).append;
+  const reload = (aiChatResult as any).reload;
+  const isLoading = (aiChatResult as any).isLoading ?? false;
+  const input = (aiChatResult as any).input ?? '';
+  const setInput = (aiChatResult as any).setInput ?? (() => {});
+  const handleInputChange = (aiChatResult as any).handleInputChange ?? (() => {});
+  const aiHandleSubmit = (aiChatResult as any).handleSubmit ?? (() => {});
 
   const createNewSession = useCallback(async () => {
     try {
@@ -133,6 +122,7 @@ export function useChat(options: UseChatOptions = {}): {
     }
   }, [api, sessionId, setMessages, onError]);
 
+  // Wrap handleSubmit to include sessionId in body
   const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault();
@@ -150,22 +140,24 @@ export function useChat(options: UseChatOptions = {}): {
     // Create new abort controller for this request
     abortControllerRef.current = new AbortController();
     
-    // Send the message using the new API
-    await sendMessage({
-      role: 'user',
-      content: input,
-    });
-    
-    // Clear the input after sending
-    setInput('');
-  }, [sessionId, input, sendMessage]);
+    // Use the AI SDK's handleSubmit with extra body data
+    if (aiHandleSubmit) {
+      aiHandleSubmit(e, {
+        body: {
+          sessionId,
+        },
+      });
+    }
+  }, [sessionId, input, aiHandleSubmit]);
 
   const stop = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    aiStop();
+    if (aiStop) {
+      aiStop();
+    }
   }, [aiStop]);
 
   // Clean up abort controller on unmount
@@ -177,6 +169,30 @@ export function useChat(options: UseChatOptions = {}): {
     };
   }, []);
 
+  // Convert messages to ChatMessage format
+  // Handle UIMessage format where content might be in parts
+  const chatMessages: ChatMessage[] = messages.map((msg: any) => {
+    let content = '';
+    
+    // Try to get content from the message
+    if (msg.content && typeof msg.content === 'string') {
+      content = msg.content;
+    } else if (msg.parts && Array.isArray(msg.parts)) {
+      // Extract text from parts
+      content = msg.parts
+        .filter((part: any) => part.type === 'text')
+        .map((part: any) => part.text || '')
+        .join('');
+    }
+    
+    return {
+      id: msg.id,
+      role: msg.role as any,
+      content,
+      timestamp: new Date().toISOString(),
+    };
+  });
+
   return {
     // Session management
     sessionId,
@@ -185,12 +201,7 @@ export function useChat(options: UseChatOptions = {}): {
     deleteSession,
     
     // Message handling
-    messages: messages.map(msg => ({
-      id: msg.id,
-      role: msg.role as any,
-      content: typeof msg.content === 'string' ? msg.content : '',
-      timestamp: new Date().toISOString(),
-    })) as ChatMessage[],
+    messages: chatMessages,
     input,
     handleInputChange,
     handleSubmit,
@@ -201,7 +212,7 @@ export function useChat(options: UseChatOptions = {}): {
     
     // Actions
     stop,
-    reload: regenerate,
-    append: sendMessage,
+    reload,
+    append,
   };
 }

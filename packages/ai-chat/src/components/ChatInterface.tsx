@@ -85,8 +85,8 @@ export function ChatInterface({
       {/* Input area */}
       <MessageInput
         value={input}
-        onChange={handleInputChange}
-        onSubmit={handleSubmit}
+        onChange={(value) => handleInputChange({ target: { value } } as any)}
+        onSubmit={() => handleSubmit()}
         onStop={stop}
         isLoading={isLoading}
         placeholder={sessionId ? "Type a message..." : "Creating session..."}

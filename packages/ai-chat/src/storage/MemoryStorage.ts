@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ChatSession, ChatMessage } from '../types';
-import { IStorage } from '../client/ChatClientV2';
+import { IStorage } from '../client/ChatClient';
 
 /**
  * In-memory storage implementation

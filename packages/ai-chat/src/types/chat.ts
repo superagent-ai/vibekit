@@ -8,6 +8,9 @@ export interface ChatSession {
   metadata?: {
     model?: string;
     mcpServers?: string[];
+    projectId?: string;
+    userId?: string;
+    [key: string]: any;
   };
 }
 
@@ -37,6 +40,9 @@ export interface SendMessageOptions {
   temperature?: number;
   maxTokens?: number;
   tools?: boolean;
+  onChunk?: (chunk: string) => void;
+  onStepFinish?: (step: any) => void;
+  maxSteps?: number;
 }
 
 export interface ChatClientOptions {

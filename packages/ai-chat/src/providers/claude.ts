@@ -87,7 +87,8 @@ export class ClaudeProvider extends BaseProvider {
   getAuthStatus(): AuthStatus {
     return {
       method: this.authMethod,
-      isAuthenticated: this.authMethod !== null,
+      authenticated: this.authMethod !== null,
+      isAuthenticated: this.authMethod !== null, // For backward compatibility
     };
   }
 

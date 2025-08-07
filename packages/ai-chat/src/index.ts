@@ -1,6 +1,5 @@
-// Client (both versions for backward compatibility)
-export { ChatClient } from './client/ChatClient';
-export { ChatClientV2, type IProvider, type IStorage, type IToolAdapter } from './client/ChatClientV2';
+// Client
+export { ChatClient, type IProvider, type IStorage, type IToolAdapter, type ChatClientDependencies } from './client/ChatClient';
 export * from './client/streaming';
 
 // Providers

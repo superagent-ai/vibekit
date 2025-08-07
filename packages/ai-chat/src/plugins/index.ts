@@ -261,12 +261,16 @@ export class CachingPlugin implements ChatPlugin {
     if (this.cache.size >= this.maxCacheSize) {
       // Remove oldest entry
       const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey);
+      }
     }
     
     // Cache the response
     // In real implementation, would associate with the original message
-    this.cache.set(this.getCacheKey(response.content), response);
+    if (response.content) {
+      this.cache.set(this.getCacheKey(response.content), response);
+    }
   }
   
   private getCacheKey(message: string): string {

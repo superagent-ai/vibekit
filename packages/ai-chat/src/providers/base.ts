@@ -1,6 +1,7 @@
 export interface AuthStatus {
-  method: 'oauth' | 'apikey' | null;
-  isAuthenticated: boolean;
+  method: 'oauth' | 'apikey' | string | null;
+  authenticated: boolean;
+  isAuthenticated?: boolean; // For backward compatibility
 }
 
 export abstract class BaseProvider {
