@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllProjects, createProject } from '@/lib/projects';
+import { validateProjectInput, sanitizeProjectData } from '@/lib/validation';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
@@ -43,28 +44,24 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    // Validate required fields
-    if (!body.name || !body.projectRoot) {
+    // Validate input
+    const validation = validateProjectInput(body);
+    if (!validation.isValid) {
       return NextResponse.json(
         { 
           success: false,
           data: null,
-          message: 'Name and projectRoot are required' 
+          message: 'Validation failed',
+          errors: validation.errors
         },
         { status: 400 }
       );
     }
     
-    const project = await createProject({
-      name: body.name,
-      projectRoot: body.projectRoot,
-      setupScript: body.setupScript || '',
-      devScript: body.devScript || '',
-      cleanupScript: body.cleanupScript || '',
-      tags: body.tags || [],
-      description: body.description || '',
-      status: body.status || 'active'
-    });
+    // Sanitize input data
+    const sanitizedData = sanitizeProjectData(body);
+    
+    const project = await createProject(sanitizedData);
     
     return NextResponse.json({
       success: true,

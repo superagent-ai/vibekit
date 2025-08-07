@@ -128,20 +128,38 @@ export default function ProjectsPage() {
   // Set up Server-Sent Events for real-time updates
   useEffect(() => {
     let eventSource: EventSource | null = null;
+    let reconnectTimer: NodeJS.Timeout | null = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const INITIAL_RECONNECT_DELAY = 1000;
+    const MAX_RECONNECT_DELAY = 30000;
     
     const connectSSE = () => {
+      // Don't reconnect if we've exceeded max attempts
+      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        console.error('Max SSE reconnection attempts reached');
+        return;
+      }
+      
       eventSource = new EventSource('/api/ws');
+      
+      eventSource.onopen = () => {
+        console.log('SSE connection established');
+        reconnectAttempts = 0; // Reset on successful connection
+      };
       
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           
-          if (data.type === 'projects-updated' || data.type === 'projects-cleared') {
+          if (data.type === 'connected') {
+            console.log('SSE connected to file watcher');
+          } else if (data.type === 'error') {
+            console.error('SSE server error:', data.message);
+          } else if (data.type === 'projects-updated' || data.type === 'projects-cleared') {
             // Fetch updated projects
             fetchProjects(true);
-          }
-          
-          if (data.type === 'current-project-updated' || data.type === 'current-project-cleared') {
+          } else if (data.type === 'current-project-updated' || data.type === 'current-project-cleared') {
             // Fetch updated current project
             fetchCurrentProject();
           }
@@ -153,11 +171,21 @@ export default function ProjectsPage() {
       eventSource.onerror = (error) => {
         console.error('SSE connection error:', error);
         eventSource?.close();
+        eventSource = null;
         
-        // Reconnect after a delay
-        setTimeout(() => {
+        // Calculate exponential backoff delay
+        const delay = Math.min(
+          INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttempts),
+          MAX_RECONNECT_DELAY
+        );
+        
+        reconnectAttempts++;
+        console.log(`Reconnecting SSE in ${delay}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        
+        // Reconnect after a delay with exponential backoff
+        reconnectTimer = setTimeout(() => {
           connectSSE();
-        }, 5000);
+        }, delay);
       };
     };
     
@@ -165,6 +193,9 @@ export default function ProjectsPage() {
     
     // Clean up on unmount
     return () => {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
       eventSource?.close();
     };
   }, []); // Empty dependency array - set up once
