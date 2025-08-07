@@ -1,7 +1,7 @@
 "use client";
 
 import type * as React from "react";
-import { ChartSpline, LucideGithub as Github, BookOpen, Palette, Info, Settings, FolderOpen, Server } from "lucide-react";
+import { ChartSpline, LucideGithub as Github, BookOpen, Palette, Info, Settings, FolderOpen, Server, MessageSquare } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -38,6 +38,12 @@ const getNavData = (pathname: string) => ({
       url: "/projects",
       icon: FolderOpen,
       isActive: pathname === "/projects" || pathname.startsWith("/projects/"),
+    },
+    {
+      title: "AI Chat",
+      url: "/chat",
+      icon: MessageSquare,
+      isActive: pathname === "/chat" || pathname.startsWith("/chat/"),
     },
     {
       title: "MCP Servers",
