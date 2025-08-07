@@ -18,7 +18,7 @@ interface ProjectFormProps {
 export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
   const [formData, setFormData] = useState({
     name: project?.name || '',
-    gitRepoPath: project?.gitRepoPath || '',
+    projectRoot: project?.projectRoot || '',
     setupScript: project?.setupScript || '',
     devScript: project?.devScript || '',
     cleanupScript: project?.cleanupScript || '',
@@ -32,8 +32,8 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name.trim() || !formData.gitRepoPath.trim()) {
-      alert('Name and Git Repository Path are required');
+    if (!formData.name.trim() || !formData.projectRoot.trim()) {
+      alert('Name and Project Root are required');
       return;
     }
 
@@ -100,12 +100,12 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="gitRepoPath">Git Repository Path *</Label>
+              <Label htmlFor="projectRoot">Project Root *</Label>
               <Input
-                id="gitRepoPath"
-                value={formData.gitRepoPath}
-                onChange={(e) => handleInputChange('gitRepoPath', e.target.value)}
-                placeholder="/path/to/your/repo"
+                id="projectRoot"
+                value={formData.projectRoot}
+                onChange={(e) => handleInputChange('projectRoot', e.target.value)}
+                placeholder="/path/to/your/project"
                 required
               />
             </div>
