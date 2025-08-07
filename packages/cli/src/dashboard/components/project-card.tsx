@@ -51,7 +51,7 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
         <div className="space-y-2">
           <div className="flex items-center text-sm text-muted-foreground">
             <GitBranch className="mr-2 h-3 w-3" />
-            <span className="truncate">{project.gitRepoPath}</span>
+            <span className="truncate">{project.projectRoot}</span>
           </div>
           
           {project.description && (
