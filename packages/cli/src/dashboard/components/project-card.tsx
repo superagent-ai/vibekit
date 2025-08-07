@@ -1,20 +1,28 @@
 "use client";
 
-import { Edit, Trash2, FolderOpen, GitBranch, Calendar, Tag, CheckCircle } from "lucide-react";
+import { Edit, Trash2, FolderOpen, GitBranch, Calendar, Tag, CheckCircle, Kanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { Project } from "@/lib/projects";
 
 interface ProjectCardProps {
   project: Project;
   isSelected?: boolean;
+  hasTaskmaster?: boolean;
   onEdit: (project: Project) => void;
   onDelete: (id: string) => void;
   onSelect?: (id: string) => void;
 }
 
-export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onSelect }: ProjectCardProps) {
+export function ProjectCard({ project, isSelected = false, hasTaskmaster = false, onEdit, onDelete, onSelect }: ProjectCardProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
@@ -39,28 +47,67 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
           )}
         </CardTitle>
         <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(project);
-            }}
-            className="h-8 w-8 p-0"
-          >
-            <Edit className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(project.id);
-            }}
-            className="h-8 w-8 p-0 hover:text-destructive"
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          {hasTaskmaster && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    asChild
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Link href={`/projects/${project.id}/kanban`} className="h-8 w-8 p-0">
+                      <Kanban className="h-3 w-3" />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>View Taskmaster Kanban</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(project);
+                  }}
+                  className="h-8 w-8 p-0"
+                >
+                  <Edit className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Edit Project</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(project.id);
+                  }}
+                  className="h-8 w-8 p-0 hover:text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Delete Project</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </CardHeader>
       <CardContent>
