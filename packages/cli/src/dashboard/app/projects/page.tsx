@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { Plus, LayoutGrid, List, Search, X, CheckCircle } from "lucide-react";
+import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProjectCard } from "@/components/project-card";
@@ -36,6 +36,9 @@ export default function ProjectsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [lastModified, setLastModified] = useState<string | null>(null);
+  const [currentProjectLastModified, setCurrentProjectLastModified] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'list'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('projectsViewMode') as 'card' | 'list') || 'card';
@@ -66,17 +69,38 @@ export default function ProjectsPage() {
     );
   }, [projects, searchQuery]);
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (skipLoadingState = false) => {
     try {
+      if (!skipLoadingState) {
+        setIsLoading(true);
+      } else {
+        // Show refresh indicator for background updates
+        setIsRefreshing(true);
+      }
       const response = await fetch('/api/projects');
       const data = await response.json();
       if (data.success) {
-        setProjects(data.data);
+        // Only update if data has changed
+        if (data.lastModified !== lastModified) {
+          setProjects(data.data);
+          setLastModified(data.lastModified);
+          
+          // Flash the refresh indicator when data updates
+          if (skipLoadingState) {
+            setTimeout(() => setIsRefreshing(false), 500);
+          }
+        } else {
+          // No changes, hide refresh indicator
+          setIsRefreshing(false);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch projects:', error);
+      setIsRefreshing(false);
     } finally {
-      setIsLoading(false);
+      if (!skipLoadingState) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -84,8 +108,12 @@ export default function ProjectsPage() {
     try {
       const response = await fetch('/api/projects/current');
       const data = await response.json();
-      if (data.success && data.data) {
-        setCurrentProject(data.data);
+      if (data.success) {
+        // Only update if data has changed
+        if (data.lastModified !== currentProjectLastModified) {
+          setCurrentProject(data.data);
+          setCurrentProjectLastModified(data.lastModified);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch current project:', error);
@@ -96,6 +124,50 @@ export default function ProjectsPage() {
     fetchProjects();
     fetchCurrentProject();
   }, []);
+  
+  // Set up Server-Sent Events for real-time updates
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    
+    const connectSSE = () => {
+      eventSource = new EventSource('/api/ws');
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'projects-updated' || data.type === 'projects-cleared') {
+            // Fetch updated projects
+            fetchProjects(true);
+          }
+          
+          if (data.type === 'current-project-updated' || data.type === 'current-project-cleared') {
+            // Fetch updated current project
+            fetchCurrentProject();
+          }
+        } catch (error) {
+          console.error('Error parsing SSE message:', error);
+        }
+      };
+      
+      eventSource.onerror = (error) => {
+        console.error('SSE connection error:', error);
+        eventSource?.close();
+        
+        // Reconnect after a delay
+        setTimeout(() => {
+          connectSSE();
+        }, 5000);
+      };
+    };
+    
+    connectSSE();
+    
+    // Clean up on unmount
+    return () => {
+      eventSource?.close();
+    };
+  }, []); // Empty dependency array - set up once
 
   const handleCreateProject = async (projectData: any) => {
     try {
@@ -200,9 +272,14 @@ export default function ProjectsPage() {
       <div className="flex-1 space-y-4 p-4 pt-0">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
+              {isRefreshing && (
+                <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
             <p className="text-muted-foreground">
-              Manage your development projects and their configurations.
+              Manage your development projects and their configurations. Updates in real-time.
             </p>
           </div>
           <div className="flex items-center gap-2">

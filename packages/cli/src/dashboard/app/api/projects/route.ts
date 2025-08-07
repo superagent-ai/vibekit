@@ -1,12 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllProjects, createProject } from '@/lib/projects';
+import { promises as fs } from 'fs';
+import path from 'path';
+import os from 'os';
+
+const PROJECTS_FILE = path.join(os.homedir(), '.vibekit', 'projects.json');
 
 export async function GET() {
   try {
     const projects = await getAllProjects();
+    
+    // Get file modification time for change detection
+    let lastModified = null;
+    try {
+      const stats = await fs.stat(PROJECTS_FILE);
+      lastModified = stats.mtime.toISOString();
+    } catch (error) {
+      // File doesn't exist yet, that's ok
+    }
+    
     return NextResponse.json({
       success: true,
       data: projects,
+      lastModified,
       message: null
     });
   } catch (error) {
@@ -15,6 +31,7 @@ export async function GET() {
       { 
         success: false,
         data: null,
+        lastModified: null,
         message: 'Failed to fetch projects' 
       },
       { status: 500 }

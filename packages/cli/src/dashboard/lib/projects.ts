@@ -1,29 +1,4 @@
-// Re-export everything from @vibe-kit/projects for use in the dashboard
-export {
-  // Types
-  type Project,
-  type ProjectsConfig,
-  type ProjectCreateInput,
-  type ProjectUpdateInput,
-  // Project management
-  getAllProjects,
-  getProject,
-  getProjectByName,
-  getProjectByPath,
-  createProject,
-  updateProject,
-  deleteProject,
-  getCurrentProject,
-  setCurrentProject,
-  setCurrentProjectById,
-  clearCurrentProject,
-  // Storage utilities
-  ensureProjectsFile,
-  readProjectsConfig,
-  writeProjectsConfig,
-  // Validation utilities
-  validateProjectData,
-  // Constants
-  PROJECTS_FILE,
-  CURRENT_PROJECT_FILE
-} from '@vibe-kit/projects';
+// Re-export everything from the projects package
+// This wrapper is needed because Next.js has issues resolving
+// packages that are outside of the dashboard's directory structure
+export * from '../../../../../packages/projects/dist/index';
