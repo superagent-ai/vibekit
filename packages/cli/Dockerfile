@@ -27,9 +27,7 @@ RUN curl -sSL https://install.anthropic.com | bash || echo "Alternative Claude i
 ENV PATH="/root/.local/bin:$BUN_INSTALL/bin:$PATH"
 
 # Install vibekit CLI globally and create symlink
-RUN bun add -g vibekit || echo "Vibekit install failed, trying npm..."
-RUN npm install -g vibekit || echo "Both bun and npm install failed"
-RUN ln -sf /home/.bun/install/global/node_modules/.bin/vibekit /usr/local/bin/vibekit || echo "Symlink failed"
+RUN bun add -g vibekit || echo "Vibekit install failed"
 
 # Create workspace directory
 RUN mkdir -p /workspace
