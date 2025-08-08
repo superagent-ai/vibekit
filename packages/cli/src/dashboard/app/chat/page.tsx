@@ -40,12 +40,12 @@ import { Button } from '@/components/ui/button';
 
 const models = [
   {
-    name: 'Claude 3.5 Sonnet',
-    value: 'claude-3-5-sonnet-20241022',
+    name: 'Claude Sonnet 4',
+    value: 'claude-sonnet-4-20250514',
   },
   {
-    name: 'Claude 3.5 Haiku', 
-    value: 'claude-3-5-haiku-20241022',
+    name: 'Claude Opus 4.1',
+    value: 'claude-opus-4-1-20250805',
   },
 ];
 

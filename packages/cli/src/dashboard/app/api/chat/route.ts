@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     }
 
     // Get model from data or use default
-    const model = data?.model || 'claude-3-5-sonnet-20241022';
+    const model = data?.model || 'claude-sonnet-4-20250514';
     console.log('Chat API: Using model:', model);
     
     // Check for API key (use the one loaded at module level)
