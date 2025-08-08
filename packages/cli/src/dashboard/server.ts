@@ -33,7 +33,7 @@ class DashboardServer {
       );
 
       // Dashboard directory path - use the source directory
-      const dashboardDir = join(process.cwd(), "src", "dashboard");
+      const dashboardDir = join(process.cwd(), 'packages', 'cli', 'src', 'dashboard');
 
       // Start dashboard using npm run dev
       this.process = spawn(
