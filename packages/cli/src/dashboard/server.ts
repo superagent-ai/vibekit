@@ -43,10 +43,10 @@ class DashboardServer {
       const dashboardDir = __dirname;
 
       // Start dashboard using npm run dev
-      // Next.js expects -p flag for port, not --port
+      // Next.js with --turbopack may not accept port via args, use environment variable
       this.process = spawn(
         "npm",
-        ["run", "dev", "--", "-p", this.port.toString()],
+        ["run", "dev"],
         {
           cwd: dashboardDir,
           stdio: ["pipe", "pipe", "pipe"],
