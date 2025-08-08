@@ -115,6 +115,19 @@ export default function ChatPage() {
 
   // Get message content as string
   const getMessageContent = (message: any): string => {
+    // Handle parts array (assistant messages from streaming)
+    if (Array.isArray(message.parts)) {
+      const textContent = message.parts
+        .filter((part: any) => part.type === 'text' || typeof part === 'string')
+        .map((part: any) => {
+          if (typeof part === 'string') return part;
+          if (part.type === 'text' && part.text) return part.text;
+          return '';
+        })
+        .join('');
+      if (textContent) return textContent;
+    }
+    
     // Handle different content types
     if (typeof message.parts?.[0]?.text === 'string') {
       return message.parts[0].text;
@@ -128,6 +141,16 @@ export default function ChatPage() {
     if (typeof message.content === 'string') {
       return message.content;
     }
+    
+    // Check if content is an array of text parts
+    if (Array.isArray(message.content)) {
+      const textParts = message.content
+        .filter((part: any) => part.type === 'text')
+        .map((part: any) => part.text)
+        .join('');
+      if (textParts) return textParts;
+    }
+    
     return '';
   };
 
@@ -163,15 +186,9 @@ export default function ChatPage() {
                   <span>View AI reasoning by expanding the thought process</span>
                 </li>
               </ul>
-              {process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY ? (
-                <p className="text-sm text-green-600">
-                  ✓ Connected to Anthropic API
-                </p>
-              ) : (
-                <p className="text-sm text-amber-600">
-                  ⚠ Set ANTHROPIC_API_KEY to enable AI responses
-                </p>
-              )}
+              <p className="text-sm text-gray-500">
+                Powered by Claude AI
+              </p>
             </div>
           </div>
         )}
