@@ -1,6 +1,6 @@
-# Vibekit Analytics Dashboard
+# @vibe-kit/dashboard
 
-A real-time analytics dashboard for monitoring AI-assisted coding sessions with Vibekit CLI.
+A real-time analytics dashboard for monitoring AI-assisted coding sessions with Vibekit CLI. This is a standalone npm package that provides a Next.js-based dashboard.
 
 ## Overview
 
@@ -15,24 +15,49 @@ The Vibekit dashboard provides comprehensive insights into your coding sessions,
 - 📈 **Session Tracking** - Duration, productivity metrics, and workflow analysis
 - 🌐 **Modern UI** - Clean, responsive interface built with Tailwind CSS
 
+## Installation
+
+```bash
+npm install @vibe-kit/dashboard
+```
+
 ## Getting Started
 
+### Via VibeKit CLI (Recommended)
 The dashboard is automatically managed by the Vibekit CLI:
 
 ```bash
-# Start dashboard from CLI (recommended)
+# Start dashboard from CLI (installs package automatically)
 vibekit dashboard
 
 # Check dashboard status
-vibekit status
+vibekit dashboard status
 ```
 
-### Manual Development
+### Direct Usage
 
-For development purposes, you can run the dashboard directly:
+```javascript
+const DashboardServer = require('@vibe-kit/dashboard');
+
+const server = new DashboardServer({
+  port: 3001,
+  hostname: 'localhost'
+});
+
+await server.start();
+```
+
+### CLI Command
 
 ```bash
-cd src/dashboard
+vibe-kit-dashboard --port 3001
+```
+
+### Development
+
+For development purposes:
+
+```bash
 npm install
 npm run dev
 ```
