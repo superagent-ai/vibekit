@@ -1,0 +1,42 @@
+{
+  "name": "@vibe-kit/taskmaster",
+  "version": "0.0.1",
+  "description": "Taskmaster integration for VibKit - modular task management provider",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "keywords": [
+    "taskmaster",
+    "task-management",
+    "kanban",
+    "vibekit"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chokidar": "^3.5.3",
+    "eventemitter3": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.1.0"
+  },
+  "peerDependencies": {
+    "@vibe-kit/projects": "^0.0.1"
+  }
+}
