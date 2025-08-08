@@ -66,31 +66,31 @@ server.addTool({
     
     // Filter by status
     if (args.status !== 'all') {
-      projects = projects.filter(p => p.status === args.status);
+      projects = projects.filter((p: Project) => p.status === args.status);
     }
     
     // Search filters
     if (args.action === 'search') {
       if (args.query) {
         const query = args.query.toLowerCase();
-        projects = projects.filter(p => 
+        projects = projects.filter((p: Project) => 
           p.name.toLowerCase().includes(query) ||
           (p.description && p.description.toLowerCase().includes(query))
         );
       }
       
       if (args.tags && args.tags.length > 0) {
-        projects = projects.filter(p => 
+        projects = projects.filter((p: Project) => 
           p.tags && args.tags!.some(tag => p.tags!.includes(tag))
         );
       }
       
       if (args.priority) {
-        projects = projects.filter(p => p.priority === args.priority);
+        projects = projects.filter((p: Project) => p.priority === args.priority);
       }
     }
     
-    const projectList = projects.map(p => ({
+    const projectList = projects.map((p: Project) => ({
       ...p,
       isCurrent: currentProject?.id === p.id
     }));
