@@ -1,0 +1,463 @@
+---
+title: Claude Desktop Configuration
+description: "Advanced configuration options for Claude Desktop integration"
+---
+
+## Overview
+
+Claude Desktop supports MCP servers through its configuration file. This guide covers all configuration options and advanced setups for the VibeKit MCP server.
+
+<Note>
+  **Using Cursor?** Cursor users can install VibeKit MCP with one click using [this installation link](cursor://anysphere.cursor-deeplink/mcp/install?name=vibekit&config=eyJjb21tYW5kIjoibnB4IC15IEB2aWJlLWtpdC9tY3Atc2VydmVyIiwiZW52Ijp7fX0%3D).
+</Note>
+
+## Configuration File Location
+
+Claude Desktop stores its configuration in a JSON file at platform-specific locations:
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    ~/Library/Application Support/Claude/claude_desktop_config.json
+    ```
+    
+    You can open this location in Finder:
+    ```bash
+    open ~/Library/Application\ Support/Claude/
+    ```
+  </Tab>
+  
+  <Tab title="Windows">
+    ```bash
+    %APPDATA%\Claude\claude_desktop_config.json
+    ```
+    
+    You can open this location in Explorer:
+    ```cmd
+    explorer %APPDATA%\Claude
+    ```
+  </Tab>
+  
+  <Tab title="Linux">
+    ```bash
+    ~/.config/Claude/claude_desktop_config.json
+    ```
+    
+    You can open this location:
+    ```bash
+    xdg-open ~/.config/Claude/
+    ```
+  </Tab>
+</Tabs>
+
+## Basic Configuration
+
+### Minimal Setup
+
+The simplest configuration using npx:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "npx",
+      "args": ["-y", "@vibe-kit/mcp-server"]
+    }
+  }
+}
+```
+
+### With Environment Variables
+
+Add environment variables for enhanced functionality:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "npx",
+      "args": ["-y", "@vibe-kit/mcp-server"],
+      "env": {
+        "DEBUG": "vibekit:*",
+        "VIBEKIT_HOME": "/custom/path/.vibekit"
+      }
+    }
+  }
+}
+```
+
+## Advanced Configurations
+
+### Local Development
+
+For development with a local build:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "node",
+      "args": ["/absolute/path/to/vibekit/packages/mcp-server/dist/index.js"],
+      "env": {
+        "NODE_ENV": "development",
+        "DEBUG": "*"
+      }
+    }
+  }
+}
+```
+
+### Using npm Link
+
+If you've linked the package locally:
+
+```bash
+# In the mcp-server directory
+npm link
+
+# Then in your config
+```
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "vibekit-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### With Custom Node Version
+
+Using a specific Node.js version via nvm or volta:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "/Users/username/.nvm/versions/node/v20.0.0/bin/npx",
+      "args": ["-y", "@vibe-kit/mcp-server"]
+    }
+  }
+}
+```
+
+### HTTP Stream Mode
+
+For remote server access:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@vibe-kit/mcp-server",
+        "--transport",
+        "http-stream",
+        "--port",
+        "3000"
+      ]
+    }
+  }
+}
+```
+
+## Multiple MCP Servers
+
+Run VibeKit alongside other MCP servers:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "npx",
+      "args": ["-y", "@vibe-kit/mcp-server"]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+## Environment Variables
+
+### VibeKit Specific
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VIBEKIT_HOME` | Directory for VibeKit data | `~/.vibekit` |
+| `DEBUG` | Debug logging pattern | (none) |
+| `NODE_ENV` | Environment mode | `production` |
+
+### Debug Levels
+
+Control logging verbosity:
+
+```json
+{
+  "env": {
+    "DEBUG": "vibekit:*"        // All VibeKit logs
+    "DEBUG": "vibekit:projects"  // Only project logs
+    "DEBUG": "*"                 // All debug output
+  }
+}
+```
+
+## Troubleshooting
+
+### Configuration Not Loading
+
+1. **Check JSON syntax**:
+   ```bash
+   # Validate JSON syntax
+   python -m json.tool < ~/Library/Application\ Support/Claude/claude_desktop_config.json
+   ```
+
+2. **Verify file permissions**:
+   ```bash
+   ls -la ~/Library/Application\ Support/Claude/claude_desktop_config.json
+   ```
+
+3. **Check Claude Desktop logs**:
+   - Open Developer Tools in Claude Desktop
+   - Check Console for MCP errors
+
+### Server Not Starting
+
+1. **Test command manually**:
+   ```bash
+   # Test the exact command from your config
+   npx -y @vibe-kit/mcp-server
+   ```
+
+2. **Check Node.js version**:
+   ```bash
+   node --version  # Should be 18.0.0 or higher
+   ```
+
+3. **Verify package installation**:
+   ```bash
+   npm list -g @vibe-kit/mcp-server
+   ```
+
+### Permission Errors
+
+Fix permission issues:
+
+```bash
+# macOS/Linux
+chmod 644 ~/Library/Application\ Support/Claude/claude_desktop_config.json
+chmod 755 ~/Library/Application\ Support/Claude/
+
+# Ensure VibeKit directory is writable
+mkdir -p ~/.vibekit
+chmod 755 ~/.vibekit
+```
+
+### Connection Issues
+
+For HTTP Stream mode connection problems:
+
+1. **Check port availability**:
+   ```bash
+   lsof -i :8080  # Check if port is in use
+   ```
+
+2. **Test server directly**:
+   ```bash
+   npx @vibe-kit/mcp-server --transport http-stream --port 8080
+   # Then test with curl
+   curl http://localhost:8080/mcp
+   ```
+
+## Configuration Templates
+
+### Production Setup
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "npx",
+      "args": ["-y", "@vibe-kit/mcp-server@latest"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}
+```
+
+### Development Setup
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "node",
+      "args": ["/path/to/dev/mcp-server/dist/index.js"],
+      "env": {
+        "NODE_ENV": "development",
+        "DEBUG": "vibekit:*",
+        "VIBEKIT_HOME": "/path/to/test/.vibekit"
+      }
+    }
+  }
+}
+```
+
+### Team Setup
+
+For shared team configuration:
+
+```json
+{
+  "mcpServers": {
+    "vibekit": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@vibe-kit/mcp-server",
+        "--transport",
+        "http-stream",
+        "--port",
+        "8080"
+      ],
+      "env": {
+        "VIBEKIT_HOME": "/shared/team/.vibekit",
+        "VIBEKIT_TEAM": "engineering"
+      }
+    }
+  }
+}
+```
+
+## Validation
+
+### Check Configuration
+
+Validate your configuration is correct:
+
+1. **JSON Validation**:
+   ```bash
+   # Check for syntax errors
+   cat ~/Library/Application\ Support/Claude/claude_desktop_config.json | python -m json.tool
+   ```
+
+2. **Test MCP Server**:
+   ```bash
+   # Run the server standalone
+   npx @vibe-kit/mcp-server
+   ```
+
+3. **Verify in Claude**:
+   - Restart Claude Desktop
+   - Type: "List my VibeKit projects"
+   - Should see response using MCP tools
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="SyntaxError in config file">
+    **Problem**: Claude Desktop won't start or ignores config
+    
+    **Solution**: Validate JSON syntax and fix any errors:
+    ```bash
+    # This will show syntax errors
+    python -m json.tool < ~/Library/Application\ Support/Claude/claude_desktop_config.json
+    ```
+  </Accordion>
+  
+  <Accordion title="Command not found">
+    **Problem**: `npx: command not found` error
+    
+    **Solution**: Use full path to npx:
+    ```json
+    {
+      "command": "/usr/local/bin/npx",
+      "args": ["-y", "@vibe-kit/mcp-server"]
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Server times out">
+    **Problem**: MCP server doesn't respond
+    
+    **Solution**: Increase timeout or check server logs:
+    ```json
+    {
+      "env": {
+        "DEBUG": "*",
+        "MCP_TIMEOUT": "30000"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+1. **Version Pinning**: Use specific versions in production:
+   ```json
+   "args": ["-y", "@vibe-kit/mcp-server@1.0.0"]
+   ```
+
+2. **Separate Environments**: Use different VIBEKIT_HOME for testing:
+   ```json
+   "env": {
+     "VIBEKIT_HOME": "/path/to/test/.vibekit"
+   }
+   ```
+
+3. **Enable Logging**: During setup, enable debug logs:
+   ```json
+   "env": {
+     "DEBUG": "vibekit:*"
+   }
+   ```
+
+4. **Regular Updates**: Keep the server updated:
+   ```bash
+   npm update -g @vibe-kit/mcp-server
+   ```
+
+## Security Considerations
+
+### Safe Configuration
+
+- Never commit tokens or secrets in the config file
+- Use environment variables for sensitive data
+- Restrict file permissions appropriately
+
+### File Permissions
+
+```bash
+# Secure the configuration file
+chmod 600 ~/Library/Application\ Support/Claude/claude_desktop_config.json
+```
+
+### Network Security
+
+For HTTP Stream mode:
+- Only bind to localhost for local use
+- Use proper authentication for remote access
+- Consider TLS for production deployments
+
+## Related Documentation
+
+- [Quick Start](/mcp/quickstart) - Get started quickly
+- [Deployment](/mcp/deployment) - Deploy for team access
+- [Tools Reference](/mcp/tools/projects) - Available MCP tools
