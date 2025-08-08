@@ -5,10 +5,13 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+import { fileURLToPath } from 'url';
 import ClaudeAgent from './agents/claude.js';
 import GeminiAgent from './agents/gemini.js';
+import CodexAgent from './agents/codex.js';
+import CursorAgent from './agents/cursor.js';
+import OpenCodeAgent from './agents/opencode.js';
 import Logger from './logging/logger.js';
-import Docker from './sandbox/docker.js';
 import Analytics from './analytics/analytics.js';
 import ProxyServer from './proxy/server.js';
 import proxyManager from './proxy/manager.js';
@@ -17,6 +20,10 @@ import React from 'react';
 import { render } from 'ink';
 import Settings from './components/settings.js';
 import { setupAliases } from './utils/aliases.js';
+import SandboxEngine from './sandbox/sandbox-engine.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
 
 const program = new Command();
 
@@ -36,7 +43,7 @@ async function readSettings() {
   
   const settingsPath = path.join(os.homedir(), '.vibekit', 'settings.json');
   const defaultSettings = {
-    sandbox: { enabled: false },
+    sandbox: { enabled: false, type: 'docker' },
     proxy: { enabled: true, redactionEnabled: true },
     analytics: { enabled: true },
     aliases: { enabled: false }
@@ -61,15 +68,15 @@ async function readSettings() {
 program
   .name('vibekit')
   .description('CLI middleware for headless and TUI coding agents')
-  .version('1.0.0')
+  .version(pkg.version)
   .option('--proxy <url>', 'HTTP/HTTPS proxy URL for all agents (e.g., http://proxy.example.com:8080)');
+
 
 program
   .command('claude')
-  .description('Run Claude Code CLI (sandbox configurable in settings)')
-  .option('--sandbox <type>', 'Sandbox type: none (default), docker', 'none')
-  .option('--no-network', 'Disable network access (Docker only)')
-  .option('--fresh-container', 'Use fresh Docker container instead of persistent one')
+  .description('Run Claude Code CLI')
+  .option('-s, --sandbox', 'Enable sandbox mode')
+  .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
   .allowUnknownOption()
   .allowExcessArguments()
   .action(async (options, command) => {
@@ -92,27 +99,14 @@ program
       process.env.ANTHROPIC_BASE_URL = proxy;
     }
     
-    // Determine sandbox type based on settings and options (lazy Docker check)
-    let sandboxType = options.sandbox;
-    if (sandboxType === 'docker' && !settings.sandbox.enabled) {
-      // If user explicitly selected docker but settings have sandbox disabled, use none
-      sandboxType = 'none';
-    } else if (!options.sandbox || options.sandbox === 'none' || options.sandbox === 'docker') {
-      // If no explicit option, none, or default docker, use settings preference
-      sandboxType = settings.sandbox.enabled ? 'docker' : 'none';
-    }
-    
-    // Docker availability will be checked lazily when actually needed in BaseAgent.runInDocker()
-    
     const agentOptions = {
-      sandbox: sandboxType,
       proxy: proxy,
       shouldStartProxy: shouldStartProxy,
       proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
-        networkMode: options.noNetwork ? 'none' : 'bridge',
-        usePersistent: !options.freshContainer // Use persistent unless explicitly disabled
+        sandbox: options.sandbox,
+        sandboxType: options.sandboxType
       }
     };
     const agent = new ClaudeAgent(logger, agentOptions);
@@ -141,9 +135,9 @@ program
 
 program
   .command('gemini')
-  .description('Run Gemini CLI (sandbox configurable in settings)')
-  .option('--sandbox <type>', 'Sandbox type: none (default), docker', 'none')
-  .option('--network', 'Allow network access (less secure)')
+  .description('Run Gemini CLI')
+  .option('-s, --sandbox', 'Enable sandbox mode')
+  .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
   .allowUnknownOption()
   .allowExcessArguments()
   .action(async (options, command) => {
@@ -161,26 +155,14 @@ program
       shouldStartProxy = !proxyManager.isRunning();
     }
     
-    // Determine sandbox type based on settings and options (lazy Docker check)
-    let sandboxType = options.sandbox;
-    if (sandboxType === 'docker' && !settings.sandbox.enabled) {
-      // If user explicitly selected docker but settings have sandbox disabled, use none
-      sandboxType = 'none';
-    } else if (!options.sandbox || options.sandbox === 'none' || options.sandbox === 'docker') {
-      // If no explicit option, none, or default docker, use settings preference
-      sandboxType = settings.sandbox.enabled ? 'docker' : 'none';
-    }
-    
-    // Docker availability will be checked lazily when actually needed in BaseAgent.runInDocker()
-    
     const agentOptions = {
-      sandbox: sandboxType,
       proxy: proxy,
       shouldStartProxy: shouldStartProxy,
       proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
-        networkAccess: options.network === true
+        sandbox: options.sandbox,
+        sandboxType: options.sandboxType
       }
     };
     const agent = new GeminiAgent(logger, agentOptions);
@@ -208,6 +190,260 @@ program
   });
 
 program
+  .command('codex')
+  .description('Run Codex CLI')
+  .option('-s, --sandbox', 'Enable sandbox mode')
+  .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
+  .allowUnknownOption()
+  .allowExcessArguments()
+  .action(async (options, command) => {
+    const logger = new Logger('codex');
+    const settings = await readSettings();
+    
+    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+    let proxyStarted = false;
+    
+    // Determine if we need to start proxy server later (lazy startup)
+    let shouldStartProxy = false;
+    if (!proxy && settings.proxy.enabled) {
+      proxy = 'http://localhost:8080';
+      shouldStartProxy = !proxyManager.isRunning();
+    }
+    
+    const agentOptions = {
+      proxy: proxy,
+      shouldStartProxy: shouldStartProxy,
+      proxyManager: proxyManager,
+      settings: settings,
+      sandboxOptions: {
+        sandbox: options.sandbox,
+        sandboxType: options.sandboxType
+      }
+    };
+    const agent = new CodexAgent(logger, agentOptions);
+    
+    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    const cleanup = () => {
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    };
+    
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+    process.on('exit', cleanup);
+    
+    const args = command.args || [];
+    try {
+      await agent.run(args);
+    } finally {
+      // Clean up proxy server if we or the agent started it
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    }
+  });
+
+program
+  .command('cursor-agent')
+  .description('Run Cursor Agent')
+  .option('-s, --sandbox', 'Enable sandbox mode')
+  .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
+  .allowUnknownOption()
+  .allowExcessArguments()
+  .action(async (options, command) => {
+    const logger = new Logger('cursor');
+    const settings = await readSettings();
+    
+    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+    let proxyStarted = false;
+    
+    // Determine if we need to start proxy server later (lazy startup)
+    let shouldStartProxy = false;
+    if (!proxy && settings.proxy.enabled) {
+      proxy = 'http://localhost:8080';
+      shouldStartProxy = !proxyManager.isRunning();
+    }
+    
+    const agentOptions = {
+      proxy: proxy,
+      shouldStartProxy: shouldStartProxy,
+      proxyManager: proxyManager,
+      settings: settings,
+      sandboxOptions: {
+        sandbox: options.sandbox,
+        sandboxType: options.sandboxType
+      }
+    };
+    const agent = new CursorAgent(logger, agentOptions);
+    
+    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    const cleanup = () => {
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    };
+    
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+    process.on('exit', cleanup);
+    
+    const args = command.args || [];
+    try {
+      await agent.run(args);
+    } finally {
+      // Clean up proxy server if we or the agent started it
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    }
+  });
+
+program
+  .command('opencode')
+  .description('Run OpenCode CLI')
+  .option('-s, --sandbox', 'Enable sandbox mode')
+  .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
+  .allowUnknownOption()
+  .allowExcessArguments()
+  .action(async (options, command) => {
+    const logger = new Logger('opencode');
+    const settings = await readSettings();
+    
+    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+    let proxyStarted = false;
+    
+    // Determine if we need to start proxy server later (lazy startup)
+    let shouldStartProxy = false;
+    if (!proxy && settings.proxy.enabled) {
+      proxy = 'http://localhost:8080';
+      shouldStartProxy = !proxyManager.isRunning();
+    }
+    
+    const agentOptions = {
+      proxy: proxy,
+      shouldStartProxy: shouldStartProxy,
+      proxyManager: proxyManager,
+      settings: settings,
+      sandboxOptions: {
+        sandbox: options.sandbox,
+        sandboxType: options.sandboxType
+      }
+    };
+    const agent = new OpenCodeAgent(logger, agentOptions);
+    
+    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    const cleanup = () => {
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    };
+    
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+    process.on('exit', cleanup);
+    
+    const args = command.args || [];
+    try {
+      await agent.run(args);
+    } finally {
+      // Clean up proxy server if we or the agent started it
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    }
+  });
+
+// Sandbox management commands
+const sandboxCommand = program
+  .command('sandbox')
+  .description('Manage sandbox environment');
+
+sandboxCommand
+  .command('status')
+  .description('Show sandbox status and configuration')
+  .option('-s, --sandbox', 'Enable sandbox mode')
+  .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
+  .action(async (options) => {
+    const logger = new Logger('sandbox');
+    const settings = await readSettings();
+    
+    const sandboxEngine = new SandboxEngine(process.cwd(), logger);
+    const status = await sandboxEngine.getStatus({
+      sandbox: options.sandbox,
+      sandboxType: options.sandboxType
+    }, settings);
+
+    console.log(chalk.blue('📦 Sandbox Status'));
+    console.log(chalk.gray('─'.repeat(50)));
+    
+    if (!status.enabled) {
+      console.log(`Status: ${chalk.red('DISABLED')}`);
+      console.log(chalk.gray('Use --sandbox flag or set VIBEKIT_SANDBOX=true to enable'));
+    } else {
+      console.log(`Status: ${chalk.green('ENABLED')}`);
+      console.log(`Type: ${chalk.cyan(status.type)}`);
+      console.log(`Source: ${chalk.gray(status.source)}`);
+      
+      if (status.runtime) {
+        console.log(`Runtime: ${chalk.cyan(status.runtime)}`);
+        console.log(`Available: ${status.available ? chalk.green('YES') : chalk.red('NO')}`);
+        
+        if (status.imageName) {
+          console.log(`Image: ${chalk.gray(status.imageName)}`);
+          console.log(`Image Exists: ${status.imageExists ? chalk.green('YES') : chalk.yellow('NO (will be built)')}`);
+        }
+        
+        console.log(`Ready: ${status.ready ? chalk.green('YES') : chalk.yellow('NO')}`);
+      }
+    }
+  });
+
+sandboxCommand
+  .command('build')
+  .description('Build sandbox container image')
+  .action(async () => {
+    const logger = new Logger('sandbox');
+    const DockerSandbox = (await import('./sandbox/docker-sandbox.js')).default;
+    
+    try {
+      const sandbox = new DockerSandbox(process.cwd(), logger);
+      await sandbox.buildImage();
+      console.log(chalk.green('✅ Sandbox image built successfully'));
+    } catch (error) {
+      console.error(chalk.red('❌ Failed to build sandbox image:'), error.message);
+      process.exit(1);
+    }
+  });
+
+sandboxCommand
+  .command('clean')
+  .description('Clean up sandbox containers and images')
+  .action(async () => {
+    const { spawn } = await import('child_process');
+    
+    console.log(chalk.blue('🧹 Cleaning sandbox resources...'));
+    
+    // Remove vibekit sandbox image
+    const cleanup = spawn('docker', ['rmi', '-f', 'vibekit-sandbox:latest'], { stdio: 'ignore' });
+    
+    cleanup.on('close', (code) => {
+      if (code === 0) {
+        console.log(chalk.green('✅ Sandbox resources cleaned'));
+      } else {
+        console.log(chalk.yellow('⚠️  Some resources may not have been cleaned (this is normal if they didn\'t exist)'));
+      }
+    });
+    
+    cleanup.on('error', () => {
+      console.log(chalk.yellow('⚠️  Docker not available for cleanup'));
+    });
+  });
+
+program
   .command('logs')
   .description('View vibekit logs')
   .option('-a, --agent <agent>', 'Filter logs by agent (claude, gemini)')
@@ -217,64 +453,7 @@ program
     await logger.viewLogs(options);
   });
 
-program
-  .command('sync')
-  .description('Sync changes from sandbox back to project')
-  .action(async () => {
-    const logger = new Logger();
-    const dockerSandbox = new Docker(process.cwd(), logger);
-    
-    try {
-      const changes = await dockerSandbox.syncChangesBack();
-      if (changes.length > 0) {
-        console.log(chalk.green(`✓ Synced ${changes.length} files from sandbox`));
-        changes.forEach(file => console.log(chalk.gray(`  - ${file}`)));
-      } else {
-        console.log(chalk.yellow('No changes to sync'));
-      }
-    } catch (error) {
-      console.error(chalk.red('Failed to sync changes:'), error.message);
-    }
-  });
 
-program
-  .command('docker')
-  .description('Manage Docker containers')
-  .option('--stop', 'Stop persistent container')
-  .option('--restart', 'Restart persistent container')
-  .option('--status', 'Show container status')
-  .action(async (options) => {
-    const logger = new Logger();
-    const dockerSandbox = new Docker(process.cwd(), logger);
-    
-    if (options.status) {
-      const isRunning = await dockerSandbox.isPersistentContainerRunning();
-      const exists = await dockerSandbox.checkPersistentContainer();
-      
-      if (isRunning) {
-        console.log(chalk.green('✓ Persistent container is running'));
-      } else if (exists) {
-        console.log(chalk.yellow('⚠ Persistent container exists but is stopped'));
-      } else {
-        console.log(chalk.red('✗ No persistent container found'));
-      }
-    }
-    
-    if (options.stop) {
-      await dockerSandbox.stopPersistentContainer();
-      console.log(chalk.green('✓ Persistent container stopped'));
-    }
-    
-    if (options.restart) {
-      await dockerSandbox.stopPersistentContainer();
-      await dockerSandbox.startPersistentContainer();
-      console.log(chalk.green('✓ Persistent container restarted'));
-    }
-    
-    if (!options.status && !options.stop && !options.restart) {
-      console.log(chalk.blue('Use --status, --stop, or --restart'));
-    }
-  });
 
 const proxyCommand = program
   .command('proxy')
@@ -418,7 +597,7 @@ dashboardCommand
   .option('--open', 'Open dashboard in browser automatically')
   .action(async (options) => {
     const port = parseInt(options.port) || 3001;
-    const { default: dashboardManager } = await import('./dashboard/manager.js');
+    const { default: dashboardManager } = await import('./dashboard/manager.ts');
     const dashboardServer = dashboardManager.getDashboardServer(port);
     
     try {
@@ -433,17 +612,24 @@ dashboardCommand
     }
   });
 
-// Default action for 'dashboard' without subcommand - start the server  
+// Default action for 'dashboard' without subcommand - start the server and open browser
 dashboardCommand
+  .option('-p, --port <number>', 'Port to run dashboard on', '3001')
+  .option('--no-open', 'Do not open browser automatically')
   .action(async (options, command) => {
     // If no subcommand was provided, start the dashboard with default settings
     if (command.args.length === 0) {
-      const port = 3001; // Default port when no subcommand is used
-      const { default: dashboardManager } = await import('./dashboard/manager.js');
+      const port = parseInt(options.port) || 3001;
+      const { default: dashboardManager } = await import('./dashboard/manager.ts');
       const dashboardServer = dashboardManager.getDashboardServer(port);
       
       try {
         await dashboardServer.start();
+        
+        // Open browser by default unless --no-open is specified
+        if (options.open !== false) {
+          await dashboardServer.openInBrowser();
+        }
       } catch (error) {
         console.error(chalk.red('Failed to start dashboard:'), error.message);
         process.exit(1);
@@ -457,9 +643,24 @@ dashboardCommand
   .option('-p, --port <number>', 'Port to stop dashboard on', '3001')
   .action(async (options) => {
     const port = parseInt(options.port) || 3001;
-    const { default: dashboardManager } = await import('./dashboard/manager.js');
+    const { default: dashboardManager } = await import('./dashboard/manager.ts');
     dashboardManager.stop(port);
     console.log(chalk.green(`✅ Dashboard stopped on port ${port}`));
+  });
+
+dashboardCommand
+  .command('update')
+  .description('Update the dashboard to the latest version')
+  .action(async () => {
+    const { default: dashboardManager } = await import('./dashboard/manager.ts');
+    const dashboardServer = dashboardManager.getDashboardServer(3001);
+    
+    try {
+      await dashboardServer.update();
+    } catch (error) {
+      console.error(chalk.red('Failed to update dashboard:'), error.message);
+      process.exit(1);
+    }
   });
 
 program
@@ -634,46 +835,23 @@ program
 
 program
   .command('clean')
-  .description('Clean logs, analytics, and Docker containers')
+  .description('Clean logs and analytics')
   .option('--logs', 'Clean logs only')
-  .option('--docker', 'Clean Docker containers and images only')
   .option('--analytics', 'Clean analytics data only')
   .action(async (options) => {
     const logger = new Logger();
     
-    if (options.logs || (!options.logs && !options.docker && !options.analytics)) {
+    if (options.logs || (!options.logs && !options.analytics)) {
       await logger.cleanLogs();
       console.log(chalk.green('✓ Logs cleaned'));
     }
     
-    if (options.analytics || (!options.logs && !options.docker && !options.analytics)) {
+    if (options.analytics || (!options.logs && !options.analytics)) {
       const os = await import('os');
       const analyticsDir = path.join(os.homedir(), '.vibekit', 'analytics');
       if (await fs.pathExists(analyticsDir)) {
         await fs.remove(analyticsDir);
         console.log(chalk.green('✓ Analytics cleaned'));
-      }
-    }
-    
-
-    if (options.docker || (!options.logs && !options.docker && !options.analytics)) {
-      try {
-        // Stop and remove persistent container
-        const dockerSandbox = new Docker(process.cwd(), logger);
-        await dockerSandbox.stopPersistentContainer();
-        
-        // Clean up Docker containers and images
-        const { spawn } = await import('child_process');
-        
-        // Remove persistent container
-        spawn('docker', ['rm', '-f', 'vibekit-persistent'], { stdio: 'ignore' });
-        
-        // Remove vibekit image
-        spawn('docker', ['image', 'rm', '-f', 'vibekit-sandbox'], { stdio: 'ignore' });
-        
-        console.log(chalk.green('✓ Docker containers and images cleaned'));
-      } catch (error) {
-        console.log(chalk.yellow('⚠ Could not clean Docker resources (Docker may not be installed)'));
       }
     }
   });

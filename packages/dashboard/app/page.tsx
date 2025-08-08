@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -43,6 +44,8 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     const displayNames: Record<string, string> = {
       claude: "claude-code",
       gemini: "gemini-cli",
+      cursor: "cursor",
+      opencode: "opencode",
     };
     return displayNames[agentKey.toLowerCase()] || agentKey;
   };
@@ -85,25 +88,29 @@ function formatDuration(ms: number): string {
 export default function Dashboard() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [recentSessions, setRecentSessions] = useState<AnalyticsSession[]>([]);
+  const [allSessions, setAllSessions] = useState<AnalyticsSession[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const sessionsPerPage = 10;
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
 
-        // Fetch summary data
-        const summaryResponse = await fetch("/api/analytics/summary?days=7");
+        // Fetch summary data (30 days for complete view)
+        const summaryResponse = await fetch("/api/analytics/summary?days=30");
         if (!summaryResponse.ok) throw new Error("Failed to fetch summary");
         const summaryData = await summaryResponse.json();
         setSummary(summaryData);
 
-        // Fetch recent sessions
-        const sessionsResponse = await fetch("/api/analytics?days=7");
+        // Fetch all sessions (30 days for more data)
+        const sessionsResponse = await fetch("/api/analytics?days=30");
         if (!sessionsResponse.ok) throw new Error("Failed to fetch sessions");
         const sessionsData = await sessionsResponse.json();
-        setRecentSessions(sessionsData.slice(0, 10)); // Last 10 sessions
+        setAllSessions(sessionsData);
+        setRecentSessions(sessionsData); // Store all sessions
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
       } finally {
@@ -173,6 +180,7 @@ export default function Dashboard() {
         claude: 0,
         gemini: 0,
         codex: 0,
+        cursor: 0,
         grok: 0,
         opencode: 0,
         ...Object.keys(summary.agentBreakdown).reduce((acc, agent) => {
@@ -295,6 +303,9 @@ export default function Dashboard() {
                     const agentColors: Record<string, string> = {
                       claude: "#ff6b35", // Orange color for Claude
                       gemini: "#4285f4", // Google blue for Gemini
+                      codex: "#6b7280", // Grey color for Codex (works in light/dark)
+                      cursor: "#374151", // Dark grey/black-ish color for Cursor (works in light/dark)
+                      opencode: "#333333", // Dark black color for OpenCode
                     };
                     if (agentColors[agentName.toLowerCase()]) {
                       return agentColors[agentName.toLowerCase()];
@@ -334,6 +345,9 @@ export default function Dashboard() {
                   const agentColors: Record<string, string> = {
                     claude: "#ff6b35", // Orange color for Claude
                     gemini: "#4285f4", // Google blue for Gemini
+                    codex: "#6b7280", // Grey color for Codex (works in light/dark)
+                    cursor: "#374151", // Dark grey/black-ish color for Cursor (works in light/dark)
+                    opencode: "#333333", // Dark black color for OpenCode
                   };
                   if (agentColors[agentName.toLowerCase()]) {
                     return agentColors[agentName.toLowerCase()];
@@ -365,10 +379,15 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Sessions Table */}
+      {/* Sessions Table with Pagination */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium uppercase">Recent Sessions</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium uppercase">All Sessions</CardTitle>
+            <div className="text-sm text-muted-foreground">
+              Total: {allSessions.length} sessions
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -376,6 +395,7 @@ export default function Dashboard() {
               <TableRow>
                 <TableHead className="text-sm font-medium uppercase">Agent</TableHead>
                 <TableHead className="text-sm font-medium uppercase">Status</TableHead>
+                <TableHead className="text-sm font-medium uppercase">Mode</TableHead>
                 <TableHead className="text-sm font-medium uppercase">Duration</TableHead>
                 <TableHead className="text-sm font-medium uppercase">Files Changed</TableHead>
                 <TableHead className="text-sm font-medium uppercase">Project</TableHead>
@@ -385,21 +405,57 @@ export default function Dashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recentSessions.map((session, index) => (
+              {(() => {
+                const indexOfLastSession = currentPage * sessionsPerPage;
+                const indexOfFirstSession = indexOfLastSession - sessionsPerPage;
+                const currentSessions = allSessions.slice(indexOfFirstSession, indexOfLastSession);
+                
+                return currentSessions.map((session, index) => (
                 <TableRow key={`${session.sessionId}-${session.startTime}-${index}`}>
                   <TableCell>
                     <Badge variant="outline" className="flex items-center gap-1.5">
                       {session.agentName.toLowerCase() === 'claude' && (
-                        <img
+                        <Image
                           src="/claude-color.png"
                           alt="Claude"
+                          width={12}
+                          height={12}
                           className="w-3 h-3"
                         />
                       )}
                       {session.agentName.toLowerCase() === 'gemini' && (
-                        <img
+                        <Image
                           src="/gemini-color.png"
                           alt="Gemini"
+                          width={12}
+                          height={12}
+                          className="w-3 h-3"
+                        />
+                      )}
+                      {session.agentName.toLowerCase() === 'codex' && (
+                        <Image
+                          src="/codex.svg"
+                          alt="Codex"
+                          width={12}
+                          height={12}
+                          className="w-3 h-3 dark:invert"
+                        />
+                      )}
+                      {session.agentName.toLowerCase() === 'cursor' && (
+                        <Image
+                          src="/cursor.svg"
+                          alt="Cursor"
+                          width={12}
+                          height={12}
+                          className="w-3 h-3"
+                        />
+                      )}
+                      {session.agentName.toLowerCase() === 'opencode' && (
+                        <Image
+                          src="/opencode.webp"
+                          alt="OpenCode"
+                          width={12}
+                          height={12}
                           className="w-3 h-3"
                         />
                       )}
@@ -408,6 +464,9 @@ export default function Dashboard() {
                           const displayNames: Record<string, string> = {
                             claude: "claude-code",
                             gemini: "gemini-cli",
+                            codex: "codex",
+                            cursor: "cursor",
+                            opencode: "opencode",
                           };
                           return displayNames[session.agentName.toLowerCase()] || session.agentName;
                         })()}
@@ -420,6 +479,14 @@ export default function Dashboard() {
                       className={`text-sm ${session.status === 'active' ? 'bg-green-100 text-green-800 border-green-200' : ''}`}
                     >
                       {session.status || 'terminated'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant={session.executionMode === 'sandbox' ? 'default' : 'outline'}
+                      className={`text-sm ${session.executionMode === 'sandbox' ? 'bg-blue-100 text-blue-800 border-blue-200' : ''}`}
+                    >
+                      {session.executionMode || 'local'}
                     </Badge>
                   </TableCell>
                   <TableCell>{formatDuration(session.duration || 0)}</TableCell>
@@ -443,9 +510,64 @@ export default function Dashboard() {
                     {new Date(session.startTime).toLocaleString()}
                   </TableCell>
                 </TableRow>
-              ))}
+              ))})()}
             </TableBody>
           </Table>
+          
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-between space-x-2 py-4">
+            <div className="text-sm text-muted-foreground">
+              Showing {((currentPage - 1) * sessionsPerPage) + 1} to{" "}
+              {Math.min(currentPage * sessionsPerPage, allSessions.length)} of{" "}
+              {allSessions.length} sessions
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 text-sm font-medium rounded-md border border-border hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              
+              {/* Page numbers */}
+              <div className="flex space-x-1">
+                {Array.from({ length: Math.ceil(allSessions.length / sessionsPerPage) }, (_, i) => i + 1)
+                  .filter(page => {
+                    // Show first page, last page, current page, and pages around current
+                    const totalPages = Math.ceil(allSessions.length / sessionsPerPage);
+                    if (page === 1 || page === totalPages) return true;
+                    if (Math.abs(page - currentPage) <= 1) return true;
+                    return false;
+                  })
+                  .map((page, index, array) => (
+                    <React.Fragment key={page}>
+                      {index > 0 && array[index - 1] < page - 1 && (
+                        <span className="px-2 py-1 text-sm">...</span>
+                      )}
+                      <button
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1 text-sm font-medium rounded-md border ${
+                          currentPage === page
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-border hover:bg-accent'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    </React.Fragment>
+                  ))}
+              </div>
+              
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(allSessions.length / sessionsPerPage)))}
+                disabled={currentPage === Math.ceil(allSessions.length / sessionsPerPage)}
+                className="px-3 py-1 text-sm font-medium rounded-md border border-border hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

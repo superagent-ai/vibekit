@@ -9,6 +9,7 @@ export interface AnalyticsSession {
   endTime: number | null;
   duration: number | null;
   status?: 'active' | 'terminated';
+  executionMode?: 'sandbox' | 'local';
   inputBytes: number;
   outputBytes: number;
   commands: Array<{
