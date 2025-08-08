@@ -12,5 +12,12 @@ export default defineConfig({
   sourcemap: false,
   outDir: "dist",
   treeshake: true, // Enable tree shaking
-  // No external dependencies needed - everything is bundled
+  external: [
+    "@ai-sdk/anthropic",
+    "@ai-sdk/openai", 
+    "@ai-sdk/openai-compatible",
+    "ai",
+    "uuid",
+    "zod"
+  ], // Don't bundle dependencies
 });

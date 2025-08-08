@@ -1,0 +1,125 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getProject, updateProject, deleteProject } from '@/lib/projects';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const project = await getProject(id);
+    
+    if (!project) {
+      return NextResponse.json(
+        { 
+          success: false,
+          data: null,
+          message: 'Project not found' 
+        },
+        { status: 404 }
+      );
+    }
+    
+    return NextResponse.json({
+      success: true,
+      data: project,
+      message: null
+    });
+  } catch (error) {
+    console.error('Failed to fetch project:', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        data: null,
+        message: 'Failed to fetch project' 
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    
+    const project = await updateProject(id, {
+      name: body.name,
+      projectRoot: body.projectRoot,
+      setupScript: body.setupScript,
+      devScript: body.devScript,
+      cleanupScript: body.cleanupScript,
+      tags: body.tags,
+      description: body.description,
+      status: body.status,
+      priority: body.priority
+    });
+    
+    if (!project) {
+      return NextResponse.json(
+        { 
+          success: false,
+          data: null,
+          message: 'Project not found' 
+        },
+        { status: 404 }
+      );
+    }
+    
+    return NextResponse.json({
+      success: true,
+      data: project,
+      message: 'Project updated successfully'
+    });
+  } catch (error) {
+    console.error('Failed to update project:', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        data: null,
+        message: 'Failed to update project' 
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const success = await deleteProject(id);
+    
+    if (!success) {
+      return NextResponse.json(
+        { 
+          success: false,
+          data: null,
+          message: 'Project not found' 
+        },
+        { status: 404 }
+      );
+    }
+    
+    return NextResponse.json({
+      success: true,
+      data: null,
+      message: 'Project deleted successfully'
+    });
+  } catch (error) {
+    console.error('Failed to delete project:', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        data: null,
+        message: 'Failed to delete project' 
+      },
+      { status: 500 }
+    );
+  }
+}
