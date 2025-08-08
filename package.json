@@ -4,7 +4,7 @@
     "type": "module",
     "version": "1.0.0",
     "bin": {
-        "vibekit": "./packages/cli/dist/index.js"
+        "vibekit": "./packages/cli/dist/cli.js"
     },
     "engines": {
         "node": ">=18.0.0"
