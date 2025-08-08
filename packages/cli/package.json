@@ -1,6 +1,6 @@
 {
   "name": "vibekit",
-  "version": "0.0.1-rc.13",
+  "version": "0.0.1-rc.16",
   "description": "Open-source analytics and security middleware for coding agents.",
   "main": "dist/cli.js",
   "type": "module",

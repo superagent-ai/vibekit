@@ -11,22 +11,12 @@ class Config {
         claude: {
           command: 'claude',
           args: [],
-          env: {},
-          sandbox: {
-            enabled: true,
-            autoBackup: true,
-            autoSync: true
-          }
+          env: {}
         },
         gemini: {
           command: 'gemini',
           args: [],
-          env: {},
-          sandbox: {
-            enabled: true,
-            autoBackup: true,
-            autoSync: true
-          }
+          env: {}
         }
       },
       logging: {
@@ -35,17 +25,6 @@ class Config {
         retention: {
           days: 30,
           maxFiles: 100
-        }
-      },
-      sandbox: {
-        defaultEnabled: true,
-        backupOnStart: true,
-        syncOnExit: true,
-        restrictions: {
-          networkAccess: true,
-          fileSystemWrite: true,
-          processExecution: true,
-          maxFileSize: '10MB'
         }
       },
       ui: {
@@ -127,12 +106,7 @@ class Config {
     return this.get(`agents.${agentName}`) || {
       command: agentName,
       args: [],
-      env: {},
-      sandbox: {
-        enabled: true,
-        autoBackup: true,
-        autoSync: true
-      }
+      env: {}
     };
   }
 
@@ -168,7 +142,7 @@ class Config {
       throw new Error('Config not loaded');
     }
 
-    const requiredKeys = ['agents', 'logging', 'sandbox', 'ui'];
+    const requiredKeys = ['agents', 'logging', 'ui'];
     
     for (const key of requiredKeys) {
       if (!(key in this.config)) {

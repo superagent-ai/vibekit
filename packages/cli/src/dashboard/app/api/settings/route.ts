@@ -7,7 +7,7 @@ const settingsPath = path.join(os.homedir(), '.vibekit', 'settings.json');
 
 // Match the exact structure from cli.js readSettings()
 const defaultSettings = {
-  sandbox: { enabled: false },
+  sandbox: { enabled: false, type: 'docker' },
   proxy: { enabled: true, redactionEnabled: true },
   analytics: { enabled: true },
   aliases: { enabled: false }
