@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
+import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 
@@ -9,9 +9,7 @@ export async function POST(request: NextRequest) {
     const currentPath = body.path || os.homedir();
     
     // Validate that the path exists
-    try {
-      await fs.access(currentPath);
-    } catch {
+    if (!await fs.pathExists(currentPath)) {
       return NextResponse.json(
         { 
           success: false,

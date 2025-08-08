@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
@@ -20,12 +19,11 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return []
   },
-  // Minimize static generation
-  trailingSlash: false,
-  // Optimize images
-  images: {
-    unoptimized: true
-  }
+  // Environment variables
+  env: {
+    SKIP_ENV_VALIDATION: 'true',
+    NEXT_TELEMETRY_DISABLED: '1',
+  },
 };
 
 export default nextConfig;
