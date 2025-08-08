@@ -1,45 +1,78 @@
 import { streamText } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import os from 'os';
 
-// Load environment variables from root .env
-// Use absolute path to the root .env file
-const rootPath = '/Users/danziger/code/vibekit/.env';
+// Note: Claude Code Max OAuth tokens are for Claude.ai web interface only
+// They cannot be used with the Anthropic API SDK
+// We need to use standard Anthropic API keys for API access
 
-// Try multiple paths in case we're running from different locations
-const possiblePaths = [
-  rootPath,
-  path.resolve(process.cwd(), '.env'),
-  path.resolve(process.cwd(), '../../../../.env'),
-  path.resolve(__dirname, '../../../../.env'),
-];
+let authMethod = 'none';
+let apiKey: string | undefined;
+let claudeCodeMaxUser: string | undefined;
 
-let apiKey = process.env.ANTHROPIC_API_KEY;
-
-// Try to load from .env files if not already set
-if (!apiKey) {
-  for (const envPath of possiblePaths) {
-    try {
-      const envContent = readFileSync(envPath, 'utf-8');
-      const envVars = dotenv.parse(envContent);
-      if (envVars.ANTHROPIC_API_KEY) {
-        process.env.ANTHROPIC_API_KEY = envVars.ANTHROPIC_API_KEY;
-        apiKey = envVars.ANTHROPIC_API_KEY;
-        console.log('Loaded API key from:', envPath);
-        break;
-      }
-    } catch (e) {
-      // Try next path
+// Check if user has Claude Code Max (for informational purposes only)
+const oauthTokenPath = path.join(os.homedir(), '.vibekit', 'claude-oauth-token.json');
+if (existsSync(oauthTokenPath)) {
+  try {
+    const tokenContent = readFileSync(oauthTokenPath, 'utf-8');
+    const oauthToken = JSON.parse(tokenContent);
+    if (oauthToken.access_token) {
+      claudeCodeMaxUser = oauthToken.account?.email_address;
+      console.log('Claude Code Max account detected for:', claudeCodeMaxUser || 'unknown user');
+      console.log('Note: Claude Code Max tokens cannot be used with the API SDK. Please set ANTHROPIC_API_KEY.');
     }
+  } catch (e) {
+    // Ignore error
+  }
+}
+
+// Load API key from environment or .env files
+{
+  // Load environment variables from root .env
+  const rootPath = '/Users/danziger/code/vibekit/.env';
+
+  // Try multiple paths in case we're running from different locations
+  const possiblePaths = [
+    rootPath,
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), '../../../../.env'),
+    path.resolve(__dirname, '../../../../.env'),
+  ];
+
+  apiKey = process.env.ANTHROPIC_API_KEY;
+
+  // Try to load from .env files if not already set
+  if (!apiKey) {
+    for (const envPath of possiblePaths) {
+      try {
+        const envContent = readFileSync(envPath, 'utf-8');
+        const envVars = dotenv.parse(envContent);
+        if (envVars.ANTHROPIC_API_KEY) {
+          process.env.ANTHROPIC_API_KEY = envVars.ANTHROPIC_API_KEY;
+          apiKey = envVars.ANTHROPIC_API_KEY;
+          authMethod = 'API Key';
+          console.log('Loaded API key from:', envPath);
+          break;
+        }
+      } catch (e) {
+        // Try next path
+      }
+    }
+  } else {
+    authMethod = 'API Key (env)';
   }
 }
 
 export async function POST(req: Request) {
   try {
     console.log('Chat API: Processing request...');
-    console.log('Current working directory:', process.cwd());
+    console.log('Authentication method:', authMethod);
+    if (claudeCodeMaxUser) {
+      console.log('Claude Code Max user detected:', claudeCodeMaxUser);
+    }
     console.log('API Key loaded:', apiKey ? 'Yes (length: ' + apiKey.length + ')' : 'No');
     
     // Parse request

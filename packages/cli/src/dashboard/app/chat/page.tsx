@@ -19,7 +19,7 @@ import {
   PromptInputToolbar,
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { Response } from '@/components/ai-elements/response';
 import { GlobeIcon, Square } from 'lucide-react';
@@ -53,6 +53,20 @@ export default function ChatPage() {
   const [model, setModel] = useState<string>(models[0].value);
   const [webSearch, setWebSearch] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [authStatus, setAuthStatus] = useState<{
+    authMethod: string;
+    claudeCodeMaxUser?: string;
+    isConfigured: boolean;
+    needsApiKey?: boolean;
+  } | null>(null);
+  
+  // Fetch auth status on mount
+  useEffect(() => {
+    fetch('/api/chat/status')
+      .then(res => res.json())
+      .then(data => setAuthStatus(data))
+      .catch(err => console.error('Failed to fetch auth status:', err));
+  }, []);
   
   // Use the AI SDK useChat hook
   const { 
@@ -189,6 +203,35 @@ export default function ChatPage() {
               <p className="text-sm text-gray-500">
                 Powered by Claude AI
               </p>
+              {authStatus && (
+                <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm">
+                  {authStatus.needsApiKey ? (
+                    <div className="space-y-2">
+                      <p className="text-amber-600">
+                        ⚠ Claude Code Max account detected ({authStatus.claudeCodeMaxUser})
+                      </p>
+                      <p className="text-amber-600 text-xs">
+                        Claude Code Max tokens are for Claude.ai only. To use the API, please set ANTHROPIC_API_KEY in your .env file.
+                      </p>
+                    </div>
+                  ) : authStatus.isConfigured ? (
+                    <div className="space-y-1">
+                      <p className="text-green-700">
+                        ✓ Using Anthropic API Key
+                      </p>
+                      {authStatus.claudeCodeMaxUser && (
+                        <p className="text-gray-500 text-xs">
+                          Claude Code Max account: {authStatus.claudeCodeMaxUser}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-red-600">
+                      ⚠ No authentication configured. Please set ANTHROPIC_API_KEY in your .env file.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
