@@ -473,7 +473,8 @@ proxyCommand
 // Dashboard commands
 const dashboardCommand = program
   .command('dashboard')
-  .description('Manage analytics dashboard');
+  .description('Manage analytics dashboard')
+  .option('-p, --port <number>', 'Port to run dashboard on', '3001');
 
 dashboardCommand
   .command('start')
@@ -502,7 +503,7 @@ dashboardCommand
   .action(async (options, command) => {
     // If no subcommand was provided, start the dashboard with default settings
     if (command.args.length === 0) {
-      const port = 3001; // Default port when no subcommand is used
+      const port = parseInt(options.port) || 3001;
       const { default: dashboardManager } = await import('./dashboard/manager.js');
       const dashboardServer = dashboardManager.getDashboardServer(port);
       
