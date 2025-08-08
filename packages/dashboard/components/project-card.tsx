@@ -111,7 +111,7 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
 
           {project.tags && project.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-2">
-              {project.tags.slice(0, 3).map((tag) => (
+              {project.tags.slice(0, 3).map((tag: string) => (
                 <Badge key={tag} variant="outline" className="text-xs">
                   <Tag className="mr-1 h-2 w-2" />
                   {tag}

@@ -137,7 +137,7 @@ function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: S
       </TableCell>
       <TableCell className="hidden lg:table-cell">
         <div className="flex flex-wrap gap-1">
-          {project.tags?.slice(0, 2).map((tag) => (
+          {project.tags?.slice(0, 2).map((tag: string) => (
             <Badge key={tag} variant="outline" className="text-xs">
               {tag}
             </Badge>
@@ -228,7 +228,7 @@ export default function ProjectsPage() {
         project.name.toLowerCase().includes(query) ||
         project.description?.toLowerCase().includes(query) ||
         project.projectRoot.toLowerCase().includes(query) ||
-        project.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+        project.tags?.some((tag: string) => tag.toLowerCase().includes(query)) ||
         project.status.toLowerCase().includes(query)
       );
     }
@@ -244,7 +244,7 @@ export default function ProjectsPage() {
           
         case 'priority':
           // Sort by priority (high > medium > low)
-          const priorityOrder = { high: 0, medium: 1, low: 2 };
+          const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
           const priorityA = priorityOrder[a.priority || 'medium'];
           const priorityB = priorityOrder[b.priority || 'medium'];
           if (priorityA !== priorityB) return priorityA - priorityB;
@@ -800,7 +800,7 @@ export default function ProjectsPage() {
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       <div className="flex flex-wrap gap-1">
-                        {project.tags?.slice(0, 2).map((tag) => (
+                        {project.tags?.slice(0, 2).map((tag: string) => (
                           <Badge key={tag} variant="outline" className="text-xs">
                             {tag}
                           </Badge>
