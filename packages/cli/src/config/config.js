@@ -17,6 +17,11 @@ class Config {
           command: 'gemini',
           args: [],
           env: {}
+        },
+        codex: {
+          command: 'codex',
+          args: [],
+          env: {}
         }
       },
       logging: {
