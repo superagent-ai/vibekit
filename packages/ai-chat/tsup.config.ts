@@ -27,7 +27,7 @@ export default defineConfig([
     splitting: false,
     sourcemap: true,
     outDir: 'dist/components',
-    external: ['react', 'react-dom', ...workspacePackages],
+    external: ['react', 'react-dom', 'katex/dist/katex.min.css', ...workspacePackages],
   },
   // Hooks build
   {

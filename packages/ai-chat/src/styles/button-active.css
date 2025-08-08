@@ -1,0 +1,18 @@
+/* Button active state styles */
+button[data-active="true"],
+.button-active {
+  background-color: #3b82f6 !important;
+  color: white !important;
+  border-color: #3b82f6 !important;
+}
+
+button[data-active="true"] svg,
+.button-active svg {
+  color: white !important;
+}
+
+button[data-active="true"]:hover,
+.button-active:hover {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+}

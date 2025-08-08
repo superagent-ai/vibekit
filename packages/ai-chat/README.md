@@ -17,6 +17,36 @@ AI chat package with MCP integration for VibeKit. Provides a complete chat solut
 npm install @vibe-kit/ai-chat
 ```
 
+### CSS Setup
+
+This package uses Tailwind CSS with CSS variables for theming. To use the components with proper styling:
+
+1. **Import the CSS file** in your app's main CSS file or entry point:
+
+```css
+/* In your app's global CSS file */
+@import '@vibe-kit/ai-chat/dist/styles/globals.css';
+```
+
+Or in your JavaScript/TypeScript entry point:
+
+```javascript
+import '@vibe-kit/ai-chat/dist/styles/globals.css';
+```
+
+2. **Ensure Tailwind CSS is configured** in your project with CSS variables support.
+
+3. **The package includes these CSS variables** that you can customize:
+
+```css
+/* Light mode */
+--background, --foreground, --card, --card-foreground,
+--popover, --popover-foreground, --primary, --primary-foreground,
+--secondary, --secondary-foreground, --muted, --muted-foreground,
+--accent, --accent-foreground, --destructive, --destructive-foreground,
+--border, --input, --ring
+```
+
 ## Authentication
 
 The package supports two authentication methods:

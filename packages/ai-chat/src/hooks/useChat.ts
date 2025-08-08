@@ -20,15 +20,17 @@ export function useChat(options: UseChatOptions = {}) {
   } = options;
 
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);
+  const [input, setInput] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Use the AI SDK's useChat hook
   const aiChatResult = useAIChat({
-    onError: (error) => {
+    api,
+    onError: (error: Error) => {
       console.error('Chat error:', error);
       onError?.(error);
     },
-    onFinish: (data) => {
+    onFinish: (data: any) => {
       if (data?.message) {
         const msg = data.message as any;
         const chatMessage: ChatMessage = {
@@ -41,7 +43,10 @@ export function useChat(options: UseChatOptions = {}) {
         onFinish?.(chatMessage);
       }
     },
-  });
+  } as any);
+  
+  // Debug: Log what we got from useAIChat
+  console.log('AI Chat Result:', aiChatResult);
 
   // Extract properties with defaults for those that might not exist
   const {
@@ -55,10 +60,24 @@ export function useChat(options: UseChatOptions = {}) {
   const append = (aiChatResult as any).append;
   const reload = (aiChatResult as any).reload;
   const isLoading = (aiChatResult as any).isLoading ?? false;
-  const input = (aiChatResult as any).input ?? '';
-  const setInput = (aiChatResult as any).setInput ?? (() => {});
-  const handleInputChange = (aiChatResult as any).handleInputChange ?? (() => {});
-  const aiHandleSubmit = (aiChatResult as any).handleSubmit ?? (() => {});
+  const sendMessage = (aiChatResult as any).sendMessage;
+  const status = (aiChatResult as any).status ?? 'ready';
+  
+  // Check what's actually available
+  if (typeof window !== 'undefined') {
+    console.log('Available methods:', {
+      append: typeof append,
+      sendMessage: typeof sendMessage,
+      reload: typeof reload,
+      status,
+      appendFunc: append?.toString?.().substring(0, 100),
+    });
+  }
+  
+  // Handle input change
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+  }, []);
 
   const createNewSession = useCallback(async () => {
     try {
@@ -122,15 +141,10 @@ export function useChat(options: UseChatOptions = {}) {
     }
   }, [api, sessionId, setMessages, onError]);
 
-  // Wrap handleSubmit to include sessionId in body
-  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
+  // Wrap handleSubmit to send message
+  const handleSubmit = useCallback(async (e?: React.FormEvent, options?: { body?: any }) => {
     if (e) {
       e.preventDefault();
-    }
-    
-    if (!sessionId) {
-      console.error('No session ID available');
-      return;
     }
     
     if (!input.trim()) {
@@ -140,15 +154,46 @@ export function useChat(options: UseChatOptions = {}) {
     // Create new abort controller for this request
     abortControllerRef.current = new AbortController();
     
-    // Use the AI SDK's handleSubmit with extra body data
-    if (aiHandleSubmit) {
-      aiHandleSubmit(e, {
-        body: {
-          sessionId,
-        },
+    // Prepare body with additional options
+    const body: any = { ...options?.body };
+    if (sessionId) {
+      body.sessionId = sessionId;
+    }
+    
+    // Try to send the message using available methods
+    if (sendMessage && typeof sendMessage === 'function') {
+      // AI SDK v3+ uses sendMessage
+      try {
+        sendMessage(input, { body });
+        setInput('');
+      } catch (error) {
+        console.error('sendMessage failed:', error);
+      }
+    } else if (append && typeof append === 'function') {
+      // Fallback to append - it might expect different formats
+      try {
+        // The append function signature varies - try the most common format
+        // append(message, options)
+        append({
+          role: 'user',
+          content: input
+        }, { 
+          options: { body }
+        });
+        setInput('');
+      } catch (error) {
+        console.error('append failed:', error);
+        onError?.(error as Error);
+      }
+    } else {
+      console.error('No send method available:', {
+        hasSendMessage: !!sendMessage,
+        hasAppend: !!append,
+        typeOfSendMessage: typeof sendMessage,
+        typeOfAppend: typeof append,
       });
     }
-  }, [sessionId, input, aiHandleSubmit]);
+  }, [sessionId, input, sendMessage, append]);
 
   const stop = useCallback(() => {
     if (abortControllerRef.current) {
@@ -203,12 +248,14 @@ export function useChat(options: UseChatOptions = {}) {
     // Message handling
     messages: chatMessages,
     input,
+    setInput,
     handleInputChange,
     handleSubmit,
     
     // State
     isLoading,
     error,
+    status,
     
     // Actions
     stop,
