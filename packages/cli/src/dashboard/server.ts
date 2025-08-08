@@ -1,6 +1,11 @@
 import { spawn, ChildProcess } from "child_process";
-import { join } from "path";
+import { dirname } from "path";
+import { fileURLToPath } from "url";
 import chalk from "chalk";
+
+// Get the directory of this file
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 interface DashboardStatus {
   running: boolean;
@@ -32,13 +37,16 @@ class DashboardServer {
         chalk.blue(`🚀 Starting analytics dashboard on port ${this.port}...`)
       );
 
-      // Dashboard directory path - use the source directory
-      const dashboardDir = join(process.cwd(), "src", "dashboard");
+      // Dashboard directory path - resolved relative to this file's location
+      // Since this file is in packages/cli/src/dashboard/server.ts,
+      // the dashboard directory is the current directory
+      const dashboardDir = __dirname;
 
       // Start dashboard using npm run dev
+      // Next.js expects -p flag for port, not --port
       this.process = spawn(
         "npm",
-        ["run", "dev", "--", "--port", this.port.toString()],
+        ["run", "dev", "--", "-p", this.port.toString()],
         {
           cwd: dashboardDir,
           stdio: ["pipe", "pipe", "pipe"],
@@ -99,9 +107,11 @@ class DashboardServer {
           this.process = null;
 
           if (code !== 0 && !hasStarted) {
-            reject(new Error(`Dashboard process exited with code ${code}`));
-          } else if (code !== 0) {
-            console.log(chalk.yellow(`📊 Dashboard stopped (code: ${code})`));
+            const reason = signal ? `signal ${signal}` : `code ${code}`;
+            reject(new Error(`Dashboard process exited with ${reason}`));
+          } else if (code !== 0 || signal) {
+            const reason = signal ? `signal: ${signal}` : `code: ${code}`;
+            console.log(chalk.yellow(`📊 Dashboard stopped (${reason})`));
           }
         }
       );
