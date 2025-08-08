@@ -33,3 +33,6 @@ export * from './factory';
 
 // Plugin system for extensibility  
 export * from './plugins';
+
+// API handlers
+export { POST as chatHandler } from './api/chat';

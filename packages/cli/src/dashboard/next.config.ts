@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Load environment variables from root .env file
+  env: {
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
+  },
   // Configure webpack to resolve @vibe-kit/projects
   webpack: (config) => {
     if (!config.resolve) {

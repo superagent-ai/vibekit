@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import '../styles/button-active.css';
-import { useChat as useAIChat } from 'ai/react';
-import { useState as useStateReact } from 'react';
+import { useChat as useAIChat } from '@ai-sdk/react';
 import { GlobeIcon } from 'lucide-react';
 import { cn } from '../utils/cn';
 import {
@@ -51,174 +50,54 @@ const models = [
   { name: 'GPT-4o', value: 'gpt-4o' },
 ];
 
-// Override fetch to log requests
-if (typeof window !== 'undefined') {
-  const originalFetch = window.fetch;
-  window.fetch = async (...args) => {
-    console.log('=== FETCH INTERCEPTED ===');
-    console.log('URL:', args[0]);
-    console.log('Method:', args[1]?.method || 'GET');
-    console.log('Body:', args[1]?.body);
-    console.log('Headers:', args[1]?.headers);
-    
-    try {
-      const response = await originalFetch(...args);
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-      console.log('Response type:', response.type);
-      
-      // Clone response to read body without consuming it
-      const cloned = response.clone();
-      
-      // Try to read error if not ok
-      if (!response.ok) {
-        try {
-          const text = await cloned.text();
-          console.error('Response error body:', text);
-        } catch (e) {
-          console.error('Could not read error body');
-        }
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('Fetch error:', error);
-      console.error('Fetch error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-      });
-      throw error;
-    }
-  };
-}
 
 export function ChatInterface({ 
   sessionId: initialSessionId, 
   className,
-  api = 'http://localhost:3001/api/chat',
+  api = '/api/chat',
   showMCPTools = true 
 }: ChatInterfaceProps) {
   const [model, setModel] = useState<string>(models[0].value);
   const [webSearch, setWebSearch] = useState(false);
+  const [sessionId] = useState(() => initialSessionId || crypto.randomUUID());
   
-  // Debug: Log state changes and render
-  React.useEffect(() => {
-    console.log('WebSearch state is now:', webSearch);
-    console.log('Button should be:', webSearch ? 'BLUE/ACTIVE' : 'DEFAULT');
-  }, [webSearch]);
-  
+  // Local state for input since v5 doesn't provide it
+  const [input, setInput] = useState('');
+
   // Use the AI SDK's useChat hook directly
-  const chatResult = useAIChat({
+  const { 
+    messages = [],
+    sendMessage,
+    status,
+    error,
+  } = useAIChat({
     api,
     body: {
+      sessionId,
       model,
       webSearch,
     },
-    streamProtocol: 'text', // Use text protocol for simple responses
-    onResponse: (response) => {
-      console.log('Got response:', response);
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-    },
-    onFinish: (message) => {
-      console.log('Finished with message:', message);
-    },
-    onError: (error) => {
-      console.error('=== useChat onError ===');
-      console.error('Full error:', error);
-      if (error instanceof Error) {
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-        console.error('Error name:', error.name);
-      }
-      if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response text:', error.response.statusText);
-      }
-    },
   });
-  
-  console.log('useAIChat result:', chatResult);
-  console.log('Available methods:', Object.keys(chatResult));
-  
-  const { 
-    messages = [], 
-    append,
-    isLoading = false,
-    error,
-    input: chatInput = '',
-    handleInputChange: chatHandleInputChange,
-    handleSubmit: chatHandleSubmit,
-  } = chatResult || {};
-  
-  // Log whenever messages change
-  React.useEffect(() => {
-    if (messages && Array.isArray(messages)) {
-      console.log('=== MESSAGES CHANGED ===');
-      console.log('Total messages:', messages.length);
-      console.log('Messages array:', messages);
-    }
-  }, [messages]);
 
-  // Debug: Log hook state
-  React.useEffect(() => {
-    console.log('=== Chat State Update ===');
-    console.log('Messages count:', messages?.length || 0);
-    console.log('Is Loading:', isLoading);
-    console.log('Error:', error);
-    console.log('API URL:', api);
-    console.log('Current settings:', { model, webSearch });
-    
-    if (messages && messages.length > 0) {
-      console.log('All messages:', messages);
-      messages.forEach((msg, i) => {
-        console.log(`Message ${i}:`, {
-          role: msg.role,
-          content: msg.content,
-          id: msg.id
-        });
-      });
-    }
-    
-    if (error) {
-      console.error('=== CHAT ERROR ===');
-      console.error('Message:', error?.message);
-      console.error('Stack:', error?.stack);
-      console.error('Full error object:', error);
-    }
-  }, [messages, isLoading, error, api, model, webSearch]);
+  const isLoading = status === 'loading' || status === 'streaming';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Submit triggered with:', {
-      chatInput,
-      isLoading,
-      model,
-      webSearch,
-      api,
-    });
-    
-    if (chatInput?.trim() && !isLoading) {
-      console.log('Calling chatHandleSubmit...');
+    if (input.trim() && !isLoading && sendMessage) {
       try {
-        await chatHandleSubmit(e);
-        console.log('chatHandleSubmit completed');
-      } catch (error) {
-        console.error('Error in handleSubmit:', error);
-        console.error('Error type:', typeof error);
-        console.error('Error details:', {
-          message: error?.message,
-          stack: error?.stack,
-          name: error?.name,
+        await sendMessage({
+          role: 'user',
+          content: input.trim(),
         });
+        setInput('');
+      } catch (error) {
+        console.error('Error sending message:', error);
       }
-    } else {
-      console.log('Not sending - empty input or loading:', { 
-        inputEmpty: !chatInput?.trim(), 
-        isLoading 
-      });
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
   };
 
   return (
@@ -236,9 +115,7 @@ export function ChatInterface({
             </div>
           ) : (
             <>
-              {messages && messages.map((message) => {
-                console.log('Rendering message:', message);
-                return (
+              {messages && messages.map((message) => (
                   <Message key={message.id} from={message.role as 'user' | 'assistant'}>
                     <MessageContent>
                       {/* Handle reasoning content if present */}
@@ -322,8 +199,7 @@ export function ChatInterface({
                     )}
                     </MessageContent>
                   </Message>
-                );
-              })}
+              ))}
               
               {/* Show loading indicator */}
               {isLoading && (
@@ -341,14 +217,8 @@ export function ChatInterface({
 
       <PromptInput onSubmit={handleSubmit} className="mt-4">
         <PromptInputTextarea
-          value={chatInput || ''}
-          onChange={(e) => {
-            if (chatHandleInputChange) {
-              chatHandleInputChange(e);
-            } else {
-              console.log('No handleInputChange available');
-            }
-          }}
+          value={input}
+          onChange={handleInputChange}
           placeholder="Type a message..."
         />
         <PromptInputToolbar>
@@ -396,7 +266,7 @@ export function ChatInterface({
             </PromptInputModelSelect>
           </PromptInputTools>
           <PromptInputSubmit
-            disabled={!chatInput?.trim() || isLoading}
+            disabled={!input?.trim() || isLoading}
             status={isLoading ? 'streaming' : 'ready'}
           />
         </PromptInputToolbar>
