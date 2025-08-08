@@ -20,8 +20,9 @@ import {
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
 import { useState } from 'react';
+import { useChat } from '@ai-sdk/react';
 import { Response } from '@/components/ai-elements/response';
-import { GlobeIcon } from 'lucide-react';
+import { GlobeIcon, Square } from 'lucide-react';
 import {
   Source,
   Sources,
@@ -35,65 +36,102 @@ import {
 } from '@/components/ai-elements/reasoning';
 import { Loader } from '@/components/ai-elements/loader';
 import { AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 
 const models = [
   {
-    name: 'GPT 4o',
-    value: 'openai/gpt-4o',
+    name: 'Claude 3.5 Sonnet',
+    value: 'claude-3-5-sonnet-20241022',
   },
   {
-    name: 'Claude 3.5 Sonnet',
-    value: 'anthropic/claude-3-5-sonnet',
+    name: 'Claude 3.5 Haiku', 
+    value: 'claude-3-5-haiku-20241022',
   },
 ];
 
 export default function ChatPage() {
-  const [input, setInput] = useState('');
   const [model, setModel] = useState<string>(models[0].value);
   const [webSearch, setWebSearch] = useState(false);
+  const [inputValue, setInputValue] = useState('');
   
-  // Mock messages for UI testing
-  const [messages, setMessages] = useState<Array<{
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    reasoning?: string;
-    sources?: Array<{ title: string; url: string }>;
-  }>>([]);
-  
-  const [status, setStatus] = useState<'idle' | 'loading'>('idle');
+  // Use the AI SDK useChat hook
+  const { 
+    messages, 
+    sendMessage,
+    status,
+    error,
+    stop,
+  } = useChat({
+    onError: (error) => {
+      console.error('Chat error:', error);
+    },
+    onFinish: (message) => {
+      console.log('Message completed:', message);
+    },
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && status !== 'loading') {
-      // Add user message
-      const userMessage = {
-        id: Date.now().toString(),
-        role: 'user' as const,
-        content: input,
-      };
-      
-      setMessages(prev => [...prev, userMessage]);
-      setInput('');
-      setStatus('loading');
-      
-      // Simulate assistant response after a delay
-      setTimeout(() => {
-        const assistantMessage = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant' as const,
-          content: `This is a mock response to: "${userMessage.content}". The UI is working correctly!`,
-          reasoning: 'This is example reasoning text that would show the AI\'s thought process.',
-          sources: webSearch ? [
-            { title: 'Example Source 1', url: 'https://example.com/1' },
-            { title: 'Example Source 2', url: 'https://example.com/2' },
-          ] : undefined,
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-        setStatus('idle');
-      }, 1500);
+    console.log('Submitting with input:', inputValue, 'status:', status);
+    
+    if (inputValue.trim() && status !== 'streaming') {
+      // Send message with custom data
+      await sendMessage({
+        role: 'user',
+        content: inputValue,
+      }, {
+        data: {
+          model,
+          showMCPTools: webSearch,
+        },
+      });
+      setInputValue('');
     }
   };
+
+  // Parse reasoning and sources from message metadata if available
+  const getMessageExtras = (message: any) => {
+    // This could be enhanced based on how your API returns reasoning/sources
+    const extras: { reasoning?: string; sources?: Array<{ title: string; url: string }> } = {};
+    
+    // Check for reasoning in tool invocations or metadata
+    if (message.toolInvocations?.some((t: any) => t.toolName === 'reasoning')) {
+      extras.reasoning = message.toolInvocations.find((t: any) => t.toolName === 'reasoning')?.result;
+    }
+    
+    // Check for sources
+    if (message.toolInvocations?.some((t: any) => t.toolName === 'web_search')) {
+      const searchResults = message.toolInvocations.find((t: any) => t.toolName === 'web_search')?.result;
+      if (searchResults && Array.isArray(searchResults)) {
+        extras.sources = searchResults.map((r: any) => ({
+          title: r.title || 'Source',
+          url: r.url || '#',
+        }));
+      }
+    }
+    
+    return extras;
+  };
+
+  // Get message content as string
+  const getMessageContent = (message: any): string => {
+    // Handle different content types
+    if (typeof message.parts?.[0]?.text === 'string') {
+      return message.parts[0].text;
+    }
+    if (typeof message.parts?.[0] === 'string') {
+      return message.parts[0];
+    }
+    if (typeof message.text === 'string') {
+      return message.text;
+    }
+    if (typeof message.content === 'string') {
+      return message.content;
+    }
+    return '';
+  };
+
+  const isLoading = status === 'streaming' || status === 'awaiting_message';
 
   return (
     <Conversation className="h-screen relative">
@@ -125,47 +163,63 @@ export default function ChatPage() {
                   <span>View AI reasoning by expanding the thought process</span>
                 </li>
               </ul>
-              <p className="text-sm text-gray-500">
-                (This is currently in demo mode - responses are simulated)
-              </p>
+              {process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY ? (
+                <p className="text-sm text-green-600">
+                  ✓ Connected to Anthropic API
+                </p>
+              ) : (
+                <p className="text-sm text-amber-600">
+                  ⚠ Set ANTHROPIC_API_KEY to enable AI responses
+                </p>
+              )}
             </div>
           </div>
         )}
-        {messages.map((message) => (
-          <Message key={message.id} role={message.role}>
-            <MessageAvatar>
-              <AvatarFallback>
-                {message.role === 'user' ? 'U' : 'AI'}
-              </AvatarFallback>
-            </MessageAvatar>
-            <MessageContent>
-              {message.role === 'user' ? (
-                <div className="prose">{message.content}</div>
-              ) : (
-                <>
-                  {message.reasoning && (
-                    <Reasoning>
-                      <ReasoningTrigger />
-                      <ReasoningContent>{message.reasoning}</ReasoningContent>
-                    </Reasoning>
-                  )}
-                  <Response>{message.content}</Response>
-                  {message.sources && message.sources.length > 0 && (
-                    <Sources>
-                      <SourcesTrigger />
-                      <SourcesContent>
-                        {message.sources.map((source, index) => (
-                          <Source key={index} title={source.title} url={source.url} />
-                        ))}
-                      </SourcesContent>
-                    </Sources>
-                  )}
-                </>
-              )}
-            </MessageContent>
-          </Message>
-        ))}
-        {status === 'loading' && (
+        
+        {messages.map((message) => {
+          const extras = getMessageExtras(message);
+          const content = getMessageContent(message);
+          
+          // Skip messages with 'data' role
+          if (message.role === 'data') return null;
+            
+          return (
+            <Message key={message.id} role={message.role}>
+              <MessageAvatar>
+                <AvatarFallback>
+                  {message.role === 'user' ? 'U' : 'AI'}
+                </AvatarFallback>
+              </MessageAvatar>
+              <MessageContent>
+                {message.role === 'user' ? (
+                  <div className="prose">{content}</div>
+                ) : (
+                  <>
+                    {extras.reasoning && (
+                      <Reasoning>
+                        <ReasoningTrigger />
+                        <ReasoningContent>{extras.reasoning}</ReasoningContent>
+                      </Reasoning>
+                    )}
+                    <Response>{content}</Response>
+                    {extras.sources && extras.sources.length > 0 && (
+                      <Sources>
+                        <SourcesTrigger />
+                        <SourcesContent>
+                          {extras.sources.map((source, index) => (
+                            <Source key={index} title={source.title} href={source.url} />
+                          ))}
+                        </SourcesContent>
+                      </Sources>
+                    )}
+                  </>
+                )}
+              </MessageContent>
+            </Message>
+          );
+        })}
+        
+        {isLoading && (
           <Message role="assistant">
             <MessageAvatar>
               <AvatarFallback>AI</AvatarFallback>
@@ -175,16 +229,29 @@ export default function ChatPage() {
             </MessageContent>
           </Message>
         )}
+        
+        {error && (
+          <div className="p-4 mb-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600 font-semibold">Error</p>
+            <p className="text-red-500 text-sm">{error.message || 'An error occurred'}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-2 px-3 py-1 text-sm bg-red-100 hover:bg-red-200 rounded"
+            >
+              Refresh Page
+            </button>
+          </div>
+        )}
       </ConversationContent>
       
       <ConversationScrollButton />
       
       <PromptInput onSubmit={handleSubmit}>
         <PromptInputTextarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
           placeholder="Send a message..."
-          disabled={status === 'loading'}
+          disabled={isLoading}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -201,7 +268,7 @@ export default function ChatPage() {
               <GlobeIcon className="h-4 w-4" />
             </PromptInputButton>
             <PromptInputModelSelect value={model} onValueChange={setModel}>
-              <PromptInputModelSelectTrigger className="w-[150px]">
+              <PromptInputModelSelectTrigger className="w-[180px]">
                 <PromptInputModelSelectValue />
               </PromptInputModelSelectTrigger>
               <PromptInputModelSelectContent>
@@ -213,7 +280,18 @@ export default function ChatPage() {
               </PromptInputModelSelectContent>
             </PromptInputModelSelect>
           </PromptInputTools>
-          <PromptInputSubmit disabled={!input.trim() || status === 'loading'} />
+          {isLoading ? (
+            <Button
+              type="button"
+              onClick={stop}
+              size="icon"
+              variant="destructive"
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <PromptInputSubmit disabled={!inputValue.trim() || isLoading} />
+          )}
         </PromptInputToolbar>
       </PromptInput>
     </Conversation>

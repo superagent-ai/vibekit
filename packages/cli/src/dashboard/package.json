@@ -38,6 +38,7 @@
     "chokidar": "^4.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.1",
     "embla-carousel-react": "^8.6.0",
     "harden-react-markdown": "^1.0.2",
     "katex": "^0.16.22",
