@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from "child_process";
-import { dirname } from "path";
+import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import chalk from "chalk";
 
@@ -37,16 +37,17 @@ class DashboardServer {
         chalk.blue(`🚀 Starting analytics dashboard on port ${this.port}...`)
       );
 
-      // Dashboard directory path - resolved relative to this file's location
-      // Since this file is in packages/cli/src/dashboard/server.ts,
-      // the dashboard directory is the current directory
-      const dashboardDir = __dirname;
+      // Dashboard directory path - need to handle both source and dist locations
+      // When running from dist, we need to navigate to the source dashboard directory
+      const dashboardDir = __dirname.includes('dist') 
+        ? join(__dirname, '..', 'src', 'dashboard')
+        : __dirname;
 
-      // Start dashboard using npm run dev
-      // Next.js expects -p flag for port, not --port
+      // Start dashboard using npx next dev directly to avoid npm script resolution issues
+      // Next.js expects -p flag for port
       this.process = spawn(
-        "npm",
-        ["run", "dev", "--", "-p", this.port.toString()],
+        "npx",
+        ["next", "dev", "--turbopack", "-p", this.port.toString()],
         {
           cwd: dashboardDir,
           stdio: ["pipe", "pipe", "pipe"],

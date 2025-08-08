@@ -36,3 +36,6 @@ export * from './plugins';
 
 // API handlers
 export { POST as chatHandler } from './api/chat';
+
+// Components (re-export for convenience)
+export * from './components';
