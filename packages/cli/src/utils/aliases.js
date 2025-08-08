@@ -24,7 +24,8 @@ export async function installGlobalAliases() {
   // This works for both local development (npx vibekit) and global installs
   const aliases = [
     { name: 'claude', command: `"vibekit claude"` },
-    { name: 'gemini', command: `"vibekit gemini"` }
+    { name: 'gemini', command: `"vibekit gemini"` },
+    { name: 'codex', command: `"vibekit codex"` }
   ];
   
   const shellConfigPaths = getShellConfigPaths();
@@ -46,7 +47,7 @@ export async function installGlobalAliases() {
 
 // Remove all conflicting aliases (more robust than uninstallGlobalAliases)
 export async function removeAllConflictingAliases() {
-  const aliases = ['claude', 'gemini'];
+  const aliases = ['claude', 'gemini', 'codex'];
   const shellConfigPaths = getShellConfigPaths();
   
   for (const configPath of shellConfigPaths) {
@@ -66,7 +67,7 @@ export async function removeAllConflictingAliases() {
         }
         
         // Skip alias lines that follow VibeKit comments
-        if (skipNext && (line.includes('alias claude=') || line.includes('alias gemini='))) {
+        if (skipNext && (line.includes('alias claude=') || line.includes('alias gemini=') || line.includes('alias codex='))) {
           skipNext = false;
           continue;
         }
@@ -117,7 +118,7 @@ export async function checkAliasesInCurrentShell() {
     const shellName = path.basename(shell);
     
     // Check if aliases are defined and working
-    const checkProcess = spawn(shellName, ['-i', '-c', 'alias claude 2>/dev/null && alias gemini 2>/dev/null && echo "ALIASES_OK"'], {
+    const checkProcess = spawn(shellName, ['-i', '-c', 'alias claude 2>/dev/null && alias gemini 2>/dev/null && alias codex 2>/dev/null && echo "ALIASES_OK"'], {
       stdio: 'pipe'
     });
     
@@ -129,6 +130,7 @@ export async function checkAliasesInCurrentShell() {
     checkProcess.on('close', () => {
       const hasValidAliases = output.includes('vibekit claude') && 
                              output.includes('vibekit gemini') && 
+                             output.includes('vibekit codex') && 
                              output.includes('ALIASES_OK');
       resolve(hasValidAliases);
     });

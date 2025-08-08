@@ -1,7 +1,7 @@
 {
   "name": "vibekit",
-  "version": "0.0.1-rc.16",
-  "description": "Open-source analytics and security middleware for coding agents.",
+  "version": "0.0.1-rc.19",
+  "description": "Run Claude Code, Gemini, Codex — or any coding agent — in a clean, isolated sandbox with sensitive data redaction and observability baked in.",
   "main": "dist/cli.js",
   "type": "module",
   "bin": {
