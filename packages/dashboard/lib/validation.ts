@@ -86,7 +86,7 @@ export function sanitizeProjectData(data: any) {
     devScript: sanitizeScript(data.devScript),
     cleanupScript: sanitizeScript(data.cleanupScript),
     tags: Array.isArray(data.tags) 
-      ? data.tags.slice(0, 20).map(tag => sanitizeString(tag, 50))
+      ? data.tags.slice(0, 20).map((tag: any) => sanitizeString(tag, 50))
       : [],
     status: ['active', 'archived'].includes(data.status) ? data.status : 'active',
     priority: ['high', 'medium', 'low'].includes(data.priority) ? data.priority : 'medium'
