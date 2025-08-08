@@ -4,14 +4,42 @@ export { VibeKit } from "./core/vibekit";
 // Constants exports
 export * from "./constants";
 
-// Essential type exports only
+// Type exports for user consumption
 export type {
   AgentType,
   AgentMode,
   ModelProvider,
-  SandboxProvider,
-  SandboxInstance,
+  AgentModel,
+  E2BConfig,
+  DaytonaConfig,
+  NorthflankConfig,
+  EnvironmentConfig,
+  GithubConfig,
+  SecretsConfig,
+  VibeKitConfig,
   Conversation,
+  LabelOptions,
+  CodexStreamCallbacks,
+  ClaudeStreamCallbacks,
+  OpenCodeStreamCallbacks,
+  GeminiStreamCallbacks,
+  GrokStreamCallbacks,
+  CodexConfig,
+  CodexResponse,
+  ClaudeConfig,
+  ClaudeResponse,
+  OpenCodeConfig,
+  OpenCodeResponse,
+  GeminiConfig,
+  GeminiResponse,
+  GrokConfig,
+  GrokResponse,
+  SandboxExecutionResult,
+  SandboxCommandOptions,
+  SandboxCommands,
+  SandboxInstance,
+  SandboxConfig,
+  SandboxProvider,
 } from "./types";
 
 // Optional exports with dynamic imports
@@ -43,9 +71,11 @@ export const createGrokAgent = async () => {
 // Authentication is handled separately via @vibe-kit/auth package
 // Users should get tokens from auth package and pass them as API keys
 
-// Type-only exports for advanced usage
-export type { ClaudeConfig, ClaudeResponse } from "./types";
-export type { CodexConfig, CodexResponse } from "./types";
-export type { OpenCodeConfig, OpenCodeResponse } from "./types";
-export type { GeminiConfig } from "./types";
-export type { BaseAgentConfig, PullRequestResult } from "./agents/base";
+// Additional type exports from agent base
+export type { 
+  BaseAgentConfig, 
+  PullRequestResult,
+  AgentResponse,
+  ExecuteCommandOptions,
+  StreamCallbacks
+} from "./agents/base";

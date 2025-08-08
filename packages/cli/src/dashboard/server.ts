@@ -1,6 +1,6 @@
-import { spawn, ChildProcess } from 'child_process';
-import { join } from 'path';
-import chalk from 'chalk';
+import { spawn, ChildProcess } from "child_process";
+import { join } from "path";
+import chalk from "chalk";
 
 interface DashboardStatus {
   running: boolean;
@@ -21,84 +21,103 @@ class DashboardServer {
 
   async start(): Promise<void> {
     if (this.isRunning) {
-      console.log(chalk.yellow(`📊 Dashboard already running on port ${this.port}`));
+      console.log(
+        chalk.yellow(`📊 Dashboard already running on port ${this.port}`)
+      );
       return;
     }
 
     return new Promise((resolve, reject) => {
-      console.log(chalk.blue(`🚀 Starting analytics dashboard on port ${this.port}...`));
+      console.log(
+        chalk.blue(`🚀 Starting analytics dashboard on port ${this.port}...`)
+      );
 
       // Dashboard directory path - use the source directory
       const dashboardDir = join(process.cwd(), 'packages', 'cli', 'src', 'dashboard');
 
       // Start dashboard using npm run dev
-      this.process = spawn('npm', ['run', 'dev', '--', '--port', this.port.toString()], {
-        cwd: dashboardDir,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          PORT: this.port.toString()
+      this.process = spawn(
+        "npm",
+        ["run", "dev", "--", "--port", this.port.toString()],
+        {
+          cwd: dashboardDir,
+          stdio: ["pipe", "pipe", "pipe"],
+          env: {
+            ...process.env,
+            PORT: this.port.toString(),
+          },
+          shell: true, // Use shell to allow command execution
         }
-      });
+      );
 
-      let startupOutput = '';
+      let startupOutput = "";
       let hasStarted = false;
 
       // Handle stdout
-      this.process.stdout?.on('data', (data: Buffer) => {
+      this.process.stdout?.on("data", (data: Buffer) => {
         const output = data.toString();
         startupOutput += output;
         console.log(chalk.gray(`[Dashboard] ${output.trim()}`)); // Debug output
 
         // Check if server has started successfully
-        if (!hasStarted && (
-          output.includes('Ready in') || 
-          output.includes('Local:') ||
-          output.includes(`localhost:${this.port}`)
-        )) {
+        if (
+          !hasStarted &&
+          (output.includes("Ready in") ||
+            output.includes("Local:") ||
+            output.includes(`localhost:${this.port}`))
+        ) {
           hasStarted = true;
           this.isRunning = true;
           console.log(chalk.green(`✅ Dashboard started successfully!`));
-          console.log(chalk.cyan(`📊 Analytics Dashboard: http://localhost:${this.port}`));
+          console.log(
+            chalk.cyan(`📊 Analytics Dashboard: http://localhost:${this.port}`)
+          );
           resolve();
         }
       });
 
       // Handle stderr
-      this.process.stderr?.on('data', (data: Buffer) => {
+      this.process.stderr?.on("data", (data: Buffer) => {
         const output = data.toString();
         startupOutput += output;
         console.log(chalk.yellow(`[Dashboard Error] ${output.trim()}`)); // Debug output
 
         // Some Next.js warnings are normal, only worry about errors
-        if (output.includes('Error:') || output.includes('EADDRINUSE')) {
+        if (output.includes("Error:") || output.includes("EADDRINUSE")) {
           if (!hasStarted) {
-            console.error(chalk.red('❌ Failed to start dashboard:'), output);
+            console.error(chalk.red("❌ Failed to start dashboard:"), output);
             reject(new Error(`Dashboard startup failed: ${output}`));
           }
         }
       });
 
       // Handle process exit
-      this.process.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
-        this.isRunning = false;
-        this.process = null;
+      this.process.on(
+        "exit",
+        (code: number | null, signal: NodeJS.Signals | null) => {
+          this.isRunning = false;
+          this.process = null;
 
-        if (code !== 0 && !hasStarted) {
-          reject(new Error(`Dashboard process exited with code ${code}`));
-        } else if (code !== 0) {
-          console.log(chalk.yellow(`📊 Dashboard stopped (code: ${code})`));
+          if (code !== 0 && !hasStarted) {
+            reject(new Error(`Dashboard process exited with code ${code}`));
+          } else if (code !== 0) {
+            console.log(chalk.yellow(`📊 Dashboard stopped (code: ${code})`));
+          }
         }
-      });
+      );
 
       // Handle process errors
-      this.process.on('error', (error: NodeJS.ErrnoException) => {
+      this.process.on("error", (error: NodeJS.ErrnoException) => {
         this.isRunning = false;
         this.process = null;
-        
+
         if (!hasStarted) {
-          if (error.code === 'ENOENT') {
-            reject(new Error('npm not found. Please ensure Node.js and npm are installed.'));
+          if (error.code === "ENOENT") {
+            reject(
+              new Error(
+                "npm not found. Please ensure Node.js and npm are installed."
+              )
+            );
           } else {
             reject(new Error(`Failed to start dashboard: ${error.message}`));
           }
@@ -109,7 +128,7 @@ class DashboardServer {
       setTimeout(() => {
         if (!hasStarted) {
           this.stop();
-          reject(new Error('Dashboard startup timeout'));
+          reject(new Error("Dashboard startup timeout"));
         }
       }, 30000);
 
@@ -118,28 +137,28 @@ class DashboardServer {
         this.stop();
       };
 
-      process.on('SIGINT', cleanup);
-      process.on('SIGTERM', cleanup);
+      process.on("SIGINT", cleanup);
+      process.on("SIGTERM", cleanup);
     });
   }
 
   stop(): void {
     if (this.process && this.isRunning) {
-      console.log(chalk.blue('🛑 Stopping dashboard...'));
-      
+      console.log(chalk.blue("🛑 Stopping dashboard..."));
+
       // Try graceful shutdown first
-      this.process.kill('SIGTERM');
-      
+      this.process.kill("SIGTERM");
+
       // Force kill after 5 seconds if still running
       setTimeout(() => {
         if (this.process && !this.process.killed) {
-          this.process.kill('SIGKILL');
+          this.process.kill("SIGKILL");
         }
       }, 5000);
-      
+
       this.isRunning = false;
       this.process = null;
-      console.log(chalk.green('✅ Dashboard stopped'));
+      console.log(chalk.green("✅ Dashboard stopped"));
     }
   }
 
@@ -147,42 +166,47 @@ class DashboardServer {
     return {
       running: this.isRunning,
       port: this.port,
-      url: this.isRunning ? `http://localhost:${this.port}` : null
+      url: this.isRunning ? `http://localhost:${this.port}` : null,
     };
   }
 
   async openInBrowser(): Promise<void> {
     if (!this.isRunning) {
-      throw new Error('Dashboard is not running');
+      throw new Error("Dashboard is not running");
     }
 
     try {
       // Use child_process to open browser instead of 'open' package
-      const { spawn } = await import('child_process');
+      const { spawn } = await import("child_process");
       const url = `http://localhost:${this.port}`;
-      
+
       // Cross-platform browser opening
       const platform = process.platform;
       let command: string;
       let args: string[];
-      
-      if (platform === 'darwin') {
-        command = 'open';
+
+      if (platform === "darwin") {
+        command = "open";
         args = [url];
-      } else if (platform === 'win32') {
-        command = 'start';
-        args = ['', url];
+      } else if (platform === "win32") {
+        command = "start";
+        args = ["", url];
       } else {
-        command = 'xdg-open';
+        command = "xdg-open";
         args = [url];
       }
-      
-      spawn(command, args, { detached: true, stdio: 'ignore' });
+
+      spawn(command, args, { detached: true, stdio: "ignore" });
       console.log(chalk.green(`🌐 Opened dashboard in browser`));
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.log(chalk.yellow(`⚠️ Could not open browser automatically: ${errorMessage}`));
-      console.log(chalk.blue(`📊 Please open manually: http://localhost:${this.port}`));
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.log(
+        chalk.yellow(`⚠️ Could not open browser automatically: ${errorMessage}`)
+      );
+      console.log(
+        chalk.blue(`📊 Please open manually: http://localhost:${this.port}`)
+      );
     }
   }
 }

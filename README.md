@@ -4,7 +4,7 @@
 
 # VibeKit is the safety layer for your coding agent
 
-Monitor, analyze, and secure your Claude, Gemini, Codex, and other coding agents with real-time insights, sensitive data redaction, and comprehensive session tracking.
+Run Claude Code, Gemini, Codex — or any coding agent — in a clean, isolated sandbox with sensitive data redaction and observability baked in.
 
 ---
 
@@ -36,8 +36,6 @@ vibekit claude
 📊 **Observability** - Complete visibility into agent operations with real-time logs, traces, and metrics
 
 🌐 **Universal agent support** - Works with Claude Code, Gemini CLI, Grok CLI, Codex CLI, OpenCode, and more
-
-🔄 **Model override** - Swap the model behind any agent CLI — e.g. run Gemini 2.5 Pro inside Claude Code
 
 💻 **Works offline & locally** - No cloud dependencies or internet required — works entirely on your machine
 

@@ -5,9 +5,38 @@ import { VibeKit } from "../packages/sdk/src/index.js";
 import { createE2BProvider } from "../packages/e2b/dist/index.js";
 import { skipIfNoVibeKitKeys, skipTest } from "./helpers/test-utils.js";
 
+// Type imports to verify they are properly exported
+import type {
+  AgentMode,
+  ModelProvider,
+  Conversation,
+  PullRequestResult,
+  AgentResponse,
+  ExecuteCommandOptions,
+} from "../packages/sdk/src/index.js";
+
 dotenv.config();
 
 describe("VibeKit SDK", () => {
+  it("should have all types properly exported", () => {
+    // Type checking test - these will fail at compile time if types are not exported
+    // We're just verifying the types can be used, not testing runtime behavior
+    type TestAgentMode = AgentMode;
+    type TestProvider = ModelProvider;
+    type TestConversation = Conversation;
+    type TestAgentResponse = AgentResponse;
+    type TestExecuteOptions = ExecuteCommandOptions;
+    type TestPrResult = PullRequestResult;
+    
+    // Example usage to verify types work correctly
+    const agentMode: TestAgentMode = "code";
+    const provider: TestProvider = "anthropic";
+    
+    // If this test compiles and runs, all types are properly exported
+    expect(agentMode).toBe("code");
+    expect(provider).toBe("anthropic");
+  });
+
   it("should create working directory", async () => {
     if (skipIfNoVibeKitKeys()) {
       return skipTest();

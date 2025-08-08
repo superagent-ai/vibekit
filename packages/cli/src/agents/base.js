@@ -1,25 +1,19 @@
 import { spawn } from 'child_process';
 import chalk from 'chalk';
 import path from 'path';
-import Docker from '../sandbox/docker.js';
 import StatusDisplay from '../components/status-display.js';
 import React from 'react';
 import { render, Static } from 'ink';
 import Analytics from '../analytics/analytics.js';
 import fs from 'fs-extra';
 import crypto from 'crypto';
+import SandboxEngine from '../sandbox/sandbox-engine.js';
+import SandboxConfig from '../sandbox/sandbox-config.js';
 
 class BaseAgent {
   constructor(agentName, logger, options = {}) {
     this.agentName = agentName;
     this.logger = logger;
-    this.sandboxPath = path.join(process.cwd(), '.vibekit', '.vibekit-sandbox');
-    
-    // Sandbox options: 'docker' or false
-    this.sandboxType = options.sandbox || 'none';
-    this.sandboxOptions = options.sandboxOptions || {};
-    
-    // Analytics options - always capture full analytics with optimized snapshotting
     
     // Proxy options
     this.proxy = options.proxy;
@@ -29,6 +23,12 @@ class BaseAgent {
     
     // Settings for display
     this.settings = options.settings || {};
+    
+    // Sandbox options
+    this.sandboxOptions = options.sandboxOptions || {};
+    this.sandboxEngine = new SandboxEngine(process.cwd(), logger, {
+      env: { ...process.env, HTTP_PROXY: this.proxy, HTTPS_PROXY: this.proxy }
+    });
   }
 
 
@@ -47,29 +47,35 @@ class BaseAgent {
 
   async run(args) {
     await this.logger.log('info', `Starting ${this.agentName} agent`, { 
-      args, 
-      sandboxType: this.sandboxType 
+      args
     });
 
     // Start proxy lazily if needed
     await this.startProxyIfNeeded();
 
+    // Show status display on host before execution
+    await this.showStatusDisplay();
+
     try {
-      switch (this.sandboxType) {
-        case 'docker':
-          return await this.runInDocker(args);
-        case false:
-        case 'none':
-          return await this.runDirect(args);
-        default:
-          // Default to no sandbox
-          return await this.runDirect(args);
+      // Try sandbox execution first
+      const sandboxResult = await this.sandboxEngine.executeWithSandbox(
+        this.getAgentCommand(),
+        args,
+        this.sandboxOptions,
+        this.settings
+      );
+
+      // If sandbox execution succeeded, return result with analytics
+      if (sandboxResult) {
+        return await this.runWithAnalytics(this.getAgentCommand(), args, () => Promise.resolve(sandboxResult), 'sandbox');
       }
+
+      // Otherwise, fall back to direct execution
+      return await this.runDirect(args);
     } catch (error) {
       await this.logger.log('error', `${this.agentName} agent failed`, { 
         error: error.message,
-        args,
-        sandboxType: this.sandboxType
+        args
       });
       throw error;
     }
@@ -77,63 +83,110 @@ class BaseAgent {
 
 
 
-  async runInDocker(args) {
-    const dockerSandbox = new Docker(process.cwd(), this.logger, this.sandboxOptions);
+
+  async showStatusDisplay() {
+    // Get sandbox config for status display
+    const sandboxConfig = await SandboxConfig.resolveSandboxConfig(this.sandboxOptions, this.settings);
     
-    // Check Docker availability lazily (only when actually needed)
-    const dockerAvailable = await dockerSandbox.checkDockerInstallation();
-    if (!dockerAvailable) {
-      console.log(chalk.yellow('⚠️  Docker not available, falling back to direct execution'));
-      return await this.runDirect(args);
-    }
-    
-    try {
-      const startTime = Date.now();
-      // Run vibekit wrapper inside container to show status display
-      const command = 'vibekit';
-      const vibekitArgs = [this.agentName, '--sandbox', 'none', ...args];
-      const result = await dockerSandbox.runCommand(command, vibekitArgs);
-      const duration = Date.now() - startTime;
-
-      await this.logger.log('info', `${this.agentName} agent completed in Docker`, { 
-        exitCode: result.code,
-        duration 
-      });
-
-      const changes = await dockerSandbox.getWorkspaceChanges();
-      if (changes.length > 0) {
-        console.log(chalk.yellow(`\n📝 ${changes.length} files changed in sandbox:`));
-        changes.slice(0, 10).forEach(file => console.log(chalk.gray(`  - ${file}`)));
-        if (changes.length > 10) {
-          console.log(chalk.gray(`  ... and ${changes.length - 10} more`));
-        }
-        
-        console.log(chalk.blue('\n💡 Run "vibekit sync" to apply changes to your project'));
-        
-        // Capture file changes in analytics if available
-        if (result.analytics) {
-          result.analytics.filesChanged = changes;
-        }
-      }
-
-      return { ...result, duration, changes };
-    } finally {
-      await dockerSandbox.cleanup();
-    }
+    // Show status display and keep it visible
+    render(React.createElement(Static, { items: [{ 
+      key: 'status-display',
+      agentName: this.agentName,
+      options: { proxy: this.proxy },
+      settings: this.settings,
+      sandboxConfig: sandboxConfig
+    }] }, (item) => React.createElement(StatusDisplay, item)));
   }
-
 
   async runDirect(args) {
     const startTime = Date.now();
     const result = await this.createChildProcess(this.getAgentCommand(), args);
     const duration = Date.now() - startTime;
 
-    await this.logger.log('info', `${this.agentName} agent completed without sandbox`, { 
+    await this.logger.log('info', `${this.agentName} agent completed`, { 
       exitCode: result.code,
       duration 
     });
 
     return { ...result, duration };
+  }
+
+  async runWithAnalytics(command, args, executionFunction, executionMode = 'local') {
+    const startTime = Date.now();
+    
+    // Always capture optimized file snapshot for full analytics
+    let beforeSnapshot;
+    let currentSnapshot;
+    
+    // File change callback for periodic updates
+    const fileChangeCallback = async () => {
+      if (!beforeSnapshot) return null;
+      
+      try {
+        const newSnapshot = await this.captureFileSnapshot();
+        const changes = await this.detectFileChanges(currentSnapshot || beforeSnapshot, newSnapshot);
+        currentSnapshot = newSnapshot;
+        return changes;
+      } catch (error) {
+        console.warn('Failed to detect file changes during periodic check:', error.message);
+        return null;
+      }
+    };
+    
+    const analytics = new Analytics(this.agentName, this.logger, fileChangeCallback, executionMode);
+    
+    // Start periodic logging (every minute by default, configurable via options)
+    const logInterval = 60000; // 60 seconds default
+    analytics.startPeriodicLogging(logInterval);
+    
+    // Capture the command being executed
+    analytics.captureCommand(command, args);
+    
+    // Capture initial file snapshot
+    try {
+      beforeSnapshot = await this.captureFileSnapshot();
+    } catch (error) {
+      console.warn('Failed to capture initial file snapshot:', error.message);
+    }
+
+    try {
+      // Execute the provided function (sandbox or direct)
+      const result = await executionFunction();
+      
+      const duration = Date.now() - startTime;
+      
+      // Detect final file changes
+      if (beforeSnapshot) {
+        try {
+          const afterSnapshot = await this.captureFileSnapshot();
+          const fileChanges = await this.detectFileChanges(beforeSnapshot, afterSnapshot);
+          
+          // Capture file operations in analytics
+          analytics.captureFileChanges(fileChanges.changes);
+          analytics.captureFileOperations(fileChanges.created, fileChanges.deleted);
+        } catch (error) {
+          console.warn('Failed to detect file changes:', error.message);
+        }
+      }
+      
+      // Finalize analytics
+      const analyticsData = await analytics.finalize(result.code || 0, duration);
+      
+      await this.logger.log('info', `${this.agentName} agent completed`, { 
+        exitCode: result.code || 0,
+        duration,
+        analyticsData: analyticsData ? analyticsData.sessionId : null
+      });
+      
+      return { ...result, duration, analyticsData };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      // Finalize analytics with error
+      await analytics.finalize(-1, duration);
+      
+      throw error;
+    }
   }
 
   getAgentCommand() {
@@ -251,7 +304,7 @@ class BaseAgent {
       }
     };
     
-    const analytics = new Analytics(this.agentName, this.logger, fileChangeCallback);
+    const analytics = new Analytics(this.agentName, this.logger, fileChangeCallback, 'local');
     
     // Start periodic logging (every minute by default, configurable via options)
     const logInterval = options.analyticsInterval || 60000; // 60 seconds default
@@ -278,25 +331,6 @@ class BaseAgent {
     return new Promise(async (resolve, reject) => {
       // Capture initial file snapshot
       await captureSnapshot();
-      
-      // Show startup status using Static component to avoid conflicts
-      const { rerender, unmount } = render(React.createElement(Static, { items: [{ 
-        key: 'status-display',
-        agentName: this.agentName,
-        sandboxType: this.sandboxType,
-        options: { proxy: this.proxy },
-        settings: this.settings
-      }] }, (item) => React.createElement(StatusDisplay, item)));
-      
-      
-      // Unmount after a brief delay to prevent conflicts with child process
-      setTimeout(() => {
-        try {
-          unmount();
-        } catch (error) {
-          // Ignore unmount errors
-        }
-      }, 100);
       
       let spawnOptions;
       
