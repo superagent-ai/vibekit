@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -43,6 +44,8 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     const displayNames: Record<string, string> = {
       claude: "claude-code",
       gemini: "gemini-cli",
+      cursor: "cursor",
+      opencode: "opencode",
     };
     return displayNames[agentKey.toLowerCase()] || agentKey;
   };
@@ -173,6 +176,7 @@ export default function Dashboard() {
         claude: 0,
         gemini: 0,
         codex: 0,
+        cursor: 0,
         grok: 0,
         opencode: 0,
         ...Object.keys(summary.agentBreakdown).reduce((acc, agent) => {
@@ -295,6 +299,9 @@ export default function Dashboard() {
                     const agentColors: Record<string, string> = {
                       claude: "#ff6b35", // Orange color for Claude
                       gemini: "#4285f4", // Google blue for Gemini
+                      codex: "#6b7280", // Grey color for Codex (works in light/dark)
+                      cursor: "#374151", // Dark grey/black-ish color for Cursor (works in light/dark)
+                      opencode: "#333333", // Dark black color for OpenCode
                     };
                     if (agentColors[agentName.toLowerCase()]) {
                       return agentColors[agentName.toLowerCase()];
@@ -334,6 +341,9 @@ export default function Dashboard() {
                   const agentColors: Record<string, string> = {
                     claude: "#ff6b35", // Orange color for Claude
                     gemini: "#4285f4", // Google blue for Gemini
+                    codex: "#6b7280", // Grey color for Codex (works in light/dark)
+                    cursor: "#374151", // Dark grey/black-ish color for Cursor (works in light/dark)
+                    opencode: "#333333", // Dark black color for OpenCode
                   };
                   if (agentColors[agentName.toLowerCase()]) {
                     return agentColors[agentName.toLowerCase()];
@@ -391,16 +401,47 @@ export default function Dashboard() {
                   <TableCell>
                     <Badge variant="outline" className="flex items-center gap-1.5">
                       {session.agentName.toLowerCase() === 'claude' && (
-                        <img
+                        <Image
                           src="/claude-color.png"
                           alt="Claude"
+                          width={12}
+                          height={12}
                           className="w-3 h-3"
                         />
                       )}
                       {session.agentName.toLowerCase() === 'gemini' && (
-                        <img
+                        <Image
                           src="/gemini-color.png"
                           alt="Gemini"
+                          width={12}
+                          height={12}
+                          className="w-3 h-3"
+                        />
+                      )}
+                      {session.agentName.toLowerCase() === 'codex' && (
+                        <Image
+                          src="/codex.svg"
+                          alt="Codex"
+                          width={12}
+                          height={12}
+                          className="w-3 h-3 dark:invert"
+                        />
+                      )}
+                      {session.agentName.toLowerCase() === 'cursor' && (
+                        <Image
+                          src="/cursor.svg"
+                          alt="Cursor"
+                          width={12}
+                          height={12}
+                          className="w-3 h-3"
+                        />
+                      )}
+                      {session.agentName.toLowerCase() === 'opencode' && (
+                        <Image
+                          src="/opencode.webp"
+                          alt="OpenCode"
+                          width={12}
+                          height={12}
                           className="w-3 h-3"
                         />
                       )}
@@ -409,6 +450,9 @@ export default function Dashboard() {
                           const displayNames: Record<string, string> = {
                             claude: "claude-code",
                             gemini: "gemini-cli",
+                            codex: "codex",
+                            cursor: "cursor",
+                            opencode: "opencode",
                           };
                           return displayNames[session.agentName.toLowerCase()] || session.agentName;
                         })()}
