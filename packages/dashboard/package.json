@@ -41,7 +41,6 @@
   "homepage": "https://github.com/superagent-ai/vibekit#readme",
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@next/swc-darwin-arm64": "^15.4.6",
     "@radix-ui/react-avatar": "^1.1.1",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-dropdown-menu": "^2.1.2",
