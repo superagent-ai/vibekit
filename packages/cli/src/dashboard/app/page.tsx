@@ -376,6 +376,7 @@ export default function Dashboard() {
               <TableRow>
                 <TableHead className="text-sm font-medium uppercase">Agent</TableHead>
                 <TableHead className="text-sm font-medium uppercase">Status</TableHead>
+                <TableHead className="text-sm font-medium uppercase">Mode</TableHead>
                 <TableHead className="text-sm font-medium uppercase">Duration</TableHead>
                 <TableHead className="text-sm font-medium uppercase">Files Changed</TableHead>
                 <TableHead className="text-sm font-medium uppercase">Project</TableHead>
@@ -420,6 +421,14 @@ export default function Dashboard() {
                       className={`text-sm ${session.status === 'active' ? 'bg-green-100 text-green-800 border-green-200' : ''}`}
                     >
                       {session.status || 'terminated'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant={session.executionMode === 'sandbox' ? 'default' : 'outline'}
+                      className={`text-sm ${session.executionMode === 'sandbox' ? 'bg-blue-100 text-blue-800 border-blue-200' : ''}`}
+                    >
+                      {session.executionMode || 'local'}
                     </Badge>
                   </TableCell>
                   <TableCell>{formatDuration(session.duration || 0)}</TableCell>

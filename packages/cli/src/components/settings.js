@@ -9,15 +9,16 @@ import dashboardManager from '../dashboard/manager.js';
 
 const Settings = () => {
   const [settings, setSettings] = useState({
+    sandbox: {
+      enabled: false,
+      type: 'docker'
+    },
     proxy: {
       enabled: true,
       redactionEnabled: true
     },
     analytics: {
       enabled: true
-    },
-    sandbox: {
-      enabled: false
     },
     aliases: {
       enabled: false
@@ -71,14 +72,14 @@ const Settings = () => {
       case 'settings':
         return [
           {
+            label: `Sandbox Isolation: ${settings.sandbox.enabled ? '✓ ON' : '✗ OFF'}`,
+            description: 'Enable sandbox isolation for secure execution',
+            action: 'toggle-sandbox'
+          },
+          {
             label: `Connect IDE: ${settings.aliases.enabled ? '✓ ON (requires restart)' : '✗ OFF'}`,
             description: 'Create global "claude" and "gemini" commands (runs "vibekit claude/gemini")',
             action: 'toggle-aliases'
-          },
-          {
-            label: `Sandbox Isolation: ${settings.sandbox.enabled ? '✓ ON' : '✗ OFF'}`,
-            description: 'Enable or disable sandbox isolation for secure execution',
-            action: 'toggle-sandbox'
           },
           {
             label: `Proxy Server: ${settings.proxy.enabled ? '✓ ON' : '✗ OFF'}`,

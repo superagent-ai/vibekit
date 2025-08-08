@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 interface VibeKitSettings {
   sandbox: {
     enabled: boolean;
+    type: string;
   };
   proxy: {
     enabled: boolean;
@@ -38,6 +39,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<VibeKitSettings>({
     sandbox: {
       enabled: false,
+      type: 'docker',
     },
     proxy: {
       enabled: true,
@@ -209,23 +211,23 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* System Settings */}
+        {/* Sandbox Settings */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
-              <CardTitle>System</CardTitle>
+              <CardTitle>Sandbox</CardTitle>
             </div>
             <CardDescription>
-              Configure system-level features and security
+              Configure sandbox isolation for secure execution
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="sandbox-enabled">Sandbox Isolation</Label>
+                <Label htmlFor="sandbox-enabled">Enable Sandbox</Label>
                 <p className="text-sm text-muted-foreground">
-                  Enable sandbox isolation for secure execution
+                  Enable sandbox isolation for secure command execution
                 </p>
               </div>
               <Switch

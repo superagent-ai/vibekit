@@ -4,7 +4,7 @@ import os from 'os';
 import { collectSystemInfo } from './system-info.js';
 
 class Analytics {
-  constructor(agentName, logger, fileChangeCallback = null) {
+  constructor(agentName, logger, fileChangeCallback = null, executionMode = 'local') {
     this.agentName = agentName;
     this.logger = logger;
     this.sessionId = Date.now().toString();
@@ -19,6 +19,7 @@ class Analytics {
       endTime: null,
       duration: null,
       status: 'active', // active, terminated
+      executionMode: executionMode, // sandbox, local
       
       // Input/Output metrics
       inputBytes: 0,
