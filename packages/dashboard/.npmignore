@@ -1,0 +1,8 @@
+# Override root .gitignore for npm publishing
+# Include .next build files in npm package
+!.next/
+
+# But still ignore these
+node_modules/
+.env*
+*.log

@@ -81,6 +81,7 @@ program
   .version(pkg.version)
   .option('--proxy <url>', 'HTTP/HTTPS proxy URL for all agents (e.g., http://proxy.example.com:8080)');
 
+
 program
   .command('claude')
   .description('Run Claude Code CLI')
@@ -607,7 +608,7 @@ dashboardCommand
   .option('--open', 'Open dashboard in browser automatically')
   .action(async (options) => {
     const port = parseInt(options.port) || 3001;
-    const { default: dashboardManager } = await import('./dashboard/manager.js');
+    const { default: dashboardManager } = await import('./dashboard/manager.ts');
     const dashboardServer = dashboardManager.getDashboardServer(port);
     
     try {
@@ -622,17 +623,24 @@ dashboardCommand
     }
   });
 
-// Default action for 'dashboard' without subcommand - start the server  
+// Default action for 'dashboard' without subcommand - start the server and open browser
 dashboardCommand
+  .option('-p, --port <number>', 'Port to run dashboard on', '3001')
+  .option('--no-open', 'Do not open browser automatically')
   .action(async (options, command) => {
     // If no subcommand was provided, start the dashboard with default settings
     if (command.args.length === 0) {
-      const port = parseInt(options.port) || 3001; // Use port option or default
-      const { default: dashboardManager } = await import('./dashboard/manager.js');
+      const port = parseInt(options.port) || 3001;
+      const { default: dashboardManager } = await import('./dashboard/manager.ts');
       const dashboardServer = dashboardManager.getDashboardServer(port);
       
       try {
         await dashboardServer.start();
+        
+        // Open browser by default unless --no-open is specified
+        if (options.open !== false) {
+          await dashboardServer.openInBrowser();
+        }
       } catch (error) {
         console.error(chalk.red('Failed to start dashboard:'), error.message);
         process.exit(1);
@@ -646,9 +654,24 @@ dashboardCommand
   .option('-p, --port <number>', 'Port to stop dashboard on', '3001')
   .action(async (options) => {
     const port = parseInt(options.port) || 3001;
-    const { default: dashboardManager } = await import('./dashboard/manager.js');
+    const { default: dashboardManager } = await import('./dashboard/manager.ts');
     dashboardManager.stop(port);
     console.log(chalk.green(`✅ Dashboard stopped on port ${port}`));
+  });
+
+dashboardCommand
+  .command('update')
+  .description('Update the dashboard to the latest version')
+  .action(async () => {
+    const { default: dashboardManager } = await import('./dashboard/manager.ts');
+    const dashboardServer = dashboardManager.getDashboardServer(3001);
+    
+    try {
+      await dashboardServer.update();
+    } catch (error) {
+      console.error(chalk.red('Failed to update dashboard:'), error.message);
+      process.exit(1);
+    }
   });
 
 program
