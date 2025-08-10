@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { MCPServerCard } from "@/components/mcp/server-card";
 import { ServerForm } from "@/components/mcp/server-form";
 import { PasteServerDialog } from "@/components/mcp/paste-server-dialog";
+import { RecommendedServersCarousel } from "@/components/mcp/recommended-servers-carousel";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -401,6 +402,9 @@ export default function MCPServersPage() {
             </Button>
           </div>
         </div>
+
+        {/* Recommended Servers Carousel */}
+        <RecommendedServersCarousel onServerInstalled={fetchServers} />
 
         {/* Filters and Search */}
         <div className="flex flex-col gap-3">

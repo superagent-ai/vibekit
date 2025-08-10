@@ -83,7 +83,15 @@ export function MCPServerCard({
       <CardHeader className="pb-1 pt-3">
         <div className="flex items-start justify-between">
           <div className="space-y-0.5 min-w-0 flex-1">
-            <CardTitle className="text-sm font-medium">{server.name}</CardTitle>
+            <CardTitle 
+              className="text-sm font-medium cursor-pointer hover:text-primary transition-colors hover:underline"
+              onClick={() => {
+                console.log('[DEBUG] Clicking server:', server.id);
+                window.location.href = `/mcp-servers/${server.id}`;
+              }}
+            >
+              {server.name}
+            </CardTitle>
             {server.description && (
               <CardDescription className="text-xs line-clamp-1">
                 {server.description}

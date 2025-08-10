@@ -134,20 +134,72 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
         if (mcpModule && mcpModule.MCPClientManager) {
           console.log('[MCP DEBUG] MCP client found, loading tools from connected servers...');
           
-          // Initialize the MCP client manager - it will automatically load from ~/.vibekit/mcp-servers.json
+          // Initialize the MCP client manager and manually add servers from config
           const path = await import('path');
           const os = await import('os');
+          const fs = await import('fs');
           
           const manager = new mcpModule.MCPClientManager({
-            autoConnect: true, // Let it auto-connect to enabled servers
+            autoConnect: false,
             configDir: path.join(os.homedir(), '.vibekit'),
           });
           
           console.log('[MCP DEBUG] Initializing MCP manager...');
           await manager.initialize();
           
+          // Load and add servers directly from mcp-servers.json
+          const mcpConfigPath = path.join(os.homedir(), '.vibekit', 'mcp-servers.json');
+          const addedServers = [];
+          
+          try {
+            if (fs.existsSync(mcpConfigPath)) {
+              const configData = fs.readFileSync(mcpConfigPath, 'utf-8');
+              const config = JSON.parse(configData);
+              console.log('[MCP DEBUG] Loading config:', config);
+              
+              if (config.mcpServers) {
+                for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
+                  try {
+                    const configData = serverConfig as any;
+                    console.log(`[MCP DEBUG] Adding server: ${name}`, configData);
+                    
+                    const server = await manager.addServer({
+                      name,
+                      transport: 'stdio',
+                      config: {
+                        command: configData.command,
+                        args: configData.args || [],
+                        env: configData.env || {},
+                      },
+                    });
+                    
+                    console.log(`[MCP DEBUG] Added server ${name} with ID: ${server.id}`);
+                    addedServers.push(server);
+                  } catch (error) {
+                    console.error(`[MCP DEBUG] Failed to add server ${name}:`, error);
+                  }
+                }
+              }
+            } else {
+              console.log('[MCP DEBUG] No config file found at:', mcpConfigPath);
+            }
+          } catch (error) {
+            console.error('[MCP DEBUG] Error loading config:', error);
+          }
+          
+          // Connect to all added servers
+          for (const server of addedServers) {
+            try {
+              console.log(`[MCP DEBUG] Connecting to server: ${server.name} (${server.id})`);
+              await manager.connect(server.id);
+              console.log(`[MCP DEBUG] Successfully connected to: ${server.name}`);
+            } catch (error) {
+              console.error(`[MCP DEBUG] Failed to connect to server ${server.name}:`, error);
+            }
+          }
+          
           // Get all connected servers
-          const connectedServers = manager.getAllServers().filter(server => 
+          const connectedServers = addedServers.filter(server => 
             manager.isConnected(server.id)
           );
           
