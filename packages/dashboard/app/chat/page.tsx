@@ -71,10 +71,10 @@ export default function ChatPage() {
   // Use the AI SDK useChat hook
   const { 
     messages, 
-    sendMessage,
     status,
     error,
     stop,
+    sendMessage,
   } = useChat({
     onError: (error) => {
       console.error('Chat error:', error);
@@ -82,19 +82,19 @@ export default function ChatPage() {
     onFinish: (message) => {
       console.log('Message completed:', message);
     },
-  });
+  }) as any;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Submitting with input:', inputValue, 'status:', status);
     
     if (inputValue.trim() && status !== 'streaming') {
-      // Send message with custom data
+      // Send message with model and other params
       await sendMessage({
         role: 'user',
         content: inputValue,
       }, {
-        data: {
+        body: {
           model,
           showMCPTools: webSearch,
         },
@@ -236,7 +236,7 @@ export default function ChatPage() {
           </div>
         )}
         
-        {messages.map((message) => {
+        {messages.map((message: any) => {
           const extras = getMessageExtras(message);
           const content = getMessageContent(message);
           
@@ -264,7 +264,7 @@ export default function ChatPage() {
                     <Response>{content}</Response>
                     {extras.sources && extras.sources.length > 0 && (
                       <Sources>
-                        <SourcesTrigger />
+                        <SourcesTrigger count={extras.sources.length} />
                         <SourcesContent>
                           {extras.sources.map((source, index) => (
                             <Source key={index} title={source.title} href={source.url} />

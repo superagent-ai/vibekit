@@ -3,52 +3,36 @@ export type {
   Project,
   ProjectsConfig,
   ProjectCreateInput,
-  ProjectUpdateInput
+  ProjectUpdateInput,
+  AnalyticsSession,
+  AnalyticsSummary
 } from './types';
 
 // Project management
 export {
   getAllProjects,
   getProject,
-  getProjectByName,
-  getProjectByPath,
   createProject,
   updateProject,
   deleteProject,
   getCurrentProject,
   setCurrentProject,
-  setCurrentProjectById,
   clearCurrentProject
-} from './manager';
+} from './projects';
 
-// Storage utilities
+// Analytics
 export {
-  ensureProjectsFile,
-  readProjectsConfig,
-  writeProjectsConfig,
-  readCurrentProject,
-  writeCurrentProject,
-  pathExists
-} from './storage';
+  getAnalyticsData
+} from './analytics';
 
-// Validation utilities
-export {
-  validateProjectData,
-  generateProjectId,
-  truncate
-} from './validator';
+// Utils
+export { cn } from './utils';
 
-// Formatting utilities
-export {
-  formatProjectsTable,
-  formatProjectDetails
-} from './formatter';
-
-// Constants
-export {
-  VIBEKIT_DIR,
-  PROJECTS_FILE,
-  CURRENT_PROJECT_FILE,
-  PROJECTS_VERSION,
-  DEFAULT_PROJECTS_CONFIG
-} from './constants';
+// Validation
+export { 
+  sanitizeString,
+  sanitizePath,
+  sanitizeScript,
+  validateProjectInput,
+  sanitizeProjectData
+} from './validation';

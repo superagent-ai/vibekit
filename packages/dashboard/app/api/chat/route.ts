@@ -135,7 +135,7 @@ export async function POST(req: Request) {
         model: anthropic(model),
         messages: formattedMessages,
         temperature: 0.7,
-        maxTokens: 4096,
+        maxOutputTokens: 4096,
       });
 
       

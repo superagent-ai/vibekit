@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       
       watcher.on('change', handleChange);
       watcher.on('add', handleChange);
-      watcher.on('unlink', (filePath) => {
+      watcher.on('unlink', (filePath: string) => {
         const fileName = path.basename(filePath);
         const eventType = fileName === 'current-project.json' ? 'current-project-cleared' : 'projects-cleared';
         

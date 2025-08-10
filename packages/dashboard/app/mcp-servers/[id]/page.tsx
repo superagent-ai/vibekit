@@ -59,7 +59,7 @@ interface Prompt {
 export default function ServerDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const serverId = params.id as string;
+  const serverId = params?.id as string;
   
   const [server, setServer] = useState<MCPServer | null>(null);
   const [tools, setTools] = useState<Tool[]>([]);

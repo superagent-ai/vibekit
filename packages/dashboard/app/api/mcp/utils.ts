@@ -24,6 +24,9 @@ export async function getManager(): Promise<MCPClientManager> {
 }
 
 // Helper to resolve params for Next.js 15 compatibility
-export async function resolveParams<T>(params: Promise<T> | T): Promise<T> {
-  return 'then' in params ? await params : params;
+export async function resolveParams<T extends object>(params: Promise<T> | T): Promise<T> {
+  if (params && typeof params === 'object' && 'then' in params) {
+    return await params;
+  }
+  return params as T;
 }

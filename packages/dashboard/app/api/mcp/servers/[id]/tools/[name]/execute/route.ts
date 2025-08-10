@@ -3,7 +3,7 @@ import { getManager, resolveParams } from '@/app/api/mcp/utils';
 
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ id: string; name: string }> | { id: string; name: string } }
+  context: { params: Promise<{ id: string; name: string }> }
 ) {
   try {
     const { id, name } = await resolveParams(context.params);

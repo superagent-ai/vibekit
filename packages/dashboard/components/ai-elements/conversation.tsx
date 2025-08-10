@@ -24,7 +24,7 @@ export const ConversationContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, children, ...props }, ref) => (
-  <ScrollArea ref={ref} className={cn('flex-1 p-4', className)} {...props}>
+  <ScrollArea ref={ref} className={cn('flex-1 p-4', className)}>
     <div className="space-y-4 max-w-3xl mx-auto">
       {children}
     </div>

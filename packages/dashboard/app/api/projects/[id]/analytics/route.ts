@@ -4,14 +4,15 @@ import { getAnalyticsData } from '@/lib/analytics';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const days = parseInt(searchParams.get('days') || '7');
     
     // Get the project
-    const project = await getProject(params.id);
+    const { id } = await params;
+    const project = await getProject(id);
     if (!project) {
       return NextResponse.json(
         { 
