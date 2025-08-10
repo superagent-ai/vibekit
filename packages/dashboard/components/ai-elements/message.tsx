@@ -14,8 +14,8 @@ export const Message = React.forwardRef<
     ref={ref}
     className={cn(
       'flex gap-3 rounded-lg p-4 mb-4',
-      role === 'user' && 'flex-row-reverse bg-blue-50 ml-auto max-w-[80%]',
-      role === 'assistant' && 'bg-gray-50 mr-auto max-w-[80%]',
+      role === 'user' && 'flex-row-reverse bg-primary/10 dark:bg-primary/20 ml-auto max-w-[80%]',
+      role === 'assistant' && 'bg-muted dark:bg-muted mr-auto max-w-[80%]',
       className
     )}
     {...props}

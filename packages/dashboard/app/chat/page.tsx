@@ -176,13 +176,13 @@ export default function ChatPage() {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="max-w-2xl mx-auto p-8">
-              <h2 className="text-2xl font-semibold mb-4 text-gray-800">
+              <h2 className="text-2xl font-semibold mb-4 text-foreground">
                 Welcome to AI Chat
               </h2>
-              <p className="text-gray-600 mb-6">
+              <p className="text-muted-foreground mb-6">
                 Start a conversation by typing a message below. You can:
               </p>
-              <ul className="text-left text-gray-600 space-y-2 mb-6">
+              <ul className="text-left text-muted-foreground space-y-2 mb-6">
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
                   <span>Ask questions and get intelligent responses</span>
@@ -200,33 +200,33 @@ export default function ChatPage() {
                   <span>View AI reasoning by expanding the thought process</span>
                 </li>
               </ul>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 Powered by Claude AI
               </p>
               {authStatus && (
-                <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm">
+                <div className="mt-4 p-3 bg-muted rounded-lg text-sm">
                   {authStatus.needsApiKey ? (
                     <div className="space-y-2">
-                      <p className="text-amber-600">
+                      <p className="text-destructive">
                         ⚠ Claude Code Max account detected ({authStatus.claudeCodeMaxUser})
                       </p>
-                      <p className="text-amber-600 text-xs">
+                      <p className="text-destructive text-xs">
                         Claude Code Max tokens are for Claude.ai only. To use the API, please set ANTHROPIC_API_KEY in your .env file.
                       </p>
                     </div>
                   ) : authStatus.isConfigured ? (
                     <div className="space-y-1">
-                      <p className="text-green-700">
+                      <p className="text-primary">
                         ✓ Using Anthropic API Key
                       </p>
                       {authStatus.claudeCodeMaxUser && (
-                        <p className="text-gray-500 text-xs">
+                        <p className="text-muted-foreground text-xs">
                           Claude Code Max account: {authStatus.claudeCodeMaxUser}
                         </p>
                       )}
                     </div>
                   ) : (
-                    <p className="text-red-600">
+                    <p className="text-destructive">
                       ⚠ No authentication configured. Please set ANTHROPIC_API_KEY in your .env file.
                     </p>
                   )}
@@ -291,12 +291,12 @@ export default function ChatPage() {
         )}
         
         {error && (
-          <div className="p-4 mb-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-600 font-semibold">Error</p>
-            <p className="text-red-500 text-sm">{error.message || 'An error occurred'}</p>
+          <div className="p-4 mb-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+            <p className="text-destructive font-semibold">Error</p>
+            <p className="text-destructive/80 text-sm">{error.message || 'An error occurred'}</p>
             <button
               onClick={() => window.location.reload()}
-              className="mt-2 px-3 py-1 text-sm bg-red-100 hover:bg-red-200 rounded"
+              className="mt-2 px-3 py-1 text-sm bg-destructive/20 hover:bg-destructive/30 rounded"
             >
               Refresh Page
             </button>
