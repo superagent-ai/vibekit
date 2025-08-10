@@ -1,5 +1,5 @@
-import { PageWrapper } from '../../../components/page-wrapper';
-import { MCPServerBrowser } from '../../../components/mcp/mcp-server-browser';
+import { PageWrapper } from '../../components/page-wrapper';
+import { MCPServerBrowser } from '../../components/mcp/mcp-server-browser';
 
 export default function MCPBrowserPage() {
   return (

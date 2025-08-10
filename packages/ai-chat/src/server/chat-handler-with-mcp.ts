@@ -402,17 +402,13 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
       (async () => {
         try {
           console.log('[MCP DEBUG] ===== ANALYZING STREAM EVENTS =====');
-          let stepCount = 0;
           let toolCallCount = 0;
           let textResponseCount = 0;
           
           for await (const chunk of result.fullStream) {
             console.log('[MCP DEBUG] Stream chunk type:', chunk.type);
             
-            if (chunk.type === 'step-start') {
-              stepCount++;
-              console.log('[MCP DEBUG] Step started:', stepCount);
-            } else if (chunk.type === 'tool-call') {
+            if (chunk.type === 'tool-call') {
               toolCallCount++;
               console.log('[MCP DEBUG] Tool call:', toolCallCount, chunk.toolName);
             } else if (chunk.type === 'tool-result') {
@@ -422,16 +418,12 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
               if (textResponseCount === 1) {
                 console.log('[MCP DEBUG] First text response started');
               }
-            } else if (chunk.type === 'step-finish') {
-              console.log('[MCP DEBUG] Step finished. Steps:', stepCount, 'Tools:', toolCallCount, 'Text responses:', textResponseCount);
             }
           }
           
           console.log('[MCP DEBUG] ===== FINAL SUMMARY =====');
-          console.log('[MCP DEBUG] Total steps:', stepCount);
           console.log('[MCP DEBUG] Total tool calls:', toolCallCount); 
           console.log('[MCP DEBUG] Total text responses:', textResponseCount);
-          console.log('[MCP DEBUG] Expected: At least 2 steps (1 tool call + 1 follow-up text)');
         } catch (err) {
           console.error('[MCP DEBUG] Stream analysis error:', err);
         }

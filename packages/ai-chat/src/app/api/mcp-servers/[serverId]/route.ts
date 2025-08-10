@@ -20,7 +20,7 @@ export async function DELETE(
     }
 
     // Load existing config
-    let mcpConfig = { mcpServers: {} };
+    let mcpConfig: { mcpServers: { [key: string]: any } } = { mcpServers: {} };
     
     try {
       const data = await fs.readFile(MCP_CONFIG_PATH, 'utf-8');

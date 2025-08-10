@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     await fs.mkdir(configDir, { recursive: true });
 
     // Load existing config
-    let mcpConfig = { mcpServers: {} };
+    let mcpConfig: { mcpServers: { [key: string]: any } } = { mcpServers: {} };
     
     try {
       const data = await fs.readFile(MCP_CONFIG_PATH, 'utf-8');

@@ -65,9 +65,9 @@ export function RecommendedServersCarousel({ onServerInstalled }: RecommendedSer
 
   const loadRecommendedServers = async () => {
     try {
-      // Import directly from assets instead of fetching
-      const data = await import('../../../../assets/recommended-mcp-servers.json');
-      setServers(data.default || data);
+      // Load from assets directory - single source of truth
+      const recommendedServers = await import('../../../../assets/recommended-mcp-servers.json');
+      setServers(recommendedServers.default || recommendedServers);
     } catch (error) {
       console.error('Failed to load recommended servers:', error);
     }
