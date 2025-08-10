@@ -31,7 +31,6 @@
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
-    "@vibe-kit/ai-chat": "^0.0.1",
     "@vibe-kit/mcp-client": "^0.0.1",
     "@vibe-kit/projects": "^0.0.1",
     "ai": "^5.0.8",

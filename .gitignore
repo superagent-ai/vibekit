@@ -59,3 +59,6 @@ test-nextjs.ts
 test-working-dir.ts
 .cluso/config.json
 .inngest/main.db
+
+.taskmaster/
+.next/
