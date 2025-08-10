@@ -108,34 +108,80 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
         // Try to import and use MCP client if available
         const mcpModule = await import('@vibe-kit/mcp-client');
         if (mcpModule && mcpModule.MCPClientManager) {
-          console.log('MCP client found, initializing tools...');
+          console.log('MCP client found, loading tools from connected servers...');
           
-          // Create a simple tool for demonstration
-          // In production, you would dynamically load tools from connected MCP servers
-          tools = {
-            // Example MCP tool - this would be dynamically generated from MCP servers
-            mcp_example: {
-              description: 'Example MCP tool (placeholder)',
-              parameters: {
-                type: 'object',
-                properties: {
-                  query: { type: 'string', description: 'Query to process' }
-                },
-                required: ['query']
-              },
-              execute: async ({ query }: { query: string }) => {
-                return { 
-                  result: `MCP tool executed with query: ${query}`,
-                  note: 'This is a placeholder. Connect MCP servers to get real tools.'
+          // Initialize the MCP client manager
+          const manager = new mcpModule.MCPClientManager({
+            autoConnect: false,
+            configDir: process.env.MCP_CONFIG_DIR,
+          });
+          
+          await manager.initialize();
+          
+          // Get all connected servers
+          const servers = manager.getAllServers();
+          const connectedServers = servers.filter(server => 
+            manager.isConnected(server.id) || server.status === 'active'
+          );
+          
+          console.log(`Found ${connectedServers.length} MCP servers`);
+          
+          // Collect tools from all connected servers
+          tools = {};
+          
+          for (const server of connectedServers) {
+            try {
+              // Connect to server if not already connected
+              if (!manager.isConnected(server.id)) {
+                console.log(`Connecting to MCP server: ${server.name}`);
+                await manager.connect(server.id);
+              }
+              
+              // Get tools from this server
+              const serverTools = await manager.getTools(server.id);
+              console.log(`Server ${server.name} has ${serverTools.length} tools`);
+              
+              // Convert MCP tools to AI SDK format
+              for (const tool of serverTools) {
+                const toolKey = `${server.name}_${tool.name}`.replace(/[^a-zA-Z0-9_]/g, '_');
+                
+                tools[toolKey] = {
+                  description: tool.description || `Tool ${tool.name} from ${server.name}`,
+                  parameters: tool.inputSchema || {
+                    type: 'object',
+                    properties: {},
+                    required: []
+                  },
+                  execute: async (params: any) => {
+                    try {
+                      console.log(`Executing tool ${tool.name} on server ${server.name} with params:`, params);
+                      const result = await manager.executeTool(server.id, tool.name, params);
+                      return result.result || result;
+                    } catch (error: any) {
+                      console.error(`Error executing tool ${tool.name}:`, error);
+                      return {
+                        error: true,
+                        message: error.message || 'Tool execution failed'
+                      };
+                    }
+                  }
                 };
               }
+            } catch (error) {
+              console.error(`Error loading tools from server ${server.name}:`, error);
             }
-          };
+          }
           
-          console.log('MCP tools initialized (placeholder mode)');
+          const toolCount = Object.keys(tools).length;
+          if (toolCount > 0) {
+            console.log(`Loaded ${toolCount} MCP tools from ${connectedServers.length} servers`);
+          } else {
+            console.log('No MCP tools available. Connect MCP servers to enable tool calling.');
+            tools = undefined; // Don't pass empty tools object
+          }
         }
       } catch (error) {
-        console.log('MCP client not available:', error);
+        console.log('MCP client not available or error loading tools:', error);
       }
     }
     
@@ -158,7 +204,8 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
       const result = streamText(streamConfig);
 
       // Return the streaming response
-      const response = result.toTextStreamResponse();
+      // Use the same method as standard handler which supports tools
+      const response = (result as any).toDataStreamResponse?.() || result.toTextStreamResponse();
       return response;
     } catch (innerError: any) {
       console.error('Chat API: Streaming error:', innerError);
