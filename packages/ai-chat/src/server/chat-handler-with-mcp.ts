@@ -18,7 +18,13 @@ interface ChatRequestBody {
     maxTokens?: number;
     showMCPTools?: boolean;
     webSearch?: boolean;
+    projectId?: string;
+    projectRoot?: string;
+    projectName?: string;
   };
+  projectId?: string;
+  projectRoot?: string;
+  projectName?: string;
 }
 
 /**
@@ -49,11 +55,19 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
     const temperature = queryTemperature ? parseFloat(queryTemperature) : (data?.temperature || 0.7);
     const maxTokens = queryMaxTokens ? parseInt(queryMaxTokens) : (data?.maxTokens || 4096);
     
+    // Extract project context
+    const projectId = body.projectId || data?.projectId;
+    const projectRoot = body.projectRoot || data?.projectRoot;
+    const projectName = body.projectName || data?.projectName;
+    
     console.log('[MCP HANDLER] Config:', {
       model,
       showMCPTools,
       temperature,
       maxTokens,
+      projectId,
+      projectRoot,
+      projectName,
       fromQuery: {
         showMCPTools: queryShowMCPTools,
         model: queryModel,
@@ -163,12 +177,27 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
                     const configData = serverConfig as any;
                     console.log(`[MCP DEBUG] Adding server: ${name}`, configData);
                     
+                    // Configure server args based on project context
+                    let args = configData.args || [];
+                    
+                    // Update filesystem server to use project root
+                    if (projectRoot && name === 'filesystem') {
+                      console.log(`[MCP DEBUG] Configuring filesystem server with projectRoot: ${projectRoot}`);
+                      args = ['-y', '@modelcontextprotocol/server-filesystem', projectRoot];
+                    }
+                    
+                    // Update git server to use project root as repository
+                    if (projectRoot && name === 'git') {
+                      console.log(`[MCP DEBUG] Configuring git server with projectRoot: ${projectRoot}`);
+                      args = ['-y', '@modelcontextprotocol/server-git', '--repository', projectRoot];
+                    }
+                    
                     const server = await manager.addServer({
                       name,
                       transport: 'stdio',
                       config: {
                         command: configData.command,
-                        args: configData.args || [],
+                        args,
                         env: configData.env || {},
                       },
                     });
@@ -346,11 +375,18 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
 
     // Add system message for tool usage if we have tools loaded
     if (showMCPTools && tools && Object.keys(tools).length > 0) {
+      let systemContent = 'When you use tools, ALWAYS provide a helpful response to the user after the tool execution completes. You must take another step after the tool runs to summarize what the tool did and present the results in a clear, user-friendly way. Never stop after just calling a tool - always explain the results to the user.';
+      
+      // Add project context if available
+      if (projectName && projectRoot) {
+        systemContent += `\n\nYou are working in the context of the "${projectName}" project located at: ${projectRoot}. All file operations and commands should be relative to this project directory unless explicitly specified otherwise.`;
+      }
+      
       formattedMessages.unshift({
         role: 'system',
-        content: 'When you use tools, ALWAYS provide a helpful response to the user after the tool execution completes. You must take another step after the tool runs to summarize what the tool did and present the results in a clear, user-friendly way. Never stop after just calling a tool - always explain the results to the user.'
+        content: systemContent
       });
-      console.log('[MCP DEBUG] Added system message for tool usage guidance');
+      console.log('[MCP DEBUG] Added system message for tool usage guidance' + (projectName ? ` with project context: ${projectName}` : ''));
     }
     
     // Stream response with optional tools

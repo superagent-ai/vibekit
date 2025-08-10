@@ -19,6 +19,12 @@ export interface ChatOptions {
   apiEndpoint?: string;
   /** Function to get current state (for handling state updates) */
   getCurrentState?: () => { model: string; webSearch: boolean; mcpTools: boolean };
+  /** Project ID for project-specific chat */
+  projectId?: string;
+  /** Project root directory for MCP tool configuration */
+  projectRoot?: string;
+  /** Project name for display */
+  projectName?: string;
 }
 
 export interface MessageExtras {
@@ -37,12 +43,15 @@ export function useChat(options: ChatOptions = {}) {
     model = 'claude-sonnet-4-20250514',
     temperature = 0.7,
     maxTokens = 4096,
-    showMCPTools = false,
+    showMCPTools = true, // Enable MCP tools by default
     webSearch = false,
     onError,
     onFinish,
     apiEndpoint = '/api/chat',
     getCurrentState,
+    projectId,
+    projectRoot,
+    projectName,
   } = options;
 
   // Add debug logging
@@ -52,6 +61,9 @@ export function useChat(options: ChatOptions = {}) {
     maxTokens,
     showMCPTools,
     webSearch,
+    projectId,
+    projectRoot,
+    projectName,
   });
 
   // The AI SDK sends the body directly with the messages in a POST request
@@ -102,6 +114,9 @@ export function useChat(options: ChatOptions = {}) {
             model: currentState.model,
             temperature,
             maxTokens,
+            projectId,
+            projectRoot,
+            projectName,
           };
           
           return originalFetch(url, {

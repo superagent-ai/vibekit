@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical, ArrowUpDown } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical, ArrowUpDown, MessageSquare } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -55,6 +56,7 @@ interface SortableRowProps {
 }
 
 function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: SortableRowProps) {
+  const router = useRouter();
   const {
     attributes,
     listeners,
@@ -159,6 +161,17 @@ function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: S
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
+              router.push(`/projects/${project.id}/chat`);
+            }}
+            title="Open chat for this project"
+          >
+            <MessageSquare className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
               onEdit(project);
             }}
           >
@@ -182,6 +195,7 @@ function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: S
 }
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -817,6 +831,17 @@ export default function ProjectsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${project.id}/chat`);
+                          }}
+                          title="Open chat for this project"
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"

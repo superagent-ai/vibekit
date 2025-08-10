@@ -48,6 +48,12 @@ export interface ChatInterfaceProps {
   className?: string;
   /** Available AI models */
   models?: Array<{ name: string; value: string }>;
+  /** Project ID for project-specific chat */
+  projectId?: string;
+  /** Project root directory for MCP tool configuration */
+  projectRoot?: string;
+  /** Project name for display */
+  projectName?: string;
   /** Default selected model */
   defaultModel?: string;
   /** Show web search toggle button */
@@ -76,10 +82,13 @@ export function ChatInterface({
   onError,
   apiEndpoint,
   welcomeMessage,
+  projectId,
+  projectRoot,
+  projectName,
 }: ChatInterfaceProps) {
   const [model, setModel] = useState<string>(defaultModel);
   const [webSearch, setWebSearch] = useState(false);
-  const [mcpTools, setMcpTools] = useState(false);
+  const [mcpTools, setMcpTools] = useState(true); // Enable MCP tools by default
   const [inputValue, setInputValue] = useState('');
   
   // Use refs to track current values for the fetch function
@@ -106,6 +115,9 @@ export function ChatInterface({
     showMCPTools: mcpTools,
     onError,
     apiEndpoint,
+    projectId,
+    projectRoot,
+    projectName,
     // Pass a getter function to get current state
     getCurrentState: () => stateRef.current,
   }) as any;
