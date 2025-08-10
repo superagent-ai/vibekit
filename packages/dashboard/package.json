@@ -85,5 +85,13 @@
     "react-dom",
     "recharts",
     "tailwind-merge"
-  ]
+  ],
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@radix-ui/react-select": "^2.2.5",
+    "@radix-ui/react-tabs": "^1.1.12",
+    "tunnel-rat": "^0.1.2"
+  }
 }
