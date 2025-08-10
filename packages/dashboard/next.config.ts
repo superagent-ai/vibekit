@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
       config.resolve.alias = {};
     }
     // Use absolute path to projects package
-    const projectsPath = path.join(__dirname, '..', '..', '..', '..', '..', 'projects', 'dist', 'index.js');
+    const projectsPath = path.join(__dirname, '..', '..', 'projects', 'dist', 'index.js');
     config.resolve.alias['@vibe-kit/projects'] = projectsPath;
     
     // Also ensure extensions are set properly
@@ -42,10 +42,23 @@ const nextConfig: NextConfig = {
     
     return config;
   },
+  // Optimize for smallest bundle size
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'recharts'],
+  },
+  // Minimize build output
+  compress: true,
+  poweredByHeader: false,
   // Configure to run on port 3001 by default
   async rewrites() {
     return []
   },
+  // Minimize static generation
+  trailingSlash: false,
+  // Optimize images
+  images: {
+    unoptimized: true
+  }
 };
 
 export default nextConfig;
