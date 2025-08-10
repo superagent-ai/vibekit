@@ -13,3 +13,4 @@ export * from './ai-elements/loader';
 export * from './ai-elements/code-block';
 export * from './ai-elements/actions';
 export * from './ai-elements/branch';
+export * from './ai-elements/tool';

@@ -38,6 +38,7 @@ import {
   ReasoningTrigger,
 } from './ai-elements/reasoning';
 import { Loader } from './ai-elements/loader';
+import { ToolSection } from './ai-elements/tool';
 
 /**
  * Configuration for ChatInterface component
@@ -219,6 +220,12 @@ export function ChatInterface({
                         <ReasoningTrigger />
                         <ReasoningContent>{extras.reasoning}</ReasoningContent>
                       </Reasoning>
+                    )}
+                    {message.toolInvocations && message.toolInvocations.length > 0 && (
+                      <ToolSection 
+                        toolInvocations={message.toolInvocations}
+                        className="mb-4"
+                      />
                     )}
                     <Response>{content}</Response>
                     {extras.sources && extras.sources.length > 0 && (
