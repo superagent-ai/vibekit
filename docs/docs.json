@@ -101,7 +101,8 @@
             "group": "Commands",
             "pages": [
               "cli/commands/init",
-              "cli/commands/local"
+              "cli/commands/local",
+              "cli/commands/projects"
             ]
           },
           {

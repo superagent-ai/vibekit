@@ -20,6 +20,16 @@ import React from 'react';
 import { render } from 'ink';
 import Settings from './components/settings.js';
 import { setupAliases } from './utils/aliases.js';
+import {
+  listProjects,
+  showProject,
+  addProject,
+  editProject,
+  removeProject,
+  removeMultipleProjects,
+  selectProjectById,
+  showCurrentProject
+} from './components/projects.js';
 import SandboxEngine from './sandbox/sandbox-engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -588,7 +598,8 @@ proxyCommand
 // Dashboard commands
 const dashboardCommand = program
   .command('dashboard')
-  .description('Manage analytics dashboard');
+  .description('Manage analytics dashboard')
+  .option('-p, --port <number>', 'Port to run dashboard on', '3001');
 
 dashboardCommand
   .command('start')
@@ -854,6 +865,95 @@ program
         console.log(chalk.green('✓ Analytics cleaned'));
       }
     }
+  });
+
+// Projects commands
+const projectsCommand = program
+  .command('projects')
+  .description('Manage development projects');
+
+projectsCommand
+  .command('list')
+  .alias('ls')
+  .description('List all projects')
+  .action(async () => {
+    await listProjects();
+  });
+
+// Default action for 'projects' without subcommand - list projects
+projectsCommand
+  .action(async (_, command) => {
+    // If no subcommand was provided, list projects
+    if (command.args.length === 0) {
+      await listProjects();
+    }
+  });
+
+projectsCommand
+  .command('add [name] [folder] [description...]')
+  .alias('create')
+  .description('Add a new project (interactive or with args)')
+  .helpOption('-h, --help', 'Display help for command')
+  .addHelpText('after', `
+Examples:
+  vibekit projects add                     # Interactive mode
+  vibekit projects add myproject . "A cool project"   # Add current dir as project
+  vibekit projects add myapp /path/to/app  # Add specific path
+  vibekit projects add webapp ./webapp "My web application"`)
+  .action(async (name, folder, descriptionParts) => {
+    // Join description parts if multiple words were provided
+    const description = descriptionParts ? descriptionParts.join(' ') : undefined;
+    await addProject(name, folder, description);
+  });
+
+projectsCommand
+  .command('show <idOrName>')
+  .alias('view')
+  .description('Show project details')
+  .option('-n, --name', 'Show by project name instead of ID')
+  .action(async (idOrName, options) => {
+    await showProject(idOrName, options.name || false);
+  });
+
+projectsCommand
+  .command('edit <id>')
+  .alias('update')
+  .description('Edit project (interactive)')
+  .action(async (id) => {
+    await editProject(id);
+  });
+
+projectsCommand
+  .command('delete <idsOrNames...>')
+  .alias('remove')
+  .alias('rm')
+  .description('Delete one or more projects by ID or name')
+  .option('-n, --name', 'Treat arguments as project names instead of IDs')
+  .addHelpText('after', `
+Examples:
+  vibekit projects delete abc123              # Delete single project by ID
+  vibekit projects delete abc123 def456       # Delete multiple projects by ID
+  vibekit projects remove -n myproject        # Delete by name
+  vibekit projects rm -n project1 project2    # Delete multiple by name
+  vibekit projects rm -n "My Project" test    # Delete multiple with spaces in names`)
+  .action(async (idsOrNames, options) => {
+    await removeMultipleProjects(idsOrNames, options.name || false);
+  });
+
+projectsCommand
+  .command('select <idOrName>')
+  .alias('use')
+  .description('Select project and change to its directory')
+  .option('-n, --name', 'Select by project name instead of ID')
+  .action(async (idOrName, options) => {
+    await selectProjectById(idOrName, options.name || false);
+  });
+
+projectsCommand
+  .command('current')
+  .description('Show currently selected project')
+  .action(async () => {
+    await showCurrentProject();
   });
 
 if (process.argv.length === 2) {
