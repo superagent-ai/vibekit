@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useChat } from '../hooks/use-chat';
 import { useAuthStatus } from '../hooks/use-auth';
 import { DEFAULT_MODELS } from '../utils/config';
@@ -82,6 +82,22 @@ export function ChatInterface({
   const [mcpTools, setMcpTools] = useState(false);
   const [inputValue, setInputValue] = useState('');
   
+  // Use refs to track current values for the fetch function
+  const stateRef = useRef({
+    model,
+    webSearch,
+    mcpTools,
+  });
+  
+  // Update ref when state changes
+  useEffect(() => {
+    stateRef.current = {
+      model,
+      webSearch,
+      mcpTools,
+    };
+  }, [model, webSearch, mcpTools]);
+  
   const { authStatus, loading: authLoading } = useAuthStatus();
   
   const chat = useChat({
@@ -90,6 +106,8 @@ export function ChatInterface({
     showMCPTools: mcpTools,
     onError,
     apiEndpoint,
+    // Pass a getter function to get current state
+    getCurrentState: () => stateRef.current,
   }) as any;
   
   const { 
@@ -197,6 +215,68 @@ export function ChatInterface({
           const extras = getMessageExtras(message);
           const content = getMessageContent(message);
           
+          // Debug message parts
+          if (message.role === 'assistant' && message.parts) {
+            console.log(`[UI DEBUG] Message parts:`, message.parts.map((p: any) => ({ type: p.type, hasText: !!p.text, text: p.text?.substring(0, 100) })));
+            message.parts.forEach((part: any, i: number) => {
+              console.log(`[UI DEBUG] Part ${i}:`, part);
+            });
+          }
+          
+          // Transform AI SDK v5 parts into toolInvocations format for the UI
+          let transformedMessage = { ...message };
+          if (message.role === 'assistant' && message.parts) {
+            const toolInvocations: any[] = [];
+            
+            message.parts.forEach((part: any) => {
+              // Check if this part is a tool call (type starts with "tool-")
+              if (part.type && part.type.startsWith('tool-')) {
+                const toolName = part.type.replace('tool-', ''); // Remove "tool-" prefix
+                
+                console.log(`[UI DEBUG] Found tool part with keys:`, Object.keys(part));
+                console.log(`[UI DEBUG] Full part object:`, part);
+                
+                // Try to find args and results in various possible locations
+                const possibleArgs = part.args || part.arguments || part.parameters || part.input || part.toolCall?.arguments;
+                const possibleResult = part.result || part.content || part.text || part.output || part.toolCall?.result;
+                
+                console.log(`[UI DEBUG] Possible args:`, possibleArgs);
+                console.log(`[UI DEBUG] Possible result:`, possibleResult);
+                
+                // Map AI SDK states to the format expected by ToolSection
+                const mapState = (state: string) => {
+                  switch (state) {
+                    case 'input-streaming':
+                      return 'partial-call';
+                    case 'input-available':
+                      return 'call';
+                    case 'output-available':
+                      return possibleResult ? 'result' : 'call';
+                    default:
+                      return possibleResult ? 'result' : 'call';
+                  }
+                };
+                
+                // Transform to toolInvocations format
+                const toolInvocation = {
+                  toolName: toolName,
+                  args: possibleArgs || {},
+                  result: possibleResult,
+                  state: mapState(part.state),
+                  error: part.error || part.errorText
+                };
+                
+                toolInvocations.push(toolInvocation);
+                console.log(`[UI DEBUG] Transformed tool invocation:`, toolInvocation);
+              }
+            });
+            
+            if (toolInvocations.length > 0) {
+              transformedMessage.toolInvocations = toolInvocations;
+              console.log(`[UI DEBUG] Added ${toolInvocations.length} tool invocations to message`);
+            }
+          }
+          
           // Skip messages with 'data' role
           if (message.role === 'data') return null;
           
@@ -204,14 +284,14 @@ export function ChatInterface({
           const messageKey = message.id ? `${message.id}-${index}` : `message-${index}`;
             
           return (
-            <Message key={messageKey} role={message.role}>
+            <Message key={messageKey} role={transformedMessage.role}>
               <MessageAvatar>
                 <AvatarFallback>
-                  {message.role === 'user' ? 'U' : 'AI'}
+                  {transformedMessage.role === 'user' ? 'U' : 'AI'}
                 </AvatarFallback>
               </MessageAvatar>
               <MessageContent>
-                {message.role === 'user' ? (
+                {transformedMessage.role === 'user' ? (
                   <div className="prose">{content}</div>
                 ) : (
                   <>
@@ -221,9 +301,9 @@ export function ChatInterface({
                         <ReasoningContent>{extras.reasoning}</ReasoningContent>
                       </Reasoning>
                     )}
-                    {message.toolInvocations && message.toolInvocations.length > 0 && (
+                    {transformedMessage.toolInvocations && transformedMessage.toolInvocations.length > 0 && (
                       <ToolSection 
-                        toolInvocations={message.toolInvocations}
+                        toolInvocations={transformedMessage.toolInvocations}
                         className="mb-4"
                       />
                     )}

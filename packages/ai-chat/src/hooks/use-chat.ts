@@ -17,6 +17,8 @@ export interface ChatOptions {
   onFinish?: (message: any) => void;
   /** Custom API endpoint (defaults to /api/chat) */
   apiEndpoint?: string;
+  /** Function to get current state (for handling state updates) */
+  getCurrentState?: () => { model: string; webSearch: boolean; mcpTools: boolean };
 }
 
 export interface MessageExtras {
@@ -40,20 +42,25 @@ export function useChat(options: ChatOptions = {}) {
     onError,
     onFinish,
     apiEndpoint = '/api/chat',
+    getCurrentState,
   } = options;
 
-  const chat = useAIChat({
+  // Add debug logging
+  console.log('[USE-CHAT DEBUG] Options:', {
+    model,
+    temperature,
+    maxTokens,
+    showMCPTools,
+    webSearch,
+  });
+
+  // The AI SDK sends the body directly with the messages in a POST request
+  // We'll use a workaround - override the sendMessage function
+  const baseChat = useAIChat({
     api: apiEndpoint,
-    maxSteps: showMCPTools ? 10 : 5, // Allow more steps when using tools
+    maxSteps: 10, // Allow multiple steps for tools
     headers: {
       'Content-Type': 'application/json',
-    },
-    body: {
-      model,
-      temperature,
-      maxTokens,
-      showMCPTools,
-      webSearch,
     },
     onError: (error: any) => {
       console.error('Chat error:', error);
@@ -64,6 +71,73 @@ export function useChat(options: ChatOptions = {}) {
       onFinish?.(message);
     },
   } as any);
+  
+  // Override sendMessage to include our custom data
+  const originalSendMessage = baseChat.sendMessage;
+  
+  // Create a wrapper that intercepts the internal fetch
+  const originalFetch = typeof window !== 'undefined' ? window.fetch.bind(window) : fetch;
+  
+  const chat = {
+    ...baseChat,
+    sendMessage: async (message: any) => {
+      // Get current state values
+      const currentState = getCurrentState ? getCurrentState() : { 
+        model, 
+        webSearch, 
+        mcpTools: showMCPTools 
+      };
+      
+      console.log('[USE-CHAT DEBUG] Intercepting sendMessage with state:', currentState);
+      
+      // Temporarily override fetch to inject our custom data
+      const tempFetch = (url: string, options: any) => {
+        if (url === apiEndpoint || url.includes('/api/chat')) {
+          console.log('[USE-CHAT DEBUG] Intercepting fetch to inject custom data');
+          const body = JSON.parse(options.body || '{}');
+          const modifiedBody = {
+            ...body,
+            showMCPTools: currentState.mcpTools,
+            webSearch: currentState.webSearch,
+            model: currentState.model,
+            temperature,
+            maxTokens,
+          };
+          
+          return originalFetch(url, {
+            ...options,
+            body: JSON.stringify(modifiedBody),
+          });
+        }
+        return originalFetch(url, options);
+      };
+      
+      // Temporarily replace fetch
+      if (typeof window !== 'undefined') {
+        (window as any).fetch = tempFetch;
+      }
+      
+      try {
+        // Call the original sendMessage which will use our modified fetch
+        const result = await originalSendMessage(message);
+        
+        // Restore original fetch
+        if (typeof window !== 'undefined') {
+          (window as any).fetch = originalFetch;
+        }
+        
+        return result;
+      } catch (error) {
+        // Always restore fetch even on error
+        if (typeof window !== 'undefined') {
+          (window as any).fetch = originalFetch;
+        }
+        
+        console.error('[USE-CHAT DEBUG] Error in sendMessage:', error);
+        throw error;
+      }
+    }
+  };
   
   // Debug what methods are available
   console.log('useChat returned:', Object.keys(chat));
@@ -95,16 +169,47 @@ export function useChat(options: ChatOptions = {}) {
   const getMessageContent = (message: any): string => {
     const msg = message;
     
+    console.log('[GET-CONTENT DEBUG] Processing message:', { 
+      role: msg.role, 
+      hasParts: !!msg.parts, 
+      partsLength: msg.parts?.length 
+    });
+    
     // Handle parts array (assistant messages from streaming)
     if (Array.isArray(msg.parts)) {
+      console.log('[GET-CONTENT DEBUG] Processing parts:', msg.parts.map((p: any, i: number) => ({
+        index: i,
+        type: p.type,
+        hasText: !!p.text,
+        textLength: p.text?.length,
+        state: p.state,
+        textPreview: p.text?.substring(0, 50) + (p.text?.length > 50 ? '...' : '')
+      })));
+      
       const textContent = msg.parts
-        .filter((part: any) => part.type === 'text' || typeof part === 'string')
+        .filter((part: any) => {
+          // Accept text parts regardless of state, or string parts
+          const isTextPart = part.type === 'text' || typeof part === 'string';
+          console.log('[GET-CONTENT DEBUG] Filtering part:', { 
+            type: part.type, 
+            isString: typeof part === 'string',
+            hasText: !!part.text,
+            state: part.state,
+            isTextPart 
+          });
+          return isTextPart;
+        })
         .map((part: any) => {
           if (typeof part === 'string') return part;
-          if (part.type === 'text' && part.text) return part.text;
+          if (part.type === 'text' && part.text) {
+            console.log('[GET-CONTENT DEBUG] Extracting text:', part.text.substring(0, 100));
+            return part.text;
+          }
           return '';
         })
         .join('');
+      
+      console.log('[GET-CONTENT DEBUG] Final text content:', textContent.substring(0, 100));
       if (textContent) return textContent;
     }
     

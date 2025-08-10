@@ -1,5 +1,6 @@
-import { streamText } from 'ai';
+import { streamText, tool } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { z } from 'zod';
 import { AuthManager } from '../utils/auth';
 import type { NextRequest } from 'next/server';
 
@@ -27,6 +28,13 @@ interface ChatRequestBody {
  */
 export async function handleChatRequestWithMCP(req: NextRequest): Promise<Response> {
   try {
+    // Get query parameters
+    const { searchParams } = new URL(req.url);
+    const queryShowMCPTools = searchParams.get('showMCPTools') === 'true';
+    const queryModel = searchParams.get('model');
+    const queryTemperature = searchParams.get('temperature');
+    const queryMaxTokens = searchParams.get('maxTokens');
+    
     // Parse and validate request
     const body = await req.json() as ChatRequestBody;
     const { messages, data } = body;
@@ -35,9 +43,24 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
       return new Response('Messages are required', { status: 400 });
     }
 
-    // Get model from data or use default
-    const model = data?.model || 'claude-sonnet-4-20250514';
-    const showMCPTools = data?.showMCPTools ?? false;
+    // Get config from query params first, then body/data
+    const model = queryModel || (body as any).model || data?.model || 'claude-sonnet-4-20250514';
+    const showMCPTools = queryShowMCPTools || (body as any).showMCPTools || data?.showMCPTools || false;
+    const temperature = queryTemperature ? parseFloat(queryTemperature) : (data?.temperature || 0.7);
+    const maxTokens = queryMaxTokens ? parseInt(queryMaxTokens) : (data?.maxTokens || 4096);
+    
+    console.log('[MCP HANDLER] Config:', {
+      model,
+      showMCPTools,
+      temperature,
+      maxTokens,
+      fromQuery: {
+        showMCPTools: queryShowMCPTools,
+        model: queryModel,
+      },
+      bodyKeys: Object.keys(body),
+      hasData: !!data
+    });
     
     // Get auth manager instance
     const authManager = AuthManager.getInstance();
@@ -98,33 +121,99 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
         content: msg.content || ''
       };
     });
-    
+
     // Initialize MCP tools if enabled
     let tools: any = undefined;
     if (showMCPTools) {
-      console.log('MCP tools enabled, checking for MCP client...');
+      console.log('[MCP DEBUG] MCP tools enabled, checking for MCP client...');
+      console.log('[MCP DEBUG] MCP_CONFIG_DIR:', process.env.MCP_CONFIG_DIR);
       
       try {
         // Try to import and use MCP client if available
         const mcpModule = await import('@vibe-kit/mcp-client');
         if (mcpModule && mcpModule.MCPClientManager) {
-          console.log('MCP client found, loading tools from connected servers...');
+          console.log('[MCP DEBUG] MCP client found, loading tools from connected servers...');
           
           // Initialize the MCP client manager
+          // Try to find config file in different locations
+          const path = await import('path');
+          const fs = await import('fs');
+          
+          let mcpConfig = null;
+          const configPaths = [
+            path.join(process.cwd(), 'packages/dashboard/mcp-config.json'),
+            path.join(process.cwd(), 'mcp-config.json'),
+            process.env.MCP_CONFIG_PATH,
+          ].filter(Boolean);
+          
+          for (const configPath of configPaths) {
+            try {
+              if (fs.existsSync(configPath)) {
+                console.log('[MCP DEBUG] Found config file at:', configPath);
+                mcpConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+                break;
+              }
+            } catch (e) {
+              console.log('[MCP DEBUG] Failed to read config from:', configPath, e);
+            }
+          }
+          
           const manager = new mcpModule.MCPClientManager({
             autoConnect: false,
             configDir: process.env.MCP_CONFIG_DIR,
           });
           
+          console.log('[MCP DEBUG] Initializing MCP manager...');
           await manager.initialize();
+          
+          // If we found a config file, add servers from it
+          const addedServers = [];
+          if (mcpConfig && mcpConfig.mcpServers) {
+            console.log('[MCP DEBUG] Adding servers from config file...');
+            for (const [name, serverConfig] of Object.entries(mcpConfig.mcpServers)) {
+              try {
+                const config = serverConfig as any;
+                if (!config.enabled) continue;
+                
+                console.log(`[MCP DEBUG] Adding server: ${name}`);
+                const server = await manager.addServer({
+                  name,
+                  transport: 'stdio',
+                  config: {
+                    command: config.command,
+                    args: config.args || [],
+                    env: config.env,
+                  },
+                });
+                console.log(`[MCP DEBUG] Added server ${name} with ID: ${server.id}`);
+                addedServers.push(server);
+              } catch (error) {
+                console.error(`[MCP DEBUG] Failed to add server ${name}:`, error);
+              }
+            }
+          }
+          
+          // Connect to all added servers
+          for (const server of addedServers) {
+            try {
+              console.log(`[MCP DEBUG] Connecting to server: ${server.name} (${server.id})`);
+              await manager.connect(server.id);
+              console.log(`[MCP DEBUG] Successfully connected to: ${server.name}`);
+            } catch (error) {
+              console.error(`[MCP DEBUG] Failed to connect to server ${server.name}:`, error);
+            }
+          }
           
           // Get all connected servers
           const servers = manager.getAllServers();
-          const connectedServers = servers.filter(server => 
-            manager.isConnected(server.id) || server.status === 'active'
+          console.log('[MCP DEBUG] All servers after connection:', servers.map(s => ({ id: s.id, name: s.name, status: s.status })));
+          
+          // Use the servers we just added and connected to
+          const connectedServers = addedServers.filter(server => 
+            manager.isConnected(server.id)
           );
           
-          console.log(`Found ${connectedServers.length} MCP servers`);
+          console.log(`[MCP DEBUG] Found ${connectedServers.length} MCP servers (connected or active)`);
           
           // Collect tools from all connected servers
           tools = {};
@@ -133,80 +222,245 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
             try {
               // Connect to server if not already connected
               if (!manager.isConnected(server.id)) {
-                console.log(`Connecting to MCP server: ${server.name}`);
+                console.log(`[MCP DEBUG] Connecting to MCP server: ${server.name} (id: ${server.id})`);
                 await manager.connect(server.id);
+                console.log(`[MCP DEBUG] Successfully connected to: ${server.name}`);
+              } else {
+                console.log(`[MCP DEBUG] Already connected to: ${server.name}`);
               }
               
               // Get tools from this server
+              console.log(`[MCP DEBUG] Getting tools from server: ${server.name}`);
               const serverTools = await manager.getTools(server.id);
-              console.log(`Server ${server.name} has ${serverTools.length} tools`);
+              console.log(`[MCP DEBUG] Server ${server.name} has ${serverTools.length} tools:`, serverTools.map(t => t.name));
               
               // Convert MCP tools to AI SDK format
-              for (const tool of serverTools) {
-                const toolKey = `${server.name}_${tool.name}`.replace(/[^a-zA-Z0-9_]/g, '_');
+              for (const mcpTool of serverTools) {
+                const toolKey = `${server.name}_${mcpTool.name}`.replace(/[^a-zA-Z0-9_]/g, '_');
+                console.log(`[MCP DEBUG] Registering tool: ${toolKey}`);
+                console.log(`[MCP DEBUG] Tool inputSchema:`, JSON.stringify(mcpTool.inputSchema, null, 2));
                 
-                tools[toolKey] = {
-                  description: tool.description || `Tool ${tool.name} from ${server.name}`,
-                  parameters: tool.inputSchema || {
+                // Ensure the input schema has the required 'type' field
+                let inputSchema = mcpTool.inputSchema || {
+                  type: 'object',
+                  properties: {},
+                  required: []
+                };
+                
+                // Make sure the schema has a type field at the root level
+                if (!inputSchema.type) {
+                  inputSchema = {
                     type: 'object',
-                    properties: {},
-                    required: []
-                  },
+                    ...inputSchema
+                  };
+                }
+                
+                // Convert JSON Schema to Zod schema for the AI SDK
+                const convertJsonSchemaToZod = (schema: any): any => {
+                  if (!schema || !schema.properties) {
+                    return z.object({});
+                  }
+                  
+                  const zodShape: any = {};
+                  for (const [key, value] of Object.entries(schema.properties)) {
+                    const prop = value as any;
+                    let zodType: any;
+                    
+                    if (prop.type === 'string') {
+                      zodType = z.string();
+                    } else if (prop.type === 'number') {
+                      zodType = z.number();
+                    } else if (prop.type === 'boolean') {
+                      zodType = z.boolean();
+                    } else if (prop.type === 'array') {
+                      if (prop.items?.type === 'string') {
+                        zodType = z.array(z.string());
+                      } else {
+                        zodType = z.array(z.any());
+                      }
+                    } else if (prop.type === 'object') {
+                      zodType = z.object({});
+                    } else {
+                      zodType = z.any();
+                    }
+                    
+                    // Add description if present
+                    if (prop.description) {
+                      zodType = zodType.describe(prop.description);
+                    }
+                    
+                    // Make optional if not required
+                    if (!schema.required?.includes(key)) {
+                      zodType = zodType.optional();
+                    }
+                    
+                    zodShape[key] = zodType;
+                  }
+                  
+                  return z.object(zodShape);
+                };
+                
+                // Use the AI SDK's tool helper
+                tools[toolKey] = tool({
+                  description: mcpTool.description || `Tool ${mcpTool.name} from ${server.name}`,
+                  inputSchema: convertJsonSchemaToZod(inputSchema),
                   execute: async (params: any) => {
                     try {
-                      console.log(`Executing tool ${tool.name} on server ${server.name} with params:`, params);
-                      const result = await manager.executeTool(server.id, tool.name, params);
+                      console.log(`[MCP EXEC] ===== TOOL EXECUTION START =====`);
+                      console.log(`[MCP EXEC] Tool: ${mcpTool.name}`);
+                      console.log(`[MCP EXEC] Server: ${server.name}`);
+                      console.log(`[MCP EXEC] Params:`, JSON.stringify(params, null, 2));
+                      
+                      const result = await manager.executeTool(server.id, mcpTool.name, params);
+                      
+                      console.log(`[MCP EXEC] Result:`, JSON.stringify(result, null, 2));
+                      console.log(`[MCP EXEC] ===== TOOL EXECUTION END =====`);
+                      
                       return result.result || result;
                     } catch (error: any) {
-                      console.error(`Error executing tool ${tool.name}:`, error);
+                      console.error(`[MCP EXEC ERROR] Tool ${mcpTool.name} failed:`, error);
+                      console.error(`[MCP EXEC ERROR] Stack:`, error.stack);
                       return {
                         error: true,
                         message: error.message || 'Tool execution failed'
                       };
                     }
                   }
-                };
+                });
               }
             } catch (error) {
-              console.error(`Error loading tools from server ${server.name}:`, error);
+              console.error(`[MCP DEBUG ERROR] Error loading tools from server ${server.name}:`, error);
             }
           }
           
           const toolCount = Object.keys(tools).length;
           if (toolCount > 0) {
-            console.log(`Loaded ${toolCount} MCP tools from ${connectedServers.length} servers`);
+            console.log(`[MCP DEBUG] Successfully loaded ${toolCount} MCP tools from ${connectedServers.length} servers`);
+            console.log(`[MCP DEBUG] Available tools:`, Object.keys(tools));
           } else {
-            console.log('No MCP tools available. Connect MCP servers to enable tool calling.');
+            console.log('[MCP DEBUG] No MCP tools available. Connect MCP servers to enable tool calling.');
             tools = undefined; // Don't pass empty tools object
           }
+        } else {
+          console.log('[MCP DEBUG] MCP client module does not have MCPClientManager');
         }
       } catch (error) {
-        console.log('MCP client not available or error loading tools:', error);
+        console.log('[MCP DEBUG ERROR] MCP client not available or error loading tools:', error);
       }
+    } else {
+      console.log('[MCP DEBUG] MCP tools disabled (showMCPTools:', showMCPTools, ')');
+    }
+
+    // Add system message for tool usage if we have tools loaded
+    if (showMCPTools && tools && Object.keys(tools).length > 0) {
+      formattedMessages.unshift({
+        role: 'system',
+        content: 'When you use tools, ALWAYS provide a helpful response to the user after the tool execution completes. You must take another step after the tool runs to summarize what the tool did and present the results in a clear, user-friendly way. Never stop after just calling a tool - always explain the results to the user.'
+      });
+      console.log('[MCP DEBUG] Added system message for tool usage guidance');
     }
     
-    // Stream the response with optional tools
+    // Stream response with optional tools
     try {
       const streamConfig: any = {
         model: anthropic(model),
         messages: formattedMessages,
-        temperature: data?.temperature || 0.7,
-        maxOutputTokens: data?.maxTokens || 4096,
+        temperature: temperature,
+        maxOutputTokens: maxTokens,
       };
       
       // Only add tools if we have any
       if (tools && Object.keys(tools).length > 0) {
         streamConfig.tools = tools;
-        streamConfig.maxSteps = 10; // Allow multiple tool calls
-        console.log('Streaming with MCP tools enabled');
+        streamConfig.maxSteps = 10; // Enable multi-step execution - increase to ensure continuation
+        
+        // Add tool choice to encourage tool usage but allow continuation
+        streamConfig.toolChoice = 'auto';
+        
+        // Add explicit stopping condition - continue until we have both tools AND text
+        streamConfig.stopWhen = (step: any, stepIndex: number) => {
+          console.log('[MCP DEBUG] StopWhen check - Step', stepIndex + 1, 'Type:', step?.stepType);
+          // Only stop if we've had both tool execution AND follow-up text
+          if (stepIndex >= 3) { // Allow at least 4 steps: text -> tool -> result -> text
+            console.log('[MCP DEBUG] Allowing stop after step', stepIndex + 1);
+            return true;
+          }
+          console.log('[MCP DEBUG] Continuing - need more steps');
+          return false;
+        };
+        
+        console.log('[MCP DEBUG] ===== STREAMING WITH TOOLS =====');
+        console.log('[MCP DEBUG] Tool count:', Object.keys(tools).length);
+        console.log('[MCP DEBUG] Tool names:', Object.keys(tools));
+        console.log('[MCP DEBUG] Max steps:', streamConfig.maxSteps);
+        console.log('[MCP DEBUG] Tool choice:', streamConfig.toolChoice);
+        console.log('[MCP DEBUG] Model:', model);
+        
+        // Debug: log the actual tool structure being sent
+        console.log('[MCP DEBUG] First tool structure:', JSON.stringify(tools[Object.keys(tools)[0]], null, 2));
+      } else {
+        console.log('[MCP DEBUG] Streaming WITHOUT tools (tools:', tools, ')');
       }
       
       const result = streamText(streamConfig);
+      console.log('[MCP DEBUG] StreamText created, returning response');
+      
+      // Debug: Access the stream asynchronously to see what's actually happening
+      (async () => {
+        try {
+          console.log('[MCP DEBUG] ===== ANALYZING STREAM EVENTS =====');
+          let stepCount = 0;
+          let toolCallCount = 0;
+          let textResponseCount = 0;
+          
+          for await (const chunk of result.fullStream) {
+            console.log('[MCP DEBUG] Stream chunk type:', chunk.type);
+            
+            if (chunk.type === 'step-start') {
+              stepCount++;
+              console.log('[MCP DEBUG] Step started:', stepCount);
+            } else if (chunk.type === 'tool-call') {
+              toolCallCount++;
+              console.log('[MCP DEBUG] Tool call:', toolCallCount, chunk.toolName);
+            } else if (chunk.type === 'tool-result') {
+              console.log('[MCP DEBUG] Tool result received');
+            } else if (chunk.type === 'text-delta') {
+              textResponseCount++;
+              if (textResponseCount === 1) {
+                console.log('[MCP DEBUG] First text response started');
+              }
+            } else if (chunk.type === 'step-finish') {
+              console.log('[MCP DEBUG] Step finished. Steps:', stepCount, 'Tools:', toolCallCount, 'Text responses:', textResponseCount);
+            }
+          }
+          
+          console.log('[MCP DEBUG] ===== FINAL SUMMARY =====');
+          console.log('[MCP DEBUG] Total steps:', stepCount);
+          console.log('[MCP DEBUG] Total tool calls:', toolCallCount); 
+          console.log('[MCP DEBUG] Total text responses:', textResponseCount);
+          console.log('[MCP DEBUG] Expected: At least 2 steps (1 tool call + 1 follow-up text)');
+        } catch (err) {
+          console.error('[MCP DEBUG] Stream analysis error:', err);
+        }
+      })();
 
-      // Return the streaming response
-      // Use the same method as standard handler which supports tools
-      const response = (result as any).toDataStreamResponse?.() || result.toTextStreamResponse();
-      return response;
+      // Return streaming response - check available methods and use correct one
+      console.log('[MCP DEBUG] Available methods on streamText result:', Object.getOwnPropertyNames(result).concat(Object.getOwnPropertyNames(Object.getPrototypeOf(result))));
+      
+      // Try the correct streaming method
+      if (result.toUIMessageStreamResponse) {
+        console.log('[MCP DEBUG] Using toUIMessageStreamResponse');
+        return result.toUIMessageStreamResponse();
+      } else if ((result as any).toDataStreamResponse) {
+        console.log('[MCP DEBUG] Using toDataStreamResponse');
+        return (result as any).toDataStreamResponse();
+      } else if (result.toTextStreamResponse) {
+        console.log('[MCP DEBUG] Using toTextStreamResponse');
+        return result.toTextStreamResponse();
+      } else {
+        console.log('[MCP DEBUG] No streaming method found, available keys:', Object.keys(result));
+        throw new Error('No valid streaming response method available');
+      }
     } catch (innerError: any) {
       console.error('Chat API: Streaming error:', innerError);
       console.error('Chat API: Error stack:', innerError?.stack);
