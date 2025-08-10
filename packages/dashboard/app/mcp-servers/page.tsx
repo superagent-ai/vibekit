@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Download, Upload, RefreshCw, Search, Filter, ArrowUpDown } from "lucide-react";
+import { Plus, Download, Upload, RefreshCw, Search, Filter, ArrowUpDown, Clipboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MCPServerCard } from "@/components/mcp/server-card";
 import { ServerForm } from "@/components/mcp/server-form";
+import { PasteServerDialog } from "@/components/mcp/paste-server-dialog";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -36,6 +37,7 @@ export default function MCPServersPage() {
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isPasteOpen, setIsPasteOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -203,6 +205,67 @@ export default function MCPServersPage() {
     }
   };
 
+  const handlePasteServers = async (parsedServers: any[]) => {
+    // Add multiple servers from paste
+    const addedServers = await Promise.all(
+      parsedServers.map(async (server) => {
+        const serverData = {
+          name: server.name,
+          description: `Imported from paste: ${server.command} ${server.args?.join(' ') || ''}`,
+          transport: 'stdio' as const,
+          config: {
+            command: server.command,
+            args: server.args || [],
+            env: server.env || {},
+          },
+        };
+
+        try {
+          const response = await fetch('/api/mcp/servers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(serverData),
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to add server ${server.name}`);
+          }
+          
+          const result = await response.json();
+          return result.data || result; // Handle different response formats
+        } catch (error) {
+          console.error(`Failed to add server ${server.name}:`, error);
+          throw error;
+        }
+      })
+    );
+
+    // Refresh the server list first
+    await fetchServers();
+
+    // Auto-connect to all newly added servers
+    console.log('Auto-connecting to imported servers...');
+    const connectPromises = addedServers.map(async (server) => {
+      if (server && server.id) {
+        try {
+          console.log(`Connecting to server: ${server.name || server.id}`);
+          await handleConnect(server.id);
+          // Small delay between connections to avoid overwhelming the system
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error(`Failed to auto-connect to server ${server.name || server.id}:`, error);
+          // Don't throw - we want to continue connecting other servers
+        }
+      }
+    });
+
+    // Wait for all connections to complete (or fail)
+    await Promise.allSettled(connectPromises);
+    
+    // Refresh again to show updated connection statuses
+    await fetchServers();
+  };
+
   return (
     <>
       <header className="flex h-16 shrink-0 items-center gap-2">
@@ -298,6 +361,24 @@ export default function MCPServersPage() {
                 onChange={handleImport}
               />
             </label>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPasteOpen(true)}
+              className="hidden sm:inline-flex"
+            >
+              <Clipboard className="mr-2 h-4 w-4" />
+              Paste
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPasteOpen(true)}
+              className="sm:hidden h-8 w-8 p-0"
+            >
+              <Clipboard className="h-4 w-4" />
+            </Button>
             
             <Button
               onClick={() => {
@@ -488,6 +569,12 @@ export default function MCPServersPage() {
         onSubmit={editingServer ? handleEditServer : handleAddServer}
         initialData={editingServer || undefined}
         mode={editingServer ? 'edit' : 'create'}
+      />
+      
+      <PasteServerDialog
+        open={isPasteOpen}
+        onOpenChange={setIsPasteOpen}
+        onAddServers={handlePasteServers}
       />
     </>
   );
