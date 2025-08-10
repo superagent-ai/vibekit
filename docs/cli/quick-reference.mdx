@@ -83,6 +83,37 @@ vibekit dashboard start --port 3001 --open
 vibekit dashboard stop
 ```
 
+### Project Management
+
+```bash
+# List all projects
+vibekit projects list
+
+# Add a new project (interactive)
+vibekit projects add
+
+# Add project with arguments
+vibekit projects add "my-app" . "My application"
+
+# Show project details
+vibekit projects show abc123
+vibekit projects show -n "my-app"  # By name
+
+# Select and switch to project
+vibekit projects select abc123
+vibekit projects select -n "my-app"
+
+# Edit project configuration
+vibekit projects edit abc123
+
+# Delete projects
+vibekit projects delete abc123
+vibekit projects delete -n "old-project"
+
+# Show current project
+vibekit projects current
+```
+
 ## Common Workflows
 
 ### Secure Development

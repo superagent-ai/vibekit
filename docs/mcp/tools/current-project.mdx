@@ -1,0 +1,335 @@
+---
+title: current_project
+description: "Manage the current active project context"
+---
+
+## Overview
+
+The `current_project` tool manages the currently active project context. This allows AI assistants to understand which project is currently being worked on, switch between projects, or clear the current selection. The current project context is shared across all VibeKit tools and interfaces.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | enum | No | Operation to perform: `get` (default), `set`, or `clear` |
+| `id` | string | Conditional | Project ID or name (required for `set` action) |
+
+## Actions
+
+### get
+
+Retrieves information about the currently selected project.
+
+**Example Request:**
+```json
+{
+  "action": "get"
+}
+```
+
+**Example Response (with current project):**
+```json
+{
+  "currentProject": {
+    "id": "abc123",
+    "name": "my-app",
+    "projectRoot": "/home/user/projects/my-app",
+    "status": "active",
+    "description": "Main application",
+    "tags": ["react", "typescript"],
+    "priority": "high",
+    "setupScript": "npm install",
+    "devScript": "npm run dev",
+    "cleanupScript": "npm run clean",
+    "createdAt": "2024-01-15T10:30:00Z",
+    "updatedAt": "2024-01-20T15:45:00Z"
+  },
+  "message": "Current project: my-app"
+}
+```
+
+**Example Response (no current project):**
+```json
+{
+  "currentProject": null,
+  "message": "No project currently selected"
+}
+```
+
+### set
+
+Sets a project as the current active project. Can use either project ID or project name.
+
+**Example Request (by ID):**
+```json
+{
+  "action": "set",
+  "id": "abc123"
+}
+```
+
+**Example Request (by name):**
+```json
+{
+  "action": "set",
+  "id": "my-app"
+}
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "currentProject": {
+    "id": "abc123",
+    "name": "my-app",
+    "projectRoot": "/home/user/projects/my-app",
+    "status": "active",
+    "description": "Main application",
+    "tags": ["react", "typescript"],
+    "priority": "high"
+  },
+  "message": "Current project set to: my-app"
+}
+```
+
+### clear
+
+Clears the current project selection, useful when you want to work without a specific project context.
+
+**Example Request:**
+```json
+{
+  "action": "clear"
+}
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "message": "Current project selection cleared"
+}
+```
+
+## Error Responses
+
+### Missing Required ID
+
+When using `set` action without providing an ID:
+
+```json
+{
+  "success": false,
+  "error": "ID is required for setting current project"
+}
+```
+
+### Project Not Found
+
+When trying to set a non-existent project:
+
+```json
+{
+  "success": false,
+  "error": "Project not found: invalid-project-id"
+}
+```
+
+### Invalid Action
+
+```json
+{
+  "error": "Invalid action"
+}
+```
+
+## Use Cases
+
+### Check Current Context
+
+Before performing project-specific operations:
+
+```json
+{
+  "action": "get"
+}
+```
+
+### Switch Projects
+
+Change to a different project by name:
+
+```json
+{
+  "action": "set",
+  "id": "frontend-app"
+}
+```
+
+### Start Fresh Session
+
+Clear any existing project context:
+
+```json
+{
+  "action": "clear"
+}
+```
+
+### Project Exists Check
+
+Try to set a project and handle the error if it doesn't exist:
+
+```json
+{
+  "action": "set",
+  "id": "maybe-project"
+}
+```
+
+## Context Persistence
+
+The current project selection is persisted in:
+- **File Location**: `~/.vibekit/current-project.json`
+- **Shared Access**: All VibeKit tools share this context
+- **Cross-Session**: Persists between sessions
+
+## Intelligent ID Resolution
+
+The `set` action intelligently resolves the provided ID:
+
+1. **First attempt**: Treat as project ID
+2. **Fallback**: Search by project name
+3. **Error**: Return not found if neither matches
+
+This allows flexible project selection:
+```json
+// Works with ID
+{ "action": "set", "id": "abc123" }
+
+// Also works with name
+{ "action": "set", "id": "my-app" }
+```
+
+## Integration with Other Tools
+
+### Workflow Example
+
+1. **List projects** to see available options:
+   ```json
+   { "action": "list" }
+   ```
+
+2. **Set current project**:
+   ```json
+   { "action": "set", "id": "my-app" }
+   ```
+
+3. **Verify selection**:
+   ```json
+   { "action": "get" }
+   ```
+
+4. **Work with the project** (context is now set)
+
+5. **Switch to another project**:
+   ```json
+   { "action": "set", "id": "api-service" }
+   ```
+
+### CLI Integration
+
+The current project set via MCP is the same one used by the CLI:
+
+```bash
+# CLI command
+vibekit projects select my-app
+
+# Equivalent MCP tool call
+{ "action": "set", "id": "my-app" }
+```
+
+Both methods update the same `~/.vibekit/current-project.json` file.
+
+## Best Practices
+
+### Context Awareness
+
+1. **Check first**: Always check current project before context-sensitive operations
+2. **Confirm switches**: Verify project switch succeeded before proceeding
+3. **Handle no context**: Gracefully handle cases where no project is selected
+
+### Project Switching
+
+1. **Save state**: Consider saving work before switching projects
+2. **Use names**: Project names are often easier to remember than IDs
+3. **Verify path**: Check the project root path after switching
+
+### Error Handling
+
+1. **Check existence**: Verify project exists before attempting to set
+2. **Fallback logic**: Have a fallback when no current project is set
+3. **Clear on error**: Consider clearing selection if project is corrupted
+
+## Response Fields
+
+### currentProject Object
+
+When a project is selected, contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique project identifier |
+| `name` | string | Project name |
+| `projectRoot` | string | Absolute path to project |
+| `status` | string | `active` or `archived` |
+| `description` | string | Optional description |
+| `tags` | string[] | Optional tags |
+| `priority` | string | Optional priority level |
+| `setupScript` | string | Optional setup command |
+| `devScript` | string | Optional dev command |
+| `cleanupScript` | string | Optional cleanup command |
+| `createdAt` | string | Creation timestamp |
+| `updatedAt` | string | Last update timestamp |
+
+### Status Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Operation success status |
+| `message` | string | Human-readable status message |
+| `error` | string | Error message if operation failed |
+
+## Advanced Usage
+
+### Conditional Operations
+
+Perform operations only if a specific project is current:
+
+1. Get current project
+2. Check if it matches expected project
+3. Proceed with operation or switch first
+
+### Multi-Project Workflows
+
+For workflows involving multiple projects:
+
+1. Store original current project
+2. Switch to each project as needed
+3. Perform operations
+4. Restore original project (optional)
+
+### Project Templates
+
+When creating similar projects:
+
+1. Set a template project as current
+2. Read its configuration
+3. Create new projects with similar settings
+4. Set new project as current
+
+## Related Tools
+
+- [`projects`](/mcp/tools/projects) - List and search all projects
+- [`project_manage`](/mcp/tools/project-management) - Create, update, or delete projects
