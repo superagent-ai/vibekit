@@ -21,8 +21,6 @@ if (existsSync(oauthTokenPath)) {
     const oauthToken = JSON.parse(tokenContent);
     if (oauthToken.access_token) {
       claudeCodeMaxUser = oauthToken.account?.email_address;
-      console.log('Claude Code Max account detected for:', claudeCodeMaxUser || 'unknown user');
-      console.log('Note: Claude Code Max tokens cannot be used with the API SDK. Please set ANTHROPIC_API_KEY.');
     }
   } catch (e) {
     // Ignore error
@@ -30,54 +28,47 @@ if (existsSync(oauthTokenPath)) {
 }
 
 // Load API key from environment or .env files
-{
-  // Load environment variables from root .env
-  const rootPath = '/Users/danziger/code/vibekit/.env';
-
+function loadApiKey() {
   // Try multiple paths in case we're running from different locations
   const possiblePaths = [
-    rootPath,
     path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), '../.env'),
+    path.resolve(process.cwd(), '../../.env'),
+    path.resolve(process.cwd(), '../../../.env'),
     path.resolve(process.cwd(), '../../../../.env'),
-    path.resolve(__dirname, '../../../../.env'),
   ];
 
-  apiKey = process.env.ANTHROPIC_API_KEY;
+  // First check if API key is already in environment
+  if (process.env.ANTHROPIC_API_KEY) {
+    apiKey = process.env.ANTHROPIC_API_KEY;
+    authMethod = 'API Key (env)';
+    return;
+  }
 
   // Try to load from .env files if not already set
-  if (!apiKey) {
-    for (const envPath of possiblePaths) {
-      try {
-        const envContent = readFileSync(envPath, 'utf-8');
-        const envVars = dotenv.parse(envContent);
-        if (envVars.ANTHROPIC_API_KEY) {
-          process.env.ANTHROPIC_API_KEY = envVars.ANTHROPIC_API_KEY;
-          apiKey = envVars.ANTHROPIC_API_KEY;
-          authMethod = 'API Key';
-          console.log('Loaded API key from:', envPath);
-          break;
-        }
-      } catch (e) {
-        // Try next path
+  for (const envPath of possiblePaths) {
+    try {
+      const envContent = readFileSync(envPath, 'utf-8');
+      const envVars = dotenv.parse(envContent);
+      if (envVars.ANTHROPIC_API_KEY) {
+        // Use the API key directly from the parsed env vars
+        apiKey = envVars.ANTHROPIC_API_KEY;
+        authMethod = 'API Key';
+        break;
       }
+    } catch (e) {
+      // Try next path
     }
-  } else {
-    authMethod = 'API Key (env)';
   }
 }
 
+// Call the function to load API key
+loadApiKey();
+
 export async function POST(req: Request) {
   try {
-    console.log('Chat API: Processing request...');
-    console.log('Authentication method:', authMethod);
-    if (claudeCodeMaxUser) {
-      console.log('Claude Code Max user detected:', claudeCodeMaxUser);
-    }
-    console.log('API Key loaded:', apiKey ? 'Yes (length: ' + apiKey.length + ')' : 'No');
-    
     // Parse request
     const body = await req.json();
-    console.log('Chat API: Body parsed:', JSON.stringify(body, null, 2));
     const { messages, data } = body;
     
     if (!messages || messages.length === 0) {
@@ -86,13 +77,11 @@ export async function POST(req: Request) {
 
     // Get model from data or use default
     const model = data?.model || 'claude-sonnet-4-20250514';
-    console.log('Chat API: Using model:', model);
     
     // Check for API key (use the one loaded at module level)
-    const currentApiKey = process.env.ANTHROPIC_API_KEY || apiKey;
+    const currentApiKey = apiKey;
     if (!currentApiKey) {
       console.error('No ANTHROPIC_API_KEY found in any location');
-      console.error('Tried paths:', possiblePaths);
       return new Response(
         JSON.stringify({ 
           error: 'API key not configured. Please set ANTHROPIC_API_KEY in your .env file.' 
@@ -110,8 +99,6 @@ export async function POST(req: Request) {
     });
     
     // Stream the response
-    console.log('Chat API: Starting stream with messages:', messages);
-    console.log('Chat API: Creating Anthropic model with:', model);
     
     // Convert messages to the format expected by the AI SDK
     const formattedMessages = messages.map((msg: any) => {
@@ -142,7 +129,6 @@ export async function POST(req: Request) {
       };
     });
     
-    console.log('Chat API: Formatted messages:', formattedMessages);
     
     try {
       const result = streamText({
@@ -150,19 +136,11 @@ export async function POST(req: Request) {
         messages: formattedMessages,
         temperature: 0.7,
         maxTokens: 4096,
-        onFinish: ({ text, usage }) => {
-          console.log('Chat API: Stream finished');
-          console.log('Chat API: Response text:', text);
-          console.log('Chat API: Token usage:', usage);
-        },
       });
 
-      console.log('Chat API: streamText result created');
       
       // Return the streaming response
-      console.log('Chat API: Calling toUIMessageStreamResponse()');
       const response = result.toUIMessageStreamResponse();
-      console.log('Chat API: Response created successfully');
       return response;
     } catch (innerError: any) {
       console.error('Chat API: Inner error:', innerError);
