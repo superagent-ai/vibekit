@@ -1,0 +1,625 @@
+---
+title: Deployment
+description: "Deploy VibeKit MCP server for team and production use"
+---
+
+## Overview
+
+This guide covers deploying the VibeKit MCP server for team access, production environments, and integration with various AI platforms beyond local Claude Desktop.
+
+## Deployment Modes
+
+### Local Development
+
+For individual developers working locally:
+
+```bash
+# Using npx (recommended)
+npx @vibe-kit/mcp-server
+
+# Or install globally
+npm install -g @vibe-kit/mcp-server
+vibekit-mcp
+```
+
+### HTTP Stream Server
+
+For network-accessible deployment:
+
+```bash
+# Start on default port 8080
+npx @vibe-kit/mcp-server --transport http-stream
+
+# Custom port
+npx @vibe-kit/mcp-server --transport http-stream --port 3000
+```
+
+Access at: `http://localhost:8080/mcp`
+
+### Docker Deployment
+
+Create a containerized deployment:
+
+```dockerfile
+# Dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install MCP server
+RUN npm install -g @vibe-kit/mcp-server
+
+# Create vibekit directory
+RUN mkdir -p /data/.vibekit
+
+# Expose HTTP stream port
+EXPOSE 8080
+
+# Set environment variables
+ENV VIBEKIT_HOME=/data/.vibekit
+ENV NODE_ENV=production
+
+# Start server in HTTP stream mode
+CMD ["vibekit-mcp", "--transport", "http-stream", "--port", "8080"]
+```
+
+Build and run:
+
+```bash
+# Build image
+docker build -t vibekit-mcp .
+
+# Run container
+docker run -d \
+  --name vibekit-mcp \
+  -p 8080:8080 \
+  -v vibekit-data:/data/.vibekit \
+  vibekit-mcp
+```
+
+### Docker Compose
+
+For multi-service deployments:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  vibekit-mcp:
+    image: vibekit-mcp:latest
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - vibekit-data:/data/.vibekit
+    environment:
+      - NODE_ENV=production
+      - DEBUG=vibekit:*
+      - VIBEKIT_HOME=/data/.vibekit
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/mcp"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  vibekit-data:
+```
+
+## Cloud Deployments
+
+### AWS EC2
+
+Deploy on Amazon EC2:
+
+```bash
+#!/bin/bash
+# ec2-setup.sh
+
+# Update system
+sudo apt-get update
+sudo apt-get upgrade -y
+
+# Install Node.js
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Install VibeKit MCP
+sudo npm install -g @vibe-kit/mcp-server
+
+# Create systemd service
+sudo tee /etc/systemd/system/vibekit-mcp.service > /dev/null <<EOF
+[Unit]
+Description=VibeKit MCP Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+ExecStart=/usr/bin/vibekit-mcp --transport http-stream --port 8080
+Restart=on-failure
+Environment="NODE_ENV=production"
+Environment="VIBEKIT_HOME=/home/ubuntu/.vibekit"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Start service
+sudo systemctl daemon-reload
+sudo systemctl enable vibekit-mcp
+sudo systemctl start vibekit-mcp
+```
+
+### Google Cloud Run
+
+Deploy as a serverless container:
+
+```dockerfile
+# Dockerfile for Cloud Run
+FROM node:20-alpine
+
+WORKDIR /app
+
+RUN npm install -g @vibe-kit/mcp-server
+
+# Cloud Run sets PORT env variable
+EXPOSE 8080
+
+CMD ["sh", "-c", "vibekit-mcp --transport http-stream --port ${PORT:-8080}"]
+```
+
+Deploy:
+
+```bash
+# Build and push to Container Registry
+gcloud builds submit --tag gcr.io/PROJECT-ID/vibekit-mcp
+
+# Deploy to Cloud Run
+gcloud run deploy vibekit-mcp \
+  --image gcr.io/PROJECT-ID/vibekit-mcp \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --port 8080
+```
+
+### Azure Container Instances
+
+Deploy on Azure:
+
+```bash
+# Create resource group
+az group create --name vibekit-rg --location eastus
+
+# Create container instance
+az container create \
+  --resource-group vibekit-rg \
+  --name vibekit-mcp \
+  --image vibekit-mcp:latest \
+  --ports 8080 \
+  --environment-variables \
+    NODE_ENV=production \
+    VIBEKIT_HOME=/data/.vibekit \
+  --ip-address public
+```
+
+### Kubernetes
+
+Deploy in a Kubernetes cluster:
+
+```yaml
+# k8s-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vibekit-mcp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vibekit-mcp
+  template:
+    metadata:
+      labels:
+        app: vibekit-mcp
+    spec:
+      containers:
+      - name: vibekit-mcp
+        image: vibekit-mcp:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: VIBEKIT_HOME
+          value: "/data/.vibekit"
+        volumeMounts:
+        - name: vibekit-storage
+          mountPath: /data/.vibekit
+      volumes:
+      - name: vibekit-storage
+        persistentVolumeClaim:
+          claimName: vibekit-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vibekit-mcp-service
+spec:
+  selector:
+    app: vibekit-mcp
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: LoadBalancer
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vibekit-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+```
+
+Deploy to cluster:
+
+```bash
+kubectl apply -f k8s-deployment.yaml
+```
+
+## Production Configuration
+
+### Environment Variables
+
+Key environment variables for production:
+
+| Variable | Description | Production Value |
+|----------|-------------|------------------|
+| `NODE_ENV` | Environment mode | `production` |
+| `VIBEKIT_HOME` | Data directory | `/data/.vibekit` |
+| `LOG_LEVEL` | Logging verbosity | `info` or `warn` |
+| `MAX_CONNECTIONS` | Connection limit | `100` |
+| `REQUEST_TIMEOUT` | Request timeout (ms) | `30000` |
+
+### Reverse Proxy with Nginx
+
+Configure Nginx as a reverse proxy:
+
+```nginx
+# /etc/nginx/sites-available/vibekit-mcp
+server {
+    listen 80;
+    server_name mcp.yourdomain.com;
+
+    location / {
+        return 301 https://$server_name$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name mcp.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/mcp.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mcp.yourdomain.com/privkey.pem;
+
+    location /mcp {
+        proxy_pass http://localhost:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Timeouts for long-running connections
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
+```
+
+### SSL/TLS with Let's Encrypt
+
+Setup SSL certificates:
+
+```bash
+# Install Certbot
+sudo apt-get install certbot python3-certbot-nginx
+
+# Get certificate
+sudo certbot --nginx -d mcp.yourdomain.com
+
+# Auto-renewal
+sudo certbot renew --dry-run
+```
+
+## Team Deployment
+
+### Shared Project Storage
+
+Configure shared storage for team access:
+
+```yaml
+# NFS Volume for Kubernetes
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vibekit-nfs-pv
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: nfs-server.example.com
+    path: "/exports/vibekit"
+```
+
+### Authentication
+
+Add authentication layer:
+
+```javascript
+// auth-proxy.js
+const express = require('express');
+const proxy = require('http-proxy-middleware');
+const jwt = require('jsonwebtoken');
+
+const app = express();
+
+// Authentication middleware
+app.use((req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Unauthorized' });
+  }
+});
+
+// Proxy to MCP server
+app.use('/mcp', proxy({
+  target: 'http://localhost:8080',
+  changeOrigin: true,
+  ws: true
+}));
+
+app.listen(3000);
+```
+
+## Monitoring
+
+### Health Checks
+
+Implement health check endpoint:
+
+```bash
+# Check server health
+curl http://localhost:8080/health
+
+# Expected response
+{"status":"healthy","uptime":12345}
+```
+
+### Prometheus Metrics
+
+Export metrics for monitoring:
+
+```yaml
+# prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'vibekit-mcp'
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: '/metrics'
+```
+
+### Logging
+
+Configure structured logging:
+
+```json
+{
+  "env": {
+    "LOG_FORMAT": "json",
+    "LOG_LEVEL": "info",
+    "LOG_FILE": "/var/log/vibekit-mcp.log"
+  }
+}
+```
+
+## Scaling
+
+### Horizontal Scaling
+
+For high availability:
+
+```yaml
+# kubernetes HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: vibekit-mcp-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vibekit-mcp
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+```
+
+### Load Balancing
+
+Distribute traffic across instances:
+
+```nginx
+# nginx load balancing
+upstream vibekit_mcp {
+    least_conn;
+    server mcp1.internal:8080;
+    server mcp2.internal:8080;
+    server mcp3.internal:8080;
+}
+
+server {
+    location /mcp {
+        proxy_pass http://vibekit_mcp;
+    }
+}
+```
+
+## Backup and Recovery
+
+### Data Backup
+
+Regular backup script:
+
+```bash
+#!/bin/bash
+# backup-vibekit.sh
+
+BACKUP_DIR="/backups/vibekit"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+VIBEKIT_HOME="/data/.vibekit"
+
+# Create backup
+tar -czf "${BACKUP_DIR}/vibekit_${TIMESTAMP}.tar.gz" -C "${VIBEKIT_HOME}" .
+
+# Keep only last 30 days of backups
+find "${BACKUP_DIR}" -name "vibekit_*.tar.gz" -mtime +30 -delete
+
+# Upload to S3 (optional)
+aws s3 cp "${BACKUP_DIR}/vibekit_${TIMESTAMP}.tar.gz" s3://backup-bucket/vibekit/
+```
+
+### Disaster Recovery
+
+Recovery procedure:
+
+```bash
+#!/bin/bash
+# restore-vibekit.sh
+
+BACKUP_FILE=$1
+VIBEKIT_HOME="/data/.vibekit"
+
+# Stop service
+systemctl stop vibekit-mcp
+
+# Restore backup
+tar -xzf "${BACKUP_FILE}" -C "${VIBEKIT_HOME}"
+
+# Fix permissions
+chown -R vibekit:vibekit "${VIBEKIT_HOME}"
+
+# Start service
+systemctl start vibekit-mcp
+```
+
+## Security Best Practices
+
+### Network Security
+
+1. **Firewall Rules**: Only allow necessary ports
+2. **VPN Access**: Require VPN for internal deployments
+3. **Rate Limiting**: Implement request rate limits
+4. **DDoS Protection**: Use cloud provider DDoS protection
+
+### Data Security
+
+1. **Encryption at Rest**: Encrypt storage volumes
+2. **Encryption in Transit**: Always use TLS/SSL
+3. **Access Control**: Implement RBAC
+4. **Audit Logging**: Log all access and changes
+
+### Container Security
+
+```dockerfile
+# Secure Dockerfile
+FROM node:20-alpine
+
+# Run as non-root user
+RUN addgroup -g 1001 -S vibekit && \
+    adduser -u 1001 -S vibekit -G vibekit
+
+# Set ownership
+RUN mkdir -p /data/.vibekit && \
+    chown -R vibekit:vibekit /data/.vibekit
+
+USER vibekit
+
+# Install as user
+RUN npm install -g @vibe-kit/mcp-server
+
+EXPOSE 8080
+
+CMD ["vibekit-mcp", "--transport", "http-stream"]
+```
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Port already in use">
+    ```bash
+    # Find process using port
+    lsof -i :8080
+    
+    # Kill process
+    kill -9 <PID>
+    ```
+  </Accordion>
+  
+  <Accordion title="Permission denied">
+    ```bash
+    # Fix permissions
+    sudo chown -R $(whoami) ~/.vibekit
+    chmod -R 755 ~/.vibekit
+    ```
+  </Accordion>
+  
+  <Accordion title="Connection timeout">
+    Check firewall rules and network connectivity:
+    ```bash
+    # Test connectivity
+    telnet localhost 8080
+    
+    # Check firewall
+    sudo ufw status
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Documentation
+
+- [Quick Start](/mcp/quickstart) - Get started quickly
+- [Claude Desktop Setup](/mcp/claude-desktop) - Local configuration
+- [Tool Reference](/mcp/tools/projects) - Available MCP tools
