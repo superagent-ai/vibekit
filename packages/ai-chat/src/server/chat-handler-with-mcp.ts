@@ -134,84 +134,25 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
         if (mcpModule && mcpModule.MCPClientManager) {
           console.log('[MCP DEBUG] MCP client found, loading tools from connected servers...');
           
-          // Initialize the MCP client manager
-          // Try to find config file in different locations
+          // Initialize the MCP client manager - it will automatically load from ~/.vibekit/mcp-servers.json
           const path = await import('path');
-          const fs = await import('fs');
-          
-          let mcpConfig = null;
-          const configPaths = [
-            path.join(process.cwd(), 'packages/dashboard/mcp-config.json'),
-            path.join(process.cwd(), 'mcp-config.json'),
-            process.env.MCP_CONFIG_PATH,
-          ].filter(Boolean);
-          
-          for (const configPath of configPaths) {
-            try {
-              if (fs.existsSync(configPath)) {
-                console.log('[MCP DEBUG] Found config file at:', configPath);
-                mcpConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-                break;
-              }
-            } catch (e) {
-              console.log('[MCP DEBUG] Failed to read config from:', configPath, e);
-            }
-          }
+          const os = await import('os');
           
           const manager = new mcpModule.MCPClientManager({
-            autoConnect: false,
-            configDir: process.env.MCP_CONFIG_DIR,
+            autoConnect: true, // Let it auto-connect to enabled servers
+            configDir: path.join(os.homedir(), '.vibekit'),
           });
           
           console.log('[MCP DEBUG] Initializing MCP manager...');
           await manager.initialize();
           
-          // If we found a config file, add servers from it
-          const addedServers = [];
-          if (mcpConfig && mcpConfig.mcpServers) {
-            console.log('[MCP DEBUG] Adding servers from config file...');
-            for (const [name, serverConfig] of Object.entries(mcpConfig.mcpServers)) {
-              try {
-                const config = serverConfig as any;
-                if (!config.enabled) continue;
-                
-                console.log(`[MCP DEBUG] Adding server: ${name}`);
-                const server = await manager.addServer({
-                  name,
-                  transport: 'stdio',
-                  config: {
-                    command: config.command,
-                    args: config.args || [],
-                    env: config.env,
-                  },
-                });
-                console.log(`[MCP DEBUG] Added server ${name} with ID: ${server.id}`);
-                addedServers.push(server);
-              } catch (error) {
-                console.error(`[MCP DEBUG] Failed to add server ${name}:`, error);
-              }
-            }
-          }
-          
-          // Connect to all added servers
-          for (const server of addedServers) {
-            try {
-              console.log(`[MCP DEBUG] Connecting to server: ${server.name} (${server.id})`);
-              await manager.connect(server.id);
-              console.log(`[MCP DEBUG] Successfully connected to: ${server.name}`);
-            } catch (error) {
-              console.error(`[MCP DEBUG] Failed to connect to server ${server.name}:`, error);
-            }
-          }
-          
           // Get all connected servers
-          const servers = manager.getAllServers();
-          console.log('[MCP DEBUG] All servers after connection:', servers.map(s => ({ id: s.id, name: s.name, status: s.status })));
-          
-          // Use the servers we just added and connected to
-          const connectedServers = addedServers.filter(server => 
+          const connectedServers = manager.getAllServers().filter(server => 
             manager.isConnected(server.id)
           );
+          
+          console.log(`[MCP DEBUG] Found ${connectedServers.length} connected MCP servers:`, 
+            connectedServers.map(s => ({ id: s.id, name: s.name, status: s.status })));
           
           console.log(`[MCP DEBUG] Found ${connectedServers.length} MCP servers (connected or active)`);
           

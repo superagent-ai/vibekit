@@ -17,7 +17,7 @@ export class ConfigStore {
     metadataKey?: string;
   }) {
     const defaultConfigDir = process.env.MCP_CONFIG_DIR || '.vibekit';
-    const defaultConfigFileName = 'servers.json';
+    const defaultConfigFileName = 'mcp-servers.json';
     
     if (options?.configPath) {
       this.configPath = options.configPath;
