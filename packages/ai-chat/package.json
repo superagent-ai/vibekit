@@ -89,6 +89,9 @@
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"
   },
+  "optionalDependencies": {
+    "@vibe-kit/mcp-client": "*"
+  },
   "devDependencies": {
     "@types/node": "^20.11.5",
     "@types/react": "^19.0.0",

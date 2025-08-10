@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useChat } from '../hooks/use-chat';
 import { useAuthStatus } from '../hooks/use-auth';
 import { DEFAULT_MODELS } from '../utils/config';
-import { GlobeIcon, Square } from 'lucide-react';
+import { GlobeIcon, Square, Wrench } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   Conversation,
@@ -78,6 +78,7 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const [model, setModel] = useState<string>(defaultModel);
   const [webSearch, setWebSearch] = useState(false);
+  const [mcpTools, setMcpTools] = useState(false);
   const [inputValue, setInputValue] = useState('');
   
   const { authStatus, loading: authLoading } = useAuthStatus();
@@ -85,6 +86,7 @@ export function ChatInterface({
   const chat = useChat({
     model,
     webSearch,
+    showMCPTools: mcpTools,
     onError,
     apiEndpoint,
   }) as any;
@@ -190,15 +192,18 @@ export function ChatInterface({
           </div>
         )}
         
-        {messages.map((message: any) => {
+        {messages.map((message: any, index: number) => {
           const extras = getMessageExtras(message);
           const content = getMessageContent(message);
           
           // Skip messages with 'data' role
           if (message.role === 'data') return null;
+          
+          // Use a combination of id and index to ensure unique keys
+          const messageKey = message.id ? `${message.id}-${index}` : `message-${index}`;
             
           return (
-            <Message key={message.id} role={message.role}>
+            <Message key={messageKey} role={message.role}>
               <MessageAvatar>
                 <AvatarFallback>
                   {message.role === 'user' ? 'U' : 'AI'}
@@ -220,8 +225,8 @@ export function ChatInterface({
                       <Sources>
                         <SourcesTrigger count={extras.sources.length} />
                         <SourcesContent>
-                          {extras.sources.map((source: any, index: any) => (
-                            <Source key={index} title={source.title} href={source.url} />
+                          {extras.sources.map((source: any, sourceIndex: number) => (
+                            <Source key={`source-${sourceIndex}-${source.url}`} title={source.title} href={source.url} />
                           ))}
                         </SourcesContent>
                       </Sources>
@@ -279,10 +284,18 @@ export function ChatInterface({
               <PromptInputButton
                 onClick={() => setWebSearch(!webSearch)}
                 className={webSearch ? 'bg-accent' : ''}
+                title="Toggle web search"
               >
                 <GlobeIcon className="h-4 w-4" />
               </PromptInputButton>
             )}
+            <PromptInputButton
+              onClick={() => setMcpTools(!mcpTools)}
+              className={mcpTools ? 'bg-accent' : ''}
+              title="Toggle MCP tools"
+            >
+              <Wrench className="h-4 w-4" />
+            </PromptInputButton>
             <PromptInputModelSelect value={model} onValueChange={setModel}>
               <PromptInputModelSelectTrigger className="w-[180px]">
                 <PromptInputModelSelectValue />

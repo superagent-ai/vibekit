@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { PageWrapper } from "@/components/page-wrapper";
 import {
   XAxis,
   YAxis,
@@ -212,8 +211,7 @@ export default function Dashboard() {
   const timeSeriesData = generateTimeSeriesData();
 
   return (
-    <PageWrapper>
-      <div className="px-6 space-y-6">
+      <div className="px-6 space-y-6 h-screen overflow-auto">
         <div className="-mx-6 px-4 border-b flex h-12 items-center">
           <div className="flex items-center gap-2">
             <SidebarTrigger />
@@ -462,6 +460,5 @@ export default function Dashboard() {
         </CardContent>
       </Card>
       </div>
-    </PageWrapper>
   );
 }

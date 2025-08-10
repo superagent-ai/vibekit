@@ -44,7 +44,7 @@ export function useChat(options: ChatOptions = {}) {
 
   const chat = useAIChat({
     api: apiEndpoint,
-    maxSteps: 5,
+    maxSteps: showMCPTools ? 10 : 5, // Allow more steps when using tools
     headers: {
       'Content-Type': 'application/json',
     },
