@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical, ArrowUpDown, MessageSquare } from "lucide-react";
+import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical, ArrowUpDown, MessageSquare, Kanban } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -156,6 +156,17 @@ function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: S
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/projects/${project.id}/kanban`);
+            }}
+            title="View Taskmaster Kanban"
+          >
+            <Kanban className="h-3 w-3" />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -831,6 +842,17 @@ export default function ProjectsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${project.id}/kanban`);
+                          }}
+                          title="View Taskmaster Kanban"
+                        >
+                          <Kanban className="h-3 w-3" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"

@@ -11,9 +11,6 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.1",
     "@ai-sdk/react": "^2.0.8",
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
     "@icons-pack/react-simple-icons": "^13.7.0",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-collapsible": "^1.1.11",
@@ -34,6 +31,7 @@
     "@vibe-kit/ai-chat": "file:../ai-chat",
     "@vibe-kit/mcp-client": "file:../mcp-client",
     "@vibe-kit/projects": "^0.0.1",
+    "@vibe-kit/taskmaster": "file:../taskmaster",
     "ai": "^5.0.8",
     "chokidar": "^4.0.3",
     "class-variance-authority": "^0.7.1",
@@ -54,6 +52,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "tailwind-merge": "^3.3.1",
+    "tunnel-rat": "^0.1.2",
     "use-stick-to-bottom": "^1.1.1",
     "uuid": "^11.1.0",
     "ws": "^8.18.3",
@@ -71,5 +70,21 @@
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.6",
     "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2"
+  },
+  "peerDependenciesMeta": {
+    "@dnd-kit/core": {
+      "optional": true
+    },
+    "@dnd-kit/sortable": {
+      "optional": true
+    },
+    "@dnd-kit/utilities": {
+      "optional": true
+    }
   }
 }
