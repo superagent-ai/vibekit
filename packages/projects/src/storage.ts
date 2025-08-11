@@ -56,10 +56,13 @@ export async function readCurrentProject(): Promise<Project | null> {
     await fs.access(CURRENT_PROJECT_FILE);
     const data = await fs.readFile(CURRENT_PROJECT_FILE, 'utf-8');
     return JSON.parse(data);
-  } catch (error) {
-    console.error('Failed to read current project:', error);
+  } catch (error: any) {
+    // Don't log ENOENT errors as they're expected when no current project is set
+    if (error.code !== 'ENOENT') {
+      console.error('Failed to read current project:', error);
+    }
+    return null;
   }
-  return null;
 }
 
 /**

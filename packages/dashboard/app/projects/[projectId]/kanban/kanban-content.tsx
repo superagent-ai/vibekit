@@ -811,7 +811,7 @@ export default function ProjectKanbanPage() {
               'grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
             }`}
           >
-            {visibleColumns.map((column: KanbanColumn) => (
+            {(column: KanbanColumn) => (
               <KanbanBoard key={column.id} id={column.id}>
                 <KanbanHeader className={`flex items-center justify-between ${column.color}`}>
                   <div className="flex items-center gap-2">
@@ -834,7 +834,7 @@ export default function ProjectKanbanPage() {
                   )}
                 </KanbanCards>
               </KanbanBoard>
-            ))}
+            )}
           </KanbanProvider>
         )}
         
