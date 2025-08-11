@@ -1,17 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { ChevronLeft, ChevronRight, Plus, Check, ExternalLink, Wrench, Users, Code, Search, Database, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Check, ExternalLink, Wrench, Users, Code, Search, Database, Zap, Twitter } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useRouter } from 'next/navigation';
+import { getXAvatarUrl, preloadAvatars } from '../../lib/avatar-utils';
 
 interface MCPServer {
   name: string;
   description: string;
   repository: string;
+  url?: string;
+  xHandle?: string;
   category: string;
   requiresApiKeys?: boolean;
   envVars?: string[];
@@ -49,7 +52,12 @@ interface RecommendedServersCarouselProps {
   onServerInstalled?: () => void;
 }
 
-export function RecommendedServersCarousel({ onServerInstalled }: RecommendedServersCarouselProps) {
+export interface RecommendedServersCarouselRef {
+  refresh: () => void;
+}
+
+export const RecommendedServersCarousel = forwardRef<RecommendedServersCarouselRef, RecommendedServersCarouselProps>(
+  ({ onServerInstalled }, ref) => {
   const router = useRouter();
   const [servers, setServers] = useState<RecommendedServers | null>(null);
   const [installedServers, setInstalledServers] = useState<Set<string>>(new Set());
@@ -62,6 +70,16 @@ export function RecommendedServersCarousel({ onServerInstalled }: RecommendedSer
     loadRecommendedServers();
     loadInstalledServers();
   }, []);
+
+  useEffect(() => {
+    // Preload avatars when servers are loaded
+    if (servers) {
+      const handles = Object.values(servers.servers)
+        .map(server => server.xHandle)
+        .filter(Boolean);
+      preloadAvatars(handles);
+    }
+  }, [servers]);
 
   const loadRecommendedServers = async () => {
     try {
@@ -79,26 +97,34 @@ export function RecommendedServersCarousel({ onServerInstalled }: RecommendedSer
       if (response.ok) {
         const data = await response.json();
         const serversList = data.servers || [];
-        setInstalledServers(new Set(serversList.map((s: any) => s.name) || []));
+        // Create a set of installed server names for comparison
+        const installedNames = new Set(serversList.map((s: any) => s.name) || []);
+        setInstalledServers(installedNames);
         setInstalledServersData(serversList);
+        // Reset carousel index when servers change
+        setCurrentIndex(0);
       }
     } catch (error) {
       console.error('Failed to load installed servers:', error);
     }
   };
 
-  const handleCardClick = (serverId: string) => {
+  // Expose refresh method to parent components
+  useImperativeHandle(ref, () => ({
+    refresh: () => {
+      loadInstalledServers();
+    }
+  }), []);
+
+  const handleCardClick = (serverId: string, serverName: string) => {
     // Find the installed server by name to get its actual ID
-    const installedServer = installedServersData.find(s => s.name === serverId);
+    const installedServer = installedServersData.find(s => s.name === serverName);
     if (installedServer) {
       // Server is installed, go to its details page
       window.location.href = `/mcp-servers/${installedServer.id}`;
     } else {
-      // Server not installed, open the repository to learn more
-      const server = servers?.servers[serverId];
-      if (server) {
-        window.open(server.repository, '_blank');
-      }
+      // Server not installed, go to the recommended server detail page
+      window.location.href = `/mcp-servers/recommended/${serverId}`;
     }
   };
 
@@ -113,7 +139,7 @@ export function RecommendedServersCarousel({ onServerInstalled }: RecommendedSer
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          name: serverId,
+          name: server.name,  // Use the actual server name, not the ID
           transport: 'stdio',
           config: {
             command: server.config.command,
@@ -124,31 +150,23 @@ export function RecommendedServersCarousel({ onServerInstalled }: RecommendedSer
 
       if (response.ok) {
         const result = await response.json();
-        const newServerId = result.data?.id || result.id;
         
-        if (newServerId) {
-          // Step 2: Auto-connect the server
-          try {
-            console.log(`[CAROUSEL] Auto-connecting server: ${serverId} (ID: ${newServerId})`);
-            const connectResponse = await fetch(`/api/mcp/servers/${newServerId}/connect`, {
-              method: 'POST'
-            });
-            
-            if (connectResponse.ok) {
-              console.log(`[CAROUSEL] Successfully connected ${serverId}`);
-            } else {
-              console.warn(`[CAROUSEL] Failed to connect ${serverId}:`, await connectResponse.text());
-            }
-            
-            // Small delay to allow connection to establish
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          } catch (connectError) {
-            console.error(`[CAROUSEL] Error connecting ${serverId}:`, connectError);
-          }
+        // The server is now auto-connected by the POST endpoint
+        if (result.server?.status === 'active') {
+          console.log(`[CAROUSEL] Server ${server.name} installed and connected`);
+          console.log(`[CAROUSEL] Tools: ${result.server.toolCount || 0}, Resources: ${result.server.resourceCount || 0}`);
+        } else {
+          console.log(`[CAROUSEL] Server ${server.name} installed (connection pending)`);
         }
         
-        // Step 3: Update state and refresh main server list
-        setInstalledServers(prev => new Set([...prev, serverId]));
+        // Update state and refresh lists
+        setInstalledServers(prev => new Set([...prev, server.name]));  // Add the server name
+        
+        // Update installed servers data immediately with the new server
+        if (result.server) {
+          setInstalledServersData(prev => [...prev, result.server]);
+        }
+        
         await loadInstalledServers(); // Refresh our own data
         onServerInstalled?.(); // Refresh parent component's server list
       }
@@ -166,8 +184,10 @@ export function RecommendedServersCarousel({ onServerInstalled }: RecommendedSer
   if (!servers || !isVisible) return null;
 
   const serverEntries = Object.entries(servers.servers);
+  // Filter out servers that are already installed by comparing names
+  const availableServers = serverEntries.filter(([_, server]) => !installedServers.has(server.name));
   const visibleServers = 6; // Show 6 cards at a time on desktop, fewer on mobile
-  const maxIndex = Math.max(0, serverEntries.length - visibleServers);
+  const maxIndex = Math.max(0, availableServers.length - visibleServers);
 
   const nextSlide = () => {
     setCurrentIndex(prev => Math.min(prev + 1, maxIndex));
@@ -208,8 +228,7 @@ export function RecommendedServersCarousel({ onServerInstalled }: RecommendedSer
               className="flex gap-3 transition-transform duration-300 ease-in-out"
               style={{ transform: `translateX(-${currentIndex * 140}px)` }}
             >
-              {serverEntries.map(([serverId, server]) => {
-                const isInstalled = installedServers.has(serverId);
+              {availableServers.map(([serverId, server]) => {
                 const isInstalling = installing.has(serverId);
                 const CategoryIcon = categoryIcons[server.category as keyof typeof categoryIcons] || Wrench;
                 const categoryColor = categoryColors[server.category as keyof typeof categoryColors] || categoryColors.utility;
@@ -217,52 +236,58 @@ export function RecommendedServersCarousel({ onServerInstalled }: RecommendedSer
                 return (
                   <Card 
                     key={serverId} 
-                    className="shrink-0 w-32 h-28 cursor-pointer hover:shadow-lg transition-all border-0 bg-gradient-to-br from-background to-muted/20"
-                    onClick={() => handleCardClick(serverId)}
+                    className="shrink-0 w-32 h-32 cursor-pointer hover:shadow-lg transition-all border-0 bg-gradient-to-br from-background to-muted/20"
+                    onClick={() => handleCardClick(serverId, server.name)}
                   >
                     <CardContent className="p-3 h-full flex flex-col justify-between">
                       <div className="flex flex-col items-center text-center gap-2">
-                        <div className={cn(
-                          "flex items-center justify-center w-10 h-10 rounded-full",
-                          categoryColor.replace('text-', 'text-white ').replace('bg-', 'bg-')
-                        )}>
-                          <CategoryIcon className="h-5 w-5 text-white" />
-                        </div>
+                        {server.xHandle ? (
+                          <img 
+                            src={getXAvatarUrl(server.xHandle, { size: 64 })}
+                            alt={`${server.name} author`}
+                            className="w-10 h-10 rounded-full object-cover ring-2 ring-offset-2 ring-offset-background ring-muted"
+                            loading="lazy"
+                            onError={(e) => {
+                              // If Unavatar fails, use default avatar
+                              e.currentTarget.src = '/default-avatar.svg';
+                            }}
+                          />
+                        ) : (
+                          <div className={cn(
+                            "flex items-center justify-center w-10 h-10 rounded-full",
+                            categoryColor.replace('text-', 'text-white ').replace('bg-', 'bg-')
+                          )}>
+                            <CategoryIcon className="h-5 w-5 text-white" />
+                          </div>
+                        )}
                         <div className="space-y-1">
                           <p className="text-xs font-semibold truncate w-full leading-tight">{server.name}</p>
-                          {server.requiresApiKeys && (
-                            <div className="w-2 h-2 rounded-full bg-amber-400 mx-auto" title="Requires API keys" />
+                          {server.xHandle && (
+                            <p className="text-[9px] text-muted-foreground truncate w-full">{server.xHandle}</p>
                           )}
                         </div>
                       </div>
                       
                       <div className="flex justify-center mt-1">
-                        {isInstalled ? (
-                          <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                            <Check className="h-3 w-3" />
-                            <span className="text-[10px] font-medium">Added</span>
-                          </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              installServer(serverId, server);
-                            }}
-                            disabled={isInstalling}
-                            className="h-6 px-3 text-[10px] rounded-full"
-                            variant="outline"
-                          >
-                            {isInstalling ? (
-                              <div className="animate-spin rounded-full h-3 w-3 border border-current border-t-transparent" />
-                            ) : (
-                              <>
-                                <Plus className="h-3 w-3 mr-1" />
-                                Add
-                              </>
-                            )}
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            installServer(serverId, server);
+                          }}
+                          disabled={isInstalling}
+                          className="h-6 px-3 text-[10px] rounded-full"
+                          variant="outline"
+                        >
+                          {isInstalling ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border border-current border-t-transparent" />
+                          ) : (
+                            <>
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -284,4 +309,6 @@ export function RecommendedServersCarousel({ onServerInstalled }: RecommendedSer
       </div>
     </div>
   );
-}
+});
+
+RecommendedServersCarousel.displayName = 'RecommendedServersCarousel';

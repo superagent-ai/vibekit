@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Plus, Download, Upload, RefreshCw, Search, Filter, ArrowUpDown, Clipboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MCPServerCard } from "@/components/mcp/server-card";
 import { ServerForm } from "@/components/mcp/server-form";
 import { PasteServerDialog } from "@/components/mcp/paste-server-dialog";
-import { RecommendedServersCarousel } from "@/components/mcp/recommended-servers-carousel";
+import { RecommendedServersCarousel, RecommendedServersCarouselRef } from "@/components/mcp/recommended-servers-carousel";
+import recommendedServers from "../../../../assets/recommended-mcp-servers.json";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -32,9 +33,12 @@ interface MCPServer {
   lastConnected?: string;
   error?: string;
   config: any;
+  xHandle?: string;
+  url?: string;
 }
 
 export default function MCPServersPage() {
+  const carouselRef = useRef<RecommendedServersCarouselRef>(null);
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -83,7 +87,19 @@ export default function MCPServersPage() {
       const response = await fetch('/api/mcp/servers');
       if (response.ok) {
         const data = await response.json();
-        setServers(data.servers || []);
+        // Enhance servers with xHandle from recommended servers
+        const enhancedServers = (data.servers || []).map((server: MCPServer) => {
+          // Try to find matching recommended server by name
+          const recommendedServer = Object.values(recommendedServers.servers).find(
+            (rec: any) => rec.name === server.name
+          );
+          return {
+            ...server,
+            xHandle: recommendedServer?.xHandle,
+            url: recommendedServer?.url,
+          };
+        });
+        setServers(enhancedServers);
       }
     } catch (error) {
       console.error('Failed to fetch servers:', error);
@@ -163,6 +179,8 @@ export default function MCPServersPage() {
       
       if (response.ok) {
         await fetchServers();
+        // Refresh the carousel to show the server back in recommended list
+        carouselRef.current?.refresh();
       }
     } catch (error) {
       console.error('Failed to delete server:', error);
@@ -404,7 +422,7 @@ export default function MCPServersPage() {
         </div>
 
         {/* Recommended Servers Carousel */}
-        <RecommendedServersCarousel onServerInstalled={fetchServers} />
+        <RecommendedServersCarousel ref={carouselRef} onServerInstalled={fetchServers} />
 
         {/* Filters and Search */}
         <div className="flex flex-col gap-3">

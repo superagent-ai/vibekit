@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MoreVertical, Play, Square, Trash2, Edit, Eye, Plug, Unplug } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getXAvatarUrl } from "@/lib/avatar-utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +28,8 @@ interface MCPServerCardProps {
     promptCount?: number;
     lastConnected?: string;
     error?: string;
+    xHandle?: string;
+    url?: string;
   };
   onConnect?: (id: string) => Promise<void>;
   onDisconnect?: (id: string) => Promise<void>;
@@ -82,21 +85,37 @@ export function MCPServerCard({
     <Card className="relative hover:shadow-lg transition-shadow">
       <CardHeader className="pb-1 pt-3">
         <div className="flex items-start justify-between">
-          <div className="space-y-0.5 min-w-0 flex-1">
-            <CardTitle 
-              className="text-sm font-medium cursor-pointer hover:text-primary transition-colors hover:underline"
-              onClick={() => {
-                console.log('[DEBUG] Clicking server:', server.id);
-                window.location.href = `/mcp-servers/${server.id}`;
-              }}
-            >
-              {server.name}
-            </CardTitle>
-            {server.description && (
-              <CardDescription className="text-xs line-clamp-1">
-                {server.description}
-              </CardDescription>
+          <div className="flex items-start gap-2 min-w-0 flex-1">
+            {server.xHandle && (
+              <img 
+                src={getXAvatarUrl(server.xHandle, { size: 32 })}
+                alt={`${server.name} avatar`}
+                className="w-8 h-8 rounded-full shrink-0 mt-0.5"
+                onError={(e) => {
+                  // If Unavatar fails, use default avatar
+                  e.currentTarget.src = '/default-avatar.svg';
+                }}
+              />
             )}
+            <div className="space-y-0.5 min-w-0 flex-1">
+              <CardTitle 
+                className="text-sm font-medium cursor-pointer hover:text-primary transition-colors hover:underline"
+                onClick={() => {
+                  console.log('[DEBUG] Clicking server:', server.id);
+                  window.location.href = `/mcp-servers/${server.id}`;
+                }}
+              >
+                {server.name}
+              </CardTitle>
+              {server.description && (
+                <CardDescription className="text-xs line-clamp-1">
+                  {server.description}
+                </CardDescription>
+              )}
+              {server.xHandle && (
+                <p className="text-[10px] text-muted-foreground">{server.xHandle}</p>
+              )}
+            </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

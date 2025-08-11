@@ -11,6 +11,8 @@ interface MCPServer {
   name: string;
   description: string;
   repository: string;
+  url?: string;
+  xHandle?: string;
   category: string;
   requiresApiKeys?: boolean;
   envVars?: string[];
@@ -161,9 +163,10 @@ export function MCPServerBrowser() {
   }
 
   const categories = ['all', ...new Set(Object.values(servers.servers).map(s => s.category))];
+  const availableServers = Object.entries(servers.servers).filter(([serverId]) => !installedServers.has(serverId));
   const filteredServers = selectedCategory === 'all' 
-    ? Object.entries(servers.servers)
-    : Object.entries(servers.servers).filter(([_, server]) => server.category === selectedCategory);
+    ? availableServers
+    : availableServers.filter(([_, server]) => server.category === selectedCategory);
 
   return (
     <div className="space-y-6">
@@ -197,7 +200,6 @@ export function MCPServerBrowser() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredServers.map(([serverId, server]) => {
-          const isInstalled = installedServers.has(serverId);
           const isInstalling = installing.has(serverId);
           const CategoryIcon = categoryIcons[server.category as keyof typeof categoryIcons] || Wrench;
           const categoryColor = categoryColors[server.category as keyof typeof categoryColors] || categoryColors.utility;
@@ -215,12 +217,6 @@ export function MCPServerBrowser() {
                       {server.category}
                     </Badge>
                   </div>
-                  {isInstalled && (
-                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                      <Check className="h-3 w-3 mr-1" />
-                      Installed
-                    </Badge>
-                  )}
                 </div>
                 <CardDescription className="text-sm">
                   {server.description}
@@ -248,43 +244,24 @@ export function MCPServerBrowser() {
               </CardContent>
 
               <CardFooter className="flex gap-2">
-                {isInstalled ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => uninstallServer(serverId, server.name)}
-                    disabled={isInstalling}
-                    className="flex-1"
-                  >
-                    {isInstalling ? (
-                      <>
-                        <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-2" />
-                        Removing...
-                      </>
-                    ) : (
-                      'Remove'
-                    )}
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    onClick={() => installServer(serverId, server)}
-                    disabled={isInstalling}
-                    className="flex-1"
-                  >
-                    {isInstalling ? (
-                      <>
-                        <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-2" />
-                        Installing...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="h-3 w-3 mr-1" />
-                        Install
-                      </>
-                    )}
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  onClick={() => installServer(serverId, server)}
+                  disabled={isInstalling}
+                  className="flex-1"
+                >
+                  {isInstalling ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-2" />
+                      Installing...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-3 w-3 mr-1" />
+                      Install
+                    </>
+                  )}
+                </Button>
                 
                 <Button
                   variant="outline"
