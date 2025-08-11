@@ -377,7 +377,7 @@ export function MCPServerBrowser() {
                       variant="outline"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => window.open(`https://twitter.com/${server.xHandle.replace('@', '')}`, '_blank')}
+                      onClick={() => window.open(`https://twitter.com/${server.xHandle?.replace('@', '')}`, '_blank')}
                       title={`Follow ${server.xHandle}`}
                     >
                       <Twitter className="h-3 w-3" />

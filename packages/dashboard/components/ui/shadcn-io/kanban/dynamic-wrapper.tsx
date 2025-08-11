@@ -14,7 +14,7 @@ interface KanbanProviderProps {
   data: any[];
   onDataChange: (event: DragEndEvent) => void;
   className?: string;
-  children: React.ReactNode;
+  children: ((column: any) => React.ReactNode) | React.ReactNode;
 }
 
 // Loading component for kanban

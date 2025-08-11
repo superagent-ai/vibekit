@@ -98,7 +98,7 @@ export const RecommendedServersCarousel = forwardRef<RecommendedServersCarouselR
         const data = await response.json();
         const serversList = data.servers || [];
         // Create a set of installed server names for comparison
-        const installedNames = new Set(serversList.map((s: any) => s.name) || []);
+        const installedNames = new Set<string>(serversList.map((s: any) => s.name) || []);
         setInstalledServers(installedNames);
         setInstalledServersData(serversList);
         // Reset carousel index when servers change

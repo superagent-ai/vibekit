@@ -26,6 +26,8 @@ import {
   type ReactNode,
   useContext,
   useState,
+  useEffect,
+  useRef,
 } from 'react';
 import { createPortal } from 'react-dom';
 import tunnel from 'tunnel-rat';
@@ -77,8 +79,8 @@ export const KanbanBoard = ({ id, children, className }: KanbanBoardProps) => {
   return (
     <div
       className={cn(
-        'flex size-full min-h-40 flex-col divide-y overflow-hidden rounded-md border bg-secondary text-xs shadow-sm ring-2 transition-all',
-        isOver ? 'ring-primary' : 'ring-transparent',
+        'flex size-full min-h-40 flex-col divide-y overflow-hidden rounded-md bg-secondary text-xs shadow-sm transition-all',
+        isOver ? 'border-2 border-primary' : 'border border-border',
         className
       )}
       ref={setNodeRef}
@@ -112,62 +114,33 @@ export const KanbanCard = <T extends KanbanItemProps = KanbanItemProps>({
   });
   const { activeCardId } = useContext(KanbanContext) as KanbanContextProps;
 
-  const [dragStartPosition, setDragStartPosition] = useState<{ x: number; y: number } | null>(null);
-  const [hasDragged, setHasDragged] = useState(false);
-
   const style = {
     transition,
     transform: CSS.Transform.toString(transform),
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setDragStartPosition({ x: e.clientX, y: e.clientY });
-    setHasDragged(false);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (dragStartPosition) {
-      const distance = Math.sqrt(
-        Math.pow(e.clientX - dragStartPosition.x, 2) + 
-        Math.pow(e.clientY - dragStartPosition.y, 2)
-      );
-      // Consider it a drag if mouse moved more than 5 pixels
-      if (distance > 5) {
-        setHasDragged(true);
-      }
+  const handleClick = () => {
+    // Since we have activation constraints, clicks will fire before drag starts
+    if (onClick && !isDragging) {
+      onClick();
     }
-  };
-
-  const handleMouseUp = () => {
-    setDragStartPosition(null);
-    // Reset hasDragged after a short delay to prevent immediate clicks
-    setTimeout(() => setHasDragged(false), 100);
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    // Don't trigger click if we detected dragging or if currently dragging
-    if (hasDragged || isDragging) {
-      return;
-    }
-    onClick?.();
   };
 
   return (
     <>
-      <div style={style} ref={setNodeRef}>
+      <div 
+        style={style} 
+        ref={setNodeRef}
+        {...listeners}
+        {...attributes}
+        onClick={handleClick}
+      >
         <Card
           className={cn(
-            'cursor-pointer gap-4 rounded-md p-3 shadow-sm',
+            'cursor-grab gap-4 rounded-md p-3 shadow-sm',
             isDragging && 'cursor-grabbing opacity-30',
             className
           )}
-          onClick={handleClick}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          {...listeners}
-          {...attributes}
         >
           {children ?? <p className="m-0 font-medium text-sm">{name}</p>}
         </Card>
@@ -256,8 +229,17 @@ export const KanbanProvider = <
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(MouseSensor),
-    useSensor(TouchSensor),
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8, // Require 8px of movement before starting drag
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    }),
     useSensor(KeyboardSensor)
   );
 

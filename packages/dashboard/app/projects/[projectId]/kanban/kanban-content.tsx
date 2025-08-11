@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, RefreshCw, AlertCircle, CheckCircle, Clock, Circle, X, Settings, Eye, EyeOff, Maximize2, Tag, Info } from "lucide-react";
+import { ArrowLeft, RefreshCw, AlertCircle, CheckCircle, Clock, Circle, X, Settings, Eye, EyeOff, Tag, Info } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -372,24 +372,6 @@ export default function ProjectKanbanPage() {
       <div className="flex items-start justify-between">
         <h3 className="font-medium text-sm line-clamp-2 flex-1">{item.task.title}</h3>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className={`h-6 w-6 p-0 ${
-              isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-            } transition-opacity`}
-            onMouseDown={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              handleTaskClick(item.task);
-            }}
-          >
-            <Maximize2 className="h-3 w-3" />
-          </Button>
           <Badge variant={getPriorityColor(item.task.priority)} className="text-xs">
             {getPriorityIcon(item.task.priority)} {item.task.priority}
           </Badge>
@@ -783,7 +765,11 @@ export default function ProjectKanbanPage() {
                   {kanbanData
                     .filter(item => item.column === column.id)
                     .map((item) => (
-                      <Card key={item.id} className="p-3 group">
+                      <Card 
+                        key={item.id} 
+                        className="p-3 group cursor-pointer hover:shadow-md transition-shadow"
+                        onClick={() => handleTaskClick(item.task)}
+                      >
                         {renderTaskCard(item)}
                       </Card>
                     ))}
@@ -827,7 +813,8 @@ export default function ProjectKanbanPage() {
                     <KanbanCard 
                       key={item.id}
                       {...item} 
-                      className="transition-transform hover:scale-[1.02] group"
+                      className="transition-transform hover:scale-[1.02] group hover:shadow-md"
+                      onClick={() => handleTaskClick(item.task)}
                     >
                       {renderTaskCard(item)}
                     </KanbanCard>

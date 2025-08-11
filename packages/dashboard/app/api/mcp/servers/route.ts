@@ -64,12 +64,15 @@ export async function POST(request: NextRequest) {
             prompts: promptCount
           });
           
-          // Update the server with the counts
-          await mgr.updateServer(server.id, {
-            toolCount,
-            resourceCount,
-            promptCount
-          });
+          // Update the server counts directly in the config store
+          const configStore = (mgr as any).configStore;
+          if (configStore) {
+            await configStore.updateServer(server.id, {
+              toolCount,
+              resourceCount,
+              promptCount
+            });
+          }
         } catch (error) {
           console.log(`[API] Could not fetch capabilities for ${server.name}:`, error);
         }

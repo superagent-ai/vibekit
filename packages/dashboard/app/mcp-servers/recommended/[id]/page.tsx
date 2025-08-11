@@ -49,7 +49,7 @@ const categoryColors = {
 export default function RecommendedServerDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const serverId = params.id as string;
+  const serverId = params?.id as string;
   
   const [server, setServer] = useState<MCPServer | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -377,7 +377,7 @@ export default function RecommendedServerDetailPage() {
                   <Button
                     variant="outline"
                     className="w-full justify-start"
-                    onClick={() => window.open(`https://twitter.com/${server.xHandle.replace('@', '')}`, '_blank')}
+                    onClick={() => window.open(`https://twitter.com/${server.xHandle?.replace('@', '')}`, '_blank')}
                   >
                     <Twitter className="mr-2 h-4 w-4" />
                     Follow {server.xHandle}
