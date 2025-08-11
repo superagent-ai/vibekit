@@ -42,7 +42,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { TaskDetailsDialog } from "@/components/task-details-dialog";
+import { TaskDetailsSheet } from "@/components/task-details-sheet";
 import type { Project } from "@/lib/projects";
 
 interface Subtask {
@@ -825,7 +825,7 @@ export default function ProjectKanbanPage() {
           </KanbanProvider>
         )}
         
-        <TaskDetailsDialog 
+        <TaskDetailsSheet
           task={selectedTask}
           allTasks={tasks}
           open={dialogOpen}

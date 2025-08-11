@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit, Trash2, FolderOpen, GitBranch, Calendar, Tag, CheckCircle, MessageSquare, Kanban } from "lucide-react";
+import { Edit, Trash2, FolderOpen, GitBranch, Calendar, Tag, CheckCircle, MessageSquare, Kanban, Info, CheckSquare } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,7 +37,7 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
       className={`group hover:shadow-md transition-all cursor-pointer ${
         isSelected ? 'ring-2 ring-primary shadow-md' : ''
       }`}
-      onClick={() => onSelect?.(project.id)}
+      onClick={() => router.push(`/projects/${project.id}`)}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium flex items-center">
@@ -48,6 +48,48 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
           )}
         </CardTitle>
         <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {!isSelected && onSelect && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect(project.id);
+                    }}
+                    className="h-8 w-8 p-0"
+                  >
+                    <CheckSquare className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Set as Current</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/projects/${project.id}`);
+                  }}
+                  className="h-8 w-8 p-0"
+                >
+                  <Info className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View Details</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

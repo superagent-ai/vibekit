@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical, ArrowUpDown, MessageSquare, Kanban } from "lucide-react";
+import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical, ArrowUpDown, MessageSquare, Kanban, Info, CheckSquare } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -53,9 +53,10 @@ interface SortableRowProps {
   onSelect: (id: string) => void;
   onEdit: (project: Project) => void;
   onDelete: (id: string) => void;
+  onSetCurrent: (id: string) => void;
 }
 
-function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: SortableRowProps) {
+function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete, onSetCurrent }: SortableRowProps) {
   const router = useRouter();
   const {
     attributes,
@@ -79,7 +80,7 @@ function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: S
       className={`hover:bg-muted/50 transition-colors cursor-pointer ${
         isSelected ? 'bg-primary/5' : ''
       } ${isDragging ? 'shadow-lg' : ''}`}
-      onClick={() => onSelect(project.id)}
+      onClick={() => router.push(`/projects/${project.id}`)}
     >
       <TableCell className="w-10">
         <div
@@ -156,6 +157,30 @@ function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete }: S
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-1">
+          {!isSelected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSetCurrent(project.id);
+              }}
+              title="Set as current project"
+            >
+              <CheckSquare className="h-3 w-3" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/projects/${project.id}`);
+            }}
+            title="View project details"
+          >
+            <Info className="h-3 w-3" />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -748,6 +773,7 @@ export default function ProjectsPage() {
                         onSelect={handleSelectProject}
                         onEdit={setEditingProject}
                         onDelete={handleDeleteProject}
+                        onSetCurrent={handleSelectProject}
                       />
                     ))}
                   </SortableContext>
@@ -775,7 +801,7 @@ export default function ProjectsPage() {
                     className={`hover:bg-muted/50 transition-colors cursor-pointer ${
                       currentProject?.id === project.id ? 'bg-primary/5' : ''
                     }`}
-                    onClick={() => handleSelectProject(project.id)}
+                    onClick={() => router.push(`/projects/${project.id}`)}
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
@@ -842,6 +868,30 @@ export default function ProjectsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        {currentProject?.id !== project.id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectProject(project.id);
+                            }}
+                            title="Set as current project"
+                          >
+                            <CheckSquare className="h-3 w-3" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${project.id}`);
+                          }}
+                          title="View project details"
+                        >
+                          <Info className="h-3 w-3" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
