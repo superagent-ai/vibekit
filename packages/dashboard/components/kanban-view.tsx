@@ -25,6 +25,7 @@ const { Provider: KanbanProvider, Board: KanbanBoard, Header: KanbanHeader, Card
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { TaskDetailsSheet } from "@/components/task-details-sheet";
+import { SubtaskDetailsSheet } from "@/components/subtask-details-sheet";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
 import type { ManualTask } from "@/lib/projects";
 
@@ -137,7 +138,9 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedSubtask, setSelectedSubtask] = useState<Subtask | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [subtaskDialogOpen, setSubtaskDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("pending");
   
@@ -347,6 +350,25 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
     setDialogOpen(true);
+  };
+
+  const handleSubtaskClick = (subtask: Subtask) => {
+    setSelectedSubtask(subtask);
+    setDialogOpen(false);
+    // Small delay to allow the task dialog to close before opening subtask dialog
+    setTimeout(() => {
+      setSubtaskDialogOpen(true);
+    }, 100);
+  };
+
+  const handleParentTaskClick = () => {
+    setSubtaskDialogOpen(false);
+    setDialogOpen(true);
+  };
+
+  const handleSiblingSubtaskClick = (subtask: Subtask) => {
+    setSelectedSubtask(subtask);
+    setSubtaskDialogOpen(true);
   };
 
   const toggleColumnVisibility = (columnId: string) => {
@@ -668,9 +690,20 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
         isManualTask={taskSource === 'manual'}
         projectId={projectId}
         onTaskUpdate={() => fetchTasks(true)}
+        onSubtaskClick={handleSubtaskClick}
         onEditClick={() => {
           setEditDialogOpen(true);
         }}
+      />
+      
+      <SubtaskDetailsSheet
+        subtask={selectedSubtask}
+        parentTask={selectedTask}
+        allTasks={tasks}
+        open={subtaskDialogOpen}
+        onOpenChange={setSubtaskDialogOpen}
+        onParentTaskClick={handleParentTaskClick}
+        onSiblingSubtaskClick={handleSiblingSubtaskClick}
       />
       
       {taskSource === 'manual' && (

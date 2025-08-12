@@ -66,9 +66,10 @@ interface TaskDetailsSheetProps {
   onEditClick?: () => void;
   projectId?: string;
   onTaskUpdate?: () => void;
+  onSubtaskClick?: (subtask: Subtask) => void;
 }
 
-export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualTask, onEditClick, projectId, onTaskUpdate }: TaskDetailsSheetProps) {
+export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualTask, onEditClick, projectId, onTaskUpdate, onSubtaskClick }: TaskDetailsSheetProps) {
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<number>>(new Set());
   const [subtaskCount, setSubtaskCount] = useState<number>(5);
   const [isExpanding, setIsExpanding] = useState(false);
@@ -321,7 +322,7 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
                 <div className="space-y-3 pl-8">
                   {task.subtasks.map((subtask, index) => {
                     const isExpanded = expandedSubtasks.has(subtask.id);
-                    const hasDetails = subtask.details || subtask.testStrategy || (subtask.dependencies && subtask.dependencies.length > 0);
+                    const hasToggleContent = subtask.details || subtask.testStrategy || (subtask.dependencies && subtask.dependencies.length > 0);
                     
                     return (
                       <div key={subtask.id}>
@@ -330,56 +331,48 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
                           <div className="space-y-2">
                             {/* Subtask Header - Always Visible */}
                             <div className="flex items-start justify-between">
-                              <CollapsibleTrigger className="flex items-start gap-2 hover:opacity-80 transition-opacity cursor-pointer group flex-1">
-                                <div className="mt-0.5">
-                                  {hasDetails ? (
+                              <div className="flex items-start gap-2 flex-1">
+                                <CollapsibleTrigger className="mt-0.5" disabled={!hasToggleContent}>
+                                  {hasToggleContent ? (
                                     isExpanded ? (
-                                      <ChevronDown className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+                                      <ChevronDown className="h-3 w-3 text-muted-foreground hover:text-foreground transition-colors cursor-pointer" />
                                     ) : (
-                                      <ChevronRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+                                      <ChevronRight className="h-3 w-3 text-muted-foreground hover:text-foreground transition-colors cursor-pointer" />
                                     )
                                   ) : (
                                     <div className="w-3" />
                                   )}
-                                </div>
-                                {getStatusIcon(subtask.status)}
+                                </CollapsibleTrigger>
                                 <div className="space-y-1 flex-1 text-left">
-                                  <h4 className="text-sm font-medium">
-                                    {subtask.title}
-                                  </h4>
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-xs text-muted-foreground">
-                                      #{subtask.id}
-                                    </p>
-                                    {subtask.description && (
-                                      <>
-                                        <span className="text-xs text-muted-foreground">•</span>
-                                        <p className="text-xs text-muted-foreground line-clamp-1">
-                                          {subtask.description}
-                                        </p>
-                                      </>
-                                    )}
+                                  <div 
+                                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (onSubtaskClick) {
+                                        onSubtaskClick(subtask);
+                                      }
+                                    }}
+                                  >
+                                    <h4 className="text-sm font-medium hover:underline inline">
+                                      #{index + 1}. {subtask.title}
+                                    </h4>
                                   </div>
+                                  {subtask.description && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {subtask.description}
+                                    </p>
+                                  )}
                                 </div>
-                              </CollapsibleTrigger>
+                              </div>
                               <Badge className={`text-xs ml-2 ${getStatusColor(subtask.status)}`}>
                                 {subtask.status.replace("-", " ")}
                               </Badge>
                             </div>
                             
-                            {/* Expandable Content */}
-                            {hasDetails && (
+                            {/* Expandable Content - Only details and test strategy */}
+                            {hasToggleContent && (
                               <CollapsibleContent>
                                 <div className="space-y-3 ml-8 pt-2">
-                                  {subtask.description && (
-                                    <div>
-                                      <p className="text-xs font-medium text-muted-foreground mb-1">Description:</p>
-                                      <p className="text-sm text-muted-foreground">
-                                        {subtask.description}
-                                      </p>
-                                    </div>
-                                  )}
-                                  
                                   {subtask.details && (
                                     <div>
                                       <p className="text-xs font-medium text-muted-foreground mb-1">Details:</p>

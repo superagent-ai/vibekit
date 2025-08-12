@@ -43,6 +43,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { TaskDetailsSheet } from "@/components/task-details-sheet";
+import { SubtaskDetailsSheet } from "@/components/subtask-details-sheet";
 import type { Project } from "@/lib/projects";
 
 interface Subtask {
@@ -153,7 +154,9 @@ export default function ProjectKanbanPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedSubtask, setSelectedSubtask] = useState<Subtask | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [subtaskDialogOpen, setSubtaskDialogOpen] = useState(false);
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("pending");
   
@@ -433,6 +436,25 @@ export default function ProjectKanbanPage() {
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
     setDialogOpen(true);
+  };
+
+  const handleSubtaskClick = (subtask: Subtask) => {
+    setSelectedSubtask(subtask);
+    setDialogOpen(false);
+    // Small delay to allow the task dialog to close before opening subtask dialog
+    setTimeout(() => {
+      setSubtaskDialogOpen(true);
+    }, 100);
+  };
+
+  const handleParentTaskClick = () => {
+    setSubtaskDialogOpen(false);
+    setDialogOpen(true);
+  };
+
+  const handleSiblingSubtaskClick = (subtask: Subtask) => {
+    setSelectedSubtask(subtask);
+    setSubtaskDialogOpen(true);
   };
 
   const toggleColumnVisibility = (columnId: string) => {
@@ -830,6 +852,19 @@ export default function ProjectKanbanPage() {
           allTasks={tasks}
           open={dialogOpen}
           onOpenChange={setDialogOpen}
+          onSubtaskClick={handleSubtaskClick}
+          projectId={projectId}
+          onTaskUpdate={() => fetchTasks(true)}
+        />
+        
+        <SubtaskDetailsSheet
+          subtask={selectedSubtask}
+          parentTask={selectedTask}
+          allTasks={tasks}
+          open={subtaskDialogOpen}
+          onOpenChange={setSubtaskDialogOpen}
+          onParentTaskClick={handleParentTaskClick}
+          onSiblingSubtaskClick={handleSiblingSubtaskClick}
         />
       </div>
     </div>
