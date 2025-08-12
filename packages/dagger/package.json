@@ -26,34 +26,13 @@
   "author": "Vibekit Team",
   "license": "MIT",
   "dependencies": {
-    "@dagger.io/dagger": "^0.18.14",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.62.0",
-    "@opentelemetry/core": "^2.0.1",
-    "@opentelemetry/instrumentation": "^0.202.0",
-    "@opentelemetry/resources": "^2.0.1",
-    "@opentelemetry/sdk-metrics": "^2.0.1",
-    "@opentelemetry/sdk-node": "^0.202.0",
-    "@opentelemetry/sdk-trace-node": "^2.0.1",
-    "@opentelemetry/semantic-conventions": "^1.36.0",
-    "data-uri-to-buffer": "^4.0.1",
-    "execa": "^9.0.0",
-    "fetch-blob": "^3.2.0",
-    "formdata-polyfill": "^4.0.10",
-    "fs-extra": "^11.2.0",
-    "graphql-request": "^7.2.0",
-    "merge-stream": "^2.0.0",
-    "node-color-log": "^12.0.1",
-    "reflect-metadata": "^0.2.2",
-    "which": "^4.0.0"
+    "@dagger.io/dagger": "^0.18.14"
   },
   "peerDependencies": {
     "@vibe-kit/sdk": "*"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.0.0",
-    "@types/which": "^3.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "vitest": "^1.0.0"

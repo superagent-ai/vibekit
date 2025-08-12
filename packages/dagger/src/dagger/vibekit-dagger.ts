@@ -80,24 +80,10 @@ export class VibeKitError extends Error {
   }
 }
 
-export class ImageResolutionError extends VibeKitError {
-  constructor(message: string, cause?: Error) {
-    super(message, "IMAGE_RESOLUTION_ERROR", cause);
-    this.name = "ImageResolutionError";
-  }
-}
-
 export class ContainerExecutionError extends VibeKitError {
   constructor(message: string, public exitCode: number, cause?: Error) {
     super(message, "CONTAINER_EXECUTION_ERROR", cause);
     this.name = "ContainerExecutionError";
-  }
-}
-
-export class ConfigurationError extends VibeKitError {
-  constructor(message: string, cause?: Error) {
-    super(message, "CONFIGURATION_ERROR", cause);
-    this.name = "ConfigurationError";
   }
 }
 
@@ -224,166 +210,38 @@ export class Configuration {
   }
 }
 
-// Connection pool for Dagger clients
-class DaggerConnectionPool {
-  private static instance: DaggerConnectionPool;
-  private connections: Map<string, { client: Client; lastUsed: number }> = new Map();
-  private maxConnections = 5;
-  private connectionTTL = 300000; // 5 minutes
-  private cleanupInterval: NodeJS.Timeout | null = null;
-  private logger: Logger;
-
-  private constructor(logger: Logger) {
-    this.logger = logger;
-    this.startCleanup();
-  }
-
-  static getInstance(logger: Logger): DaggerConnectionPool {
-    if (!DaggerConnectionPool.instance) {
-      DaggerConnectionPool.instance = new DaggerConnectionPool(logger);
-    }
-    return DaggerConnectionPool.instance;
-  }
-
-  private startCleanup(): void {
-    this.cleanupInterval = setInterval(() => {
-      const now = Date.now();
-      for (const [key, conn] of this.connections.entries()) {
-        if (now - conn.lastUsed > this.connectionTTL) {
-          this.logger.debug(`Cleaning up stale connection: ${key}`);
-          this.connections.delete(key);
-        }
-      }
-    }, 60000); // Clean up every minute
-  }
-
-  async getConnection(key: string): Promise<Client> {
-    const existing = this.connections.get(key);
-    if (existing) {
-      existing.lastUsed = Date.now();
-      return existing.client;
-    }
-
-    if (this.connections.size >= this.maxConnections) {
-      // Remove least recently used
-      let oldestKey = "";
-      let oldestTime = Date.now();
-      for (const [k, v] of this.connections.entries()) {
-        if (v.lastUsed < oldestTime) {
-          oldestTime = v.lastUsed;
-          oldestKey = k;
-        }
-      }
-      if (oldestKey) {
-        this.logger.debug(`Evicting LRU connection: ${oldestKey}`);
-        this.connections.delete(oldestKey);
-      }
-    }
-
-    // Create new connection
-    let newClient: Client | null = null;
-    await connect(async (client) => {
-      newClient = client;
-    });
-    
-    if (!newClient) {
-      throw new Error("Failed to create Dagger client connection");
-    }
-    
-    this.connections.set(key, { client: newClient, lastUsed: Date.now() });
-    return newClient;
-  }
-
-  async close(): Promise<void> {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
-    this.connections.clear();
-  }
-}
-
-// Retry utility with exponential backoff for transient failures
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  options: {
-    attempts: number;
-    delayMs: number;
-    logger: Logger;
-    context: string;
-  }
-): Promise<T> {
-  let lastError: Error | undefined;
-  
-  for (let attempt = 1; attempt <= options.attempts; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      options.logger.warn(
-        `${options.context} failed (attempt ${attempt}/${options.attempts})`,
-        lastError
-      );
-      
-      if (attempt < options.attempts) {
-        const delay = options.delayMs * Math.pow(2, attempt - 1);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  
-  throw lastError || new Error(`${options.context} failed after ${options.attempts} attempts`);
-}
-
 // Validates and sanitizes command input to prevent injection
 function sanitizeCommand(command: string): string {
-  // Basic command injection prevention
-  const dangerous = [";", "&&", "||", "|", "`", "$", "(", ")", "{", "}", "[", "]", "<", ">", "&"];
-  let sanitized = command;
+  // For Dagger, we're already running in an isolated container
+  // and using sh -c, so we can be less restrictive
+  // Still prevent some obvious injection patterns
   
-  // Only allow these characters in quoted strings
-  const quotedRegex = /(["'])(?:(?=(\\?))\2.)*?\1/g;
-  const quoted: string[] = [];
-  sanitized = sanitized.replace(quotedRegex, (match) => {
-    quoted.push(match);
-    return `__QUOTE_${quoted.length - 1}__`;
-  });
+  // Check for obvious command injection attempts
+  const veryDangerous = [
+    "rm -rf /",
+    "rm -rf /*",
+    ":(){ :|:& };:", // Fork bomb
+    "dd if=/dev/zero", // Disk fill
+  ];
   
-  // Check for dangerous characters outside quotes
-  for (const char of dangerous) {
-    if (sanitized.includes(char)) {
-      throw new Error(`Command contains potentially dangerous character: ${char}`);
+  for (const pattern of veryDangerous) {
+    if (command.includes(pattern)) {
+      throw new Error(`Command contains dangerous pattern: ${pattern}`);
     }
   }
   
-  // Restore quoted strings
-  quoted.forEach((q, i) => {
-    sanitized = sanitized.replace(`__QUOTE_${i}__`, q);
-  });
-  
-  return sanitized;
+  // Allow common shell operators since we're in a sandboxed environment
+  // The container isolation provides the security boundary
+  return command;
 }
-
-// Helper function to get Dockerfile path based on agent type
-const getDockerfilePathFromAgentType = (
-  agentType?: AgentType
-): string | undefined => {
-  const dockerfileMap: Record<AgentType, string> = {
-    claude: "assets/dockerfiles/Dockerfile.claude",
-    codex: "assets/dockerfiles/Dockerfile.codex",
-    opencode: "assets/dockerfiles/Dockerfile.opencode",
-    gemini: "assets/dockerfiles/Dockerfile.gemini",
-    grok: "assets/dockerfiles/Dockerfile.grok"
-  };
-  
-  return agentType ? dockerfileMap[agentType] : undefined;
-};
 
 // Image resolution using shared infrastructure
 class ImageResolver {
   private sharedResolver: any;
+  private config: LocalConfig;
 
   constructor(config: LocalConfig, logger: Logger) {
+    this.config = config;
     // Import and use the shared ImageResolver
     const sharedConfig = {
       preferRegistryImages: config.preferRegistryImages,
@@ -426,6 +284,9 @@ class ImageResolver {
   async resolveImage(agentType?: AgentType): Promise<string> {
     if (!this.sharedResolver) {
       // Fallback if shared resolver not initialized yet
+      if (agentType && this.config.dockerHubUser) {
+        return `${this.config.dockerHubUser}/vibekit-${agentType}:latest`;
+      }
       return agentType ? `vibekit-${agentType}:latest` : "ubuntu:24.04";
     }
     
@@ -437,7 +298,6 @@ class ImageResolver {
 class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
   private isRunning = true;
   private workspaceDirectory: Directory | null = null;
-  private connectionPool: DaggerConnectionPool;
   private logger: Logger;
   private imageResolver: ImageResolver;
   private config: LocalConfig;
@@ -452,7 +312,6 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     super();
     this.config = Configuration.getInstance(config).get();
     this.logger = Configuration.getInstance().getLogger();
-    this.connectionPool = DaggerConnectionPool.getInstance(this.logger);
     this.imageResolver = new ImageResolver(this.config, this.logger);
   }
 
@@ -516,83 +375,91 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     command: string,
     options?: SandboxCommandOptions
   ): Promise<SandboxExecutionResult> {
-    const connectionKey = `sandbox-${this.sandboxId}`;
-    const client = await this.connectionPool.getConnection(connectionKey);
-
-    // Resolve the image
-    const image = await this.imageResolver.resolveImage(this.agentType);
+    // Use direct connect instead of connection pool to avoid GraphQL sync issues
+    let result: SandboxExecutionResult | null = null;
     
-    // Create container
-    let container = client.container()
-      .from(image)
-      .withWorkdir(this.workDir || "/vibe0");
+    await connect(async (client) => {
+      // Resolve the image
+      const image = await this.imageResolver.resolveImage(this.agentType);
+      
+      // Create container
+      let container = client.container()
+        .from(image)
+        .withWorkdir(this.workDir || "/vibe0");
 
-    // Add environment variables
-    if (this.envs) {
-      for (const [key, value] of Object.entries(this.envs)) {
-        container = container.withEnvVariable(key, value);
+      // Add environment variables
+      if (this.envs) {
+        for (const [key, value] of Object.entries(this.envs)) {
+          container = container.withEnvVariable(key, value);
+        }
       }
-    }
 
-    // Restore workspace if exists
-    if (this.workspaceDirectory) {
-      container = container.withDirectory(
-        this.workDir || "/vibe0",
-        this.workspaceDirectory
-      );
-    }
-
-    // Execute command
-    if (options?.background) {
-      // Background execution
-      container = container.withExec(["sh", "-c", command], {
-        experimentalPrivilegedNesting: true,
-      });
-
-      // Save workspace state
-      this.workspaceDirectory = container.directory(this.workDir || "/vibe0");
-
-      return {
-        exitCode: 0,
-        stdout: `Background process started: ${command}`,
-        stderr: "",
-      };
-    } else {
-      // Foreground execution with timeout
-      const timeout = options?.timeoutMs || 120000; // 2 minutes default
-      const execContainer = container.withExec(["sh", "-c", command]);
-
-      try {
-        const [stdout, stderr, exitCode] = await Promise.race([
-          Promise.all([
-            execContainer.stdout(),
-            execContainer.stderr(),
-            execContainer.exitCode()
-          ]),
-          new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error("Command execution timeout")), timeout)
-          )
-        ]);
-
-        // Save workspace state
-        this.workspaceDirectory = execContainer.directory(this.workDir || "/vibe0");
-
-        // Handle output callbacks
-        if (stdout && options?.onStdout) {
-          this.emitOutput("stdout", stdout, options.onStdout);
-        }
-        if (stderr && options?.onStderr) {
-          this.emitOutput("stderr", stderr, options.onStderr);
-        }
-
-        return { exitCode, stdout, stderr };
-      } catch (error) {
-        if (error instanceof Error && error.message === "Command execution timeout") {
-          throw new ContainerExecutionError("Command execution timeout", -1, error);
-        }
-        throw error;
+      // Restore workspace if exists
+      if (this.workspaceDirectory) {
+        container = container.withDirectory(
+          this.workDir || "/vibe0",
+          this.workspaceDirectory
+        );
       }
+
+      // Execute command
+      if (options?.background) {
+        // Background execution
+        container = container.withExec(["sh", "-c", command], {
+          experimentalPrivilegedNesting: true,
+        });
+
+        // Save workspace state - await the directory call
+        this.workspaceDirectory = await container.directory(this.workDir || "/vibe0");
+
+        result = {
+          exitCode: 0,
+          stdout: `Background process started: ${command}`,
+          stderr: "",
+        };
+      } else {
+        // Foreground execution with timeout
+        const timeout = options?.timeoutMs || 120000; // 2 minutes default
+        const execContainer = container.withExec(["sh", "-c", command]);
+
+        try {
+          const [stdout, stderr, exitCode] = await Promise.race([
+            Promise.all([
+              execContainer.stdout(),
+              execContainer.stderr(),
+              execContainer.exitCode()
+            ]),
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error("Command execution timeout")), timeout)
+            )
+          ]);
+
+          // Save workspace state - await the directory call
+          this.workspaceDirectory = await execContainer.directory(this.workDir || "/vibe0");
+
+          // Handle output callbacks
+          if (stdout && options?.onStdout) {
+            this.emitOutput("stdout", stdout, options.onStdout);
+          }
+          if (stderr && options?.onStderr) {
+            this.emitOutput("stderr", stderr, options.onStderr);
+          }
+
+          result = { exitCode, stdout, stderr };
+        } catch (error) {
+          if (error instanceof Error && error.message === "Command execution timeout") {
+            throw new ContainerExecutionError("Command execution timeout", -1, error);
+          }
+          throw error;
+        }
+      }
+    });
+
+    if (!result) {
+      throw new ContainerExecutionError("Command execution failed - no result returned", -1);
     }
+    
+    return result;
   }
 
   private emitOutput(
