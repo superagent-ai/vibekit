@@ -351,10 +351,14 @@ export default function ProjectDetailPage() {
 
         {/* Tabbed Content */}
         <Tabs defaultValue={defaultTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Info className="h-4 w-4" />
               Overview
+            </TabsTrigger>
+            <TabsTrigger value="log" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Log
             </TabsTrigger>
             <TabsTrigger value="tasks" className="flex items-center gap-2">
               <ListTodo className="h-4 w-4" />
@@ -532,33 +536,21 @@ export default function ProjectDetailPage() {
               </Card>
             )}
 
-            {/* Quick Actions */}
+            {/* Recent Logs */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
-                <CardDescription>Common actions for this project</CardDescription>
+                <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
+                <CardDescription>Last 10 log entries for this project</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <Button 
-                    variant="outline" 
-                    className="justify-start"
-                    onClick={() => setChatSheetOpen(true)}
-                  >
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Open Chat
-                  </Button>
-                  <Button variant="outline" className="justify-start">
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit Project
-                  </Button>
-                  <Button variant="outline" className="justify-start">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                  </Button>
+                <div className="space-y-2">
+                  <div className="text-center py-4 text-sm text-muted-foreground">
+                    No recent activity
+                  </div>
                 </div>
               </CardContent>
             </Card>
+
           </TabsContent>
 
           <TabsContent value="tasks" className="space-y-4">
@@ -652,6 +644,28 @@ export default function ProjectDetailPage() {
                     </p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="log" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Project Log</CardTitle>
+                <CardDescription>
+                  Complete log history for this project
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">
+                    No logs available yet
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Logs will appear here when activities are performed
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
