@@ -158,6 +158,17 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
       cancelled: false,
     };
   });
+  
+  // Update selected task when tasks are refreshed
+  useEffect(() => {
+    if (selectedTask && tasks.length > 0) {
+      const updatedTask = tasks.find(t => t.id === selectedTask.id);
+      if (updatedTask && JSON.stringify(updatedTask) !== JSON.stringify(selectedTask)) {
+        console.log('[KanbanView] Updating selected task with refreshed data');
+        setSelectedTask(updatedTask);
+      }
+    }
+  }, [tasks]);
 
   // Convert tasks to kanban format
   const convertTasksToKanbanData = (tasks: Task[]): KanbanTask[] => {
@@ -655,6 +666,8 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         isManualTask={taskSource === 'manual'}
+        projectId={projectId}
+        onTaskUpdate={() => fetchTasks(true)}
         onEditClick={() => {
           setEditDialogOpen(true);
         }}

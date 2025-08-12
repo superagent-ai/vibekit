@@ -17,6 +17,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
 import { 
   ChevronRight,
   ChevronDown, 
@@ -29,7 +30,9 @@ import {
   FileText,
   TestTube,
   ListChecks,
-  Edit
+  Edit,
+  Sparkles,
+  Loader2
 } from "lucide-react";
 
 interface Subtask {
@@ -61,10 +64,14 @@ interface TaskDetailsSheetProps {
   onOpenChange: (open: boolean) => void;
   isManualTask?: boolean;
   onEditClick?: () => void;
+  projectId?: string;
+  onTaskUpdate?: () => void;
 }
 
-export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualTask, onEditClick }: TaskDetailsSheetProps) {
+export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualTask, onEditClick, projectId, onTaskUpdate }: TaskDetailsSheetProps) {
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<number>>(new Set());
+  const [subtaskCount, setSubtaskCount] = useState<number>(5);
+  const [isExpanding, setIsExpanding] = useState(false);
   
   if (!task) return null;
   
@@ -79,6 +86,50 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
       }
       return newSet;
     });
+  };
+  
+  // Handle expanding task into subtasks
+  const handleExpandTask = async () => {
+    if (!projectId || !task) return;
+    
+    setIsExpanding(true);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/tasks/expand`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: task.id,
+          numSubtasks: subtaskCount
+        }),
+      });
+      
+      if (!response.ok) {
+        let errorMessage = 'Failed to expand task';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // If not JSON, try text
+          const errorText = await response.text();
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      // Refresh the task data
+      if (onTaskUpdate) {
+        onTaskUpdate();
+      }
+      
+      // Success! The useEffect in KanbanView will update the selected task automatically
+    } catch (error) {
+      console.error('Failed to expand task:', error);
+      alert(`Failed to expand task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsExpanding(false);
+    }
   };
   
   // Helper function to get task title by ID
@@ -261,7 +312,7 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
             )}
 
             {/* Subtasks */}
-            {task.subtasks && task.subtasks.length > 0 && (
+            {task.subtasks && task.subtasks.length > 0 ? (
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <ListChecks className="h-4 w-4" />
@@ -374,6 +425,62 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
                   })}
                 </div>
               </div>
+            ) : (
+              // Show expand option when no subtasks exist and not a manual task
+              !isManualTask && projectId && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <ListChecks className="h-4 w-4" />
+                    Subtasks
+                  </h3>
+                  <div className="pl-8 space-y-4">
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        This task hasn't been broken down into subtasks yet. 
+                        Use AI to automatically generate subtasks for better task management.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="1"
+                            max="20"
+                            value={subtaskCount}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value);
+                              if (!isNaN(value) && value >= 1 && value <= 20) {
+                                setSubtaskCount(value);
+                              }
+                            }}
+                            className="w-16 h-8"
+                            disabled={isExpanding}
+                            autoFocus={false}
+                            tabIndex={-1}
+                          />
+                          <span className="text-sm text-muted-foreground">subtasks</span>
+                        </div>
+                        <Button 
+                          onClick={handleExpandTask}
+                          disabled={isExpanding}
+                          size="sm"
+                        >
+                          {isExpanding ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Expanding...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              Expand Task
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
             )}
           </div>
         </ScrollArea>
