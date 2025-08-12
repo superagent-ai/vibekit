@@ -57,18 +57,6 @@ export function useChat(options: ChatOptions = {}) {
     mcpServerFilter,
   } = options;
 
-  // Add debug logging
-  console.log('[USE-CHAT DEBUG] Options:', {
-    model,
-    temperature,
-    maxTokens,
-    showMCPTools,
-    webSearch,
-    projectId,
-    projectRoot,
-    projectName,
-    mcpServerFilter,
-  });
 
   // The AI SDK sends the body directly with the messages in a POST request
   // We'll use a workaround - override the sendMessage function
@@ -153,14 +141,11 @@ export function useChat(options: ChatOptions = {}) {
           (window as any).fetch = originalFetch;
         }
         
-        console.error('[USE-CHAT DEBUG] Error in sendMessage:', error);
         throw error;
       }
     }
   };
   
-  // Debug what methods are available
-  console.log('useChat returned:', Object.keys(chat));
 
   // Parse message extras (reasoning, sources)
   const getMessageExtras = (message: any): MessageExtras => {

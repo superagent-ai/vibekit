@@ -1,6 +1,5 @@
 // Version for debugging
-export const MCP_CLIENT_VERSION = '0.0.1-debug-' + Date.now();
-console.log('[mcp-client] Loading version:', MCP_CLIENT_VERSION);
+export const MCP_CLIENT_VERSION = '0.0.1';
 
 export { MCPClientManager } from './manager/server-manager';
 export { MCPClient } from './client/mcp-client';
