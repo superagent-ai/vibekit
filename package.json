@@ -17,7 +17,7 @@
         "build": "turbo run build",
         "build:packages": "turbo run build --filter='./packages/*'",
         "dev": "turbo run dev",
-        "dev:dashboard": "turbo run dev --filter=vibekit-dashboard",
+        "dev:dashboard": "turbo run dev --filter=@vibe-kit/dashboard",
         "type-check": "turbo run type-check",
         "test": "turbo run test",
         "lint": "turbo run lint",
