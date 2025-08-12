@@ -196,6 +196,7 @@ export default function ProjectKanbanPage() {
       if (!response.ok) throw new Error("Failed to fetch project");
       const data = await response.json();
       if (data.success) {
+        console.log("Project loaded:", data.data);
         setProject(data.data);
       }
     } catch (error) {
@@ -439,6 +440,7 @@ export default function ProjectKanbanPage() {
   };
 
   const handleSubtaskClick = (subtask: Subtask) => {
+    console.log("Opening subtask sheet, project:", project);
     setSelectedSubtask(subtask);
     setDialogOpen(false);
     // Small delay to allow the task dialog to close before opening subtask dialog
@@ -865,6 +867,8 @@ export default function ProjectKanbanPage() {
           onOpenChange={setSubtaskDialogOpen}
           onParentTaskClick={handleParentTaskClick}
           onSiblingSubtaskClick={handleSiblingSubtaskClick}
+          projectId={projectId}
+          projectRoot={project?.projectRoot}
         />
       </div>
     </div>

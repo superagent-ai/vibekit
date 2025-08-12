@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Sheet,
   SheetContent,
@@ -13,6 +13,15 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { 
   Hash,
   Link,
@@ -23,6 +32,10 @@ import {
   AlertCircle,
   ScrollText,
   ListChecks,
+  Bot,
+  Settings,
+  GitBranch,
+  Play,
 } from "lucide-react";
 
 interface Subtask {
@@ -55,6 +68,8 @@ interface SubtaskDetailsSheetProps {
   onOpenChange: (open: boolean) => void;
   onParentTaskClick?: () => void;
   onSiblingSubtaskClick?: (subtask: Subtask) => void;
+  projectId?: string;
+  projectRoot?: string;
 }
 
 export function SubtaskDetailsSheet({ 
@@ -64,9 +79,78 @@ export function SubtaskDetailsSheet({
   open, 
   onOpenChange,
   onParentTaskClick,
-  onSiblingSubtaskClick
+  onSiblingSubtaskClick,
+  projectId,
+  projectRoot
 }: SubtaskDetailsSheetProps) {
+  console.log("SubtaskDetailsSheet props:", { projectId, projectRoot, open });
   const [activeTab, setActiveTab] = useState("logs");
+  const [selectedAgent, setSelectedAgent] = useState<string>("");
+  const [selectedSandbox, setSelectedSandbox] = useState<string>("");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [branches, setBranches] = useState<string[]>([]);
+  const [settings, setSettings] = useState<any>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  
+  // Fetch settings on mount/open
+  useEffect(() => {
+    if (!open) return;
+    
+    // Fetch user settings for defaults
+    fetch("/api/settings")
+      .then(res => res.json())
+      .then(data => {
+        setSettings(data);
+        setSelectedAgent(data.agents?.defaultAgent || "claude");
+        setSelectedSandbox(data.agents?.defaultSandbox || "dagger");
+      })
+      .catch(err => console.error("Failed to load settings:", err));
+  }, [open]);
+  
+  // Fetch git branches when projectRoot is available
+  useEffect(() => {
+    if (!open) return;
+    
+    console.log("Branch fetch effect - projectRoot:", projectRoot, "open:", open);
+    
+    if (projectRoot) {
+      console.log("Fetching branches for project root:", projectRoot);
+      const params = new URLSearchParams({ projectRoot });
+      fetch(`/api/projects/git/branches?${params}`)
+        .then(res => {
+          console.log("Branch fetch response status:", res.status);
+          return res.json();
+        })
+        .then(data => {
+          console.log("Branches data received:", data);
+          if (data.error) {
+            console.error("Branch fetch error:", data.error);
+          }
+          if (data.branches && data.branches.length > 0) {
+            setBranches(data.branches);
+            // Set default to current branch
+            if (data.currentBranch) {
+              setSelectedBranch(data.currentBranch);
+            } else if (data.branches[0]) {
+              setSelectedBranch(data.branches[0]);
+            }
+          } else {
+            console.warn("No branches found in repository");
+            setBranches([]);
+            setSelectedBranch('');
+          }
+        })
+        .catch(err => {
+          console.error("Failed to load branches:", err);
+          setBranches([]);
+          setSelectedBranch('');
+        });
+    } else {
+      console.warn("No project root provided to branch fetch effect");
+      setBranches([]);
+      setSelectedBranch('');
+    }
+  }, [open, projectRoot]);
   
   if (!subtask || !parentTask) return null;
   
@@ -144,6 +228,167 @@ export function SubtaskDetailsSheet({
 
         <ScrollArea className="h-[calc(100vh-220px)] pr-6">
           <div className="space-y-8">
+            {/* Agent Code Generation Card - Only show for pending subtasks */}
+            {subtask.status === "pending" && (
+              <Card className="border-primary/20 bg-primary/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Bot className="h-5 w-5" />
+                    Agent Code Generation
+                  </CardTitle>
+                  <CardDescription>
+                    Execute this subtask using an AI agent with your preferred settings
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {/* Agent Selection */}
+                    <div className="space-y-2">
+                      <Label htmlFor="agent-select" className="text-sm">
+                        Agent
+                      </Label>
+                      <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+                        <SelectTrigger id="agent-select" className="w-full">
+                          <SelectValue placeholder="Select agent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="claude">
+                            <div className="flex items-center gap-2">
+                              <Bot className="h-4 w-4" />
+                              <span>Claude</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="codex">
+                            <div className="flex items-center gap-2">
+                              <Bot className="h-4 w-4" />
+                              <span>Codex</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="gemini">
+                            <div className="flex items-center gap-2">
+                              <Bot className="h-4 w-4" />
+                              <span>Gemini</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="grok">
+                            <div className="flex items-center gap-2">
+                              <Bot className="h-4 w-4" />
+                              <span>Grok</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="opencode">
+                            <div className="flex items-center gap-2">
+                              <Bot className="h-4 w-4" />
+                              <span>OpenCode</span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Sandbox Selection */}
+                    <div className="space-y-2">
+                      <Label htmlFor="sandbox-select" className="text-sm">
+                        Sandbox Provider
+                      </Label>
+                      <Select value={selectedSandbox} onValueChange={setSelectedSandbox}>
+                        <SelectTrigger id="sandbox-select" className="w-full">
+                          <SelectValue placeholder="Select sandbox" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cloudflare">
+                            <div className="flex items-center gap-2">
+                              <Settings className="h-4 w-4" />
+                              <span>Cloudflare</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="dagger">
+                            <div className="flex items-center gap-2">
+                              <Settings className="h-4 w-4" />
+                              <span>Dagger</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="daytona">
+                            <div className="flex items-center gap-2">
+                              <Settings className="h-4 w-4" />
+                              <span>Daytona</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="e2b">
+                            <div className="flex items-center gap-2">
+                              <Settings className="h-4 w-4" />
+                              <span>E2B</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="northflank">
+                            <div className="flex items-center gap-2">
+                              <Settings className="h-4 w-4" />
+                              <span>Northflank</span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Branch Selection */}
+                    <div className="space-y-2">
+                      <Label htmlFor="branch-select" className="text-sm">
+                        Base Branch
+                      </Label>
+                      <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                        <SelectTrigger id="branch-select" className="w-full">
+                          <SelectValue placeholder="Select branch" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {branches.length > 0 ? (
+                            branches.map(branch => (
+                              <SelectItem key={branch} value={branch}>
+                                <div className="flex items-center gap-2">
+                                  <GitBranch className="h-4 w-4" />
+                                  <span>{branch}</span>
+                                </div>
+                              </SelectItem>
+                            ))
+                          ) : projectRoot ? (
+                            <div className="p-2 text-sm text-muted-foreground text-center">
+                              No branches found in repository
+                            </div>
+                          ) : (
+                            <div className="p-2 text-sm text-muted-foreground text-center">
+                              No project root available
+                            </div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Execute Button */}
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      onClick={() => {
+                        setIsExecuting(true);
+                        // TODO: Implement actual execution logic
+                        console.log("Executing subtask with:", {
+                          agent: selectedAgent,
+                          sandbox: selectedSandbox,
+                          branch: selectedBranch,
+                          subtask: subtask,
+                        });
+                        // Simulate execution
+                        setTimeout(() => setIsExecuting(false), 2000);
+                      }}
+                      disabled={isExecuting || !selectedAgent || !selectedSandbox || !selectedBranch}
+                      className="gap-2"
+                    >
+                      <Play className="h-4 w-4" />
+                      {isExecuting ? "Executing..." : "Execute Subtask"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Description */}
             {subtask.description && (
               <div className="space-y-2">

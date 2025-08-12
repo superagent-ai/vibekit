@@ -704,6 +704,8 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
         onOpenChange={setSubtaskDialogOpen}
         onParentTaskClick={handleParentTaskClick}
         onSiblingSubtaskClick={handleSiblingSubtaskClick}
+        projectId={projectId}
+        projectRoot={projectRoot}
       />
       
       {taskSource === 'manual' && (
