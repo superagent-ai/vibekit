@@ -153,27 +153,28 @@ export function CommitDetailsSheet({ projectId, commit, open, onOpenChange }: Co
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-3xl lg:max-w-5xl overflow-hidden p-0">
-        <SheetHeader className="p-6 pb-4">
+        <SheetHeader className="p-6 pb-2">
           <SheetTitle className="flex items-center gap-2">
             <GitCommit className="h-5 w-5" />
             Commit {commit.hash.substring(0, 7)}
           </SheetTitle>
-          <SheetDescription className="space-y-2">
-            <div className="text-sm font-medium text-foreground mt-2">
-              {commitDetails?.message || commit.message}
-            </div>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <User className="h-3 w-3" />
-                <span>{commitDetails?.author || commit.author}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                <span>{new Date(commitDetails?.authorDate || commit.date).toLocaleString()}</span>
-              </div>
-            </div>
+          <SheetDescription>
+            {commitDetails?.message || commit.message}
           </SheetDescription>
         </SheetHeader>
+        
+        <div className="px-6 pb-4">
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <User className="h-3 w-3" />
+              <span>{commitDetails?.author || commit.author}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              <span>{new Date(commitDetails?.authorDate || commit.date).toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
 
         <Separator />
 
