@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { 
   Sheet,
   SheetContent,
@@ -11,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Hash,
   Link,
@@ -20,6 +22,7 @@ import {
   ChevronRight,
   AlertCircle,
   ScrollText,
+  ListChecks,
 } from "lucide-react";
 
 interface Subtask {
@@ -63,6 +66,8 @@ export function SubtaskDetailsSheet({
   onParentTaskClick,
   onSiblingSubtaskClick
 }: SubtaskDetailsSheetProps) {
+  const [activeTab, setActiveTab] = useState("logs");
+  
   if (!subtask || !parentTask) return null;
   
   // Get sibling subtasks (excluding current)
@@ -201,19 +206,43 @@ export function SubtaskDetailsSheet({
                 </div>
               </div>
             )}
-
-            {/* Sibling Subtasks */}
-            {siblingSubtasks.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold">Other Subtasks in Parent Task</h3>
-                <div className="pl-8 space-y-2">
+          </div>
+          
+          {/* Tabs for Logs and Other Subtasks */}
+          <Separator className="my-6" />
+          
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+            <TabsList className="grid grid-cols-2 w-full">
+              <TabsTrigger value="logs" className="flex items-center gap-2">
+                <ScrollText className="h-4 w-4" />
+                Logs
+              </TabsTrigger>
+              <TabsTrigger value="subtasks" className="flex items-center gap-2">
+                <ListChecks className="h-4 w-4" />
+                Other Subtasks
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="logs" className="mt-4">
+              <div className="border rounded-lg p-4 bg-muted/20">
+                <div className="text-center py-8">
+                  <ScrollText className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">No logs available for this subtask</p>
+                  <p className="text-xs text-muted-foreground mt-2">Logs will appear here when the subtask is executed</p>
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="subtasks" className="mt-4">
+              {siblingSubtasks.length > 0 ? (
+                <div className="space-y-2">
                   {siblingSubtasks.map(sibling => {
                     // Find the index of this sibling in the parent's subtasks array
                     const siblingIndex = parentTask.subtasks.findIndex(s => s.id === sibling.id);
                     return (
                       <div
                         key={sibling.id}
-                        className="flex items-center justify-between p-2 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                        className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => {
                           if (onSiblingSubtaskClick) {
                             onOpenChange(false);
@@ -224,7 +253,7 @@ export function SubtaskDetailsSheet({
                         <div>
                           <p className="text-sm font-medium">#{siblingIndex + 1}. {sibling.title}</p>
                           {sibling.description && (
-                            <p className="text-xs text-muted-foreground">{sibling.description}</p>
+                            <p className="text-xs text-muted-foreground mt-1">{sibling.description}</p>
                           )}
                         </div>
                         <Badge className={`text-xs ${getStatusColor(sibling.status)}`}>
@@ -234,25 +263,17 @@ export function SubtaskDetailsSheet({
                     );
                   })}
                 </div>
-              </div>
-            )}
-            
-            {/* Logs Section */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <ScrollText className="h-4 w-4" />
-                Logs
-              </h3>
-              <div className="pl-8">
+              ) : (
                 <div className="border rounded-lg p-4 bg-muted/20">
-                  <div className="text-center py-4">
-                    <p className="text-sm text-muted-foreground">No logs available for this subtask</p>
-                    <p className="text-xs text-muted-foreground mt-2">Logs will appear here when the subtask is executed</p>
+                  <div className="text-center py-8">
+                    <ListChecks className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">No other subtasks in this task</p>
+                    <p className="text-xs text-muted-foreground mt-2">This is the only subtask for the parent task</p>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </ScrollArea>
       </SheetContent>
     </Sheet>
