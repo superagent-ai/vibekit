@@ -13,7 +13,14 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Settings, Shield, BarChart3, Link, RefreshCw } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Settings, Shield, BarChart3, Link, RefreshCw, Bot } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 // Match the exact structure from cli.js readSettings()
@@ -31,6 +38,9 @@ interface VibeKitSettings {
   };
   aliases: {
     enabled: boolean;
+  };
+  agents?: {
+    defaultAgent: string;
   };
 }
 
@@ -50,6 +60,9 @@ export default function SettingsPage() {
     },
     aliases: {
       enabled: false,
+    },
+    agents: {
+      defaultAgent: 'claude',
     },
   });
   const [loading, setLoading] = useState(true);
@@ -97,14 +110,27 @@ export default function SettingsPage() {
   };
 
   const handleToggle = (category: keyof VibeKitSettings, setting: string) => {
+    const categorySettings = settings[category];
+    if (!categorySettings) return;
+    
     const newSettings = {
       ...settings,
       [category]: {
-        ...settings[category],
+        ...categorySettings,
         [setting]:
-          !settings[category][
-            setting as keyof (typeof settings)[typeof category]
+          !categorySettings[
+            setting as keyof typeof categorySettings
           ],
+      },
+    };
+    saveSettings(newSettings);
+  };
+
+  const handleAgentChange = (agent: string) => {
+    const newSettings = {
+      ...settings,
+      agents: {
+        defaultAgent: agent,
       },
     };
     saveSettings(newSettings);
@@ -273,6 +299,68 @@ export default function SettingsPage() {
                 onCheckedChange={() => handleToggle("aliases", "enabled")}
                 disabled={saving}
               />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Agents Settings */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Bot className="h-5 w-5" />
+              <CardTitle>Agents</CardTitle>
+            </div>
+            <CardDescription>
+              Configure default agent for task execution
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="default-agent">Default Agent</Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Select the default agent that will appear in the execution dropdown for tasks and subtasks
+              </p>
+              <Select
+                value={settings.agents?.defaultAgent || 'claude'}
+                onValueChange={handleAgentChange}
+                disabled={saving}
+              >
+                <SelectTrigger id="default-agent" className="w-full">
+                  <SelectValue placeholder="Select an agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="claude">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-4 w-4" />
+                      <span>Claude</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="gemini">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-4 w-4" />
+                      <span>Gemini</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="grok">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-4 w-4" />
+                      <span>Grok</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="codex">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-4 w-4" />
+                      <span>Codex</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="opencode">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-4 w-4" />
+                      <span>OpenCode</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>

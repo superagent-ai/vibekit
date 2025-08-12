@@ -10,7 +10,8 @@ const defaultSettings = {
   sandbox: { enabled: false, type: 'docker' },
   proxy: { enabled: true, redactionEnabled: true },
   analytics: { enabled: true },
-  aliases: { enabled: false }
+  aliases: { enabled: false },
+  agents: { defaultAgent: 'claude' }
 };
 
 export async function GET() {
