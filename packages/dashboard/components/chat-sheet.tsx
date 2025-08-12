@@ -49,26 +49,28 @@ export function ChatSheet({ project, open, onOpenChange }: ChatSheetProps) {
             <MessageSquare className="h-5 w-5" />
             Project Chat
           </SheetTitle>
-          <SheetDescription className="flex flex-col gap-1">
-            <div className="font-medium text-foreground">{project.name}</div>
-            <div className="flex items-center gap-1 text-xs">
-              <Folder className="h-3 w-3" />
-              <code className="text-xs">{project.projectRoot}</code>
+          <SheetDescription asChild>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium text-foreground">{project.name}</span>
+              <span className="flex items-center gap-1 text-xs">
+                <Folder className="h-3 w-3" />
+                <code className="text-xs">{project.projectRoot}</code>
+              </span>
+              {connectedMCPServers.length > 0 && (
+                <span className="flex items-center gap-1 text-xs mt-1">
+                  <Badge variant="outline" className="text-xs">
+                    {connectedMCPServers.length} MCP servers enabled
+                  </Badge>
+                </span>
+              )}
+              {isLoadingServers && (
+                <span className="flex items-center gap-1 text-xs mt-1">
+                  <Badge variant="secondary" className="text-xs">
+                    Loading servers...
+                  </Badge>
+                </span>
+              )}
             </div>
-            {connectedMCPServers.length > 0 && (
-              <div className="flex items-center gap-1 text-xs mt-1">
-                <Badge variant="outline" className="text-xs">
-                  {connectedMCPServers.length} MCP servers enabled
-                </Badge>
-              </div>
-            )}
-            {isLoadingServers && (
-              <div className="flex items-center gap-1 text-xs mt-1">
-                <Badge variant="secondary" className="text-xs">
-                  Loading servers...
-                </Badge>
-              </div>
-            )}
           </SheetDescription>
         </SheetHeader>
         
