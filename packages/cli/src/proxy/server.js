@@ -129,6 +129,21 @@ class ProxyServer {
       return;
     }
 
+    // Log incoming HTTP request details
+    console.log(chalk.cyan('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.yellow(`📥 Incoming HTTP Request #${requestId}`));
+    console.log(chalk.cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.green('Method:'), req.method);
+    console.log(chalk.green('URL:'), targetUrl.href);
+    console.log(chalk.green('Headers:'));
+    Object.entries(req.headers).forEach(([key, value]) => {
+      // Redact sensitive headers
+      const displayValue = key.toLowerCase() === 'x-api-key' || key.toLowerCase() === 'authorization' 
+        ? this.redactSensitiveContent(value) 
+        : value;
+      console.log(`  ${chalk.gray(key)}: ${displayValue}`);
+    });
+
     // Prepare request options
     const options = {
       hostname: targetUrl.hostname,
@@ -155,7 +170,18 @@ class ProxyServer {
     });
 
     req.on('end', () => {
-      // Request body captured silently
+      // Log request body if present
+      if (requestBody) {
+        console.log(chalk.green('Body:'));
+        try {
+          const parsedBody = JSON.parse(requestBody);
+          console.log(chalk.gray(JSON.stringify(parsedBody, null, 2)));
+        } catch {
+          // If not JSON, just print as-is
+          console.log(chalk.gray(requestBody));
+        }
+      }
+      console.log(chalk.cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
     });
 
 
@@ -296,8 +322,22 @@ class ProxyServer {
 
   handleHttpsConnect(req, clientSocket, head) {
     this.requestCount++;
+    const requestId = this.requestCount;
     
     const { hostname, port } = this.parseHostPort(req.url);
+
+    // Log incoming HTTPS CONNECT request
+    console.log(chalk.magenta('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.yellow(`🔒 Incoming HTTPS CONNECT Request #${requestId}`));
+    console.log(chalk.magenta('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.green('Method:'), 'CONNECT');
+    console.log(chalk.green('Host:'), hostname);
+    console.log(chalk.green('Port:'), port);
+    console.log(chalk.green('Headers:'));
+    Object.entries(req.headers).forEach(([key, value]) => {
+      console.log(`  ${chalk.gray(key)}: ${value}`);
+    });
+    console.log(chalk.magenta('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
 
     const serverSocket = new net.Socket();
 
