@@ -86,7 +86,7 @@ const getNavData = (pathname: string) => ({
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
-  const data = getNavData(pathname);
+  const data = getNavData(pathname || '/');
   return (
     <TooltipProvider>
       <Sidebar collapsible="icon" {...props}>
