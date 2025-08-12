@@ -11,7 +11,7 @@ const defaultSettings = {
   proxy: { enabled: true, redactionEnabled: true },
   analytics: { enabled: true },
   aliases: { enabled: false },
-  agents: { defaultAgent: 'claude' }
+  agents: { defaultAgent: 'claude', defaultSandbox: 'dagger' }
 };
 
 export async function GET() {

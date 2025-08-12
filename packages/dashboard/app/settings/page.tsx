@@ -41,6 +41,7 @@ interface VibeKitSettings {
   };
   agents?: {
     defaultAgent: string;
+    defaultSandbox: string;
   };
 }
 
@@ -63,6 +64,7 @@ export default function SettingsPage() {
     },
     agents: {
       defaultAgent: 'claude',
+      defaultSandbox: 'dagger',
     },
   });
   const [loading, setLoading] = useState(true);
@@ -131,6 +133,18 @@ export default function SettingsPage() {
       ...settings,
       agents: {
         defaultAgent: agent,
+        defaultSandbox: settings.agents?.defaultSandbox || 'dagger',
+      },
+    };
+    saveSettings(newSettings);
+  };
+
+  const handleSandboxChange = (sandbox: string) => {
+    const newSettings = {
+      ...settings,
+      agents: {
+        defaultAgent: settings.agents?.defaultAgent || 'claude',
+        defaultSandbox: sandbox,
       },
     };
     saveSettings(newSettings);
@@ -335,6 +349,12 @@ export default function SettingsPage() {
                       <span>Claude</span>
                     </div>
                   </SelectItem>
+                  <SelectItem value="codex">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-4 w-4" />
+                      <span>Codex</span>
+                    </div>
+                  </SelectItem>
                   <SelectItem value="gemini">
                     <div className="flex items-center gap-2">
                       <Bot className="h-4 w-4" />
@@ -347,16 +367,57 @@ export default function SettingsPage() {
                       <span>Grok</span>
                     </div>
                   </SelectItem>
-                  <SelectItem value="codex">
-                    <div className="flex items-center gap-2">
-                      <Bot className="h-4 w-4" />
-                      <span>Codex</span>
-                    </div>
-                  </SelectItem>
                   <SelectItem value="opencode">
                     <div className="flex items-center gap-2">
                       <Bot className="h-4 w-4" />
                       <span>OpenCode</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="default-sandbox">Default Agent Sandbox</Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Select the default sandbox provider for agent execution
+              </p>
+              <Select
+                value={settings.agents?.defaultSandbox || 'dagger'}
+                onValueChange={handleSandboxChange}
+                disabled={saving}
+              >
+                <SelectTrigger id="default-sandbox" className="w-full">
+                  <SelectValue placeholder="Select a sandbox provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cloudflare">
+                    <div className="flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      <span>Cloudflare</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="dagger">
+                    <div className="flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      <span>Dagger</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="daytona">
+                    <div className="flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      <span>Daytona</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="e2b">
+                    <div className="flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      <span>E2B</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="northflank">
+                    <div className="flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      <span>Northflank</span>
                     </div>
                   </SelectItem>
                 </SelectContent>
