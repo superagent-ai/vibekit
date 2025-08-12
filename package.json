@@ -3,6 +3,7 @@
     "private": true,
     "type": "module",
     "version": "1.0.0",
+    "packageManager": "npm@10.9.2",
     "bin": {
         "vibekit": "./packages/cli/dist/cli.js"
     },
@@ -13,12 +14,14 @@
         "packages/*"
     ],
     "scripts": {
-        "build": "npm run build --workspaces",
-        "build:packages": "npm run build --workspace=packages/e2b && npm run build --workspace=packages/daytona && npm run build --workspace=packages/northflank && npm run build --workspace=packages/cloudflare && npm run build --workspace=packages/dagger && npm run build --workspace=packages/auth && npm run build --workspace=packages/taskmaster && npm run build --workspace=packages/sdk && npm run build --workspace=packages/cli",
-        "dev": "npm run dev --workspace=packages/sdk",
-        "dev:dashboard": "npm run dev --workspace=vibekit-dashboard",
-        "type-check": "npm run build --workspace=packages/sdk && npm run build:types --workspace=packages/dagger && npm run type-check --workspaces",
-        "test": "vitest"
+        "build": "turbo run build",
+        "build:packages": "turbo run build --filter='./packages/*'",
+        "dev": "turbo run dev",
+        "dev:dashboard": "turbo run dev --filter=vibekit-dashboard",
+        "type-check": "turbo run type-check",
+        "test": "turbo run test",
+        "lint": "turbo run lint",
+        "clean": "turbo run clean"
     },
     "devDependencies": {
         "@types/node": "^22.15.18",
@@ -28,6 +31,7 @@
         "tailwindcss": "^4.1.11",
         "tailwindcss-animate": "^1.0.7",
         "tsup": "^8.4.0",
+        "turbo": "^2.5.5",
         "typescript": "^5.8.3",
         "vitest": "^3.1.3"
     },
