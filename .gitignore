@@ -43,6 +43,9 @@ logs
 # nextjs
 .next/
 
+# turbo
+.turbo/
+
 # Misc
 .cache/
 .temp/
