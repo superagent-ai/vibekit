@@ -10,6 +10,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./services": {
+      "types": "./dist/services.d.ts",
+      "import": "./dist/services.js",
+      "require": "./dist/services.cjs"
+    },
+    "./registry": {
+      "types": "./dist/registry.d.ts",
+      "import": "./dist/registry.js",
+      "require": "./dist/registry.cjs"
     }
   },
   "scripts": {

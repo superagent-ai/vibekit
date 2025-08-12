@@ -4,6 +4,8 @@ export default defineConfig({
   // Single main entry point to avoid duplication
   entry: {
     index: "src/index.ts",
+    services: "src/services/index.ts",
+    registry: "src/registry/index.ts",
   },
   format: ["esm", "cjs"],
   dts: true,

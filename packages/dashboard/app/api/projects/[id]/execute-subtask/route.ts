@@ -1,0 +1,459 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { VibeKit } from '@vibe-kit/sdk';
+import { createLocalProvider } from '@vibe-kit/dagger';
+import { homedir } from 'os';
+import { join } from 'path';
+import { AgentAnalytics } from '@/lib/agent-analytics';
+import { SessionLogger } from '@/lib/session-logger';
+// Import other providers as needed
+// import { createE2BProvider } from '@vibe-kit/e2b';
+// import { createDaytonaProvider } from '@vibe-kit/daytona';
+// import { createCloudflareProvider } from '@vibe-kit/cloudflare';
+// import { createNorthflankProvider } from '@vibe-kit/northflank';
+
+interface ExecuteSubtaskRequest {
+  subtask: {
+    id: number;
+    title: string;
+    description: string;
+    details?: string;
+    testStrategy?: string;
+  };
+  agent: string;
+  sandbox: string;
+  branch: string;
+  projectRoot: string;
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  let vibeKit: VibeKit | null = null;
+  let analytics: AgentAnalytics | null = null;
+  let sessionLogger: SessionLogger | null = null;
+  
+  try {
+    const { id } = await params;
+    const body: ExecuteSubtaskRequest = await request.json();
+    const { subtask, agent, sandbox, branch, projectRoot } = body;
+    
+    console.log('Executing subtask:', {
+      projectId: id,
+      subtaskId: subtask.id,
+      agent,
+      sandbox,
+      branch,
+      projectRoot
+    });
+    
+    // Generate session ID (same for both analytics and session logger)
+    const sessionId = Date.now().toString();
+    
+    // Initialize session logger for real-time logging
+    sessionLogger = new SessionLogger(sessionId, agent, {
+      projectId: id,
+      projectRoot,
+      taskId: subtask.id.toString(),
+      taskTitle: subtask.title
+    });
+    await sessionLogger.initialize();
+    console.log('Session logger initialized:', sessionId);
+    
+    // Log initial sandbox configuration
+    await sessionLogger.captureInfo(`🚀 Initializing ${agent} agent with ${sandbox} sandbox`, { 
+      agent, 
+      sandbox,
+      branch,
+      projectRoot 
+    });
+    
+    // Check if analytics are enabled and initialize if so
+    const analyticsEnabled = await AgentAnalytics.isEnabled();
+    if (analyticsEnabled) {
+      analytics = new AgentAnalytics(agent, projectRoot);
+      await analytics.initialize();
+      console.log('Analytics initialized for session');
+    }
+    
+    // Fetch settings to get Docker Hub username
+    let dockerHubUser = process.env.DOCKER_HUB_USER;
+    try {
+      const settingsPath = join(homedir(), '.vibekit', 'settings.json');
+      const fs = require('fs').promises;
+      const settingsContent = await fs.readFile(settingsPath, 'utf-8');
+      const settings = JSON.parse(settingsContent);
+      if (settings?.agents?.dockerHubUser) {
+        dockerHubUser = settings.agents.dockerHubUser;
+      }
+    } catch (error) {
+      console.log('Could not read settings, using environment variable or default');
+    }
+    
+    // Create sandbox provider based on selection
+    let sandboxProvider;
+    switch (sandbox) {
+      case 'dagger':
+        sandboxProvider = createLocalProvider({
+          preferRegistryImages: true,
+          dockerHubUser: dockerHubUser || undefined,
+          pushImages: false,
+        });
+        break;
+      
+      // Add other providers as they're implemented
+      // case 'e2b':
+      //   sandboxProvider = createE2BProvider({
+      //     apiKey: process.env.E2B_API_KEY,
+      //     template: agent,
+      //   });
+      //   break;
+      
+      default:
+        throw new Error(`Unsupported sandbox provider: ${sandbox}`);
+    }
+    
+    // Configure agent settings
+    const agentConfig: any = {
+      type: agent,
+    };
+    
+    // Set provider and API key based on agent type
+    switch (agent) {
+      case 'claude':
+        agentConfig.provider = 'anthropic';
+        agentConfig.apiKey = process.env.ANTHROPIC_API_KEY;
+        agentConfig.model = 'claude-sonnet-4-20250514';
+        break;
+      case 'gemini':
+        agentConfig.provider = 'google';
+        agentConfig.apiKey = process.env.GEMINI_API_KEY;
+        break;
+      case 'grok':
+        agentConfig.provider = 'xai';
+        agentConfig.apiKey = process.env.GROK_API_KEY;
+        break;
+      case 'codex':
+        agentConfig.provider = 'openai';
+        agentConfig.apiKey = process.env.OPENAI_API_KEY;
+        break;
+      case 'opencode':
+        agentConfig.provider = 'opencode';
+        agentConfig.apiKey = process.env.OPENCODE_API_KEY;
+        break;
+      default:
+        throw new Error(`Unsupported agent: ${agent}`);
+    }
+    
+    // Configure VibeKit
+    vibeKit = new VibeKit()
+      .withAgent(agentConfig)
+      .withSandbox(sandboxProvider)
+      .withWorkingDirectory(projectRoot);
+    
+    // Add secrets/environment variables if needed
+    const secrets: Record<string, string> = {};
+    // Check for GitHub token (support both GITHUB_TOKEN and GITHUB_API_KEY)
+    const githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_API_KEY;
+    if (githubToken) {
+      secrets.GITHUB_TOKEN = githubToken;
+    }
+    // Add any other environment variables that might be needed in the sandbox
+    if (Object.keys(secrets).length > 0) {
+      vibeKit.withSecrets(secrets);
+    }
+    
+    // Configure GitHub integration if token is available
+    if (githubToken) {
+      // Try to detect the Git repository from the project
+      let repoUrl: string | undefined;
+      let isGitRepo = false;
+      
+      try {
+        // Try to get the Git remote URL
+        const { execSync } = await import('child_process');
+        
+        // First check if it's a git repository
+        try {
+          execSync(`cd ${projectRoot} && git rev-parse --git-dir`, { encoding: 'utf8' });
+          isGitRepo = true;
+        } catch {
+          isGitRepo = false;
+        }
+        
+        if (isGitRepo) {
+          const remoteUrl = execSync(`cd ${projectRoot} && git config --get remote.origin.url`, { encoding: 'utf8' }).trim();
+          
+          // Extract owner/repo from various Git URL formats
+          // Supports: https://github.com/owner/repo.git, git@github.com:owner/repo.git, etc.
+          const patterns = [
+            /github\.com[:/]([^/]+\/[^/.]+?)(?:\.git)?$/,  // Standard formats
+            /github\.com[:/]([^/]+\/[^/]+?)$/,              // Without .git
+            /git@github\.com:([^/]+\/[^/.]+?)(?:\.git)?$/   // SSH format
+          ];
+          
+          for (const pattern of patterns) {
+            const match = remoteUrl.match(pattern);
+            if (match) {
+              repoUrl = match[1];
+              break;
+            }
+          }
+          
+          if (repoUrl) {
+            console.log('Detected GitHub repository:', repoUrl);
+            
+            // Configure GitHub integration
+            vibeKit.withGithub({
+              token: githubToken,
+              repository: repoUrl
+            });
+            
+            // Log the repository detection and configuration
+            if (sessionLogger) {
+              await sessionLogger.captureInfo(`🐙 GitHub integration configured`, { 
+                repository: repoUrl,
+                branch: branch,
+                hasToken: true
+              });
+            }
+          } else {
+            console.log('Git repository detected but not a GitHub repository');
+            if (sessionLogger) {
+              await sessionLogger.captureInfo(`⚠️ Non-GitHub repository detected`, { 
+                remoteUrl: remoteUrl.substring(0, 50)
+              });
+            }
+          }
+        } else {
+          console.log('Project is not a Git repository');
+          if (sessionLogger) {
+            await sessionLogger.captureInfo(`ℹ️ Project is not a Git repository`, { 
+              projectRoot 
+            });
+          }
+        }
+      } catch (error) {
+        console.log('Error detecting Git repository:', error);
+        if (sessionLogger) {
+          await sessionLogger.captureInfo(`⚠️ Could not detect Git repository configuration`, { 
+            error: String(error).substring(0, 100)
+          });
+        }
+      }
+    } else {
+      console.log('GitHub token not configured');
+      if (sessionLogger) {
+        await sessionLogger.captureInfo(`⚠️ GitHub token not configured - GitHub features disabled`, {});
+      }
+    }
+    
+    // Build the prompt from subtask information
+    const promptParts: string[] = [];
+    
+    promptParts.push(`Task: ${subtask.title}`);
+    
+    if (subtask.description) {
+      promptParts.push(`\nDescription: ${subtask.description}`);
+    }
+    
+    if (subtask.details) {
+      promptParts.push(`\nDetails:\n${subtask.details}`);
+    }
+    
+    if (subtask.testStrategy) {
+      promptParts.push(`\nTest Strategy:\n${subtask.testStrategy}`);
+    }
+    
+    promptParts.push(`\nBase Branch: ${branch}`);
+    promptParts.push(`\nPlease implement this task following the description, details, and test strategy provided.`);
+    
+    const prompt = promptParts.join('\n');
+    
+    console.log('Executing with prompt:', prompt);
+    
+    // Capture prompt in analytics if enabled
+    if (analytics) {
+      analytics.capturePrompt(prompt);
+    }
+    
+    // Set up event listeners for real-time updates
+    const updates: string[] = [];
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    
+    vibeKit.on('update', (update) => {
+      updates.push(update);
+      console.log('VibeKit Update:', update);
+      
+      // Try to parse for specific events
+      try {
+        const parsed = JSON.parse(update);
+        if (parsed.type === 'start' && parsed.sandbox_id) {
+          console.log(`🏗️ Sandbox Launch Started: ${parsed.sandbox_id}`);
+        } else if (parsed.type === 'container_created') {
+          console.log(`🐳 Container Created: ${parsed.container_id || 'unknown'}`);
+        } else if (parsed.type === 'image_pull') {
+          console.log(`🖼️ Image Pull: ${parsed.image || 'unknown'}`);
+        } else if (parsed.type === 'repository_clone') {
+          console.log(`📥 Repository Clone: ${parsed.repository || 'unknown'}`);
+        }
+      } catch (parseError) {
+        // Not JSON, check for Git operations in plain text
+        if (update.includes('Cloning into') || update.includes('git clone')) {
+          console.log(`📥 Git operation detected: ${update.substring(0, 100)}`);
+        }
+      }
+      
+      if (analytics) {
+        analytics.captureUpdate(update);
+      }
+      if (sessionLogger) {
+        sessionLogger.captureUpdate(update);
+      }
+    });
+    
+    vibeKit.on('stdout', (data) => {
+      stdout.push(data);
+      console.log('Sandbox STDOUT:', data);
+      
+      // Detect Git operations in stdout
+      if (data.includes('Cloning into') || data.includes('Initialized empty Git repository')) {
+        console.log('📥 Git repository operation detected');
+      } else if (data.includes('Switched to') || data.includes('Your branch is')) {
+        console.log('🔀 Git branch operation detected');
+      } else if (data.includes('[') && data.includes(']') && data.includes('commit')) {
+        console.log('💾 Git commit detected');
+      }
+      
+      if (analytics) {
+        analytics.captureOutput(data);
+      }
+      if (sessionLogger) {
+        sessionLogger.captureStdout(data);
+      }
+    });
+    
+    vibeKit.on('stderr', (data) => {
+      stderr.push(data);
+      console.log('Sandbox STDERR:', data);
+      if (analytics) {
+        analytics.captureOutput(data);
+      }
+      if (sessionLogger) {
+        sessionLogger.captureStderr(data);
+      }
+    });
+    
+    vibeKit.on('error', (error) => {
+      console.error('VibeKit Error:', error);
+      if (analytics) {
+        analytics.captureOutput(`Error: ${error}`);
+      }
+      if (sessionLogger) {
+        sessionLogger.captureError(`${error}`);
+      }
+    });
+    
+    // Execute code generation
+    console.log('Starting code generation with SDK...');
+    await sessionLogger.captureInfo(`🏗️ Launching sandbox and cloning repository...`, { 
+      mode: 'code',
+      promptLength: prompt.length 
+    });
+    
+    const startTime = Date.now();
+    const result = await vibeKit.generateCode({
+      prompt,
+      mode: 'code',
+      branch: branch  // Pass the branch parameter for GitHub operations
+    });
+    const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+    
+    console.log(`Execution completed in ${elapsedTime} seconds`);
+    console.log('Result:', {
+      sandboxId: result?.sandboxId,
+      exitCode: result?.exitCode,
+      success: result?.exitCode === 0
+    });
+    
+    // Finalize session logger
+    if (sessionLogger) {
+      await sessionLogger.finalize(result?.exitCode || 0);
+      console.log('Session logger finalized');
+    }
+    
+    // Finalize analytics if enabled
+    let analyticsData = null;
+    if (analytics) {
+      analyticsData = await analytics.finalize(result?.exitCode || 0, (Date.now() - startTime));
+      console.log('Analytics finalized:', {
+        sessionId: analyticsData.sessionId,
+        duration: analyticsData.duration,
+        exitCode: analyticsData.exitCode
+      });
+    }
+    
+    // Clean up
+    try {
+      await vibeKit.kill();
+      console.log('Sandbox terminated successfully');
+    } catch (cleanupError) {
+      console.warn('Cleanup warning:', cleanupError);
+    }
+    
+    return NextResponse.json({
+      success: result?.exitCode === 0,
+      sandboxId: result?.sandboxId,
+      exitCode: result?.exitCode,
+      executionTime: elapsedTime,
+      stdout: result?.stdout || stdout.join('\n'),
+      stderr: result?.stderr || stderr.join('\n'),
+      updates: updates,
+      sessionId: sessionId,  // Return the session ID for log retrieval
+      analyticsSessionId: analyticsData?.sessionId,
+      message: result?.exitCode === 0 
+        ? 'Subtask executed successfully' 
+        : 'Subtask execution failed'
+    });
+    
+  } catch (error: any) {
+    console.error('Failed to execute subtask:', error);
+    
+    // Finalize session logger with error
+    if (sessionLogger) {
+      try {
+        await sessionLogger.finalize(-1);
+      } catch (logError) {
+        console.warn('Failed to finalize session logger:', logError);
+      }
+    }
+    
+    // Finalize analytics with error if enabled
+    if (analytics) {
+      try {
+        await analytics.finalize(-1, Date.now() - analytics.getStartTime());
+      } catch (analyticsError) {
+        console.warn('Failed to finalize analytics:', analyticsError);
+      }
+    }
+    
+    // Clean up on error
+    if (vibeKit) {
+      try {
+        await vibeKit.kill();
+      } catch (cleanupError) {
+        console.warn('Cleanup error:', cleanupError);
+      }
+    }
+    
+    return NextResponse.json(
+      { 
+        success: false,
+        error: error.message || 'Failed to execute subtask',
+        details: error.stack
+      },
+      { status: 500 }
+    );
+  }
+}

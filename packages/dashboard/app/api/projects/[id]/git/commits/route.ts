@@ -12,6 +12,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   const params = await context.params;
+  const { id } = params;
   try {
     // Get project details from storage
     const projectsPath = path.join(os.homedir(), '.vibekit', 'projects.json');
@@ -20,7 +21,7 @@ export async function GET(
       const projectsData = await fs.readFile(projectsPath, 'utf-8');
       const projectsConfig = JSON.parse(projectsData);
       const projects = projectsConfig.projects || {};
-      const project = projects[params.id];
+      const project = projects[id];
       
       if (!project) {
         return NextResponse.json(

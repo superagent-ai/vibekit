@@ -60,7 +60,7 @@ export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const projectId = params ? (Array.isArray(params.projectId) ? params.projectId[0] : params.projectId as string) : '';
+  const projectId = params ? (Array.isArray(params.id) ? params.id[0] : params.id as string) : '';
   const defaultTab = searchParams?.get('tab') || 'overview';
   
   const [project, setProject] = useState<Project | null>(null);

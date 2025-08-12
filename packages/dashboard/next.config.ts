@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+// Load environment variables from root .env file
+import "./load-env.js";
+
 const nextConfig: NextConfig = {
   output: 'standalone',
   eslint: {
@@ -12,9 +15,15 @@ const nextConfig: NextConfig = {
   // Load environment variables from root .env file
   env: {
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN || process.env.GITHUB_API_KEY || '',
+    GITHUB_API_KEY: process.env.GITHUB_API_KEY || '',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+    GROK_API_KEY: process.env.GROK_API_KEY || process.env.XAI_API_KEY || '',
+    OPENCODE_API_KEY: process.env.OPENCODE_API_KEY || '',
   },
   // Configure webpack to resolve @vibe-kit/projects
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     if (!config.resolve) {
       config.resolve = {};
     }
@@ -29,6 +38,29 @@ const nextConfig: NextConfig = {
     if (!config.resolve.extensions) {
       config.resolve.extensions = ['.js', '.jsx', '.ts', '.tsx', '.json'];
     }
+    
+    // Handle OpenTelemetry issues in Dagger
+    // We don't use telemetry, so provide empty modules for missing dependencies
+    if (!config.resolve.fallback) {
+      config.resolve.fallback = {};
+    }
+    
+    // Use webpack's NormalModuleReplacementPlugin to replace the missing module
+    const webpack = require('webpack');
+    config.plugins = config.plugins || [];
+    config.plugins.push(
+      new webpack.NormalModuleReplacementPlugin(
+        /@opentelemetry\/exporter-jaeger/,
+        path.resolve(__dirname, 'lib/empty-module.js')
+      )
+    );
+    
+    // Ignore critical dependency warnings from Dagger
+    config.ignoreWarnings = config.ignoreWarnings || [];
+    config.ignoreWarnings.push({
+      module: /dagger/,
+      message: /Critical dependency/,
+    });
     
     return config;
   },

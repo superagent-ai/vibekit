@@ -20,7 +20,7 @@ import type { Project } from "@/lib/projects";
 export default function ProjectChatPage() {
   const params = useParams();
   const router = useRouter();
-  const projectId = params?.projectId as string;
+  const projectId = params?.id as string;
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

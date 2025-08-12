@@ -15,6 +15,7 @@ export interface ImageResolverConfig {
   preferRegistryImages?: boolean;
   pushImages?: boolean;
   privateRegistry?: string;
+  dockerHubUser?: string;
   retryAttempts?: number;
   retryDelayMs?: number;
   logger?: {
@@ -62,6 +63,7 @@ export class ImageResolver {
       preferRegistryImages: config.preferRegistryImages ?? true,
       pushImages: config.pushImages ?? true,
       privateRegistry: config.privateRegistry ?? "",
+      dockerHubUser: config.dockerHubUser ?? "",
       retryAttempts: config.retryAttempts ?? 3,
       retryDelayMs: config.retryDelayMs ?? 1000,
       logger: config.logger ?? defaultLogger,
@@ -112,7 +114,7 @@ export class ImageResolver {
     // Step 2: Try to pull from user's registry
     if (this.config.preferRegistryImages) {
       try {
-        const registryImage = await this.registryManager.getImageName(agentType);
+        const registryImage = await this.registryManager.getImageName(agentType, undefined, this.config.dockerHubUser || undefined);
         if (registryImage) {
           await this.registryManager.pullImage(registryImage);
           this.config.logger.info(`Successfully pulled image from registry: ${registryImage}`);
@@ -141,7 +143,7 @@ export class ImageResolver {
         // Push to registry if configured
         if (this.config.pushImages) {
           try {
-            const registryImage = await this.registryManager.getImageName(agentType);
+            const registryImage = await this.registryManager.getImageName(agentType, undefined, this.config.dockerHubUser || undefined);
             if (registryImage) {
               await this.dockerClient.tagImage(localTag, registryImage);
               await this.dockerClient.pushImage(registryImage);
@@ -168,6 +170,10 @@ export class ImageResolver {
    * Get the local image tag for an agent type
    */
   private getLocalImageTag(agentType: AgentType): string {
+    // If we have a dockerHubUser, use the full image name
+    if (this.config.dockerHubUser) {
+      return `${this.config.dockerHubUser}/vibekit-${agentType}:latest`;
+    }
     return `vibekit-${agentType}:latest`;
   }
 

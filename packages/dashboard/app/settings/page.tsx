@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Settings, Shield, BarChart3, Link, RefreshCw, Bot } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
 
 // Match the exact structure from cli.js readSettings()
 interface VibeKitSettings {
@@ -42,6 +43,7 @@ interface VibeKitSettings {
   agents?: {
     defaultAgent: string;
     defaultSandbox: string;
+    dockerHubUser?: string;
   };
 }
 
@@ -134,6 +136,7 @@ export default function SettingsPage() {
       agents: {
         defaultAgent: agent,
         defaultSandbox: settings.agents?.defaultSandbox || 'dagger',
+        dockerHubUser: settings.agents?.dockerHubUser,
       },
     };
     saveSettings(newSettings);
@@ -145,6 +148,19 @@ export default function SettingsPage() {
       agents: {
         defaultAgent: settings.agents?.defaultAgent || 'claude',
         defaultSandbox: sandbox,
+        dockerHubUser: settings.agents?.dockerHubUser,
+      },
+    };
+    saveSettings(newSettings);
+  };
+
+  const handleDockerHubUserChange = (dockerHubUser: string) => {
+    const newSettings = {
+      ...settings,
+      agents: {
+        defaultAgent: settings.agents?.defaultAgent || 'claude',
+        defaultSandbox: settings.agents?.defaultSandbox || 'dagger',
+        dockerHubUser: dockerHubUser,
       },
     };
     saveSettings(newSettings);
@@ -422,6 +438,23 @@ export default function SettingsPage() {
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="docker-hub-user">Docker Hub Username</Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Your Docker Hub username for pulling agent images (optional)
+              </p>
+              <Input
+                id="docker-hub-user"
+                type="text"
+                placeholder="Enter your Docker Hub username"
+                value={settings.agents?.dockerHubUser || ''}
+                onChange={(e) => handleDockerHubUserChange(e.target.value)}
+                disabled={saving}
+              />
+              <p className="text-xs text-muted-foreground">
+                If not provided, will attempt to use public images
+              </p>
             </div>
           </CardContent>
         </Card>

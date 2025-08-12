@@ -34,10 +34,11 @@ let RegistryManager: any = null;
 
 async function getDockerClient() {
   if (!DockerClient) {
-    const infraPath = '@vibe-kit/sdk/infra';
-    const infraModule = await import(infraPath).catch(() => null);
-    if (infraModule) {
-      DockerClient = infraModule.DockerClient;
+    // Import from services module
+    const servicesPath = '@vibe-kit/sdk/services';
+    const servicesModule = await import(servicesPath).catch(() => null);
+    if (servicesModule) {
+      DockerClient = servicesModule.DockerClient;
     }
   }
   
@@ -57,10 +58,11 @@ async function getDockerClient() {
 
 async function getConfigManager() {
   if (!ConfigManager) {
-    const infraPath = '@vibe-kit/sdk/infra';
-    const infraModule = await import(infraPath).catch(() => null);
-    if (infraModule) {
-      ConfigManager = infraModule.ConfigManager;
+    // Import from services module
+    const servicesPath = '@vibe-kit/sdk/services';
+    const servicesModule = await import(servicesPath).catch(() => null);
+    if (servicesModule) {
+      ConfigManager = servicesModule.ConfigManager;
     }
   }
   

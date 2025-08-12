@@ -12,6 +12,7 @@ export async function GET(
   context: { params: Promise<{ id: string; hash: string }> }
 ) {
   const params = await context.params;
+  const { id, hash } = params;
   try {
     // Get project details from storage
     const projectsPath = path.join(os.homedir(), '.vibekit', 'projects.json');
@@ -20,7 +21,7 @@ export async function GET(
       const projectsData = await fs.readFile(projectsPath, 'utf-8');
       const projectsConfig = JSON.parse(projectsData);
       const projects = projectsConfig.projects || {};
-      const project = projects[params.id];
+      const project = projects[id];
       
       if (!project) {
         return NextResponse.json(
@@ -42,9 +43,9 @@ export async function GET(
       }
 
       // Get commit details
-      const commitCommand = `git show --format=fuller ${params.hash}`;
-      const statsCommand = `git show --stat --format= ${params.hash}`;
-      const filesCommand = `git diff-tree --no-commit-id --name-status -r ${params.hash}`;
+      const commitCommand = `git show --format=fuller ${hash}`;
+      const statsCommand = `git show --stat --format= ${hash}`;
+      const filesCommand = `git diff-tree --no-commit-id --name-status -r ${hash}`;
       
       try {
         // Get full commit details with diff
@@ -57,7 +58,7 @@ export async function GET(
         // Parse the commit info
         const lines = commitResult.stdout.split('\n');
         let commitInfo: any = {
-          hash: params.hash,
+          hash: hash,
           message: '',
           author: '',
           authorEmail: '',
@@ -126,7 +127,7 @@ export async function GET(
         const fileDiffs: any[] = [];
         for (const file of commitInfo.files) {
           try {
-            const fileDiffCommand = `git diff ${params.hash}~1 ${params.hash} -- "${file.path}"`;
+            const fileDiffCommand = `git diff ${hash}~1 ${hash} -- "${file.path}"`;
             const { stdout } = await execAsync(fileDiffCommand, { 
               cwd: projectPath,
               maxBuffer: 1024 * 1024 * 2 // 2MB per file
@@ -140,7 +141,7 @@ export async function GET(
           } catch {
             // File might be new or deleted, try different approach
             try {
-              const showFileCommand = `git show ${params.hash}:"${file.path}"`;
+              const showFileCommand = `git show ${hash}:"${file.path}"`;
               const { stdout } = await execAsync(showFileCommand, { 
                 cwd: projectPath,
                 maxBuffer: 1024 * 1024 * 2

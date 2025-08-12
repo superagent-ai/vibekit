@@ -671,7 +671,6 @@ export default function ProjectsPage() {
                 variant={viewMode === 'card' ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={() => handleViewModeChange('card')}
-                className="h-7 px-2 rounded-sm"
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
               </Button>
@@ -679,14 +678,13 @@ export default function ProjectsPage() {
                 variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={() => handleViewModeChange('list')}
-                className="h-7 px-2 rounded-sm"
               >
                 <List className="h-3.5 w-3.5" />
               </Button>
             </div>
             
             {/* New Project Button */}
-            <Button onClick={() => setShowForm(true)} size="sm" className="h-8">
+            <Button onClick={() => setShowForm(true)} size="sm">
               <Plus className="mr-1 h-3.5 w-3.5" />
               New
             </Button>

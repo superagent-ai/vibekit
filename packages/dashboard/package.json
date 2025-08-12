@@ -16,7 +16,7 @@
     "bin/dashboard.js"
   ],
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -64,6 +64,7 @@
     "chokidar": "^4.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dayjs": "^1.11.13",
     "dotenv": "^17.2.1",
     "embla-carousel-react": "^8.6.0",
     "harden-react-markdown": "^1.0.2",

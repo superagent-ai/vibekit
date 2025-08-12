@@ -1,6 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import { cn } from "@/lib/utils";
+
+// Extend Day.js with plugins
+dayjs.extend(relativeTime);
 import { 
   Sheet,
   SheetContent,
@@ -13,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ExecutionLogsTable } from "@/components/execution-logs-table";
 import {
   Select,
   SelectContent,
@@ -85,27 +92,56 @@ export function SubtaskDetailsSheet({
 }: SubtaskDetailsSheetProps) {
   console.log("SubtaskDetailsSheet props:", { projectId, projectRoot, open });
   const [activeTab, setActiveTab] = useState("logs");
-  const [selectedAgent, setSelectedAgent] = useState<string>("");
-  const [selectedSandbox, setSelectedSandbox] = useState<string>("");
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [selectedAgent, setSelectedAgent] = useState<string>("claude");
+  const [selectedSandbox, setSelectedSandbox] = useState<string>("dagger");
+  const [selectedBranch, setSelectedBranch] = useState<string>("main");
   const [branches, setBranches] = useState<string[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [executionLogs, setExecutionLogs] = useState<string>("");
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [executionHistory, setExecutionHistory] = useState<any[]>([]);
   
-  // Fetch settings on mount/open
+  // Fetch settings and execution history on mount/open
   useEffect(() => {
-    if (!open) return;
+    if (!open || !subtask || !projectId) return;
     
     // Fetch user settings for defaults
     fetch("/api/settings")
       .then(res => res.json())
       .then(data => {
+        console.log("Settings loaded:", data);
         setSettings(data);
-        setSelectedAgent(data.agents?.defaultAgent || "claude");
-        setSelectedSandbox(data.agents?.defaultSandbox || "dagger");
+        // Override with user's configured defaults if they exist
+        if (data?.agents?.defaultAgent) {
+          setSelectedAgent(data.agents.defaultAgent);
+        }
+        if (data?.agents?.defaultSandbox) {
+          setSelectedSandbox(data.agents.defaultSandbox);
+        }
       })
-      .catch(err => console.error("Failed to load settings:", err));
-  }, [open]);
+      .catch(err => {
+        console.error("Failed to load settings:", err);
+        // Defaults are already set in useState, so no need to set them again
+      });
+    
+    // Fetch execution history for this subtask
+    fetch(`/api/projects/${projectId}/tasks/execution-history?subtaskId=${subtask.id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.executions?.length > 0) {
+          setExecutionHistory(data.executions);
+          // Set the most recent sessionId for viewing logs
+          const mostRecent = data.executions[0];
+          if (mostRecent?.sessionId) {
+            setSessionId(mostRecent.sessionId);
+          }
+        }
+      })
+      .catch(err => {
+        console.error("Failed to load execution history:", err);
+      });
+  }, [open, subtask?.id, projectId]);
   
   // Fetch git branches when projectRoot is available
   useEffect(() => {
@@ -116,7 +152,7 @@ export function SubtaskDetailsSheet({
     if (projectRoot) {
       console.log("Fetching branches for project root:", projectRoot);
       const params = new URLSearchParams({ projectRoot });
-      fetch(`/api/projects/git/branches?${params}`)
+      fetch(`/api/projects/${projectId}/git/branches?${params}`)
         .then(res => {
           console.log("Branch fetch response status:", res.status);
           return res.json();
@@ -131,24 +167,28 @@ export function SubtaskDetailsSheet({
             // Set default to current branch
             if (data.currentBranch) {
               setSelectedBranch(data.currentBranch);
-            } else if (data.branches[0]) {
+            } else if (data.branches.includes("main")) {
+              setSelectedBranch("main");
+            } else if (data.branches.includes("master")) {
+              setSelectedBranch("master");
+            } else {
               setSelectedBranch(data.branches[0]);
             }
           } else {
             console.warn("No branches found in repository");
-            setBranches([]);
-            setSelectedBranch('');
+            setBranches(["main"]); // Provide a fallback branch
+            setSelectedBranch("main");
           }
         })
         .catch(err => {
           console.error("Failed to load branches:", err);
-          setBranches([]);
-          setSelectedBranch('');
+          setBranches(["main"]); // Provide a fallback branch
+          setSelectedBranch("main");
         });
     } else {
       console.warn("No project root provided to branch fetch effect");
-      setBranches([]);
-      setSelectedBranch('');
+      setBranches(["main"]); // Provide a fallback branch
+      setSelectedBranch("main");
     }
   }, [open, projectRoot]);
   
@@ -366,19 +406,110 @@ export function SubtaskDetailsSheet({
                   {/* Execute Button */}
                   <div className="flex justify-end pt-2">
                     <Button
-                      onClick={() => {
+                      onClick={async () => {
+                        if (!projectId || !projectRoot) {
+                          alert("Project information is missing");
+                          return;
+                        }
+                        
                         setIsExecuting(true);
-                        // TODO: Implement actual execution logic
-                        console.log("Executing subtask with:", {
-                          agent: selectedAgent,
-                          sandbox: selectedSandbox,
-                          branch: selectedBranch,
-                          subtask: subtask,
-                        });
-                        // Simulate execution
-                        setTimeout(() => setIsExecuting(false), 2000);
+                        
+                        try {
+                          console.log("Executing subtask:", {
+                            projectId,
+                            subtask,
+                            agent: selectedAgent,
+                            sandbox: selectedSandbox,
+                            branch: selectedBranch,
+                            projectRoot
+                          });
+                          
+                          const response = await fetch(`/api/projects/${projectId}/execute-subtask`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              subtask: {
+                                id: subtask.id,
+                                title: subtask.title,
+                                description: subtask.description,
+                                details: subtask.details,
+                                testStrategy: subtask.testStrategy,
+                              },
+                              agent: selectedAgent,
+                              sandbox: selectedSandbox,
+                              branch: selectedBranch,
+                              projectRoot: projectRoot,
+                            }),
+                          });
+                          
+                          const result = await response.json();
+                          
+                          if (result.success) {
+                            console.log("Execution successful:", result);
+                            
+                            // Store the session ID for real-time log streaming
+                            const executionSessionId = result.sessionId || result.analyticsId;
+                            if (executionSessionId) {
+                              setSessionId(executionSessionId);
+                              
+                              // Save execution history
+                              fetch(`/api/projects/${projectId}/tasks/execution-history`, {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                  subtaskId: subtask.id,
+                                  sessionId: executionSessionId,
+                                  timestamp: new Date().toISOString(),
+                                  agent: selectedAgent,
+                                  sandbox: selectedSandbox,
+                                  branch: selectedBranch,
+                                  status: 'completed'
+                                }),
+                              }).catch(err => {
+                                console.error('Failed to save execution history:', err);
+                              });
+                            }
+                            
+                            // Store the execution logs (for fallback if needed)
+                            let logs = `=== Execution Summary ===\n`;
+                            logs += `Execution Time: ${result.executionTime}s\n`;
+                            logs += `Sandbox ID: ${result.sandboxId}\n`;
+                            logs += `Exit Code: ${result.exitCode}\n\n`;
+                            
+                            if (result.stdout) {
+                              logs += `=== Output ===\n${result.stdout}\n\n`;
+                            }
+                            
+                            if (result.stderr) {
+                              logs += `=== Errors/Warnings ===\n${result.stderr}\n\n`;
+                            }
+                            
+                            if (result.updates && result.updates.length > 0) {
+                              logs += `=== Updates ===\n${result.updates.join('\n')}\n`;
+                            }
+                            
+                            setExecutionLogs(logs);
+                            
+                            // Switch to logs tab to show output
+                            setActiveTab("logs");
+                            
+                            // TODO: Update subtask status to in-progress or done
+                          } else {
+                            console.error("Execution failed:", result);
+                            alert(`Execution failed: ${result.error || 'Unknown error'}`);
+                          }
+                        } catch (error: any) {
+                          console.error("Failed to execute subtask:", error);
+                          alert(`Failed to execute subtask: ${error.message}`);
+                        } finally {
+                          setIsExecuting(false);
+                        }
                       }}
-                      disabled={isExecuting || !selectedAgent || !selectedSandbox || !selectedBranch}
+                      disabled={isExecuting || !selectedAgent || !selectedSandbox || !selectedBranch || !projectId || !projectRoot}
                       className="gap-2"
                     >
                       <Play className="h-4 w-4" />
@@ -469,13 +600,48 @@ export function SubtaskDetailsSheet({
             </TabsList>
             
             <TabsContent value="logs" className="mt-4">
-              <div className="border rounded-lg p-4 bg-muted/20">
-                <div className="text-center py-8">
-                  <ScrollText className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">No logs available for this subtask</p>
-                  <p className="text-xs text-muted-foreground mt-2">Logs will appear here when the subtask is executed</p>
-                </div>
+              <div className="border rounded-lg bg-background h-[500px]">
+                <ExecutionLogsTable sessionId={sessionId} className="h-full p-4" />
               </div>
+              
+              {/* Execution History Selector */}
+              {executionHistory.length > 1 && (
+                <div className="mt-4 p-3 border rounded-lg bg-muted/20">
+                  <Label className="text-xs font-medium mb-2 block">Previous Executions</Label>
+                  <Select value={sessionId || ""} onValueChange={setSessionId}>
+                    <SelectTrigger className="w-full text-xs">
+                      <SelectValue placeholder="Select execution to view" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {executionHistory.map((exec, index) => (
+                        <SelectItem key={exec.sessionId} value={exec.sessionId}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span title={dayjs(exec.timestamp).format('LLLL')}>
+                              {dayjs(exec.timestamp).fromNow()} - {exec.agent}/{exec.sandbox}
+                            </span>
+                            {index === 0 && (
+                              <Badge variant="outline" className="text-xs ml-2">Latest</Badge>
+                            )}
+                            {exec.status && (
+                              <Badge 
+                                variant="outline" 
+                                className={cn(
+                                  "text-xs ml-2",
+                                  exec.status === 'completed' ? 'text-green-600 border-green-600' :
+                                  exec.status === 'failed' ? 'text-red-600 border-red-600' :
+                                  'text-yellow-600 border-yellow-600'
+                                )}
+                              >
+                                {exec.status}
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </TabsContent>
             
             <TabsContent value="subtasks" className="mt-4">
