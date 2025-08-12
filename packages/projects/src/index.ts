@@ -3,7 +3,9 @@ export type {
   Project,
   ProjectsConfig,
   ProjectCreateInput,
-  ProjectUpdateInput
+  ProjectUpdateInput,
+  ManualTask,
+  ManualSubtask
 } from './types';
 
 // Project management

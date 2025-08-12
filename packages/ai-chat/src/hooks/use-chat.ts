@@ -25,6 +25,8 @@ export interface ChatOptions {
   projectRoot?: string;
   /** Project name for display */
   projectName?: string;
+  /** Filter for MCP servers - only these server IDs will be enabled */
+  mcpServerFilter?: string[];
 }
 
 export interface MessageExtras {
@@ -52,6 +54,7 @@ export function useChat(options: ChatOptions = {}) {
     projectId,
     projectRoot,
     projectName,
+    mcpServerFilter,
   } = options;
 
   // Add debug logging
@@ -64,6 +67,7 @@ export function useChat(options: ChatOptions = {}) {
     projectId,
     projectRoot,
     projectName,
+    mcpServerFilter,
   });
 
   // The AI SDK sends the body directly with the messages in a POST request
@@ -117,6 +121,7 @@ export function useChat(options: ChatOptions = {}) {
             projectId,
             projectRoot,
             projectName,
+            mcpServerFilter,
           };
           
           return originalFetch(url, {

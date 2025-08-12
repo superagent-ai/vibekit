@@ -61,6 +61,18 @@ export async function POST(request: NextRequest) {
     // Sanitize input data
     const sanitizedData = sanitizeProjectData(body);
     
+    // If taskSource is not explicitly set, auto-detect based on .taskmaster folder presence
+    if (!sanitizedData.taskSource && sanitizedData.projectRoot) {
+      const taskmasterPath = path.join(sanitizedData.projectRoot, '.taskmaster');
+      try {
+        const stats = await fs.stat(taskmasterPath);
+        sanitizedData.taskSource = stats.isDirectory() ? 'taskmaster' : 'manual';
+      } catch {
+        // .taskmaster folder doesn't exist, use manual mode
+        sanitizedData.taskSource = 'manual';
+      }
+    }
+    
     const project = await createProject(sanitizedData);
     
     return NextResponse.json({

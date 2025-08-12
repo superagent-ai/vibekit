@@ -9,8 +9,9 @@ const execAsync = promisify(exec);
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; hash: string } }
+  context: { params: Promise<{ id: string; hash: string }> }
 ) {
+  const params = await context.params;
   try {
     // Get project details from storage
     const projectsPath = path.join(os.homedir(), '.vibekit', 'projects.json');

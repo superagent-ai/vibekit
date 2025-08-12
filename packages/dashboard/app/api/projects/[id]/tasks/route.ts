@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getProject } from '@/lib/projects';
 import { Taskmaster } from '@vibe-kit/taskmaster';
 
@@ -10,12 +10,31 @@ export async function GET(
   const project = await getProject(projectId);
   
   if (!project) {
-    return Taskmaster.api.handleGetTasks({
-      id: projectId,
-      projectRoot: '',
+    return NextResponse.json(
+      { success: false, error: 'Project not found' },
+      { status: 404 }
+    );
+  }
+  
+  // Check if project uses manual tasks
+  if (project.taskSource === 'manual') {
+    // Return manual tasks in the same format as taskmaster
+    const manualTasks = project.manualTasks || [];
+    return NextResponse.json({
+      success: true,
+      data: {
+        tasks: manualTasks,
+        metadata: {
+          created: project.createdAt,
+          updated: project.updatedAt,
+          description: `Manual tasks for ${project.name}`,
+          source: 'manual'
+        }
+      }
     });
   }
   
+  // Default to taskmaster
   return Taskmaster.api.handleGetTasks({
     id: project.id,
     projectRoot: project.projectRoot,

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { 
   Sheet,
   SheetContent,
@@ -8,10 +9,17 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { 
-  ChevronRight, 
+  ChevronRight,
+  ChevronDown, 
   Clock, 
   CheckCircle, 
   Circle, 
@@ -20,7 +28,8 @@ import {
   Link,
   FileText,
   TestTube,
-  ListChecks
+  ListChecks,
+  Edit
 } from "lucide-react";
 
 interface Subtask {
@@ -50,10 +59,27 @@ interface TaskDetailsSheetProps {
   allTasks?: Task[];  // Optional: pass all tasks to resolve dependency names
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isManualTask?: boolean;
+  onEditClick?: () => void;
 }
 
-export function TaskDetailsSheet({ task, allTasks, open, onOpenChange }: TaskDetailsSheetProps) {
+export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualTask, onEditClick }: TaskDetailsSheetProps) {
+  const [expandedSubtasks, setExpandedSubtasks] = useState<Set<number>>(new Set());
+  
   if (!task) return null;
+  
+  // Helper function to toggle subtask expansion
+  const toggleSubtask = (subtaskId: number) => {
+    setExpandedSubtasks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(subtaskId)) {
+        newSet.delete(subtaskId);
+      } else {
+        newSet.add(subtaskId);
+      }
+      return newSet;
+    });
+  };
   
   // Helper function to get task title by ID
   const getTaskTitle = (taskId: number): string => {
@@ -146,6 +172,19 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange }: TaskDet
               </SheetDescription>
             </div>
             <div className="flex flex-col gap-2">
+              {isManualTask && onEditClick && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onEditClick();
+                  }}
+                >
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+              )}
               <Badge variant={getPriorityColor(task.priority)} className="text-xs">
                 {getPriorityIcon(task.priority)} {task.priority}
               </Badge>
@@ -228,72 +267,111 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange }: TaskDet
                   <ListChecks className="h-4 w-4" />
                   Subtasks ({task.subtasks.length})
                 </h3>
-                <div className="space-y-4 pl-8">
-                  {task.subtasks.map((subtask, index) => (
-                    <div key={subtask.id} className="space-y-3">
-                      {index > 0 && <Separator className="my-4" />}
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-2">
-                            {getStatusIcon(subtask.status)}
-                            <div className="space-y-1">
-                              <h4 className="text-sm font-medium">
-                                {subtask.title}
-                              </h4>
-                              <p className="text-xs text-muted-foreground">
-                                Subtask #{subtask.id}
-                              </p>
-                            </div>
-                          </div>
-                          <Badge className={`text-xs ${getStatusColor(subtask.status)}`}>
-                            {subtask.status.replace("-", " ")}
-                          </Badge>
-                        </div>
-                        
-                        {subtask.description && (
-                          <p className="text-sm text-muted-foreground ml-8">
-                            {subtask.description}
-                          </p>
-                        )}
-                        
-                        {subtask.details && (
-                          <div className="ml-8">
-                            <p className="text-xs font-medium text-muted-foreground mb-1">Details:</p>
-                            <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                              {subtask.details}
-                            </p>
-                          </div>
-                        )}
-                        
-                        {subtask.testStrategy && (
-                          <div className="ml-8">
-                            <p className="text-xs font-medium text-muted-foreground mb-1">Test Strategy:</p>
-                            <p className="text-xs text-muted-foreground">
-                              {subtask.testStrategy}
-                            </p>
-                          </div>
-                        )}
-                        
-                        {subtask.dependencies && subtask.dependencies.length > 0 && (
-                          <div className="ml-8">
-                            <p className="text-xs font-medium text-muted-foreground mb-1">Depends on:</p>
-                            <div className="space-y-1">
-                              {subtask.dependencies.map(dep => (
-                                <div key={dep} className="flex items-center gap-2">
-                                  <Badge variant="outline" className="text-xs">
-                                    #{dep}
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground">
-                                    {getSubtaskTitle(dep)}
-                                  </span>
+                <div className="space-y-3 pl-8">
+                  {task.subtasks.map((subtask, index) => {
+                    const isExpanded = expandedSubtasks.has(subtask.id);
+                    const hasDetails = subtask.details || subtask.testStrategy || (subtask.dependencies && subtask.dependencies.length > 0);
+                    
+                    return (
+                      <div key={subtask.id}>
+                        {index > 0 && <Separator className="my-3" />}
+                        <Collapsible open={isExpanded} onOpenChange={() => toggleSubtask(subtask.id)}>
+                          <div className="space-y-2">
+                            {/* Subtask Header - Always Visible */}
+                            <div className="flex items-start justify-between">
+                              <CollapsibleTrigger className="flex items-start gap-2 hover:opacity-80 transition-opacity cursor-pointer group flex-1">
+                                <div className="mt-0.5">
+                                  {hasDetails ? (
+                                    isExpanded ? (
+                                      <ChevronDown className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+                                    ) : (
+                                      <ChevronRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+                                    )
+                                  ) : (
+                                    <div className="w-3" />
+                                  )}
                                 </div>
-                              ))}
+                                {getStatusIcon(subtask.status)}
+                                <div className="space-y-1 flex-1 text-left">
+                                  <h4 className="text-sm font-medium">
+                                    {subtask.title}
+                                  </h4>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs text-muted-foreground">
+                                      #{subtask.id}
+                                    </p>
+                                    {subtask.description && (
+                                      <>
+                                        <span className="text-xs text-muted-foreground">•</span>
+                                        <p className="text-xs text-muted-foreground line-clamp-1">
+                                          {subtask.description}
+                                        </p>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </CollapsibleTrigger>
+                              <Badge className={`text-xs ml-2 ${getStatusColor(subtask.status)}`}>
+                                {subtask.status.replace("-", " ")}
+                              </Badge>
                             </div>
+                            
+                            {/* Expandable Content */}
+                            {hasDetails && (
+                              <CollapsibleContent>
+                                <div className="space-y-3 ml-8 pt-2">
+                                  {subtask.description && (
+                                    <div>
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">Description:</p>
+                                      <p className="text-sm text-muted-foreground">
+                                        {subtask.description}
+                                      </p>
+                                    </div>
+                                  )}
+                                  
+                                  {subtask.details && (
+                                    <div>
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">Details:</p>
+                                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                                        {subtask.details}
+                                      </p>
+                                    </div>
+                                  )}
+                                  
+                                  {subtask.testStrategy && (
+                                    <div>
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">Test Strategy:</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {subtask.testStrategy}
+                                      </p>
+                                    </div>
+                                  )}
+                                  
+                                  {subtask.dependencies && subtask.dependencies.length > 0 && (
+                                    <div>
+                                      <p className="text-xs font-medium text-muted-foreground mb-1">Depends on:</p>
+                                      <div className="space-y-1">
+                                        {subtask.dependencies.map(dep => (
+                                          <div key={dep} className="flex items-center gap-2">
+                                            <Badge variant="outline" className="text-xs">
+                                              #{dep}
+                                            </Badge>
+                                            <span className="text-xs text-muted-foreground">
+                                              {getSubtaskTitle(dep)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </CollapsibleContent>
+                            )}
                           </div>
-                        )}
+                        </Collapsible>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

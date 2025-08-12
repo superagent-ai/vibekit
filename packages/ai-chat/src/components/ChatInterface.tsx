@@ -68,6 +68,8 @@ export interface ChatInterfaceProps {
     subtitle?: string;
     features?: string[];
   };
+  /** Filter for MCP servers - only these server IDs will be enabled */
+  mcpServerFilter?: string[];
 }
 
 /**
@@ -85,6 +87,7 @@ export function ChatInterface({
   projectId,
   projectRoot,
   projectName,
+  mcpServerFilter,
 }: ChatInterfaceProps) {
   const [model, setModel] = useState<string>(defaultModel);
   const [webSearch, setWebSearch] = useState(false);
@@ -118,6 +121,7 @@ export function ChatInterface({
     projectId,
     projectRoot,
     projectName,
+    mcpServerFilter,
     // Pass a getter function to get current state
     getCurrentState: () => stateRef.current,
   }) as any;

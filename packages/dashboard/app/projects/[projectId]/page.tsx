@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { 
   ArrowLeft, 
   Folder, 
@@ -10,7 +10,6 @@ import {
   FileText, 
   Settings,
   MessageSquare,
-  Kanban,
   Edit,
   ExternalLink,
   GitBranch,
@@ -18,10 +17,13 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
+  Circle,
+  X,
   User,
   Hash,
   Info,
-  ListTodo
+  ListTodo,
+  Server
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -47,12 +49,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CommitDetailsSheet } from "@/components/commit-details-sheet";
+import { ChatSheet } from "@/components/chat-sheet";
+import { ProjectForm } from "@/components/project-form";
+import { KanbanView } from "@/components/kanban-view";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { MCPServersSheet } from "@/components/mcp-servers-sheet";
 import type { Project } from "@/lib/projects";
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params ? (Array.isArray(params.projectId) ? params.projectId[0] : params.projectId as string) : '';
+  const defaultTab = searchParams?.get('tab') || 'overview';
   
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,6 +71,11 @@ export default function ProjectDetailPage() {
   const [isLoadingCommits, setIsLoadingCommits] = useState(false);
   const [selectedCommit, setSelectedCommit] = useState<any>(null);
   const [commitSheetOpen, setCommitSheetOpen] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [chatSheetOpen, setChatSheetOpen] = useState(false);
+  const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
+  const [kanbanRefreshKey, setKanbanRefreshKey] = useState(0);
+  const [mcpServersSheetOpen, setMcpServersSheetOpen] = useState(false);
 
   // Fetch project details
   const fetchProject = async () => {
@@ -157,6 +171,44 @@ export default function ProjectDetailPage() {
       }
     } catch (error) {
       console.error('Failed to set current project:', error);
+    }
+  };
+
+  const handleUpdateProject = async (id: string, projectData: any) => {
+    try {
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(projectData),
+      });
+      
+      if (response.ok) {
+        await fetchProject();
+        setShowEditForm(false);
+      }
+    } catch (error) {
+      console.error('Failed to update project:', error);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        // Navigate back to projects list after deletion
+        router.push('/projects');
+      }
+    } catch (error) {
+      console.error('Failed to delete project:', error);
     }
   };
 
@@ -278,17 +330,13 @@ export default function ProjectDetailPage() {
                 Set as Current
               </Button>
             )}
-            <Button variant="outline" asChild>
-              <Link href={`/projects/${project.id}/chat`}>
-                <MessageSquare className="mr-2 h-4 w-4" />
-                Chat
-              </Link>
+            <Button variant="outline" onClick={() => setMcpServersSheetOpen(true)}>
+              <Server className="mr-2 h-4 w-4" />
+              MCP Servers
             </Button>
-            <Button variant="outline" asChild>
-              <Link href={`/projects/${project.id}/kanban`}>
-                <Kanban className="mr-2 h-4 w-4" />
-                Kanban
-              </Link>
+            <Button variant="outline" onClick={() => setChatSheetOpen(true)}>
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Chat
             </Button>
             <Button variant="outline" asChild>
               <Link href="/projects">
@@ -301,72 +349,8 @@ export default function ProjectDetailPage() {
 
         <Separator />
 
-        {/* Top Section - Project Stats */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {/* Project Status Card */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{project.status}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {project.status === 'active' ? 'Currently active' : 'Archived project'}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Total Tasks Card */}
-          {taskStats && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{taskStats.total}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {taskStats.done} completed, {taskStats.inProgress} in progress
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Priority Card */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Priority</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold capitalize">{project.priority || 'Medium'}</span>
-                <Badge variant={getPriorityColor(project.priority)}>
-                  {getPriorityIcon(project.priority)}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Project priority level
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Last Updated Card */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Last Updated</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {new Date(project.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {new Date(project.updatedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Bottom Section - Tabbed Content */}
-        <Tabs defaultValue="overview" className="space-y-4">
+        {/* Tabbed Content */}
+        <Tabs defaultValue={defaultTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Info className="h-4 w-4" />
@@ -387,35 +371,166 @@ export default function ProjectDetailPage() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
+            {/* Project Stats */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {/* Project Status Card */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Status</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{project.status}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {project.status === 'active' ? 'Currently active' : 'Archived project'}
+                  </p>
+                </CardContent>
+              </Card>
 
-            {/* Project Path Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">Project Location</CardTitle>
-                <CardDescription>File system path and configuration</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <div className="text-sm text-muted-foreground mb-1">Project Root</div>
-                  <code className="text-sm bg-muted px-2 py-1 rounded">{project.projectRoot}</code>
-                </div>
-                {project.gitRepo && (
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                      <GitBranch className="h-3 w-3" />
-                      Git Repository
-                    </div>
-                    <code className="text-sm bg-muted px-2 py-1 rounded">{project.gitRepo}</code>
+              {/* Total Tasks Card */}
+              {taskStats && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{taskStats.total}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {taskStats.done} completed, {taskStats.inProgress} in progress
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Priority Card */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Priority</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold capitalize">{project.priority || 'Medium'}</span>
+                    <Badge variant={getPriorityColor(project.priority)}>
+                      {getPriorityIcon(project.priority)}
+                    </Badge>
                   </div>
-                )}
-                <div>
-                  <div className="text-sm text-muted-foreground mb-1">Taskmaster Configuration</div>
-                  <code className="text-sm bg-muted px-2 py-1 rounded">
-                    {project.projectRoot}/.taskmaster/tasks/tasks.json
-                  </code>
-                </div>
-              </CardContent>
-            </Card>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Project priority level
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Last Updated Card */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Last Updated</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {new Date(project.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(project.updatedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tags Card */}
+            {project.tags && project.tags.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Tags</CardTitle>
+                  <CardDescription>Labels associated with this project</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {project.tags.map((tag) => (
+                      <Badge key={tag} variant="secondary">
+                        <Tag className="mr-1 h-3 w-3" />
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Task Breakdown */}
+            {taskStats && taskStats.total > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Task Breakdown</CardTitle>
+                  <CardDescription>Distribution of tasks by status</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <Circle className="h-3 w-3 text-gray-600" />
+                          <p className="text-xs text-muted-foreground">Pending</p>
+                        </div>
+                        <p className="text-xl font-bold">{taskStats.pending}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-blue-600" />
+                          <p className="text-xs text-muted-foreground">In Progress</p>
+                        </div>
+                        <p className="text-xl font-bold text-blue-600">{taskStats.inProgress}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3 text-purple-600" />
+                          <p className="text-xs text-muted-foreground">Review</p>
+                        </div>
+                        <p className="text-xl font-bold text-purple-600">{taskStats.review}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3 text-green-600" />
+                          <p className="text-xs text-muted-foreground">Completed</p>
+                        </div>
+                        <p className="text-xl font-bold text-green-600">{taskStats.done}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-yellow-600" />
+                          <p className="text-xs text-muted-foreground">Deferred</p>
+                        </div>
+                        <p className="text-xl font-bold text-yellow-600">{taskStats.deferred}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <X className="h-3 w-3 text-red-600" />
+                          <p className="text-xs text-muted-foreground">Cancelled</p>
+                        </div>
+                        <p className="text-xl font-bold text-red-600">{taskStats.cancelled}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Progress Bar */}
+                    {taskStats.total > 0 && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Progress</span>
+                            <span>{Math.round((taskStats.done / taskStats.total) * 100)}% Complete</span>
+                          </div>
+                          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-green-600 transition-all duration-300"
+                              style={{ width: `${(taskStats.done / taskStats.total) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Quick Actions */}
             <Card>
@@ -425,17 +540,13 @@ export default function ProjectDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <Button variant="outline" className="justify-start" asChild>
-                    <Link href={`/projects/${project.id}/chat`}>
-                      <MessageSquare className="mr-2 h-4 w-4" />
-                      Open Chat
-                    </Link>
-                  </Button>
-                  <Button variant="outline" className="justify-start" asChild>
-                    <Link href={`/projects/${project.id}/kanban`}>
-                      <Kanban className="mr-2 h-4 w-4" />
-                      View Kanban
-                    </Link>
+                  <Button 
+                    variant="outline" 
+                    className="justify-start"
+                    onClick={() => setChatSheetOpen(true)}
+                  >
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Open Chat
                   </Button>
                   <Button variant="outline" className="justify-start">
                     <Edit className="mr-2 h-4 w-4" />
@@ -451,67 +562,13 @@ export default function ProjectDetailPage() {
           </TabsContent>
 
           <TabsContent value="tasks" className="space-y-4">
-            {taskStats ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Task Overview</CardTitle>
-                  <CardDescription>
-                    This project has {taskStats.total} tasks tracked in the Taskmaster system
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Pending</p>
-                        <p className="text-2xl font-bold">{taskStats.pending}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">In Progress</p>
-                        <p className="text-2xl font-bold text-blue-600">{taskStats.inProgress}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Review</p>
-                        <p className="text-2xl font-bold text-purple-600">{taskStats.review}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Completed</p>
-                        <p className="text-2xl font-bold text-green-600">{taskStats.done}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Deferred</p>
-                        <p className="text-2xl font-bold text-yellow-600">{taskStats.deferred}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Cancelled</p>
-                        <p className="text-2xl font-bold text-red-600">{taskStats.cancelled}</p>
-                      </div>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-center">
-                      <Button asChild>
-                        <Link href={`/projects/${project.id}/kanban`}>
-                          <Kanban className="mr-2 h-4 w-4" />
-                          View Kanban
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Task Overview</CardTitle>
-                  <CardDescription>No task data available for this project</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Tasks will appear here once you create a Taskmaster configuration for this project.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+            <KanbanView 
+              key={kanbanRefreshKey}
+              projectId={project.id} 
+              projectRoot={project.projectRoot}
+              taskSource={project.taskSource || 'taskmaster'}
+              onCreateTask={() => setShowCreateTaskDialog(true)}
+            />
           </TabsContent>
 
           <TabsContent value="git" className="space-y-4">
@@ -600,6 +657,71 @@ export default function ProjectDetailPage() {
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4">
+            {/* Task Management Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Task Management</CardTitle>
+                <CardDescription>Automatically detected based on project structure</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Task Source</div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      {project.taskSource === 'manual' ? 'Manual Tasks' : 'Taskmaster'}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {project.taskSource === 'manual' 
+                        ? 'No .taskmaster folder found'
+                        : '.taskmaster folder detected'}
+                    </span>
+                  </div>
+                </div>
+                {project.taskSource === 'manual' ? (
+                  <>
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">Manual Tasks</div>
+                      <p className="text-sm">{project.manualTasks?.length || 0} tasks created in VibeKit</p>
+                    </div>
+                    <div className="p-3 bg-muted rounded-md">
+                      <p className="text-xs text-muted-foreground">
+                        💡 Tasks are stored directly in VibeKit. You can switch to Taskmaster mode by clicking "Edit Project" below.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">Configuration File</div>
+                      <code className="text-sm bg-muted px-2 py-1 rounded">
+                        {project.projectRoot}/.taskmaster/tasks/tasks.json
+                      </code>
+                    </div>
+                    <div className="p-3 bg-muted rounded-md">
+                      <p className="text-xs text-muted-foreground">
+                        💡 Tasks are being read from your Taskmaster configuration. You can switch to manual tasks by clicking "Edit Project" below.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Project Location */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Project Location</CardTitle>
+                <CardDescription>File system path and configuration</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Project Root</div>
+                  <code className="text-sm bg-muted px-2 py-1 rounded">{project.projectRoot}</code>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Project Settings */}
             <Card>
               <CardHeader>
                 <CardTitle>Project Settings</CardTitle>
@@ -629,11 +751,15 @@ export default function ProjectDetailPage() {
                 </div>
                 <Separator />
                 <div className="flex gap-2">
-                  <Button variant="outline">
+                  <Button variant="outline" onClick={() => setShowEditForm(true)}>
                     <Edit className="mr-2 h-4 w-4" />
                     Edit Project
                   </Button>
-                  <Button variant="outline" className="text-destructive hover:text-destructive">
+                  <Button 
+                    variant="outline" 
+                    className="text-destructive hover:text-destructive"
+                    onClick={handleDeleteProject}
+                  >
                     Delete Project
                   </Button>
                 </div>
@@ -648,6 +774,39 @@ export default function ProjectDetailPage() {
         commit={selectedCommit}
         open={commitSheetOpen}
         onOpenChange={setCommitSheetOpen}
+      />
+
+      <ChatSheet
+        project={project}
+        open={chatSheetOpen}
+        onOpenChange={setChatSheetOpen}
+      />
+
+      {showEditForm && project && (
+        <ProjectForm
+          project={project}
+          onSubmit={(data) => handleUpdateProject(project.id, data)}
+          onCancel={() => setShowEditForm(false)}
+        />
+      )}
+
+      <CreateTaskDialog
+        projectId={project.id}
+        open={showCreateTaskDialog}
+        onOpenChange={setShowCreateTaskDialog}
+        onTaskCreated={() => {
+          // Refresh tasks
+          fetchTaskStats();
+          // Force KanbanView to refresh by changing its key
+          setKanbanRefreshKey(prev => prev + 1);
+        }}
+      />
+
+      <MCPServersSheet
+        project={project}
+        open={mcpServersSheetOpen}
+        onOpenChange={setMcpServersSheetOpen}
+        onSettingsUpdate={fetchProject}
       />
     </div>
   );

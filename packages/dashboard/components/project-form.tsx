@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,11 +26,51 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
     description: project?.description || '',
     tags: project?.tags?.join(', ') || '',
     status: project?.status || 'active',
-    priority: project?.priority || 'medium'
+    priority: project?.priority || 'medium',
+    taskSource: project?.taskSource || 'manual'
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDirectoryBrowser, setShowDirectoryBrowser] = useState(false);
+  const [hasTaskmaster, setHasTaskmaster] = useState<boolean | null>(null);
+  const [isCheckingTaskmaster, setIsCheckingTaskmaster] = useState(false);
+
+  // Check for .taskmaster folder when project root changes
+  useEffect(() => {
+    const checkTaskmaster = async () => {
+      if (!formData.projectRoot || formData.projectRoot.trim() === '') {
+        setHasTaskmaster(null);
+        return;
+      }
+
+      setIsCheckingTaskmaster(true);
+      try {
+        const response = await fetch('/api/projects/check-taskmaster', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectRoot: formData.projectRoot })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setHasTaskmaster(data.hasTaskmaster);
+          
+          // Auto-set task source if this is a new project (not editing)
+          if (!project && data.hasTaskmaster) {
+            setFormData(prev => ({ ...prev, taskSource: 'taskmaster' }));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check for taskmaster:', error);
+      } finally {
+        setIsCheckingTaskmaster(false);
+      }
+    };
+
+    // Debounce the check
+    const timer = setTimeout(checkTaskmaster, 500);
+    return () => clearTimeout(timer);
+  }, [formData.projectRoot, project]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,6 +184,47 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
               <p className="text-xs text-muted-foreground">
                 Enter the absolute path to your project folder
               </p>
+            </div>
+
+            {/* Only show task management for new projects or if editing */}
+            <div className="space-y-2">
+              <Label htmlFor="taskSource">Task Management</Label>
+              <div className="space-y-2">
+                <select
+                  id="taskSource"
+                  value={formData.taskSource}
+                  onChange={(e) => handleInputChange('taskSource', e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="taskmaster">Taskmaster (.taskmaster folder)</option>
+                  <option value="manual">Manual Tasks</option>
+                </select>
+                
+                {/* Show detection status */}
+                {formData.projectRoot && hasTaskmaster !== null && !isCheckingTaskmaster && (
+                  <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                    <span className="text-xs">
+                      {hasTaskmaster ? (
+                        <>✓ <code className="text-xs bg-background px-1 py-0.5 rounded">.taskmaster</code> folder detected</>
+                      ) : (
+                        <>ℹ️ No <code className="text-xs bg-background px-1 py-0.5 rounded">.taskmaster</code> folder found</>
+                      )}
+                    </span>
+                  </div>
+                )}
+                
+                {isCheckingTaskmaster && (
+                  <div className="text-xs text-muted-foreground">
+                    Checking for .taskmaster folder...
+                  </div>
+                )}
+                
+                <p className="text-xs text-muted-foreground">
+                  {formData.taskSource === 'manual' 
+                    ? 'Tasks will be created and managed within VibeKit'
+                    : 'Tasks will be read from the Taskmaster configuration file'}
+                </p>
+              </div>
             </div>
 
             <div className="space-y-2">

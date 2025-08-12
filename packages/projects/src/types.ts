@@ -12,6 +12,33 @@ export interface Project {
   status: 'active' | 'archived';
   rank?: number;
   priority?: 'high' | 'medium' | 'low';
+  taskSource?: 'taskmaster' | 'manual';
+  manualTasks?: ManualTask[];
+  mcpServers?: Record<string, boolean>; // MCP server ID -> enabled status
+}
+
+export interface ManualTask {
+  id: number;
+  title: string;
+  description: string;
+  details?: string;
+  testStrategy?: string;
+  priority: 'high' | 'medium' | 'low';
+  dependencies: number[];
+  status: 'pending' | 'done' | 'in-progress' | 'review' | 'deferred' | 'cancelled';
+  subtasks: ManualSubtask[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManualSubtask {
+  id: number;
+  title: string;
+  description: string;
+  dependencies: number[];
+  details?: string;
+  status: 'pending' | 'done' | 'in-progress' | 'review' | 'deferred' | 'cancelled';
+  testStrategy?: string;
 }
 
 export interface ProjectsConfig {
@@ -30,6 +57,9 @@ export interface ProjectCreateInput {
   status?: 'active' | 'archived';
   rank?: number;
   priority?: 'high' | 'medium' | 'low';
+  taskSource?: 'taskmaster' | 'manual';
+  manualTasks?: ManualTask[];
+  mcpServers?: Record<string, boolean>;
 }
 
 export interface ProjectUpdateInput {
@@ -43,4 +73,7 @@ export interface ProjectUpdateInput {
   status?: 'active' | 'archived';
   rank?: number;
   priority?: 'high' | 'medium' | 'low';
+  taskSource?: 'taskmaster' | 'manual';
+  manualTasks?: ManualTask[];
+  mcpServers?: Record<string, boolean>;
 }

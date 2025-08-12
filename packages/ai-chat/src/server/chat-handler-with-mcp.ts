@@ -21,10 +21,12 @@ interface ChatRequestBody {
     projectId?: string;
     projectRoot?: string;
     projectName?: string;
+    mcpServerFilter?: string[];
   };
   projectId?: string;
   projectRoot?: string;
   projectName?: string;
+  mcpServerFilter?: string[];
 }
 
 /**
@@ -59,6 +61,7 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
     const projectId = body.projectId || data?.projectId;
     const projectRoot = body.projectRoot || data?.projectRoot;
     const projectName = body.projectName || data?.projectName;
+    const mcpServerFilter = (body as any).mcpServerFilter || body.mcpServerFilter || data?.mcpServerFilter;
     
     console.log('[MCP HANDLER] Config:', {
       model,
@@ -68,6 +71,7 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
       projectId,
       projectRoot,
       projectName,
+      mcpServerFilter,
       fromQuery: {
         showMCPTools: queryShowMCPTools,
         model: queryModel,
@@ -174,6 +178,12 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
               if (config.mcpServers) {
                 for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
                   try {
+                    // Skip server if not in filter list (when filter is provided)
+                    if (mcpServerFilter && mcpServerFilter.length > 0 && !mcpServerFilter.includes(name)) {
+                      console.log(`[MCP DEBUG] Skipping server ${name} - not in filter list`);
+                      continue;
+                    }
+                    
                     const configData = serverConfig as any;
                     console.log(`[MCP DEBUG] Adding server: ${name}`, configData);
                     

@@ -77,8 +77,8 @@ export function validateProjectInput(data: any) {
   };
 }
 
-export function sanitizeProjectData(data: any) {
-  return {
+export function sanitizeProjectData(data: any): any {
+  const sanitized: any = {
     name: sanitizeString(data.name, 100),
     projectRoot: sanitizePath(data.projectRoot),
     description: sanitizeString(data.description, 500),
@@ -91,4 +91,14 @@ export function sanitizeProjectData(data: any) {
     status: ['active', 'archived'].includes(data.status) ? data.status : 'active',
     priority: ['high', 'medium', 'low'].includes(data.priority) ? data.priority : 'medium'
   };
+  
+  // Include optional fields if present
+  if (data.taskSource) {
+    sanitized.taskSource = ['taskmaster', 'manual'].includes(data.taskSource) ? data.taskSource : undefined;
+  }
+  if (data.manualTasks) {
+    sanitized.manualTasks = data.manualTasks;
+  }
+  
+  return sanitized;
 }
