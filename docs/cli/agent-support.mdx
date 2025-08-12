@@ -1,0 +1,208 @@
+---
+title: Universal Agent Support
+description: "Works with Claude Code, Gemini, Codex, Cursor Agent, and OpenCode - providing consistent security and observability across all coding agents."
+---
+
+VibeKit CLI provides universal support for popular coding agents, giving you consistent security, observability, and management features regardless of which AI coding assistant you use.
+
+## Supported Agents
+
+### Claude Code
+Anthropic's Claude Code CLI with enhanced security:
+```bash
+# Run Claude Code through VibeKit
+vibekit claude "Help me refactor this React component"
+
+# With sandbox enabled
+vibekit claude --sandbox "Debug this API issue"
+
+# Pass arguments directly to Claude CLI
+vibekit claude --help
+```
+
+### Gemini
+Google's Gemini with VibeKit protection:
+```bash
+# Run Gemini with VibeKit features
+vibekit gemini "Generate a Python data analysis script"
+
+# With sandbox isolation
+vibekit gemini --sandbox-type docker "Write comprehensive tests"
+```
+
+### Codex
+OpenAI's Codex with monitoring:
+```bash
+# Run Codex through VibeKit
+vibekit codex "Convert this JavaScript to TypeScript"
+
+# All VibeKit features apply to Codex
+vibekit codex --sandbox "Generate production-ready code"
+```
+
+### Cursor Agent
+Cursor's AI agent with VibeKit wrapper:
+```bash
+# Run Cursor Agent through VibeKit
+vibekit cursor-agent "Help me implement this feature"
+
+# With logging and proxy features
+vibekit cursor-agent --sandbox-type podman "Review this code"
+```
+
+### OpenCode
+Open-source coding agent integration:
+```bash
+# OpenCode with VibeKit features
+vibekit opencode "Help with Rust memory management"
+
+# Full VibeKit feature support
+vibekit opencode --sandbox "Optimize this algorithm"
+```
+
+## Universal Features
+
+### Consistent Security
+Every agent gets the same security protections:
+- **Proxy Server**: All agent traffic routed through redaction proxy
+- **Sandbox Support**: Optional Docker/Podman isolation for all agents
+- **Redaction**: Sensitive data removal across all agents
+- **Logging**: Structured logging for all agent interactions
+
+### Common Options
+All agents support the same VibeKit options:
+```bash
+# Sandbox options work with any agent
+vibekit [agent] --sandbox
+vibekit [agent] --sandbox-type docker
+
+# Global proxy configuration applies to all
+vibekit [agent] --proxy http://localhost:8080
+```
+
+### Unified Logging
+Same observability features for all agents:
+```bash
+# View logs from any agent
+vibekit logs --agent claude
+vibekit logs --agent gemini
+vibekit logs --agent codex
+
+# Analytics for specific agents
+vibekit analytics --agent cursor-agent
+```
+
+### Cross-Agent Analytics
+Compare and analyze different agents:
+```bash
+# View analytics across all agents
+vibekit analytics
+
+# Multi-agent breakdown shows performance comparison
+# Output includes per-agent session counts, success rates, etc.
+```
+
+## Configuration
+
+### Global Settings
+VibeKit settings apply to all agents:
+```json
+{
+  "sandbox": {
+    "enabled": false,
+    "type": "docker"
+  },
+  "proxy": {
+    "enabled": true,
+    "redactionEnabled": true
+  },
+  "analytics": {
+    "enabled": true
+  }
+}
+```
+
+### Environment Variables
+```bash
+# Agent-specific API keys (set by underlying CLIs)
+export ANTHROPIC_API_KEY="your-claude-key"
+export GEMINI_API_KEY="your-gemini-key" 
+export OPENAI_API_KEY="your-openai-key"
+
+# VibeKit global settings
+export VIBEKIT_SANDBOX=true
+export VIBEKIT_DEBUG=true
+```
+
+### Settings Management
+```bash
+# Open settings interface (works for all agents)
+vibekit
+
+# Settings affect all agents uniformly
+```
+
+## How Agent Wrapping Works
+
+### Command Forwarding
+VibeKit acts as a wrapper around existing agent CLIs:
+- Forwards all unknown options to the underlying agent
+- Adds VibeKit-specific options (`--sandbox`, `--sandbox-type`)
+- Applies consistent logging, proxy, and analytics features
+
+### Example Flow
+```bash
+vibekit claude "help me code" --some-claude-option
+
+# 1. VibeKit processes its own options (--sandbox, etc.)
+# 2. Starts proxy server if needed
+# 3. Forwards "help me code" and "--some-claude-option" to claude CLI
+# 4. Logs the session and captures analytics
+```
+
+### Agent Requirements
+VibeKit assumes the underlying agent CLIs are installed:
+- `claude` command for Claude Code CLI
+- `gemini` command for Gemini CLI
+- `codex` command for Codex CLI
+- `cursor-agent` command for Cursor Agent
+- `opencode` command for OpenCode
+
+## Current Implementation
+
+### What's Implemented
+- **Command Wrapping**: All agents get proxy, logging, analytics
+- **Consistent Options**: Same sandbox and proxy options for all
+- **Unified Analytics**: Cross-agent session tracking and comparison
+- **Settings Integration**: Global settings affect all agents
+
+### Agent Status
+All supported agents use the same architecture:
+- Proxy server for redaction (when enabled)
+- Structured logging to `~/.vibekit/logs/`
+- Analytics tracking in `~/.vibekit/analytics/`
+- Optional sandbox execution
+
+## Best Practices
+
+### Agent Selection
+Choose agents based on their strengths:
+- **Claude**: Complex reasoning, detailed analysis
+- **Gemini**: Multimodal capabilities, diverse tasks
+- **Codex**: Code completion and generation
+- **Cursor Agent**: IDE-integrated workflows
+- **OpenCode**: Open-source flexibility
+
+### Consistent Workflow
+- Use same VibeKit options across agents for consistency
+- Monitor analytics to compare agent effectiveness
+- Apply same security settings (sandbox, redaction) to all agents
+- Regular log review for all agent activities
+
+### Security
+- Enable redaction for all agents handling sensitive code
+- Use sandbox mode when working with untrusted operations
+- Monitor proxy logs for unexpected data patterns
+- Keep all agent CLIs updated for security
+
+Universal agent support provides a consistent security and observability layer across different AI coding assistants, letting you choose the best tool for each task while maintaining unified monitoring and protection.

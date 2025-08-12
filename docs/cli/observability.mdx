@@ -1,0 +1,190 @@
+---
+title: Observability
+description: "Complete visibility into agent operations with logs, analytics, and dashboard to understand what your coding agents are doing."
+---
+<img
+  src="/images/dashboard.png"
+  alt="Dashboard"
+/>
+
+## Dashboard
+
+### Web Dashboard
+VibeKit includes a web dashboard for monitoring agent activity:
+```bash
+# Start the dashboard (opens browser automatically)
+vibekit dashboard
+
+# Start on custom port
+vibekit dashboard --port 3001
+
+# Start without opening browser
+vibekit dashboard --no-open
+
+# Stop dashboard
+vibekit dashboard stop
+```
+
+### Dashboard Features
+The dashboard provides:
+- Agent session monitoring
+- Analytics visualization
+- Settings management
+- Real-time activity tracking
+
+## Logging System
+
+### View Logs
+Monitor agent activity through comprehensive logging:
+```bash
+# View recent logs (default: 50 lines)
+vibekit logs
+
+# View logs for specific agent
+vibekit logs --agent claude
+
+# View more lines
+vibekit logs --lines 100
+
+# Filter by specific agent
+vibekit logs --agent gemini
+```
+
+### Log Storage
+Logs are stored in JSON format at `~/.vibekit/logs/`:
+- Daily log files per agent (e.g., `claude-2024-01-15.log`)
+- Structured JSON entries with timestamps, levels, and metadata
+- Session IDs for tracking individual agent runs
+
+### Log Format
+Each log entry contains:
+```json
+{
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "level": "INFO",
+  "agent": "claude",
+  "sessionId": "1705312200000",
+  "message": "Agent session started",
+  "metadata": {}
+}
+```
+
+## Analytics
+
+### Usage Statistics
+View detailed analytics about your agent usage:
+```bash
+# View analytics summary (default: 7 days)
+vibekit analytics
+
+# View analytics for specific agent
+vibekit analytics --agent claude
+
+# View analytics for custom time period
+vibekit analytics --days 30
+
+# Export analytics to JSON
+vibekit analytics --export analytics.json
+```
+
+### Analytics Metrics
+The analytics system tracks:
+- **Total Sessions**: Number of agent sessions
+- **Session Duration**: Average and total session time
+- **Success Rate**: Percentage of successful completions
+- **Files Changed**: Number of files modified during sessions
+- **Error Count**: Total errors and warnings encountered
+- **Agent Breakdown**: Performance comparison across agents
+
+### Example Analytics Output
+```
+📊 Agent Analytics Summary
+──────────────────────────────────────────────────
+Total Sessions: 45
+Total Duration: 1,200s  
+Average Duration: 27s
+Success Rate: 89.3%
+Files Changed: 127
+Total Errors: 5
+Total Warnings: 12
+
+🤖 Agent Breakdown
+──────────────────────────────────────────────────
+claude:
+  Sessions: 32
+  Avg Duration: 31s
+  Success Rate: 91.2%
+
+gemini:
+  Sessions: 13
+  Avg Duration: 18s
+  Success Rate: 84.6%
+```
+
+## Data Management
+
+### Clean Up Data
+Remove old logs and analytics:
+```bash
+# Clean both logs and analytics
+vibekit clean
+
+# Clean only logs
+vibekit clean --logs
+
+# Clean only analytics data  
+vibekit clean --analytics
+```
+
+### Log Location
+- **Logs**: `~/.vibekit/logs/`
+- **Analytics**: `~/.vibekit/analytics/`
+- **Settings**: `~/.vibekit/settings.json`
+
+## Current Capabilities
+
+### What's Available
+- **Structured Logging**: JSON-formatted logs with timestamps and metadata
+- **Analytics Dashboard**: Web interface for viewing usage statistics
+- **CLI Analytics**: Command-line access to usage metrics
+- **Agent Tracking**: Per-agent performance monitoring
+- **Session Management**: Track individual agent sessions
+- **Data Export**: Export analytics to JSON format
+
+### Dashboard Features
+- Real-time session monitoring
+- Settings management interface
+- Analytics visualization
+- Agent comparison views
+
+## Proxy Server Observability
+
+### Traffic Monitoring
+The proxy server provides additional observability:
+- HTTP/HTTPS request logging
+- Response time tracking
+- Redaction statistics
+- SSE (Server-Sent Events) stream monitoring
+
+### Proxy Logs
+Proxy activity is captured but processed silently for privacy:
+- Request/response analysis
+- Traffic patterns
+- Redaction effectiveness
+- Performance metrics
+
+## Best Practices
+
+### Regular Monitoring
+1. **Check Analytics Weekly**: Review agent usage patterns
+2. **Monitor Success Rates**: Identify problematic sessions
+3. **Clean Up Data**: Regularly remove old logs and analytics
+4. **Use Dashboard**: Keep dashboard running for real-time monitoring
+
+### Troubleshooting
+1. **Check Recent Logs**: Look for error patterns in recent sessions
+2. **Review Analytics**: Identify trends in failure rates
+3. **Monitor Dashboard**: Watch for real-time issues
+4. **Export Data**: Save important metrics before cleanup
+
+The observability features help you understand agent performance, track usage patterns, and identify issues through comprehensive logging and analytics.

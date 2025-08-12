@@ -1,0 +1,83 @@
+# Browser Usage
+
+For browser/web applications, use the browser-safe import that works without Node.js-specific features like file system access.
+
+## Basic Setup
+
+```typescript
+import { ClaudeWebAuth, LocalStorageTokenStorage } from '@vibe-kit/auth/browser';
+// OR use the default import which is browser-safe:
+// import { ClaudeAuth, LocalStorageTokenStorage } from '@vibe-kit/auth';
+
+// Create storage
+const storage = new LocalStorageTokenStorage();
+const auth = new ClaudeWebAuth(storage);
+```
+
+## Authentication Flow
+
+```typescript
+// Create authorization URL
+const { url, state, codeVerifier } = ClaudeWebAuth.createAuthorizationUrl();
+
+// Open URL in browser for user authentication
+window.open(url, '_blank');
+
+// After user authorizes and provides the code#state string:
+const authCode = 'code123#state456'; // From user input
+const token = await auth.authenticate(authCode, codeVerifier, state);
+```
+
+## Token Management
+
+```typescript
+// Check authentication status
+const isAuthenticated = await auth.isAuthenticated();
+
+// Get valid token (auto-refresh if needed)
+const accessToken = await auth.getValidToken();
+
+// Use token with AI provider APIs
+if (!accessToken) {
+  // Handle authentication flow...
+}
+```
+
+## Using with AI Provider APIs
+
+### Claude AI (Available Now)
+
+```typescript
+import { ClaudeWebAuth, LocalStorageTokenStorage } from '@vibe-kit/auth/browser';
+
+const storage = new LocalStorageTokenStorage();
+const auth = new ClaudeWebAuth(storage);
+
+// Get token (assumes user is already authenticated)
+const accessToken = await auth.getValidToken();
+if (!accessToken) {
+  // Handle authentication flow...
+}
+
+// Use with Claude Code CLI
+// First, export the token as an environment variable:
+// export CLAUDE_CODE_OAUTH_TOKEN=${accessToken}
+// claude -p 'Hello!'
+```
+
+## Storage Options
+
+Browser environments support multiple storage options:
+
+- **LocalStorageTokenStorage**: Browser localStorage (client-side only)
+- **CookieTokenStorage**: Cookie-based storage for SSR applications
+
+```typescript
+import { ClaudeWebAuth, LocalStorageTokenStorage, CookieTokenStorage } from '@vibe-kit/auth/browser';
+
+// Using localStorage (most common)
+const localAuth = new ClaudeWebAuth(new LocalStorageTokenStorage());
+
+// Using cookies (for SSR)
+const cookieAuth = new ClaudeWebAuth(new CookieTokenStorage());
+```

@@ -6,15 +6,15 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const days = parseInt(searchParams.get('days') || '7');
     const agentName = searchParams.get('agent') || undefined;
-    
+
     const analytics = await getAnalyticsData(days, agentName);
     const summary = generateSummary(analytics);
     
     return NextResponse.json(summary);
   } catch (error) {
-    console.error('Failed to fetch analytics summary:', error);
+    console.error('Failed to generate analytics summary:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch analytics summary' },
+      { error: 'Failed to generate analytics summary' },
       { status: 500 }
     );
   }

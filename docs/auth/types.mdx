@@ -1,0 +1,114 @@
+# Types & API Reference
+
+## Core Types
+
+### OAuthToken
+
+The main token interface used throughout the authentication library:
+
+```typescript
+interface OAuthToken {
+  access_token: string;
+  token_type: string;
+  expires_in?: number;
+  refresh_token?: string;
+  scope?: string;
+  created_at: number;
+}
+```
+
+## Authentication Methods
+
+### ClaudeAuth (Node.js)
+
+Static methods available when using `@vibe-kit/auth/node`:
+
+```typescript
+class ClaudeAuth {
+  // Start OAuth flow (opens browser automatically)
+  static authenticate(): Promise<OAuthToken>;
+  
+  // Check if user is authenticated
+  static isAuthenticated(): Promise<boolean>;
+  
+  // Get valid token (auto-refresh if needed)
+  static getValidToken(): Promise<string | null>;
+  
+  // Verify current authentication
+  static verify(): Promise<boolean>;
+  
+  // Get authentication status
+  static getStatus(): Promise<any>;
+  
+  // Logout and clear tokens
+  static logout(): Promise<void>;
+  
+  // Export token in different formats
+  static exportToken(format: 'env' | 'json' | 'full'): Promise<string>;
+  
+  // Import token from various sources
+  static importToken(options: {
+    fromEnv?: boolean;
+    fromFile?: string;
+    refreshToken?: string;
+  }): Promise<void>;
+}
+```
+
+### ClaudeWebAuth (Browser)
+
+Instance-based authentication for browser environments:
+
+```typescript
+class ClaudeWebAuth {
+  constructor(storage: TokenStorage);
+  
+  // Create authorization URL with PKCE
+  static createAuthorizationUrl(): {
+    url: string;
+    state: string;
+    codeVerifier: string;
+  };
+  
+  // Complete authentication with auth code
+  authenticate(
+    authCode: string, 
+    codeVerifier: string, 
+    state: string
+  ): Promise<OAuthToken>;
+  
+  // Check if authenticated
+  isAuthenticated(): Promise<boolean>;
+  
+  // Get valid token (auto-refresh if needed)
+  getValidToken(): Promise<string | null>;
+}
+```
+
+## Storage Interfaces
+
+### TokenStorage
+
+Base interface for token storage implementations:
+
+```typescript
+interface TokenStorage {
+  store(token: OAuthToken): Promise<void>;
+  retrieve(): Promise<OAuthToken | null>;
+  clear(): Promise<void>;
+}
+```
+
+### Available Implementations
+
+- **MemoryTokenStorage**: In-memory storage for server-side use
+- **LocalStorageTokenStorage**: Browser localStorage (client-side only)  
+- **CookieTokenStorage**: Cookie-based storage for SSR applications
+
+## Coming Soon
+
+Additional provider support with similar interfaces:
+
+- **Gemini Max**: Access Google's most advanced AI models
+- **Grok Max**: Leverage xAI's premium models  
+- **ChatGPT Max**: Use OpenAI's latest models

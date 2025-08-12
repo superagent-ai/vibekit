@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const days = parseInt(searchParams.get('days') || '7');
     const agentName = searchParams.get('agent') || undefined;
-    
+
     const analytics = await getAnalyticsData(days, agentName);
     
     return NextResponse.json(analytics);

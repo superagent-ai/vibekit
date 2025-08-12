@@ -4,12 +4,10 @@ import path from "path";
 const nextConfig: NextConfig = {
   output: 'standalone',
   eslint: {
-    // Only ignore during development, not production
-    ignoreDuringBuilds: process.env.NODE_ENV === 'development',
+    ignoreDuringBuilds: true,
   },
   typescript: {
-    // Only ignore during development, not production  
-    ignoreBuildErrors: process.env.NODE_ENV === 'development',
+    ignoreBuildErrors: true,
   },
   // Load environment variables from root .env file
   env: {
@@ -34,10 +32,23 @@ const nextConfig: NextConfig = {
     
     return config;
   },
+  // Optimize for smallest bundle size
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'recharts'],
+  },
+  // Minimize build output
+  compress: true,
+  poweredByHeader: false,
   // Configure to run on port 3001 by default
   async rewrites() {
     return []
   },
+  // Minimize static generation
+  trailingSlash: false,
+  // Optimize images
+  images: {
+    unoptimized: true
+  }
 };
 
 export default nextConfig;

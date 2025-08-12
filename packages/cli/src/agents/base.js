@@ -313,24 +313,27 @@ class BaseAgent {
     // Capture the command being executed
     analytics.captureCommand(command, args);
     
-    // Capture initial file snapshot
-    const captureSnapshot = async () => {
-      try {
-        beforeSnapshot = await this.captureFileSnapshot();
-        currentSnapshot = beforeSnapshot;
-      } catch (error) {
-        console.warn('Failed to capture file snapshot:', error.message);
-      }
-    };
-    
     // Determine if this is likely an interactive session
     const isInteractive = args.length === 0 && process.stdin.isTTY;
     
     // Using standard child process for all sessions
     
     return new Promise(async (resolve, reject) => {
-      // Capture initial file snapshot
-      await captureSnapshot();
+      // Track if analytics have been finalized to prevent double finalization
+      let analyticsFinalized = false;
+      
+      // Capture initial file snapshot asynchronously (don't block spawn)
+      const captureSnapshot = async () => {
+        try {
+          beforeSnapshot = await this.captureFileSnapshot();
+          currentSnapshot = beforeSnapshot;
+        } catch (error) {
+          console.warn('Failed to capture file snapshot:', error.message);
+        }
+      };
+      
+      // Start snapshot capture in background - don't await
+      captureSnapshot();
       
       let spawnOptions;
       
@@ -426,14 +429,24 @@ class BaseAgent {
           }
           
           // Finalize analytics
-          const analyticsData = await analytics.finalize(code, duration);
-          
-          resolve({
-            code,
-            duration,
-            analytics: analyticsData,
-            changes: fileChanges.changes
-          });
+          if (!analyticsFinalized) {
+            analyticsFinalized = true;
+            const analyticsData = await analytics.finalize(code, duration);
+            
+            resolve({
+              code,
+              duration,
+              analytics: analyticsData,
+              changes: fileChanges.changes
+            });
+          } else {
+            resolve({
+              code,
+              duration,
+              analytics: null,
+              changes: fileChanges.changes
+            });
+          }
         });
 
         child.on('error', async (error) => {
@@ -442,7 +455,10 @@ class BaseAgent {
           console.error(chalk.red(`[vibekit] Process error: ${error.message}`));
           
           // Finalize analytics with error
-          await analytics.finalize(-1, Date.now() - startTime);
+          if (!analyticsFinalized) {
+            analyticsFinalized = true;
+            await analytics.finalize(-1, Date.now() - startTime);
+          }
           
           reject(error);
         });
@@ -474,33 +490,119 @@ class BaseAgent {
           }
           
           // Finalize analytics
-          const analyticsData = await analytics.finalize(code, duration);
-          
-          resolve({
-            code,
-            duration,
-            analytics: analyticsData,
-            changes: fileChanges.changes
-          });
+          if (!analyticsFinalized) {
+            analyticsFinalized = true;
+            const analyticsData = await analytics.finalize(code, duration);
+            
+            resolve({
+              code,
+              duration,
+              analytics: analyticsData,
+              changes: fileChanges.changes
+            });
+          } else {
+            resolve({
+              code,
+              duration,
+              analytics: null,
+              changes: fileChanges.changes
+            });
+          }
         });
 
         child.on('error', async (error) => {
           console.error(chalk.red(`[vibekit] Process error: ${error.message}`));
           
           // Finalize analytics with error
-          await analytics.finalize(-1, Date.now() - startTime);
+          if (!analyticsFinalized) {
+            analyticsFinalized = true;
+            await analytics.finalize(-1, Date.now() - startTime);
+          }
           
           reject(error);
         });
       }
 
       // Handle signals
-      process.on('SIGINT', () => {
-        child.kill('SIGINT');
-      });
+      const signalHandler = (signal) => {
+        return () => {
+          // Kill child process
+          child.kill(signal);
+          
+          // Force finalize analytics synchronously for immediate save
+          if (!analyticsFinalized) {
+            analyticsFinalized = true;
+            const duration = Date.now() - startTime;
+            try {
+              analytics.finalizeSync(-1, duration);
+            } catch (error) {
+              console.error('Failed to finalize analytics on signal:', error);
+            }
+          }
+          
+          // Exit immediately
+          process.exit(signal === 'SIGINT' ? 130 : 1);
+        };
+      };
 
-      process.on('SIGTERM', () => {
-        child.kill('SIGTERM');
+      process.on('SIGINT', signalHandler('SIGINT'));
+      process.on('SIGTERM', signalHandler('SIGTERM'));
+      process.on('SIGHUP', signalHandler('SIGHUP'));
+      
+      // Handle unexpected exits
+      process.on('beforeExit', (code) => {
+        if (!analyticsFinalized) {
+          analyticsFinalized = true;
+          const duration = Date.now() - startTime;
+          try {
+            analytics.finalizeSync(code || 0, duration);
+          } catch (error) {
+            console.error('Failed to finalize analytics on beforeExit:', error);
+          }
+        }
+      });
+      
+      // Handle process exit - last chance to save
+      process.on('exit', (code) => {
+        if (!analyticsFinalized) {
+          analyticsFinalized = true;
+          const duration = Date.now() - startTime;
+          try {
+            analytics.finalizeSync(code || 0, duration);
+          } catch (error) {
+            console.error('Failed to finalize analytics on exit:', error);
+          }
+        }
+      });
+      
+      // Handle uncaught exceptions
+      process.on('uncaughtException', (error) => {
+        console.error('Uncaught exception:', error);
+        if (!analyticsFinalized) {
+          analyticsFinalized = true;
+          const duration = Date.now() - startTime;
+          try {
+            analytics.finalizeSync(-1, duration);
+          } catch (err) {
+            console.error('Failed to finalize analytics on uncaught exception:', err);
+          }
+        }
+        process.exit(1);
+      });
+      
+      // Handle unhandled promise rejections
+      process.on('unhandledRejection', (reason) => {
+        console.error('Unhandled promise rejection:', reason);
+        if (!analyticsFinalized) {
+          analyticsFinalized = true;
+          const duration = Date.now() - startTime;
+          try {
+            analytics.finalizeSync(-1, duration);
+          } catch (error) {
+            console.error('Failed to finalize analytics on unhandled rejection:', error);
+          }
+        }
+        process.exit(1);
       });
     });
   }

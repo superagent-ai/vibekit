@@ -106,21 +106,23 @@ async function getProjectName() {
       }
     }
     
-    // Try git repository name
-    try {
-      const remoteUrl = execSync('git config --get remote.origin.url', { 
-        encoding: 'utf8', 
-        timeout: 5000,
-        cwd: process.cwd()
-      }).trim();
-      
-      // Extract repo name from various git URL formats
-      const urlMatch = remoteUrl.match(/\/([^/]+?)(\.git)?$/);
-      if (urlMatch && urlMatch[1]) {
-        return urlMatch[1];
+    // Try git repository name (only if in a git repo)
+    if (isGitRepository()) {
+      try {
+        const remoteUrl = execSync('git config --get remote.origin.url', { 
+          encoding: 'utf8', 
+          timeout: 5000,
+          cwd: process.cwd()
+        }).trim();
+        
+        // Extract repo name from various git URL formats
+        const urlMatch = remoteUrl.match(/\/([^/]+?)(\.git)?$/);
+        if (urlMatch && urlMatch[1]) {
+          return urlMatch[1];
+        }
+      } catch (error) {
+        // Git command failed, continue to fallback
       }
-    } catch (error) {
-      // Git command failed, continue to fallback
     }
     
     // Fallback to directory name
@@ -241,9 +243,30 @@ async function detectProjectType() {
 }
 
 /**
+ * Check if current directory is a git repository
+ */
+function isGitRepository() {
+  try {
+    execSync('git rev-parse --git-dir', { 
+      encoding: 'utf8', 
+      timeout: 5000,
+      cwd: process.cwd(),
+      stdio: 'ignore'
+    });
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
  * Get current git branch
  */
 async function getGitBranch() {
+  if (!isGitRepository()) {
+    return null;
+  }
+  
   try {
     const branch = execSync('git rev-parse --abbrev-ref HEAD', { 
       encoding: 'utf8', 
@@ -260,6 +283,10 @@ async function getGitBranch() {
  * Get git working tree status
  */
 async function getGitStatus() {
+  if (!isGitRepository()) {
+    return null;
+  }
+  
   try {
     const status = execSync('git status --porcelain', { 
       encoding: 'utf8', 

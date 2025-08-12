@@ -15,11 +15,13 @@ async function createProvider(config: ModelConfig) {
       return createAnthropic({ apiKey: config.apiKey });
     }
     case "openai": {
-      const { createOpenAI } = await import("@ai-sdk/openai");
-      return createOpenAI({ apiKey: config.apiKey });
+      const { openai } = await import("@ai-sdk/openai");
+      return openai.responses;
     }
     case "openrouter": {
-      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { createOpenAICompatible } = await import(
+        "@ai-sdk/openai-compatible"
+      );
       return createOpenAICompatible({
         name: "openrouter",
         apiKey: config.apiKey,
@@ -30,7 +32,9 @@ async function createProvider(config: ModelConfig) {
       if (!config.baseUrl) {
         throw new Error("baseUrl is required for Azure provider");
       }
-      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { createOpenAICompatible } = await import(
+        "@ai-sdk/openai-compatible"
+      );
       return createOpenAICompatible({
         name: "azure",
         apiKey: config.apiKey,
@@ -38,7 +42,9 @@ async function createProvider(config: ModelConfig) {
       });
     }
     case "gemini": {
-      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { createOpenAICompatible } = await import(
+        "@ai-sdk/openai-compatible"
+      );
       return createOpenAICompatible({
         name: "gemini",
         apiKey: config.apiKey,
@@ -46,7 +52,9 @@ async function createProvider(config: ModelConfig) {
       });
     }
     case "ollama": {
-      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { createOpenAICompatible } = await import(
+        "@ai-sdk/openai-compatible"
+      );
       return createOpenAICompatible({
         name: "ollama",
         apiKey: config.apiKey || "ollama", // Ollama often doesn't require a real key
@@ -54,7 +62,9 @@ async function createProvider(config: ModelConfig) {
       });
     }
     case "mistral": {
-      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { createOpenAICompatible } = await import(
+        "@ai-sdk/openai-compatible"
+      );
       return createOpenAICompatible({
         name: "mistral",
         apiKey: config.apiKey,
@@ -62,7 +72,9 @@ async function createProvider(config: ModelConfig) {
       });
     }
     case "deepseek": {
-      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { createOpenAICompatible } = await import(
+        "@ai-sdk/openai-compatible"
+      );
       return createOpenAICompatible({
         name: "deepseek",
         apiKey: config.apiKey,
@@ -70,7 +82,9 @@ async function createProvider(config: ModelConfig) {
       });
     }
     case "xai": {
-      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { createOpenAICompatible } = await import(
+        "@ai-sdk/openai-compatible"
+      );
       return createOpenAICompatible({
         name: "xai",
         apiKey: config.apiKey,
@@ -78,7 +92,9 @@ async function createProvider(config: ModelConfig) {
       });
     }
     case "groq": {
-      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { createOpenAICompatible } = await import(
+        "@ai-sdk/openai-compatible"
+      );
       return createOpenAICompatible({
         name: "groq",
         apiKey: config.apiKey,
@@ -86,7 +102,9 @@ async function createProvider(config: ModelConfig) {
       });
     }
     case "arceeai": {
-      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { createOpenAICompatible } = await import(
+        "@ai-sdk/openai-compatible"
+      );
       return createOpenAICompatible({
         name: "arceeai",
         apiKey: config.apiKey,
@@ -103,7 +121,7 @@ function getDefaultModel(provider: ModelProvider): string {
     case "anthropic":
       return "claude-3-5-sonnet-20240620";
     case "openai":
-      return "gpt-4o-mini";
+      return "gpt-5";
     case "openrouter":
       return "anthropic/claude-3.5-sonnet";
     case "azure":
@@ -136,7 +154,7 @@ export async function generatePRMetadata(
 ) {
   const _prompt = `You are tasked to create title and body for a pull request based on the following task:\n${prompt}\n\npatch:\n\n${patch}`;
   const provider = await createProvider(modelConfig);
-  const model = modelConfig.model || getDefaultModel(modelConfig.provider);
+  const model = getDefaultModel(modelConfig.provider);
 
   const { generateObject } = await import("ai");
   const { object } = await generateObject({

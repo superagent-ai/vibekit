@@ -263,6 +263,21 @@ class Analytics {
     return this.saveAnalytics();
   }
 
+  // Synchronous version for emergency finalization (e.g., on process exit)
+  finalizeSync(exitCode, duration) {
+    this.stopPeriodicLogging();
+    
+    this.metrics.endTime = Date.now();
+    this.metrics.duration = duration || (this.metrics.endTime - this.metrics.startTime);
+    this.metrics.exitCode = exitCode;
+    this.metrics.status = 'terminated';
+    
+    // Final token count refinement from buffers
+    this.refineTokenCounts();
+    
+    return this.saveAnalyticsSync();
+  }
+
   refineTokenCounts() {
     // More sophisticated analytics could be added here
     // For now, use the basic metrics we collect
@@ -307,6 +322,35 @@ class Analytics {
       return this.metrics;
     } catch (error) {
       console.error('Failed to save analytics:', error.message);
+      return null;
+    }
+  }
+
+  // Synchronous version for emergency saves (e.g., on process exit)
+  saveAnalyticsSync() {
+    const date = new Date().toISOString().split('T')[0];
+    const analyticsFile = path.join(this.analyticsDir, `${this.agentName}-${date}.json`);
+    
+    try {
+      let existingData = [];
+      if (fs.pathExistsSync(analyticsFile)) {
+        const content = fs.readFileSync(analyticsFile, 'utf8');
+        existingData = JSON.parse(content);
+      }
+      
+      // Find existing session and update it, or add new one
+      const existingIndex = existingData.findIndex(s => s.sessionId === this.metrics.sessionId);
+      if (existingIndex >= 0) {
+        existingData[existingIndex] = this.metrics;
+      } else {
+        existingData.push(this.metrics);
+      }
+      
+      fs.writeFileSync(analyticsFile, JSON.stringify(existingData, null, 2));
+      
+      return this.metrics;
+    } catch (error) {
+      console.error('Failed to save analytics synchronously:', error.message);
       return null;
     }
   }

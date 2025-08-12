@@ -1,0 +1,89 @@
+# Node.js Usage
+
+For Node.js applications (CLI tools, servers, etc.), use the Node.js-specific import for full functionality including file system access and automatic browser launching.
+
+## Basic Usage
+
+```typescript
+import { ClaudeAuth } from '@vibe-kit/auth/node';
+
+// Start OAuth flow (opens browser automatically)
+const token = await ClaudeAuth.authenticate();
+
+// Check if authenticated
+const isAuthenticated = await ClaudeAuth.isAuthenticated();
+
+// Get valid token (auto-refresh if needed)
+const accessToken = await ClaudeAuth.getValidToken();
+
+// Verify authentication
+const isValid = await ClaudeAuth.verify();
+
+// Get authentication status
+const status = await ClaudeAuth.getStatus();
+
+// Logout
+await ClaudeAuth.logout();
+```
+
+## Token Import/Export
+
+Node.js environments support importing and exporting tokens in various formats:
+
+```typescript
+import { ClaudeAuth } from '@vibe-kit/auth/node';
+
+// Export token in different formats
+const envToken = await ClaudeAuth.exportToken('env');
+const jsonToken = await ClaudeAuth.exportToken('json');
+const fullToken = await ClaudeAuth.exportToken('full');
+
+// Import from various sources
+await ClaudeAuth.importToken({ fromEnv: true });
+await ClaudeAuth.importToken({ fromFile: './token.json' });
+await ClaudeAuth.importToken({ refreshToken: 'your-refresh-token' });
+```
+
+## Using with AI Provider APIs
+
+### Claude AI (Available Now)
+
+```typescript
+import { ClaudeAuth } from '@vibe-kit/auth/node';
+
+// Authenticate and get token
+let accessToken = await ClaudeAuth.getValidToken();
+if (!accessToken) {
+  await ClaudeAuth.authenticate();
+  accessToken = await ClaudeAuth.getValidToken();
+}
+
+// Use with Claude Code CLI
+// First, export the token as an environment variable:
+// export CLAUDE_CODE_OAUTH_TOKEN=${accessToken}
+// claude -p 'Hello, Claude!'
+```
+
+### With Official SDKs
+
+```typescript
+// Claude AI with Anthropic SDK
+import Anthropic from '@anthropic-ai/sdk';
+import { ClaudeAuth } from '@vibe-kit/auth/node';
+
+const accessToken = await ClaudeAuth.getValidToken();
+const anthropic = new Anthropic({
+  apiKey: '', // Leave empty for OAuth
+  authToken: accessToken, // Use your MAX subscription token
+});
+
+const message = await anthropic.messages.create({
+  model: 'claude-sonnet-4-20250514',
+  max_tokens: 1000,
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+## Storage Options
+
+Node.js environments use **MemoryTokenStorage** by default, providing in-memory storage for server-side applications with secure file system token persistence.

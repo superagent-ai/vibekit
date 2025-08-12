@@ -13,31 +13,62 @@
   },
   "background": {
     "color": {
-      "light": "#FFFFFF",
-      "dark": "#000000"
+      "light": "#FAFAFA",
+      "dark": "#000"
     }
   },
   "appearance": {
-    "default": "light",
+    "default": "dark",
     "strict": false
+  },
+  "icons": {
+    "library": "lucide"
   },
   "favicon": "/favicon.png",
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "CLI",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "index",
+              "cli/installation",
+              "cli/quick-reference"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "cli/local-sandbox",
+              "cli/redaction",
+              "cli/observability",
+              "cli/agent-support"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "cli/configuration-files",
+              "cli/environment-variables"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDK",
         "groups": [
           {
             "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "ask-mode",
-              "github-integration",
-              "streaming",
-              "session-management",
-              "secrets",
-              "open-telemetry"
+              "sdk/index-sdk",
+              "sdk/quickstart",
+              "sdk/ask-mode",
+              "sdk/github-integration",
+              "sdk/streaming",
+              "sdk/session-management",
+              "sdk/secrets"
             ]
           },
           {
@@ -61,14 +92,9 @@
               "supported-sandboxes/modal",
               "supported-sandboxes/northflank"
             ]
-          }
-        ]
-      },
-      {
-        "tab": "API",
-        "groups": [
+          },
           {
-            "group": "VibeKit",
+            "group": "SDK Reference",
             "pages": [
               "api-reference/configuration",
               "api-reference/generate-code",
@@ -87,43 +113,26 @@
         ]
       },
       {
-        "tab": "CLI",
+        "tab": "Auth",
         "groups": [
           {
             "group": "Getting Started",
             "pages": [
-              "cli/overview",
-              "cli/installation",
-              "cli/quick-reference"
+              "auth/index",
+              "auth/overview"
             ]
           },
           {
-            "group": "Commands",
+            "group": "Usage",
             "pages": [
-              "cli/commands/init",
-              "cli/commands/local",
-              "cli/commands/projects"
+              "auth/node",
+              "auth/browser"
             ]
           },
           {
-            "group": "Local Subcommands",
+            "group": "Reference",
             "pages": [
-              "cli/commands/local/create",
-              "cli/commands/local/list",
-              "cli/commands/local/exec",
-              "cli/commands/local/generate",
-              "cli/commands/local/pr",
-              "cli/commands/local/connect",
-              "cli/commands/local/status",
-              "cli/commands/local/logs",
-              "cli/commands/local/delete"
-            ]
-          },
-          {
-            "group": "Configuration",
-            "pages": [
-              "cli/environment-variables",
-              "cli/configuration-files"
+              "auth/types"
             ]
           }
         ]
@@ -167,18 +176,13 @@
           "anchor": "Community",
           "href": "https://discord.gg/spZ7MnqFT4",
           "icon": "discord"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://www.superagent.sh/blog",
-          "icon": "newspaper"
         }
       ]
     }
   },
   "logo": {
-    "light": "/logo/logo.png",
-    "dark": "/logo/logo.png"
+    "light": "/logo/light.png",
+    "dark": "/logo/dark.png"
   },
   "navbar": {
     "links": [

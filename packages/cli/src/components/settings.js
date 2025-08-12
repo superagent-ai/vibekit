@@ -6,8 +6,9 @@ import os from 'os';
 import { setupAliases } from '../utils/aliases.js';
 import proxyManager from '../proxy/manager.js';
 import dashboardManager from '../dashboard/manager.js';
+import CFonts from 'cfonts';
 
-const Settings = () => {
+const Settings = ({ showWelcome = false }) => {
   const [settings, setSettings] = useState({
     sandbox: {
       enabled: false,
@@ -26,7 +27,8 @@ const Settings = () => {
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [currentMenu, setCurrentMenu] = useState('main'); // 'main', 'analytics', 'settings'
+  const [currentMenu, setCurrentMenu] = useState('main'); // 'main', 'analytics', 'proxy', 'sandbox', 'ide'
+  const [logoRendered, setLogoRendered] = useState(false);
   const { exit } = useApp();
 
   const settingsPath = path.join(os.homedir(), '.vibekit', 'settings.json');
@@ -37,13 +39,28 @@ const Settings = () => {
         return [
           {
             label: 'Analytics',
-            description: 'View and configure analytics settings',
+            description: 'Configure analytics and logging settings',
             action: 'open-analytics'
           },
           {
-            label: 'Settings',
-            description: 'Configure proxy and system settings',
-            action: 'open-settings'
+            label: 'Proxy',
+            description: 'Configure proxy server settings',
+            action: 'open-proxy'
+          },
+          {
+            label: 'Sandbox',
+            description: 'Configure sandbox isolation settings',
+            action: 'open-sandbox'
+          },
+          {
+            label: 'IDE',
+            description: 'Configure IDE integrations and aliases',
+            action: 'open-ide'
+          },
+          {
+            label: 'Discord',
+            description: 'Join our Discord community',
+            action: 'open-discord'
           },
           {
             label: 'Exit',
@@ -69,7 +86,25 @@ const Settings = () => {
             action: 'back-to-main'
           }
         ];
-      case 'settings':
+      case 'proxy':
+        return [
+          {
+            label: `Proxy Server: ${settings.proxy.enabled ? '✓ ON' : '✗ OFF'}`,
+            description: 'Enable or disable the proxy server functionality',
+            action: 'toggle-proxy'
+          },
+          {
+            label: `Redaction: ${settings.proxy.redactionEnabled ? '✓ ON' : '✗ OFF'}`,
+            description: 'Toggle redaction of sensitive data in proxy logs',
+            action: 'toggle-redaction'
+          },
+          {
+            label: 'Back to Main Menu',
+            description: 'Return to main settings menu',
+            action: 'back-to-main'
+          }
+        ];
+      case 'sandbox':
         return [
           {
             label: `Sandbox Isolation: ${settings.sandbox.enabled ? '✓ ON' : '✗ OFF'}`,
@@ -77,19 +112,22 @@ const Settings = () => {
             action: 'toggle-sandbox'
           },
           {
-            label: `Connect IDE: ${settings.aliases.enabled ? '✓ ON (requires restart)' : '✗ OFF'}`,
-            description: 'Create global "claude" and "gemini" commands (runs "vibekit claude/gemini")',
+            label: `Sandbox Type: ${settings.sandbox.type}`,
+            description: 'Container runtime (docker/podman)',
+            action: 'cycle-sandbox-type'
+          },
+          {
+            label: 'Back to Main Menu',
+            description: 'Return to main settings menu',
+            action: 'back-to-main'
+          }
+        ];
+      case 'ide':
+        return [
+          {
+            label: `Global Aliases: ${settings.aliases.enabled ? '✓ ON (requires restart)' : '✗ OFF (requires restart)'}`,
+            description: 'Create global "claude", "gemini" and "codex" commands',
             action: 'toggle-aliases'
-          },
-          {
-            label: `Proxy Server: ${settings.proxy.enabled ? '✓ ON' : '✗ OFF'}`,
-            description: 'Enable or disable the proxy server functionality',
-            action: 'toggle-proxy'
-          },
-          {
-            label: `Proxy Redaction: ${settings.proxy.redactionEnabled ? '✓ ON' : '✗ OFF'}`,
-            description: 'Toggle redaction of sensitive data in proxy logs',
-            action: 'toggle-redaction'
           },
           {
             label: 'Back to Main Menu',
@@ -123,6 +161,24 @@ const Settings = () => {
     loadSettings();
   }, [settingsPath]);
 
+  useEffect(() => {
+    if (showWelcome && !logoRendered) {
+      // Render the cfonts logo directly to stdout
+      CFonts.say('VIBEKIT', {
+        font: 'tiny',
+        align: 'center',
+        colors: ['gray'],
+        background: 'transparent',
+        letterSpacing: 1,
+        lineHeight: 0,  // Minimize line height
+        space: false,  // Disable extra space around the logo
+        maxLength: '0',
+        env: 'node'
+      });
+      setLogoRendered(true);
+    }
+  }, [showWelcome, logoRendered]);
+
   const saveSettings = async (newSettings) => {
     try {
       await fs.writeJson(settingsPath, newSettings, { spaces: 2 });
@@ -132,19 +188,23 @@ const Settings = () => {
     }
   };
 
-  useInput(async (input, key) => {
-    if (loading) return;
+  // Check if we're in a TTY environment
+  const isRawModeSupported = process.stdin.isTTY;
 
-    if (key.upArrow || input === 'k') {
-      setSelectedIndex(prev => (prev > 0 ? prev - 1 : menuItems.length - 1));
-    } else if (key.downArrow || input === 'j') {
-      setSelectedIndex(prev => (prev < menuItems.length - 1 ? prev + 1 : 0));
-    } else if (key.leftArrow) {
-      if (currentMenu !== 'main') {
-        setCurrentMenu('main');
-        setSelectedIndex(0);
-      }
-    } else if (key.return || input === ' ') {
+  if (isRawModeSupported) {
+    useInput(async (input, key) => {
+      if (loading) return;
+
+      if (key.upArrow || input === 'k') {
+        setSelectedIndex(prev => (prev > 0 ? prev - 1 : menuItems.length - 1));
+      } else if (key.downArrow || input === 'j') {
+        setSelectedIndex(prev => (prev < menuItems.length - 1 ? prev + 1 : 0));
+      } else if (key.leftArrow) {
+        if (currentMenu !== 'main') {
+          setCurrentMenu('main');
+          setSelectedIndex(0);
+        }
+      } else if (key.return || input === ' ') {
       const selectedItem = menuItems[selectedIndex];
       
       switch (selectedItem.action) {
@@ -152,9 +212,25 @@ const Settings = () => {
           setCurrentMenu('analytics');
           setSelectedIndex(0);
           break;
-        case 'open-settings':
-          setCurrentMenu('settings');
+        case 'open-proxy':
+          setCurrentMenu('proxy');
           setSelectedIndex(0);
+          break;
+        case 'open-sandbox':
+          setCurrentMenu('sandbox');
+          setSelectedIndex(0);
+          break;
+        case 'open-ide':
+          setCurrentMenu('ide');
+          setSelectedIndex(0);
+          break;
+        case 'open-discord':
+          // Open Discord invite link
+          import('child_process').then(({ exec }) => {
+            const openCmd = process.platform === 'darwin' ? 'open' : 
+                           process.platform === 'win32' ? 'start' : 'xdg-open';
+            exec(`${openCmd} https://discord.gg/spZ7MnqFT4`);
+          });
           break;
         case 'back-to-main':
           setCurrentMenu('main');
@@ -237,6 +313,19 @@ const Settings = () => {
           };
           saveSettings(newSandboxSettings);
           break;
+        case 'cycle-sandbox-type':
+          const types = ['docker', 'podman'];
+          const currentIndex = types.indexOf(settings.sandbox.type);
+          const nextType = types[(currentIndex + 1) % types.length];
+          const newSandboxTypeSettings = {
+            ...settings,
+            sandbox: {
+              ...settings.sandbox,
+              type: nextType
+            }
+          };
+          saveSettings(newSandboxTypeSettings);
+          break;
         case 'toggle-aliases':
           const newAliasSettings = {
             ...settings,
@@ -256,15 +345,16 @@ const Settings = () => {
           exit();
           break;
       }
-    } else if (key.escape || input === 'q') {
-      if (currentMenu !== 'main') {
-        setCurrentMenu('main');
-        setSelectedIndex(0);
-      } else {
-        exit();
+      } else if (key.escape || input === 'q') {
+        if (currentMenu !== 'main') {
+          setCurrentMenu('main');
+          setSelectedIndex(0);
+        } else {
+          exit();
+        }
       }
-    }
-  });
+    });
+  }
 
   if (loading) {
     return (
@@ -280,14 +370,21 @@ const Settings = () => {
         return '🖖 VibeKit Settings';
       case 'analytics':
         return '📊 Analytics Settings';
-      case 'settings':
-        return '⚙️  System Settings';
+      case 'proxy':
+        return '🔌 Proxy Settings';
+      case 'sandbox':
+        return '📦 Sandbox Settings';
+      case 'ide':
+        return '💻 IDE Settings';
       default:
         return '🖖 VibeKit Settings';
     }
   };
 
   const getNavigationText = () => {
+    if (!isRawModeSupported) {
+      return 'Run with a terminal to enable interactive mode';
+    }
     if (currentMenu === 'main') {
       return 'Use ↑/↓/←/→ to navigate, Enter/Space to select, q/Esc to exit';
     } else {
@@ -296,36 +393,77 @@ const Settings = () => {
   };
 
   return (
-    <Box flexDirection="column" padding={1}>
-      <Text color="blue" bold>{getMenuTitle()}</Text>
-      <Text> </Text>
+    <Box flexDirection="column" padding={1} alignItems={showWelcome ? "center" : undefined}>
+      {showWelcome && (
+        <>
+          <Box justifyContent="center" marginBottom={2}>
+            <Text color="gray">The safety layer for coding agents</Text>
+          </Box>
+        </>
+      )}
       
-      {menuItems.map((item, index) => (
-        <Box key={index} marginY={0}>
-          <Text color={index === selectedIndex ? 'cyan' : 'white'}>
-            {index === selectedIndex ? '❯ ' : '  '}
-            {item.label.includes('✓ ON') ? (
-              <>
-                {item.label.replace(/✓ ON.*/, '')}
-                <Text color="green">✓ ON</Text>
-                {item.label.includes('(requires restart)') && (
-                  <Text color="gray"> (requires restart)</Text>
+      <Box flexDirection="column" alignItems={showWelcome ? "center" : undefined}>
+        {!showWelcome && (
+          <>
+            <Text color="blue" bold>{getMenuTitle()}</Text>
+            <Text> </Text>
+          </>
+        )}
+        
+        <Box flexDirection="column">
+          {menuItems.map((item, index) => (
+            <Box key={index} marginY={0}>
+              <Text color={index === selectedIndex ? 'cyan' : 'white'}>
+                {index === selectedIndex ? '❯ ' : '  '}
+                {item.label.includes('✓ ON') ? (
+                  <>
+                    {item.label.replace(/✓ ON.*/, '')}
+                    <Text color="green">✓ ON</Text>
+                    {item.label.includes('(requires restart)') && (
+                      <Text color="gray" dimColor> (requires restart)</Text>
+                    )}
+                  </>
+                ) : item.label.includes('✗ OFF') ? (
+                  <>
+                    {item.label.replace(/✗ OFF.*/, '')}
+                    <Text color="red">✗ OFF</Text>
+                    {item.label.includes('(requires restart)') && (
+                      <Text color="gray" dimColor> (requires restart)</Text>
+                    )}
+                  </>
+                ) : (
+                  item.label
                 )}
-              </>
-            ) : item.label.includes('✗ OFF') ? (
-              <>
-                {item.label.replace('✗ OFF', '')}
-                <Text color="red">✗ OFF</Text>
-              </>
-            ) : (
-              item.label
-            )}
-          </Text>
+              </Text>
+            </Box>
+          ))}
         </Box>
-      ))}
 
-      <Text> </Text>
-      <Text color="gray">{getNavigationText()}</Text>
+        {!showWelcome && (
+          <>
+            <Text> </Text>
+            <Text color="gray">{getNavigationText()}</Text>
+          </>
+        )}
+        
+        {showWelcome && (
+          <>
+            <Text> </Text>
+            <Box flexDirection="column" alignItems="center" marginTop={1}>
+              <Text color="gray" dimColor>Quick Commands:</Text>
+              <Box flexDirection="column" marginTop={1}>
+                <Text color="gray" dimColor>  vibekit claude        Run Claude Code CLI</Text>
+                <Text color="gray" dimColor>  vibekit gemini        Run Gemini CLI</Text>
+                <Text color="gray" dimColor>  vibekit codex         Run Codex CLI</Text>
+                <Text color="gray" dimColor>  vibekit cursor-agent  Run Cursor Agent</Text>
+                <Text color="gray" dimColor>  vibekit opencode      Run OpenCode CLI</Text>
+                <Text color="gray" dimColor>  vibekit              Configure settings</Text>
+                <Text color="gray" dimColor>  vibekit dashboard     Open analytics dashboard</Text>
+              </Box>
+            </Box>
+          </>
+        )}
+      </Box>
     </Box>
   );
 };

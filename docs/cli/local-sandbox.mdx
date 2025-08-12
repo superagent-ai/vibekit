@@ -1,0 +1,141 @@
+---
+title: Local Sandbox
+description: "Optional Docker container isolation for running AI coding agents with filesystem protection."
+---
+
+VibeKit's local sandbox feature optionally runs coding agents inside Docker containers, providing isolation from your host system. The sandbox functionality is available but not enabled by default.
+
+## How It Works
+
+When sandbox mode is enabled, VibeKit creates isolated Docker containers to run coding agents:
+
+- **Container Isolation**: Agent processes run inside Docker containers
+- **Filesystem Control**: Limited access to host filesystem through controlled mounts
+- **Runtime Support**: Works with Docker or Podman
+- **Optional Feature**: Sandbox can be enabled per-command or via settings
+
+## Configuration
+
+### Enable Sandbox Mode
+```bash
+# Enable sandbox for a single command
+vibekit claude --sandbox "Help me debug this issue"
+
+# Specify sandbox type (docker or podman)
+vibekit claude --sandbox-type docker "Generate some code"
+
+# Use podman instead of docker
+vibekit claude --sandbox-type podman "Review this function"
+```
+
+### Environment Variables
+```bash
+# Enable sandbox globally
+export VIBEKIT_SANDBOX=true
+
+# Set default sandbox type
+export VIBEKIT_SANDBOX_TYPE=docker
+```
+
+### Settings Configuration
+Configure sandbox in `~/.vibekit/settings.json`:
+```json
+{
+  "sandbox": {
+    "enabled": false,
+    "type": "docker"
+  }
+}
+```
+
+## Sandbox Management
+
+### Check Sandbox Status
+```bash
+# View current sandbox configuration
+vibekit sandbox status
+
+# Check with specific options
+vibekit sandbox status --sandbox --sandbox-type docker
+```
+
+### Build Sandbox Image
+```bash
+# Build the sandbox container image
+vibekit sandbox build
+```
+
+### Clean Up Sandbox Resources
+```bash
+# Remove sandbox images and containers
+vibekit sandbox clean
+```
+
+## Current Implementation
+
+### What's Available
+- **Docker/Podman Support**: Configurable container runtime
+- **Sandbox Detection**: Automatic detection of available runtimes
+- **Image Building**: Build custom sandbox images
+- **Status Reporting**: Check sandbox readiness and configuration
+- **Optional Operation**: Works with or without sandboxing
+
+### Sandbox Engine Features
+The sandbox engine provides:
+- Runtime detection (Docker/Podman availability)
+- Container image management
+- Configuration resolution from CLI options and settings
+- Execution orchestration between sandboxed and direct execution
+
+### Example Status Output
+```
+📦 Sandbox Status
+──────────────────────────────────────────────────
+Status: ENABLED
+Type: docker
+Source: CLI option
+Runtime: docker
+Available: YES
+Image: vibekit-sandbox:latest
+Image Exists: YES
+Ready: YES
+```
+
+## Benefits
+
+### Isolation
+- **Process Isolation**: Agent processes run in separate containers
+- **Filesystem Protection**: Host filesystem access is controlled
+- **Resource Containment**: Container resource limits prevent system impact
+
+### Flexibility
+- **Optional Use**: Enable only when needed for sensitive operations
+- **Runtime Choice**: Support for both Docker and Podman
+- **Configuration Options**: CLI flags, environment variables, or settings file
+
+### Development Safety
+- **Safe Experimentation**: Test potentially risky operations in isolation
+- **Clean Environment**: Fresh container state for reproducible results
+- **Host Protection**: Prevent accidental system modifications
+
+## Best Practices
+
+### When to Use Sandbox
+- Working with untrusted or experimental code
+- Testing potentially destructive operations
+- Ensuring reproducible development environments
+- Protecting sensitive host system configurations
+
+### Setup Recommendations
+1. **Install Docker/Podman**: Ensure container runtime is available
+2. **Build Image**: Pre-build sandbox image for faster startup
+3. **Test Configuration**: Verify sandbox status before important work
+4. **Monitor Resources**: Check container resource usage during long sessions
+
+### Security Considerations
+- Sandbox provides process isolation, not complete security
+- Container breakout vulnerabilities may still exist
+- Host filesystem mounts reduce isolation benefits
+- Keep container runtime updated for security patches
+
+The local sandbox feature provides an additional layer of protection when running AI coding agents, offering configurable isolation without requiring it for basic operations.

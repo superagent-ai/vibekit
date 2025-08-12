@@ -8,6 +8,9 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 import ClaudeAgent from './agents/claude.js';
 import GeminiAgent from './agents/gemini.js';
+import CodexAgent from './agents/codex.js';
+import CursorAgent from './agents/cursor.js';
+import OpenCodeAgent from './agents/opencode.js';
 import Logger from './logging/logger.js';
 import Analytics from './analytics/analytics.js';
 import ProxyServer from './proxy/server.js';
@@ -78,6 +81,7 @@ program
   .version(pkg.version)
   .option('--proxy <url>', 'HTTP/HTTPS proxy URL for all agents (e.g., http://proxy.example.com:8080)');
 
+
 program
   .command('claude')
   .description('Run Claude Code CLI')
@@ -126,6 +130,7 @@ program
     
     process.on('SIGINT', cleanup);
     process.on('SIGTERM', cleanup);
+    process.on('SIGHUP', cleanup);
     process.on('exit', cleanup);
     
     const args = command.args || [];
@@ -182,6 +187,178 @@ program
     
     process.on('SIGINT', cleanup);
     process.on('SIGTERM', cleanup);
+    process.on('SIGHUP', cleanup);
+    process.on('exit', cleanup);
+    
+    const args = command.args || [];
+    try {
+      await agent.run(args);
+    } finally {
+      // Clean up proxy server if we or the agent started it
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    }
+  });
+
+program
+  .command('codex')
+  .description('Run Codex CLI')
+  .option('-s, --sandbox', 'Enable sandbox mode')
+  .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
+  .allowUnknownOption()
+  .allowExcessArguments()
+  .action(async (options, command) => {
+    const logger = new Logger('codex');
+    const settings = await readSettings();
+    
+    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+    let proxyStarted = false;
+    
+    // Determine if we need to start proxy server later (lazy startup)
+    let shouldStartProxy = false;
+    if (!proxy && settings.proxy.enabled) {
+      proxy = 'http://localhost:8080';
+      shouldStartProxy = !proxyManager.isRunning();
+    }
+    
+    const agentOptions = {
+      proxy: proxy,
+      shouldStartProxy: shouldStartProxy,
+      proxyManager: proxyManager,
+      settings: settings,
+      sandboxOptions: {
+        sandbox: options.sandbox,
+        sandboxType: options.sandboxType
+      }
+    };
+    const agent = new CodexAgent(logger, agentOptions);
+    
+    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    const cleanup = () => {
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    };
+    
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+    process.on('SIGHUP', cleanup);
+    process.on('exit', cleanup);
+    
+    const args = command.args || [];
+    try {
+      await agent.run(args);
+    } finally {
+      // Clean up proxy server if we or the agent started it
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    }
+  });
+
+program
+  .command('cursor-agent')
+  .description('Run Cursor Agent')
+  .option('-s, --sandbox', 'Enable sandbox mode')
+  .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
+  .allowUnknownOption()
+  .allowExcessArguments()
+  .action(async (options, command) => {
+    const logger = new Logger('cursor');
+    const settings = await readSettings();
+    
+    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+    let proxyStarted = false;
+    
+    // Determine if we need to start proxy server later (lazy startup)
+    let shouldStartProxy = false;
+    if (!proxy && settings.proxy.enabled) {
+      proxy = 'http://localhost:8080';
+      shouldStartProxy = !proxyManager.isRunning();
+    }
+    
+    const agentOptions = {
+      proxy: proxy,
+      shouldStartProxy: shouldStartProxy,
+      proxyManager: proxyManager,
+      settings: settings,
+      sandboxOptions: {
+        sandbox: options.sandbox,
+        sandboxType: options.sandboxType
+      }
+    };
+    const agent = new CursorAgent(logger, agentOptions);
+    
+    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    const cleanup = () => {
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    };
+    
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+    process.on('SIGHUP', cleanup);
+    process.on('exit', cleanup);
+    
+    const args = command.args || [];
+    try {
+      await agent.run(args);
+    } finally {
+      // Clean up proxy server if we or the agent started it
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    }
+  });
+
+program
+  .command('opencode')
+  .description('Run OpenCode CLI')
+  .option('-s, --sandbox', 'Enable sandbox mode')
+  .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
+  .allowUnknownOption()
+  .allowExcessArguments()
+  .action(async (options, command) => {
+    const logger = new Logger('opencode');
+    const settings = await readSettings();
+    
+    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+    let proxyStarted = false;
+    
+    // Determine if we need to start proxy server later (lazy startup)
+    let shouldStartProxy = false;
+    if (!proxy && settings.proxy.enabled) {
+      proxy = 'http://localhost:8080';
+      shouldStartProxy = !proxyManager.isRunning();
+    }
+    
+    const agentOptions = {
+      proxy: proxy,
+      shouldStartProxy: shouldStartProxy,
+      proxyManager: proxyManager,
+      settings: settings,
+      sandboxOptions: {
+        sandbox: options.sandbox,
+        sandboxType: options.sandboxType
+      }
+    };
+    const agent = new OpenCodeAgent(logger, agentOptions);
+    
+    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    const cleanup = () => {
+      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+        proxyManager.stop();
+      }
+    };
+    
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+    process.on('SIGHUP', cleanup);
     process.on('exit', cleanup);
     
     const args = command.args || [];
@@ -436,7 +613,7 @@ dashboardCommand
   .option('--open', 'Open dashboard in browser automatically')
   .action(async (options) => {
     const port = parseInt(options.port) || 3001;
-    const { default: dashboardManager } = await import('./dashboard/manager.js');
+    const { default: dashboardManager } = await import('./dashboard/manager.ts');
     const dashboardServer = dashboardManager.getDashboardServer(port);
     
     try {
@@ -451,8 +628,10 @@ dashboardCommand
     }
   });
 
-// Default action for 'dashboard' without subcommand - start the server  
+// Default action for 'dashboard' without subcommand - start the server and open browser
 dashboardCommand
+  .option('-p, --port <number>', 'Port to run dashboard on', '3001')
+  .option('--no-open', 'Do not open browser automatically')
   .action(async (options, command) => {
     // If no subcommand was provided, start the dashboard with default settings
     if (command.args.length === 0) {
@@ -462,6 +641,11 @@ dashboardCommand
       
       try {
         await dashboardServer.start();
+        
+        // Open browser by default unless --no-open is specified
+        if (options.open !== false) {
+          await dashboardServer.openInBrowser();
+        }
       } catch (error) {
         console.error(chalk.red('Failed to start dashboard:'), error.message);
         process.exit(1);
@@ -475,17 +659,26 @@ dashboardCommand
   .option('-p, --port <number>', 'Port to stop dashboard on', '3001')
   .action(async (options) => {
     const port = parseInt(options.port) || 3001;
-    const { default: dashboardManager } = await import('./dashboard/manager.js');
+    const { default: dashboardManager } = await import('./dashboard/manager.ts');
     dashboardManager.stop(port);
     console.log(chalk.green(`✅ Dashboard stopped on port ${port}`));
   });
 
-program
-  .command('settings')
-  .description('Manage vibekit settings and configurations')
+dashboardCommand
+  .command('update')
+  .description('Update the dashboard to the latest version')
   .action(async () => {
-    render(React.createElement(Settings));
+    const { default: dashboardManager } = await import('./dashboard/manager.ts');
+    const dashboardServer = dashboardManager.getDashboardServer(3001);
+    
+    try {
+      await dashboardServer.update();
+    } catch (error) {
+      console.error(chalk.red('Failed to update dashboard:'), error.message);
+      process.exit(1);
+    }
   });
+
 
 program
   .command('setup-aliases')
@@ -538,7 +731,7 @@ program
     
     if (!shellWorking) {
       console.log(chalk.yellow('\n💡 To fix alias issues:'));
-      console.log(chalk.yellow('   1. Run: vibekit settings (enable aliases)'));
+      console.log(chalk.yellow('   1. Run: vibekit (enable aliases)'));
       console.log(chalk.yellow('   2. Restart terminal or run: source ~/.zshrc'));
       console.log(chalk.yellow('   3. Test with: claude --help'));
     }
@@ -762,11 +955,12 @@ projectsCommand
     await showCurrentProject();
   });
 
+// Show welcome screen when just 'vibekit' is typed
 if (process.argv.length === 2) {
-  program.help();
+  render(React.createElement(Settings, { showWelcome: true }));
+} else {
+  program.parseAsync(process.argv).catch(error => {
+    console.error(chalk.red('Error:'), error.message);
+    process.exit(1);
+  });
 }
-
-program.parseAsync(process.argv).catch(error => {
-  console.error(chalk.red('Error:'), error.message);
-  process.exit(1);
-});

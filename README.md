@@ -1,8 +1,8 @@
 <div align="center">
 
-<img width="500px" src="./assets/vibekit-hero.png" />
+<img width="700px" src="./assets/vibekit-cli.png" />
 
-# VibeKit is the safety layer for your coding agent
+# VibeKit is the safety layer for your coding agent 🖖
 
 Run Claude Code, Gemini, Codex — or any coding agent — in a clean, isolated sandbox with sensitive data redaction and observability baked in.
 

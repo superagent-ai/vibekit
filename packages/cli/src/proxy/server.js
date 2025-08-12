@@ -2,55 +2,75 @@ import http from 'http';
 import https from 'https';
 import net from 'net';
 import { URL } from 'url';
-import { Transform } from 'stream';
-import fs from 'fs';
-import path from 'path';
-import yaml from 'js-yaml';
 import chalk from 'chalk';
+import { initializeSensitivePatterns } from '../utils/redaction.js';
 
 class ProxyServer {
   constructor(port = 8080) {
     this.port = port;
     this.server = null;
     this.requestCount = 0;
-    this.sensitivePatterns = this.loadPatterns();
+    this.responseBuffers = new Map();
+    this.sseContentAccumulators = new Map(); // Track accumulated content per request
+    this.sensitivePatterns = initializeSensitivePatterns();
   }
 
-  loadPatterns() {
-    try {
-      // Get the project root directory and look for patterns in src/utils
-      const currentDir = process.cwd();
-      const rulesPatternsPath = path.join(currentDir, 'src/utils/rules-stable.yml');
-      
-      const patterns = {};
-      
-      // Load rules patterns if available
-      if (fs.existsSync(rulesPatternsPath)) {
-        const rulesData = yaml.load(fs.readFileSync(rulesPatternsPath, 'utf8'));
-        if (rulesData && rulesData.patterns) {
-          rulesData.patterns.forEach(patternObj => {
-            if (patternObj.pattern && patternObj.pattern.name && patternObj.pattern.regex) {
-              try {
-                patterns[patternObj.pattern.name] = new RegExp(patternObj.pattern.regex, 'gi');
-              } catch (error) {
-                // Invalid regex pattern, skip silently
-              }
-            }
-          });
-        }
-      }
-      
-      return patterns;
-    } catch (error) {
-      return {
-        emails: /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi,
-        creditCards: /[0-9]{13,19}/g
-      };
-    }
+  redactSensitiveContent(content) {
+    let redactedContent = content;
+    
+    this.sensitivePatterns.forEach(pattern => {
+      redactedContent = redactedContent.replace(pattern, 'REDACTED');
+    });
+    
+    return redactedContent;
   }
+
+  processChunkWithBuffer(newChunk, requestId) {
+    const accumulator = this.sseContentAccumulators.get(requestId);
+    if (!accumulator) return newChunk;
+    
+    // Add new chunk to buffer
+    accumulator.buffer += newChunk;
+    
+    // Split by lines and process complete lines
+    const lines = accumulator.buffer.split('\n');
+    
+    // Keep the last (potentially incomplete) line in buffer
+    accumulator.buffer = lines.pop() || '';
+    
+    // Process complete lines
+    if (lines.length > 0) {
+      const completeLines = lines.join('\n') + '\n';
+      const redacted = this.redactSensitiveContent(completeLines);
+      return redacted;
+    }
+    
+    // No complete lines yet, don't send anything
+    return null;
+  }
+  
+  flushBuffer(requestId) {
+    const accumulator = this.sseContentAccumulators.get(requestId);
+    if (!accumulator || !accumulator.buffer) return null;
+    
+    // Process remaining buffer content
+    const remaining = accumulator.buffer;
+    accumulator.buffer = '';
+    
+    const redacted = this.redactSensitiveContent(remaining);
+    return redacted;
+  }
+
 
   start() {
     return new Promise((resolve, reject) => {
+      // Check if server is already running
+      if (this.server && this.server.listening) {
+        console.log(chalk.yellow(`⚠️  Proxy server is already running on port ${this.port}`));
+        resolve();
+        return;
+      }
+
       // Create HTTP proxy server
       this.server = http.createServer((req, res) => {
         this.handleHttpRequest(req, res);
@@ -67,7 +87,13 @@ class ProxyServer {
       });
 
       this.server.on('error', (error) => {
-        reject(error);
+        // Check if error is EADDRINUSE (port already in use)
+        if (error.code === 'EADDRINUSE') {
+          console.log(chalk.yellow(`⚠️  Port ${this.port} is already in use. Proxy server may already be running.`));
+          resolve(); // Don't reject, just resolve to avoid error
+        } else {
+          reject(error);
+        }
       });
 
       // Graceful shutdown
@@ -132,54 +158,6 @@ class ProxyServer {
       // Request body captured silently
     });
 
-    // Create sensitive data filter transform
-    const createSensitiveDataFilter = (requestId) => {
-      const sensitivePatterns = this.sensitivePatterns;
-      
-      let buffer = '';
-      
-      return new Transform({
-        transform(chunk, encoding, callback) {
-          // Add chunk to buffer
-          buffer += chunk.toString();
-          
-          // Process most of buffer, keep overlap for cross-chunk patterns
-          const overlapSize = 100; // Keep last 100 chars for patterns that might be split
-          const processLength = buffer.length - overlapSize;
-          
-          if (processLength > 0) {
-            let processChunk = buffer.slice(0, processLength);
-            buffer = buffer.slice(processLength); // Keep overlap
-            
-            // Scan and replace sensitive data
-            Object.entries(sensitivePatterns).forEach(([type, pattern]) => {
-              const matches = processChunk.match(pattern);
-              if (matches) {
-                processChunk = processChunk.replace(pattern, `[${type.toUpperCase()}_REDACTED]`);
-              }
-            });
-            
-            this.push(processChunk);
-          }
-          
-          callback();
-        },
-        
-        flush(callback) {
-          // Process remaining buffer on stream end
-          if (buffer) {
-            Object.entries(sensitivePatterns).forEach(([type, pattern]) => {
-              const matches = buffer.match(pattern);
-              if (matches) {
-                buffer = buffer.replace(pattern, `[${type.toUpperCase()}_REDACTED]`);
-              }
-            });
-            this.push(buffer);
-          }
-          callback();
-        }
-      });
-    };
 
     // Make the proxied request
     const proxyReq = httpModule.request(options, (proxyRes) => {
@@ -187,30 +165,123 @@ class ProxyServer {
       // Check if this is an SSE response
       const isSSE = proxyRes.headers['content-type']?.includes('text/event-stream');
       
+      // Initialize response buffer and SSE accumulator for this request
+      this.responseBuffers.set(requestId, '');
       if (isSSE) {
-        this.handleSSEResponse(requestId, proxyRes);
+        this.sseContentAccumulators.set(requestId, {
+          buffer: '' // Just buffer until we get complete lines
+        });
       }
 
-      // Capture response body for non-SSE or log SSE events
-      let responseBody = '';
-      proxyRes.on('data', (chunk) => {
-        const chunkStr = chunk.toString();
-        responseBody += chunkStr;
-        
-        // For SSE streams, parse and display events in real-time
-        if (isSSE) {
-          this.parseSSEChunk(requestId, chunkStr);
-        }
-      });
-
-      proxyRes.on('end', () => {
-        // Request completed silently
-      });
-
-      // Forward the response through sensitive data filter
+      // Forward the response headers immediately
       res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      const sensitiveFilter = createSensitiveDataFilter(requestId);
-      proxyRes.pipe(sensitiveFilter).pipe(res);
+
+      // Handle SSE responses differently
+      if (isSSE) {
+        let eventBuffer = '';
+        const accumulator = this.sseContentAccumulators.get(requestId);
+        
+        proxyRes.on('data', (chunk) => {
+          const chunkStr = chunk.toString();
+          eventBuffer += chunkStr;
+          
+          // Split by double newlines to get complete events
+          const events = eventBuffer.split('\n\n');
+          eventBuffer = events.pop() || ''; // Keep incomplete event in buffer
+          
+          events.forEach(eventData => {
+            if (eventData.trim()) {
+              const lines = eventData.split('\n');
+              const event = {};
+              
+              lines.forEach(line => {
+                if (line.startsWith('event: ')) {
+                  event.type = line.substring(7);
+                } else if (line.startsWith('data: ')) {
+                  const data = line.substring(6);
+                  try {
+                    event.data = JSON.parse(data);
+                  } catch {
+                    event.data = data;
+                  }
+                }
+              });
+              
+              // Handle different event types
+              if (event.type === 'content_block_delta' && event.data?.delta?.text) {
+                // Process chunk with buffering for redaction
+                const redactedChunk = this.processChunkWithBuffer(event.data.delta.text, requestId);
+                
+                if (redactedChunk) {
+                  // Forward the redacted chunk immediately
+                  const redactedEventData = {
+                    type: 'content_block_delta',
+                    index: event.data.index || 0,
+                    delta: {
+                      type: 'text_delta',
+                      text: redactedChunk
+                    }
+                  };
+                  
+                  const redactedEvent = `event: content_block_delta\ndata: ${JSON.stringify(redactedEventData)}\n\n`;
+                  res.write(redactedEvent);
+                }
+              } else if (event.type === 'content_block_stop') {
+                // Flush any remaining buffer content
+                const finalChunk = this.flushBuffer(requestId);
+                if (finalChunk) {
+                  const finalEventData = {
+                    type: 'content_block_delta',
+                    index: 0,
+                    delta: {
+                      type: 'text_delta',
+                      text: finalChunk
+                    }
+                  };
+                  
+                  const finalEvent = `event: content_block_delta\ndata: ${JSON.stringify(finalEventData)}\n\n`;
+                  res.write(finalEvent);
+                }
+                
+                // Forward the stop event
+                res.write(eventData + '\n\n');
+              } else if (event.type === 'message_delta' && event.data?.usage?.output_tokens) {
+                // Store the final usage data to send with our accumulated content
+                accumulator.totalTokens = event.data.usage.output_tokens;
+                accumulator.messageData = event.data;
+                // Don't forward this yet - we'll send it after our complete content
+              } else {
+                // Forward all other events as-is (message_start, message_stop, content_block_start, ping, etc.)
+                res.write(eventData + '\n\n');
+              }
+            }
+          });
+        });
+        
+        proxyRes.on('end', () => {
+          // Handle any remaining buffered event
+          if (eventBuffer.trim()) {
+            res.write(eventBuffer + '\n\n');
+          }
+          res.end();
+          // Clean up
+          this.responseBuffers.delete(requestId);
+          this.sseContentAccumulators.delete(requestId);
+        });
+      } else {
+        // For non-SSE responses, pipe directly
+        proxyRes.pipe(res);
+        
+        // Log non-SSE responses
+        let responseBody = '';
+        proxyRes.on('data', (chunk) => {
+          responseBody += chunk.toString();
+        });
+        
+        proxyRes.on('end', () => {
+          this.responseBuffers.delete(requestId);
+        });
+      }
     });
 
     // Handle proxy request errors
@@ -225,7 +296,6 @@ class ProxyServer {
 
   handleHttpsConnect(req, clientSocket, head) {
     this.requestCount++;
-    const requestId = this.requestCount;
     
     const { hostname, port } = this.parseHostPort(req.url);
 
@@ -241,24 +311,18 @@ class ProxyServer {
         serverSocket.write(head);
       }
       
-      // Data flows through tunnel silently
-      clientSocket.on('data', (data) => {
-        this.analyzeTraffic(requestId, data, 'client->server');
-      });
-
-      serverSocket.on('data', (data) => {
-        this.analyzeTraffic(requestId, data, 'server->client');
-      });
+      // For HTTPS tunnels, just pipe the data without logging (it's encrypted)
+      // Logging encrypted binary data is not useful
 
       serverSocket.pipe(clientSocket);
       clientSocket.pipe(serverSocket);
     });
 
-    serverSocket.on('error', (error) => {
+    serverSocket.on('error', () => {
       clientSocket.end();
     });
 
-    clientSocket.on('error', (error) => {
+    clientSocket.on('error', () => {
       serverSocket.end();
     });
 
@@ -275,114 +339,20 @@ class ProxyServer {
     };
   }
 
-  truncateString(str, maxLength) {
-    if (str.length <= maxLength) {
-      return str;
-    }
-    return str.substring(0, maxLength) + '...';
-  }
-
-  handleSSEResponse(requestId, proxyRes) {
-    // Initialize SSE buffer for this request
-    if (!this.sseBuffers) {
-      this.sseBuffers = new Map();
-    }
-    this.sseBuffers.set(requestId, '');
-    
-    // Set up event listeners for SSE stream lifecycle
-    proxyRes.on('close', () => {
-      this.sseBuffers.delete(requestId);
-    });
-    
-    proxyRes.on('error', (error) => {
-      this.sseBuffers.delete(requestId);
-    });
-  }
-
-  parseSSEChunk(requestId, chunk) {
-    // Get or initialize buffer for this request
-    if (!this.sseBuffers) {
-      this.sseBuffers = new Map();
-    }
-    
-    let buffer = this.sseBuffers.get(requestId) || '';
-    buffer += chunk;
-    
-    // Split by double newlines to separate events
-    const events = buffer.split('\n\n');
-    
-    // Keep the last incomplete event in buffer
-    buffer = events.pop() || '';
-    this.sseBuffers.set(requestId, buffer);
-    
-    // Process complete events
-    events.forEach(eventData => {
-      if (eventData.trim()) {
-        this.logSSEEvent(requestId, eventData);
-      }
-    });
-  }
-
-  logSSEEvent(requestId, eventData) {
-    const lines = eventData.split('\n');
-    const event = {
-      type: 'message',
-      data: '',
-      id: null,
-      retry: null
-    };
-    
-    // Parse SSE event fields
-    lines.forEach(line => {
-      const colonIndex = line.indexOf(':');
-      if (colonIndex === -1) return;
-      
-      const field = line.substring(0, colonIndex).trim();
-      const value = line.substring(colonIndex + 1).trim();
-      
-      switch (field) {
-        case 'event':
-          event.type = value;
-          break;
-        case 'data':
-          event.data += (event.data ? '\n' : '') + value;
-          break;
-        case 'id':
-          event.id = value;
-          break;
-        case 'retry':
-          event.retry = parseInt(value, 10);
-          break;
-      }
-    });
-    
-    // Parse SSE event silently
-    // Event data is processed but not logged
-  }
-
-  analyzeTraffic(requestId, data, direction) {
-    // Traffic analysis runs silently
-    // Data is processed but not logged
-  }
-
-  isPrintableData(str) {
-    // Check if string contains mostly printable ASCII characters
-    const printableCount = str.split('').filter(char => {
-      const code = char.charCodeAt(0);
-      return code >= 32 && code <= 126;
-    }).length;
-    
-    return printableCount / str.length > 0.7; // 70% printable threshold
-  }
 
   stop() {
     if (this.server) {
       this.server.close();
     }
     
-    // Clean up SSE buffers
-    if (this.sseBuffers) {
-      this.sseBuffers.clear();
+    // Clean up response buffers
+    if (this.responseBuffers) {
+      this.responseBuffers.clear();
+    }
+    
+    // Clean up SSE content accumulators
+    if (this.sseContentAccumulators) {
+      this.sseContentAccumulators.clear();
     }
   }
 }

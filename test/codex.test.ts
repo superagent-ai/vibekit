@@ -12,7 +12,7 @@ describe("Codex CLI", () => {
       return skipTest();
     }
 
-    const prompt = "Hi there";
+    const prompt = "Replace the README with the text 'HELLO WORLD'";
 
     const e2bProvider = createE2BProvider({
       apiKey: process.env.E2B_API_KEY!,
@@ -25,6 +25,10 @@ describe("Codex CLI", () => {
         provider: "openai",
         apiKey: process.env.OPENAI_API_KEY!,
         model: "codex-mini-latest",
+      })
+      .withGithub({
+        token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
+        repository: process.env.GH_REPOSITORY || "superagent-ai/signals",
       })
       .withSandbox(e2bProvider);
 
@@ -43,5 +47,5 @@ describe("Codex CLI", () => {
     expect(host).toBeDefined();
     expect(updateSpy).toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
-  }, 60000);
+  }, 600000);
 });

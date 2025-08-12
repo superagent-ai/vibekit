@@ -1,0 +1,148 @@
+---
+title: Built-in Redaction
+description: "Automatically detect and remove sensitive data like API keys, secrets, and PII from AI agent completions through the proxy server."
+---
+
+VibeKit's built-in redaction system automatically identifies and removes sensitive information from coding agent outputs by intercepting HTTP traffic through a proxy server that applies pattern-based filtering.
+
+## How It Works
+
+VibeKit runs a proxy server that sits between coding agents and their API endpoints. All HTTP/HTTPS traffic flows through this proxy, where responses are processed in real-time to detect and redact sensitive data before it reaches you.
+
+### Proxy-based Redaction
+```bash
+# VibeKit automatically starts proxy server
+vibekit claude "Show me API integration code"
+
+# Traffic flows: Claude API → Proxy (redaction) → Your terminal
+# Sensitive data is replaced before you see it
+```
+
+### Pattern Detection
+The redaction system uses comprehensive pattern matching from `rules-stable.yml` that includes hundreds of patterns for:
+
+- **AWS**: Access keys (AKIA...), ARNs, API Gateway URLs, RDS endpoints
+- **OpenAI**: API keys (sk-...), organization keys, project keys
+- **GitHub**: Personal access tokens, app tokens
+- **Google**: API keys, service account keys, OAuth tokens
+- **Database**: Connection strings, credentials
+- **Generic**: Email addresses, credit card numbers, phone numbers
+
+## Configuration
+
+### Settings Management
+Control redaction through the VibeKit settings:
+```bash
+# Open settings interface
+vibekit
+
+# Toggle redaction on/off in the proxy section
+```
+
+### Settings File
+Located at `~/.vibekit/settings.json`:
+```json
+{
+  "proxy": {
+    "enabled": true,
+    "redactionEnabled": true
+  }
+}
+```
+
+### How Patterns Work
+Patterns are loaded from `packages/cli/src/utils/rules-stable.yml`:
+```yaml
+patterns:
+  - pattern:
+      name: OpenAI API Key
+      regex: sk-[a-zA-Z0-9]{48}
+      confidence: high
+  - pattern:
+      name: AWS Access Key ID Value
+      regex: (A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}
+      confidence: high
+```
+
+## Real-time Processing
+
+### Stream Processing
+Redaction happens as data flows through Transform streams:
+- HTTP responses are processed in chunks
+- Pattern matching occurs on buffered content
+- Sensitive data is replaced with `[PATTERN_NAME_REDACTED]` tokens
+- Modified responses are sent to your terminal
+
+### Example Output
+```bash
+# Original API response:
+# "Configure with API key sk-1234567890abcdef..."
+
+# What you see:
+# "Configure with API key [OPENAI_API_KEY_REDACTED]..."
+```
+
+## Current Capabilities
+
+### What's Implemented
+- **Proxy Server**: Intercepts HTTP/HTTPS traffic
+- **Pattern Matching**: 200+ predefined patterns for common secrets
+- **Real-time Processing**: Redacts responses as they stream
+- **Settings Integration**: Toggle redaction on/off
+- **Multiple Agents**: Works with Claude, Gemini, Codex, etc.
+
+### Default Patterns Include
+- AWS access keys, secret keys, ARNs
+- OpenAI API keys and organization keys
+- GitHub personal access tokens
+- Google API keys and service accounts
+- Database connection strings
+- Email addresses and phone numbers
+- Credit card patterns
+
+## Proxy Server Management
+
+### Automatic Operation
+The proxy server starts automatically when needed:
+```bash
+# Proxy starts automatically with redaction enabled
+vibekit claude "Generate secure API client"
+```
+
+### Manual Control
+```bash
+# Start proxy server manually
+vibekit proxy start --port 8080
+
+# Stop proxy server
+vibekit proxy kill --port 8080
+```
+
+## Limitations & Current State
+
+### What's Not Yet Implemented
+- Custom pattern definition through CLI
+- Redaction reporting and analytics
+- Retroactive log processing
+- Sensitivity level controls
+- Whitelist management
+
+### Fallback Behavior
+If pattern loading fails, the system falls back to basic patterns:
+- Email addresses: `[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}`
+- Credit cards: `[0-9]{13,19}`
+
+## Best Practices
+
+### Security
+- Keep redaction enabled in settings
+- Regularly review proxy logs for sensitive data
+- Monitor pattern matching effectiveness
+- Update VibeKit for new pattern definitions
+
+### Development
+- Test with dummy secrets to verify redaction works
+- Check settings periodically to ensure redaction is enabled
+- Be aware that redaction only works through the proxy server
+
+Built-in redaction provides an essential security layer by intercepting and filtering sensitive data from AI coding agent responses, helping prevent accidental exposure of secrets and credentials.

@@ -91,7 +91,7 @@ When enabled, you can use `claude` instead of `vibekit claude`.
 Use the interactive settings interface:
 
 ```bash
-vibekit settings
+vibekit
 ```
 
 This provides a TUI for toggling options:
@@ -204,7 +204,7 @@ Enable global aliases to use `claude` directly:
 
 ```bash
 # Enable in settings
-vibekit settings  # Toggle aliases to enabled
+vibekit  # Toggle aliases to enabled
 
 # Install aliases to shell
 vibekit setup-aliases
@@ -391,7 +391,7 @@ Enable Docker sandbox for unknown or experimental prompts:
 
 ```bash
 # Enable sandbox in settings for safety
-vibekit settings
+vibekit
 
 # Or use per-command
 vibekit claude --sandbox docker "Experimental code generation"

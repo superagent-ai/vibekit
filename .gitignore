@@ -40,6 +40,9 @@ logs
 # grok
 .grok
 
+# nextjs
+.next/
+
 # Misc
 .cache/
 .temp/

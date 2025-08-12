@@ -34,7 +34,6 @@ export class DockerSandbox {
     const imageExists = await SandboxUtils.checkImageExists(this.runtime, this.imageName);
     
     if (!imageExists) {
-      SandboxUtils.logSandboxOperation('Building sandbox image...');
       await this.buildImage();
     }
     
@@ -48,21 +47,53 @@ export class DockerSandbox {
     // Find the CLI package root by looking for the Dockerfile
     let packageRoot = process.cwd();
     let dockerfilePath = path.join(packageRoot, 'Dockerfile');
+    const searchedPaths = [packageRoot];
     
     // If not found in current directory, try packages/cli (for workspace root execution)
     if (!await fs.pathExists(dockerfilePath)) {
       packageRoot = path.join(process.cwd(), 'packages', 'cli');
       dockerfilePath = path.join(packageRoot, 'Dockerfile');
+      searchedPaths.push(packageRoot);
     }
     
     // If still not found, try going up from current directory (for CLI directory execution)
     if (!await fs.pathExists(dockerfilePath) && process.cwd().endsWith('packages/cli')) {
       packageRoot = process.cwd();
       dockerfilePath = path.join(packageRoot, 'Dockerfile');
+      searchedPaths.push(packageRoot);
+    }
+    
+    // If still not found, try to find it relative to this module (for npm installed package)
+    if (!await fs.pathExists(dockerfilePath)) {
+      // Get the directory containing this module
+      const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+      
+      // For compiled JS in dist/, navigate up to the package root
+      // dist/sandbox/docker-sandbox.js -> ../../Dockerfile
+      if (moduleDir.includes('/dist/')) {
+        packageRoot = path.resolve(moduleDir, '../../');
+      } else {
+        // For source files src/sandbox/docker-sandbox.js -> ../../Dockerfile  
+        packageRoot = path.resolve(moduleDir, '../../');
+      }
+      
+      dockerfilePath = path.join(packageRoot, 'Dockerfile');
+      searchedPaths.push(packageRoot);
+      
+      // If still not found and we're in a node_modules directory, try finding the vibekit package
+      if (!await fs.pathExists(dockerfilePath) && moduleDir.includes('node_modules')) {
+        // Find the vibekit package in node_modules
+        const nodeModulesMatch = moduleDir.match(/(.*\/node_modules)/);
+        if (nodeModulesMatch) {
+          packageRoot = path.join(nodeModulesMatch[1], 'vibekit');
+          dockerfilePath = path.join(packageRoot, 'Dockerfile');
+          searchedPaths.push(packageRoot);
+        }
+      }
     }
     
     if (!await fs.pathExists(dockerfilePath)) {
-      throw new Error(`Dockerfile not found at ${dockerfilePath}. Searched in: ${process.cwd()}, ${path.join(process.cwd(), 'packages', 'cli')}`);
+      throw new Error(`Dockerfile not found. Searched in: ${searchedPaths.join(', ')}`);
     }
 
     return new Promise((resolve, reject) => {
@@ -106,10 +137,6 @@ export class DockerSandbox {
       ...process.env,
       ...options.env
     };
-    
-    if (!containerEnv.ANTHROPIC_API_KEY) {
-      SandboxUtils.logSandboxWarning('No Claude API key found in environment. Set ANTHROPIC_API_KEY environment variable.');
-    }
     
     return new Promise((resolve, reject) => {
       const child = spawn(this.runtime, containerArgs, {

@@ -55,7 +55,6 @@ export class SandboxConfig {
         // If user specified docker but only podman available (or vice versa), auto-switch
         if (source !== 'cli') {
           sandboxType = availableRuntime;
-          SandboxUtils.logSandboxOperation(`Auto-detected container runtime: ${availableRuntime}`);
         }
       }
     }

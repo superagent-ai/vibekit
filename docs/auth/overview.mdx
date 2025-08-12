@@ -1,0 +1,38 @@
+Universal OAuth authentication library for AI providers' MAX subscriptions. Currently supports Claude AI with Gemini, Grok, and ChatGPT Max coming soon.
+
+## Features
+
+- **MAX Subscription Access**: Leverage your existing AI provider MAX subscriptions programmatically
+- **Multiple Providers**: Claude AI (available), Gemini, Grok, ChatGPT Max (coming soon)
+- **Environment-Specific Builds**: Separate Node.js and browser-compatible builds
+- **OAuth 2.0 + PKCE**: Secure authentication with industry standards
+- **Token Management**: Automatic token refresh and secure storage
+- **Browser & Node.js**: Works in both web applications and server environments
+
+## Why Use MAX Subscriptions?
+
+Instead of paying per API call, leverage the subscriptions you already have:
+
+- **Cost Effective**: Use your existing MAX subscriptions instead of pay-per-use APIs
+- **Higher Limits**: MAX subscriptions often have higher rate limits and priority access
+- **Latest Models**: Access to the newest and most capable models in each provider's lineup
+- **Consistent Experience**: Same interface across different AI providers
+
+## Installation
+
+```bash
+npm install @vibe-kit/auth
+```
+
+## Environment Compatibility
+
+- **Node.js**: Use `@vibe-kit/auth/node` for full functionality including file system access and browser launching
+- **Browser**: Use `@vibe-kit/auth/browser` or default import for browser-safe functionality
+- **Universal**: The default import provides browser-safe functionality that works everywhere
+
+## Security
+
+- Tokens are stored with restricted file permissions (CLI)
+- Automatic token refresh prevents expired token usage
+- PKCE (Proof Key for Code Exchange) for secure OAuth flows
+- State parameter validation prevents CSRF attacks
