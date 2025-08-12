@@ -21,8 +21,8 @@ const nextConfig: NextConfig = {
     if (!config.resolve.alias) {
       config.resolve.alias = {};
     }
-    // Use relative path to projects package  
-    const projectsPath = path.resolve(__dirname, '../projects/dist/index.js');
+    // Use relative path to projects package ESM build
+    const projectsPath = path.resolve(__dirname, '../projects/dist/index.mjs');
     config.resolve.alias['@vibe-kit/projects'] = projectsPath;
     
     // Also ensure extensions are set properly
