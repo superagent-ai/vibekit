@@ -29,7 +29,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
+import { 
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { 
   Hash,
@@ -376,19 +383,18 @@ export function SubtaskDetailsSheet({
 
             {/* Agent Code Generation Card - Only show for pending subtasks */}
             {subtask.status === "pending" && (
-              <Card className="border-primary/20 bg-primary/5">
-                <div className="px-3 py-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <Bot className="h-4 w-4" />
-                      <span className="text-sm font-medium">Execute with AI Agent</span>
-                    </div>
-                    {selectedSandbox === 'dagger' && (
-                      <DockerStatusIndicator 
-                        onStatusChange={setDockerStatus}
-                      />
-                    )}
+              <Card className="border-primary/20 bg-primary/5 p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4" />
+                    <span className="text-sm font-medium">Execute with AI Agent</span>
                   </div>
+                  {selectedSandbox === 'dagger' && (
+                    <DockerStatusIndicator 
+                      onStatusChange={setDockerStatus}
+                    />
+                  )}
+                </div>
                   <div className="flex gap-2 items-end">
                     {/* Agent Selection */}
                     <div className="flex-1">
@@ -654,7 +660,6 @@ export function SubtaskDetailsSheet({
                       {isExecuting ? "Executing..." : "Execute"}
                     </Button>
                   </div>
-                </div>
               </Card>
             )}
 
