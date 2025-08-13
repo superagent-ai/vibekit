@@ -384,13 +384,7 @@ export function SubtaskDetailsSheet({
             {/* Agent Code Generation Card - Only show for pending subtasks */}
             {subtask.status === "pending" && (
               <Card className="border-primary/20 bg-primary/5 p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <Bot className="h-4 w-4" />
-                    <span className="text-sm font-medium">Execute with AI Agent</span>
-                  </div>
-                </div>
-                  <div className="flex gap-2 items-end">
+                <div className="flex gap-2 items-end">
                     {/* Agent Selection */}
                     <div className="flex-1">
                       <Label htmlFor="agent-select" className="text-xs text-muted-foreground">
