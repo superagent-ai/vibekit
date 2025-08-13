@@ -54,6 +54,7 @@ import { ProjectForm } from "@/components/project-form";
 import { KanbanView } from "@/components/kanban-view";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { MCPServersSheet } from "@/components/mcp-servers-sheet";
+import { DockerStatusIndicator } from "@/components/docker-status-indicator";
 import type { Project } from "@/lib/projects";
 
 export default function ProjectDetailPage() {
@@ -330,6 +331,7 @@ export default function ProjectDetailPage() {
                 Set as Current
               </Button>
             )}
+            <DockerStatusIndicator />
             <Button variant="outline" onClick={() => setMcpServersSheetOpen(true)}>
               <Server className="mr-2 h-4 w-4" />
               MCP Servers

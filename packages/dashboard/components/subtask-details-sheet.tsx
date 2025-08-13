@@ -389,11 +389,6 @@ export function SubtaskDetailsSheet({
                     <Bot className="h-4 w-4" />
                     <span className="text-sm font-medium">Execute with AI Agent</span>
                   </div>
-                  {selectedSandbox === 'dagger' && (
-                    <DockerStatusIndicator 
-                      onStatusChange={setDockerStatus}
-                    />
-                  )}
                 </div>
                   <div className="flex gap-2 items-end">
                     {/* Agent Selection */}
