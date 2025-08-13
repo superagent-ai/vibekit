@@ -135,7 +135,8 @@ export class DockerSandbox {
     // Prepare environment
     const containerEnv = {
       ...process.env,
-      ...options.env
+      ...options.env,
+      VIBEKIT_SANDBOX_ACTIVE: '1' // Mark that we're inside a sandbox
     };
     
     return new Promise((resolve, reject) => {

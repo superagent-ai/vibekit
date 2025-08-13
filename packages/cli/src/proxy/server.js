@@ -2,8 +2,8 @@ import http from 'http';
 import https from 'https';
 import net from 'net';
 import { URL } from 'url';
-import chalk from 'chalk';
 import { initializeSensitivePatterns } from '../utils/redaction.js';
+import { getVibeKitProxyTargetURL } from '../utils/claude-settings.js';
 
 class ProxyServer {
   constructor(port = 8080) {
@@ -66,7 +66,6 @@ class ProxyServer {
     return new Promise((resolve, reject) => {
       // Check if server is already running
       if (this.server && this.server.listening) {
-        console.log(chalk.yellow(`⚠️  Proxy server is already running on port ${this.port}`));
         resolve();
         return;
       }
@@ -89,7 +88,6 @@ class ProxyServer {
       this.server.on('error', (error) => {
         // Check if error is EADDRINUSE (port already in use)
         if (error.code === 'EADDRINUSE') {
-          console.log(chalk.yellow(`⚠️  Port ${this.port} is already in use. Proxy server may already be running.`));
           resolve(); // Don't reject, just resolve to avoid error
         } else {
           reject(error);
@@ -109,16 +107,24 @@ class ProxyServer {
     });
   }
 
-  handleHttpRequest(req, res) {
+  async handleHttpRequest(req, res) {
     this.requestCount++;
     const requestId = this.requestCount;
+    
+    // Removed noisy proxy logs - requests are handled silently
 
-    // Parse the target URL - handle relative URLs by prepending Anthropic API base
+    // Parse the target URL - handle relative URLs by prepending API base
     let targetUrl;
     try {
       if (req.url.startsWith('/')) {
-        // Relative URL - prepend Anthropic API base
-        targetUrl = new URL(req.url, 'https://api.anthropic.com');
+        // Relative URL - prepend API base (use custom target if set, otherwise default)
+        const claudeTargetUrl = await getVibeKitProxyTargetURL();
+        const baseUrl = process.env.VIBEKIT_PROXY_TARGET_URL || 
+                        claudeTargetUrl ||
+                        'https://api.anthropic.com';
+        
+        
+        targetUrl = new URL(req.url, baseUrl);
       } else {
         // Absolute URL
         targetUrl = new URL(req.url);

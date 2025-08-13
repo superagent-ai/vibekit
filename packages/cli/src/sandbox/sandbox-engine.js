@@ -1,4 +1,5 @@
 import DockerSandbox from './docker-sandbox.js';
+import SandboxExecSandbox from './sandbox-exec.js';
 import SandboxConfig from './sandbox-config.js';
 import SandboxUtils from './sandbox-utils.js';
 
@@ -24,6 +25,15 @@ export class SandboxEngine {
         return new DockerSandbox(this.projectRoot, this.logger, {
           ...this.options,
           runtime: runtime || type
+        });
+      
+      case 'sandbox-exec':
+        return new SandboxExecSandbox(this.projectRoot, this.logger, {
+          ...this.options,
+          profile: sandboxConfig.profile,
+          profileFile: sandboxConfig.profileFile,
+          profileString: sandboxConfig.profileString,
+          profileParams: sandboxConfig.profileParams
         });
       
       case 'none':
@@ -62,8 +72,11 @@ export class SandboxEngine {
     // Check if sandbox is available
     const isAvailable = await sandbox.isAvailable();
     if (!isAvailable) {
-      SandboxUtils.logSandboxWarning(`${sandboxConfig.runtime} is not available, falling back to direct execution`);
-      SandboxUtils.logSandboxOperation('To use sandbox mode, ensure Docker or Podman is installed and running');
+      SandboxUtils.logSandboxWarning(`${sandboxConfig.type} is not available, falling back to direct execution`);
+      const helpMessage = sandboxConfig.type === 'sandbox-exec' 
+        ? 'sandbox-exec is only available on macOS'
+        : 'To use sandbox mode, ensure Docker or Podman is installed and running';
+      SandboxUtils.logSandboxOperation(helpMessage);
       return null;
     }
 

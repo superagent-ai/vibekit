@@ -32,13 +32,20 @@ export class SandboxConfig {
     }
     // 3. Check settings file (lowest priority)
     else if (settings.sandbox?.enabled) {
+      // Legacy format support
       sandboxEnabled = true;
       sandboxType = settings.sandbox?.type || 'docker';
       source = 'settings';
     }
+    else if (settings.sandbox?.type && settings.sandbox.type !== 'none') {
+      // New format
+      sandboxEnabled = true;
+      sandboxType = settings.sandbox.type;
+      source = 'settings';
+    }
 
     // Validate sandbox type
-    if (sandboxEnabled && !['docker', 'podman', 'none'].includes(sandboxType)) {
+    if (sandboxEnabled && !['docker', 'podman', 'sandbox-exec', 'none'].includes(sandboxType)) {
       SandboxUtils.logSandboxWarning(`Unknown sandbox type '${sandboxType}', falling back to 'docker'`);
       sandboxType = 'docker';
     }
@@ -59,12 +66,30 @@ export class SandboxConfig {
       }
     }
 
-    return {
+    const config = {
       enabled: sandboxEnabled,
       type: sandboxEnabled ? sandboxType : 'none',
       source,
       runtime: sandboxEnabled && (sandboxType === 'docker' || sandboxType === 'podman') ? sandboxType : null
     };
+
+    // Add sandbox-exec specific configuration
+    if (sandboxEnabled && sandboxType === 'sandbox-exec') {
+      // Get configuration from CLI options, environment, or settings
+      const sandboxExecConfig = 
+        cliOptions.sandboxExec ||
+        SandboxConfig.parseSandboxExecEnv() ||
+        settings.sandbox?.sandboxExec ||
+        {};
+
+      // Default to custom profile if no specific profile is set
+      config.profile = sandboxExecConfig.profile;
+      config.profileFile = sandboxExecConfig.profileFile;
+      config.profileString = sandboxExecConfig.profileString;
+      config.profileParams = sandboxExecConfig.profileParams;
+    }
+
+    return config;
   }
 
   /**
@@ -79,6 +104,35 @@ export class SandboxConfig {
    */
   static getSandboxImageName() {
     return process.env.VIBEKIT_SANDBOX_IMAGE || 'vibekit-sandbox:latest';
+  }
+
+  /**
+   * Parse sandbox-exec configuration from environment variables
+   */
+  static parseSandboxExecEnv() {
+    const config = {};
+    
+    if (process.env.VIBEKIT_SANDBOX_EXEC_PROFILE) {
+      config.profile = process.env.VIBEKIT_SANDBOX_EXEC_PROFILE;
+    }
+    
+    if (process.env.VIBEKIT_SANDBOX_EXEC_PROFILE_FILE) {
+      config.profileFile = process.env.VIBEKIT_SANDBOX_EXEC_PROFILE_FILE;
+    }
+    
+    if (process.env.VIBEKIT_SANDBOX_EXEC_PROFILE_STRING) {
+      config.profileString = process.env.VIBEKIT_SANDBOX_EXEC_PROFILE_STRING;
+    }
+
+    if (process.env.VIBEKIT_SANDBOX_EXEC_PARAMS) {
+      try {
+        config.profileParams = JSON.parse(process.env.VIBEKIT_SANDBOX_EXEC_PARAMS);
+      } catch (error) {
+        SandboxUtils.logSandboxWarning('Invalid JSON in VIBEKIT_SANDBOX_EXEC_PARAMS, ignoring');
+      }
+    }
+    
+    return Object.keys(config).length > 0 ? config : null;
   }
 }
 

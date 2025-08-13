@@ -11,8 +11,7 @@ import CFonts from 'cfonts';
 const Settings = ({ showWelcome = false }) => {
   const [settings, setSettings] = useState({
     sandbox: {
-      enabled: false,
-      type: 'docker'
+      type: 'none'
     },
     proxy: {
       enabled: true,
@@ -107,14 +106,10 @@ const Settings = ({ showWelcome = false }) => {
       case 'sandbox':
         return [
           {
-            label: `Sandbox Isolation: ${settings.sandbox.enabled ? '✓ ON' : '✗ OFF'}`,
-            description: 'Enable sandbox isolation for secure execution',
-            action: 'toggle-sandbox'
-          },
-          {
-            label: `Sandbox Type: ${settings.sandbox.type}`,
-            description: 'Container runtime (docker/podman)',
-            action: 'cycle-sandbox-type'
+            label: `Sandbox: ${settings.sandbox.type}`,
+            description: 'Sandbox isolation method (none/docker/sandbox-exec)',
+            action: 'cycle-sandbox-type',
+            color: 'green'
           },
           {
             label: 'Back to Main Menu',
@@ -303,18 +298,8 @@ const Settings = ({ showWelcome = false }) => {
           };
           saveSettings(newAnalyticsSettings);
           break;
-        case 'toggle-sandbox':
-          const newSandboxSettings = {
-            ...settings,
-            sandbox: {
-              ...settings.sandbox,
-              enabled: !settings.sandbox.enabled
-            }
-          };
-          saveSettings(newSandboxSettings);
-          break;
         case 'cycle-sandbox-type':
-          const types = ['docker', 'podman'];
+          const types = ['none', 'docker', 'sandbox-exec'];
           const currentIndex = types.indexOf(settings.sandbox.type);
           const nextType = types[(currentIndex + 1) % types.length];
           const newSandboxTypeSettings = {
@@ -413,7 +398,7 @@ const Settings = ({ showWelcome = false }) => {
         <Box flexDirection="column">
           {menuItems.map((item, index) => (
             <Box key={index} marginY={0}>
-              <Text color={index === selectedIndex ? 'cyan' : 'white'}>
+              <Text color={index === selectedIndex ? 'cyan' : (item.color || 'white')}>
                 {index === selectedIndex ? '❯ ' : '  '}
                 {item.label.includes('✓ ON') ? (
                   <>
@@ -430,6 +415,10 @@ const Settings = ({ showWelcome = false }) => {
                     {item.label.includes('(requires restart)') && (
                       <Text color="gray" dimColor> (requires restart)</Text>
                     )}
+                  </>
+                ) : item.label.includes('Sandbox: ') ? (
+                  <>
+                    Sandbox: <Text color="green">{settings.sandbox.type}</Text>
                   </>
                 ) : (
                   item.label

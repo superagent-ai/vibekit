@@ -14,9 +14,8 @@ const StatusDisplay = ({agentName, options = {}, settings = {}, sandboxConfig = 
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text dimColor>
-        🖖 VibeKit | Sandbox: <Text color={sandboxStatus.color}>{sandboxStatus.text}</Text> | Proxy: <Text color={options.proxy ? 'green' : 'red'}>{proxyStatus}</Text> | Dashboard: <Text color="cyan">http://localhost:3001</Text>
+        🖖 VibeKit | Sandbox: <Text color={sandboxStatus.color}>{sandboxStatus.text}</Text> | Proxy: <Text color={options.proxy ? 'green' : 'red'}>{proxyStatus}</Text>
       </Text>
-      <Text> </Text>
     </Box>
   );
 };
