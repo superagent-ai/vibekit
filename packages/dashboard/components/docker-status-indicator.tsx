@@ -71,19 +71,35 @@ export function DockerStatusIndicator({
     return () => clearInterval(interval);
   }, []);
   
-  if (!status && !isChecking) {
-    return null;
+  // Show loading state on initial load
+  if (!status) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className={cn("inline-flex items-center gap-2", className)}>
+              <Badge 
+                variant="outline" 
+                className="gap-1 text-xs text-gray-600 bg-gray-50 border-gray-200"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Docker
+              </Badge>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>Checking Docker status...</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
   }
   
   const getStatusIcon = () => {
-    if (isChecking) {
-      return <Loader2 className="h-4 w-4 animate-spin" />;
-    }
+    // Don't show loading spinner in the badge icon
     if (!status?.dockerInstalled) {
       return <XCircle className="h-4 w-4" />;
     }
     if (!status?.dockerRunning) {
-      return <AlertCircle className="h-4 w-4" />;
+      return <XCircle className="h-4 w-4" />;
     }
     return <CheckCircle2 className="h-4 w-4" />;
   };
@@ -93,15 +109,13 @@ export function DockerStatusIndicator({
       return "text-red-600 bg-red-50 border-red-200";
     }
     if (!status?.dockerRunning) {
-      return "text-yellow-600 bg-yellow-50 border-yellow-200";
+      return "text-red-600 bg-red-50 border-red-200";
     }
     return "text-green-600 bg-green-50 border-green-200";
   };
   
   const getStatusText = () => {
-    if (isChecking) {
-      return "Checking...";
-    }
+    // Don't show "Checking..." in the badge text
     if (!status?.dockerInstalled) {
       return "Docker Not Installed";
     }
@@ -158,21 +172,24 @@ export function DockerStatusIndicator({
             <div className={cn("inline-flex items-center gap-2", className)}>
               <Badge 
                 variant="outline" 
-                className={cn("gap-1 text-xs", getStatusColor())}
+                className={cn(
+                  "gap-1 text-xs",
+                  getStatusColor(),
+                  (!status?.dockerInstalled || !status?.dockerRunning) && "animate-pulse"
+                )}
               >
                 {getStatusIcon()}
                 Docker
               </Badge>
-              {!isChecking && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={checkDockerStatus}
-                >
-                  <RefreshCw className="h-3 w-3" />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={checkDockerStatus}
+                disabled={isChecking}
+              >
+                <RefreshCw className={cn("h-3 w-3", isChecking && "animate-spin")} />
+              </Button>
             </div>
           </TooltipTrigger>
           <TooltipContent>{getTooltipContent()}</TooltipContent>
@@ -182,11 +199,24 @@ export function DockerStatusIndicator({
   }
   
   return (
-    <div className={cn("rounded-lg border p-4 space-y-3", className)}>
+    <div className={cn(
+      "rounded-lg border p-4 space-y-3",
+      (!status?.dockerInstalled || !status?.dockerRunning) && "border-red-200 bg-red-50/50",
+      className
+    )}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {getStatusIcon()}
-          <span className="font-medium text-sm">{getStatusText()}</span>
+          <span className={cn(
+            (!status?.dockerInstalled || !status?.dockerRunning) && "text-red-600"
+          )}>
+            {getStatusIcon()}
+          </span>
+          <span className={cn(
+            "font-medium text-sm",
+            (!status?.dockerInstalled || !status?.dockerRunning) && "text-red-600"
+          )}>
+            {getStatusText()}
+          </span>
         </div>
         <Button
           variant="ghost"
