@@ -25,6 +25,47 @@ interface ExecuteSubtaskRequest {
   projectRoot: string;
 }
 
+async function checkDockerStatus() {
+  const { exec } = require('child_process');
+  const { promisify } = require('util');
+  const execAsync = promisify(exec);
+  
+  try {
+    // Quick Docker check
+    await execAsync('docker ps -q', { timeout: 5000 });
+    return { success: true };
+  } catch (error: any) {
+    if (error.message?.includes('Cannot connect to the Docker daemon')) {
+      return { 
+        success: false, 
+        error: 'Docker is not running',
+        userMessage: 'Docker Desktop is not running. Please start Docker Desktop and try again.',
+        details: 'The Dagger sandbox requires Docker to be running on your system.'
+      };
+    } else if (error.message?.includes('command not found')) {
+      return { 
+        success: false, 
+        error: 'Docker not installed',
+        userMessage: 'Docker is not installed. Please install Docker Desktop from docker.com',
+        details: 'Visit https://www.docker.com/products/docker-desktop to download and install Docker.'
+      };
+    } else if (error.message?.includes('permission denied')) {
+      return { 
+        success: false, 
+        error: 'Docker permission denied',
+        userMessage: 'Docker requires elevated permissions. Please ensure your user has access to Docker.',
+        details: 'You may need to add your user to the docker group or restart Docker Desktop.'
+      };
+    }
+    return { 
+      success: false, 
+      error: 'Docker check failed',
+      userMessage: 'Unable to connect to Docker. Please ensure Docker Desktop is installed and running.',
+      details: error.message
+    };
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -37,6 +78,23 @@ export async function POST(
     const { id } = await params;
     const body: ExecuteSubtaskRequest = await request.json();
     const { subtask, agent, sandbox, branch, projectRoot } = body;
+    
+    // Check Docker status if using Dagger sandbox
+    if (sandbox === 'dagger') {
+      const dockerCheck = await checkDockerStatus();
+      if (!dockerCheck.success) {
+        console.error('Docker check failed:', dockerCheck);
+        return NextResponse.json(
+          { 
+            success: false,
+            error: dockerCheck.userMessage,
+            details: dockerCheck.details,
+            errorType: 'docker_not_running'
+          },
+          { status: 503 }
+        );
+      }
+    }
     
     console.log('Executing subtask:', {
       projectId: id,
@@ -423,6 +481,7 @@ export async function POST(
     // Finalize session logger with error
     if (sessionLogger) {
       try {
+        await sessionLogger.captureError(`Execution failed: ${error.message}`);
         await sessionLogger.finalize(-1);
       } catch (logError) {
         console.warn('Failed to finalize session logger:', logError);
@@ -447,13 +506,56 @@ export async function POST(
       }
     }
     
+    // Parse error message for specific issues
+    let errorType = 'unknown';
+    let userMessage = error.message || 'Failed to execute subtask';
+    let details = error.stack;
+    
+    if (error.message?.includes('Cannot read properties of undefined (reading \'port\')') ||
+        error.message?.includes('Docker daemon') ||
+        error.message?.includes('docker.sock')) {
+      errorType = 'docker_not_running';
+      userMessage = 'Docker is not running. Please start Docker Desktop and try again.';
+      details = 'The sandbox environment requires Docker to be running. Make sure Docker Desktop is installed and running.';
+    } else if (error.message?.includes('API key') || 
+               error.message?.includes('authentication') ||
+               error.message?.includes('unauthorized')) {
+      errorType = 'auth_error';
+      userMessage = 'Authentication failed. Please check your API keys in settings.';
+      details = `Make sure your ${error.message.includes('ANTHROPIC') ? 'Anthropic' : 
+                 error.message.includes('OPENAI') ? 'OpenAI' : 
+                 error.message.includes('GEMINI') ? 'Google' : 
+                 error.message.includes('GROK') ? 'Grok' : 'AI provider'} API key is configured correctly.`;
+    } else if (error.message?.includes('rate limit') || 
+               error.message?.includes('too many requests')) {
+      errorType = 'rate_limit';
+      userMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+      details = 'You have made too many requests. Please wait a few minutes before trying again.';
+    } else if (error.message?.includes('network') || 
+               error.message?.includes('ECONNREFUSED') ||
+               error.message?.includes('ETIMEDOUT')) {
+      errorType = 'network_error';
+      userMessage = 'Network error. Please check your internet connection.';
+      details = 'Unable to connect to the required services. Check your internet connection and firewall settings.';
+    } else if (error.message?.includes('sandbox') || 
+               error.message?.includes('container')) {
+      errorType = 'sandbox_error';
+      userMessage = 'Sandbox environment error. Please try again or use a different sandbox provider.';
+      details = error.message;
+    }
+    
     return NextResponse.json(
       { 
         success: false,
-        error: error.message || 'Failed to execute subtask',
-        details: error.stack
+        error: userMessage,
+        details: details,
+        errorType: errorType,
+        originalError: error.message
       },
-      { status: 500 }
+      { status: errorType === 'docker_not_running' ? 503 : 
+                errorType === 'auth_error' ? 401 :
+                errorType === 'rate_limit' ? 429 :
+                errorType === 'network_error' ? 502 : 500 }
     );
   }
 }

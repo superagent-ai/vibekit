@@ -32,6 +32,7 @@ import {
   Activity
 } from "lucide-react";
 import { useSessionLogs } from "@/hooks/use-session-logs";
+import { useRealtimeSessionLogs } from "@/hooks/use-realtime-session-logs";
 import { cn } from "@/lib/utils";
 
 // Extend Day.js with plugins
@@ -42,10 +43,18 @@ dayjs.extend(duration);
 interface ExecutionLogsTableProps {
   sessionId: string | null;
   className?: string;
+  useRealtimeStreaming?: boolean;
 }
 
-export function ExecutionLogsTable({ sessionId, className }: ExecutionLogsTableProps) {
-  const { logs, metadata, isLive, isLoading, error } = useSessionLogs(sessionId);
+export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming = true }: ExecutionLogsTableProps) {
+  // Use real-time streaming hook if enabled, otherwise fall back to polling
+  const pollingData = useSessionLogs(sessionId, { enabled: !useRealtimeStreaming });
+  const realtimeData = useRealtimeSessionLogs(sessionId, { enabled: useRealtimeStreaming });
+  
+  // Select the appropriate data source
+  const { logs, metadata, isLive, isLoading, error, isConnected } = useRealtimeStreaming ? 
+    { ...realtimeData, isConnected: realtimeData.isConnected } : 
+    { ...pollingData, isConnected: false };
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
   
@@ -213,6 +222,12 @@ export function ExecutionLogsTable({ sessionId, className }: ExecutionLogsTableP
       <div className="flex items-center justify-between pb-3 border-b">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium">Execution History</h3>
+          {useRealtimeStreaming && isConnected && (
+            <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+              <Activity className="h-3 w-3" />
+              Streaming
+            </Badge>
+          )}
           {isLive ? (
             <Badge variant="outline" className="gap-1">
               <Loader2 className="h-3 w-3 animate-spin" />

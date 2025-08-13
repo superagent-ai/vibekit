@@ -20,6 +20,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExecutionLogsTable } from "@/components/execution-logs-table";
+import { ExecutionsList, type Execution } from "@/components/executions-list";
+import { DockerStatusIndicator } from "@/components/docker-status-indicator";
 import {
   Select,
   SelectContent,
@@ -43,6 +45,7 @@ import {
   Settings,
   GitBranch,
   Play,
+  History,
 } from "lucide-react";
 
 interface Subtask {
@@ -91,7 +94,7 @@ export function SubtaskDetailsSheet({
   projectRoot
 }: SubtaskDetailsSheetProps) {
   console.log("SubtaskDetailsSheet props:", { projectId, projectRoot, open });
-  const [activeTab, setActiveTab] = useState("logs");
+  const [activeTab, setActiveTab] = useState("executions");
   const [selectedAgent, setSelectedAgent] = useState<string>("claude");
   const [selectedSandbox, setSelectedSandbox] = useState<string>("dagger");
   const [selectedBranch, setSelectedBranch] = useState<string>("main");
@@ -101,6 +104,8 @@ export function SubtaskDetailsSheet({
   const [executionLogs, setExecutionLogs] = useState<string>("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [executionHistory, setExecutionHistory] = useState<any[]>([]);
+  const [selectedExecution, setSelectedExecution] = useState<Execution | null>(null);
+  const [dockerStatus, setDockerStatus] = useState<any>(null);
   
   // Fetch settings and execution history on mount/open
   useEffect(() => {
@@ -279,6 +284,13 @@ export function SubtaskDetailsSheet({
                   <CardDescription>
                     Execute this subtask using an AI agent with your preferred settings
                   </CardDescription>
+                  {selectedSandbox === 'dagger' && (
+                    <div className="mt-2">
+                      <DockerStatusIndicator 
+                        onStatusChange={setDockerStatus}
+                      />
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-3">
@@ -494,13 +506,45 @@ export function SubtaskDetailsSheet({
                             
                             setExecutionLogs(logs);
                             
-                            // Switch to logs tab to show output
-                            setActiveTab("logs");
+                            // Add to execution history
+                            const newExecution: Execution = {
+                              id: executionSessionId,
+                              sessionId: executionSessionId,
+                              timestamp: new Date().toISOString(),
+                              agent: selectedAgent,
+                              sandbox: selectedSandbox,
+                              branch: selectedBranch,
+                              status: result.exitCode === 0 ? 'completed' : 'failed',
+                              exitCode: result.exitCode,
+                              duration: parseFloat(result.executionTime) * 1000
+                            };
+                            
+                            setExecutionHistory(prev => [newExecution, ...prev]);
+                            setSelectedExecution(newExecution);
+                            
+                            // Switch to executions tab to show the new execution
+                            setActiveTab("executions");
                             
                             // TODO: Update subtask status to in-progress or done
                           } else {
                             console.error("Execution failed:", result);
-                            alert(`Execution failed: ${result.error || 'Unknown error'}`);
+                            
+                            // Show user-friendly error dialog
+                            let errorDialog = result.error || 'Unknown error occurred';
+                            
+                            if (result.errorType === 'docker_not_running') {
+                              errorDialog = `🐳 Docker Not Running\n\n${result.error}\n\nSolution:\n1. Open Docker Desktop\n2. Wait for Docker to start\n3. Try executing again`;
+                            } else if (result.errorType === 'auth_error') {
+                              errorDialog = `🔑 Authentication Error\n\n${result.error}\n\n${result.details}`;
+                            } else if (result.errorType === 'rate_limit') {
+                              errorDialog = `⏱️ Rate Limit Exceeded\n\n${result.error}\n\n${result.details}`;
+                            } else if (result.errorType === 'network_error') {
+                              errorDialog = `🌐 Network Error\n\n${result.error}\n\n${result.details}`;
+                            } else if (result.errorType === 'sandbox_error') {
+                              errorDialog = `📦 Sandbox Error\n\n${result.error}\n\n${result.details}`;
+                            }
+                            
+                            alert(errorDialog);
                           }
                         } catch (error: any) {
                           console.error("Failed to execute subtask:", error);
@@ -509,7 +553,7 @@ export function SubtaskDetailsSheet({
                           setIsExecuting(false);
                         }
                       }}
-                      disabled={isExecuting || !selectedAgent || !selectedSandbox || !selectedBranch || !projectId || !projectRoot}
+                      disabled={isExecuting || !selectedAgent || !selectedSandbox || !selectedBranch || !projectId || !projectRoot || (selectedSandbox === 'dagger' && (!dockerStatus?.dockerRunning || !dockerStatus?.dockerInstalled))}
                       className="gap-2"
                     >
                       <Play className="h-4 w-4" />
@@ -588,7 +632,11 @@ export function SubtaskDetailsSheet({
           <Separator className="my-6" />
           
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-            <TabsList className="grid grid-cols-2 w-full">
+            <TabsList className="grid grid-cols-3 w-full">
+              <TabsTrigger value="executions" className="flex items-center gap-2">
+                <History className="h-4 w-4" />
+                Executions
+              </TabsTrigger>
               <TabsTrigger value="logs" className="flex items-center gap-2">
                 <ScrollText className="h-4 w-4" />
                 Logs
@@ -599,9 +647,44 @@ export function SubtaskDetailsSheet({
               </TabsTrigger>
             </TabsList>
             
+            <TabsContent value="executions" className="mt-4">
+              <div className="grid gap-4 md:grid-cols-2 h-[500px]">
+                {/* Executions List */}
+                <div className="border rounded-lg bg-background">
+                  <div className="p-3 border-b">
+                    <h4 className="text-sm font-medium">Execution History</h4>
+                  </div>
+                  <ExecutionsList 
+                    subtaskId={subtask.id}
+                    projectId={projectId || ''}
+                    selectedExecutionId={selectedExecution?.id}
+                    onSelectExecution={(execution) => {
+                      setSelectedExecution(execution);
+                      setSessionId(execution.sessionId);
+                    }}
+                    className="h-[450px]"
+                  />
+                </div>
+                
+                {/* Selected Execution Logs */}
+                <div className="border rounded-lg bg-background">
+                  <div className="p-3 border-b">
+                    <h4 className="text-sm font-medium">
+                      {selectedExecution ? `Logs - ${selectedExecution.agent}/${selectedExecution.sandbox}` : 'Select an execution to view logs'}
+                    </h4>
+                  </div>
+                  <ExecutionLogsTable 
+                    sessionId={selectedExecution?.sessionId || null} 
+                    useRealtimeStreaming={selectedExecution?.status === 'running'}
+                    className="h-[450px] p-4" 
+                  />
+                </div>
+              </div>
+            </TabsContent>
+            
             <TabsContent value="logs" className="mt-4">
               <div className="border rounded-lg bg-background h-[500px]">
-                <ExecutionLogsTable sessionId={sessionId} className="h-full p-4" />
+                <ExecutionLogsTable sessionId={sessionId} className="h-full p-4" useRealtimeStreaming={true} />
               </div>
               
               {/* Execution History Selector */}
