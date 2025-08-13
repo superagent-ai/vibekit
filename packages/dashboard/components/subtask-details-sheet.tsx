@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { 
   Hash,
@@ -94,7 +94,7 @@ export function SubtaskDetailsSheet({
   projectRoot
 }: SubtaskDetailsSheetProps) {
   console.log("SubtaskDetailsSheet props:", { projectId, projectRoot, open });
-  const [activeTab, setActiveTab] = useState("executions");
+  const [activeTab, setActiveTab] = useState("logs");
   const [selectedAgent, setSelectedAgent] = useState<string>("claude");
   const [selectedSandbox, setSelectedSandbox] = useState<string>("dagger");
   const [selectedBranch, setSelectedBranch] = useState<string>("main");
@@ -106,6 +106,9 @@ export function SubtaskDetailsSheet({
   const [executionHistory, setExecutionHistory] = useState<any[]>([]);
   const [selectedExecution, setSelectedExecution] = useState<Execution | null>(null);
   const [dockerStatus, setDockerStatus] = useState<any>(null);
+  const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
+  const [hasMoreDetailsContent, setHasMoreDetailsContent] = useState(false);
+  const [detailsContentHeight, setDetailsContentHeight] = useState(80);
   
   // Fetch settings and execution history on mount/open
   useEffect(() => {
@@ -196,6 +199,52 @@ export function SubtaskDetailsSheet({
       setSelectedBranch("main");
     }
   }, [open, projectRoot]);
+
+  // Check if details content is longer than the default height
+  useEffect(() => {
+    if (subtask?.details || subtask?.testStrategy) {
+      // Calculate estimated content height based on line count and character width
+      const lineHeight = 16; // text-xs line height
+      const charsPerLine = 80; // rough estimate for text-xs width
+      
+      let totalHeight = 0;
+      
+      // Calculate details height
+      if (subtask.details) {
+        const detailsLines = subtask.details.split('\n');
+        detailsLines.forEach(line => {
+          const wrappedLines = Math.ceil(line.length / charsPerLine) || 1;
+          totalHeight += wrappedLines * lineHeight;
+        });
+        
+        // Add space for "Details:" header if both exist
+        if (subtask.testStrategy) {
+          totalHeight += lineHeight;
+        }
+      }
+      
+      // Calculate test strategy height
+      if (subtask.testStrategy) {
+        // Add space for "Test Strategy:" header
+        totalHeight += lineHeight;
+        
+        const testLines = subtask.testStrategy.split('\n');
+        testLines.forEach(line => {
+          const wrappedLines = Math.ceil(line.length / charsPerLine) || 1;
+          totalHeight += wrappedLines * lineHeight;
+        });
+      }
+      
+      // Add some padding and spacing
+      totalHeight += 24; // Extra padding for spacing between sections
+      
+      setDetailsContentHeight(totalHeight);
+      setHasMoreDetailsContent(totalHeight > 80);
+    } else {
+      setHasMoreDetailsContent(false);
+      setDetailsContentHeight(80);
+    }
+  }, [subtask?.details, subtask?.testStrategy]);
   
   if (!subtask || !parentTask) return null;
   
@@ -228,79 +277,126 @@ export function SubtaskDetailsSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl lg:max-w-3xl overflow-hidden p-6 lg:p-8">
-        <SheetHeader className="pb-6">
-          <div className="space-y-4">
-            {/* Parent Task Reference */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (onParentTaskClick) {
-                    onOpenChange(false);
-                    onParentTaskClick();
-                  }
-                }}
-                className="h-auto px-2 py-1"
-              >
-                <ArrowLeft className="h-3 w-3 mr-1" />
-                <span className="text-xs">Parent Task</span>
-              </Button>
-              <ChevronRight className="h-3 w-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground truncate">
-                {parentTask.title}
-              </span>
-            </div>
-            
-            {/* Subtask Title and Status */}
-            <div className="flex items-start justify-between">
-              <div className="space-y-1.5 flex-1 pr-2">
-                <SheetTitle className="text-xl">
-                  <span className="line-clamp-2">{subtask.title}</span>
-                </SheetTitle>
-                <SheetDescription className="flex items-center gap-2 text-sm">
-                  <Hash className="h-3 w-3" />
-                  Subtask #{subtask.id}
-                </SheetDescription>
+      <SheetContent className="w-full sm:max-w-2xl lg:max-w-3xl overflow-hidden p-0">
+        <div className="flex flex-col h-full">
+          <SheetHeader className="px-6 py-3 border-b">
+            <div className="space-y-2">
+              {/* Parent Task Reference */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (onParentTaskClick) {
+                      onOpenChange(false);
+                      onParentTaskClick();
+                    }
+                  }}
+                  className="h-auto px-2 py-1"
+                >
+                  <ArrowLeft className="h-3 w-3 mr-1" />
+                  <span className="text-xs">Parent Task</span>
+                </Button>
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground truncate">
+                  #{parentTask.id}: {parentTask.title}
+                </span>
               </div>
-              <Badge className={`text-xs ${getStatusColor(subtask.status)}`}>
-                {subtask.status.replace("-", " ")}
-              </Badge>
+              
+              {/* Subtask Title and Status */}
+              <div className="flex items-start justify-between">
+                <div className="space-y-1.5 flex-1 pr-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs font-mono">
+                      Task {parentTask.id}.{subtask.id}
+                    </Badge>
+                    <SheetTitle className="text-lg">
+                      <span className="line-clamp-2">{subtask.title}</span>
+                    </SheetTitle>
+                  </div>
+                  {subtask.description && (
+                    <p className="text-xs text-muted-foreground pl-2">
+                      {subtask.description}
+                    </p>
+                  )}
+                </div>
+                <Badge className={`text-xs ${getStatusColor(subtask.status)}`}>
+                  {subtask.status.replace("-", " ")}
+                </Badge>
+              </div>
             </div>
-          </div>
-        </SheetHeader>
+          </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-220px)] pr-6">
-          <div className="space-y-8">
+          {/* Task Details - Fixed, not scrollable */}
+          <div className="px-6 lg:px-8 flex-shrink-0">
+            <div className="space-y-3 py-2">
+            {/* Details & Test Strategy */}
+            {(subtask.details || subtask.testStrategy) && (
+              <div>
+                <h3 className="text-[10px] font-semibold flex items-center gap-1.5 text-muted-foreground uppercase tracking-wider mb-1">
+                  <AlertCircle className="h-3 w-3" />
+                  Details {subtask.testStrategy && '& Test Strategy'}
+                </h3>
+                <ScrollArea 
+                  className="w-full" 
+                  style={{ height: isDetailsExpanded ? `${Math.min(detailsContentHeight, 200)}px` : '80px' }}
+                >
+                  <div className="text-xs pl-4 pr-3 whitespace-pre-wrap text-muted-foreground space-y-3">
+                    {subtask.details && (
+                      <div>
+                        {subtask.testStrategy && (
+                          <div className="font-medium mb-1">Details:</div>
+                        )}
+                        {subtask.details}
+                      </div>
+                    )}
+                    {subtask.testStrategy && (
+                      <div>
+                        <div className="font-medium mb-1 flex items-center gap-1">
+                          <TestTube className="h-3 w-3" />
+                          Test Strategy:
+                        </div>
+                        {subtask.testStrategy}
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+                {hasMoreDetailsContent && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 mt-1 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setIsDetailsExpanded(!isDetailsExpanded)}
+                  >
+                    {isDetailsExpanded ? 'Show Less' : 'Show More'}
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Agent Code Generation Card - Only show for pending subtasks */}
             {subtask.status === "pending" && (
               <Card className="border-primary/20 bg-primary/5">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Bot className="h-5 w-5" />
-                    Agent Code Generation
-                  </CardTitle>
-                  <CardDescription>
-                    Execute this subtask using an AI agent with your preferred settings
-                  </CardDescription>
-                  {selectedSandbox === 'dagger' && (
-                    <div className="mt-2">
+                <div className="px-3 py-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-4 w-4" />
+                      <span className="text-sm font-medium">Execute with AI Agent</span>
+                    </div>
+                    {selectedSandbox === 'dagger' && (
                       <DockerStatusIndicator 
                         onStatusChange={setDockerStatus}
                       />
-                    </div>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-3">
+                    )}
+                  </div>
+                  <div className="flex gap-2 items-end">
                     {/* Agent Selection */}
-                    <div className="space-y-2">
-                      <Label htmlFor="agent-select" className="text-sm">
+                    <div className="flex-1">
+                      <Label htmlFor="agent-select" className="text-xs text-muted-foreground">
                         Agent
                       </Label>
                       <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-                        <SelectTrigger id="agent-select" className="w-full">
+                        <SelectTrigger id="agent-select" className="w-full h-7 text-xs mt-0.5">
                           <SelectValue placeholder="Select agent" />
                         </SelectTrigger>
                         <SelectContent>
@@ -339,12 +435,12 @@ export function SubtaskDetailsSheet({
                     </div>
 
                     {/* Sandbox Selection */}
-                    <div className="space-y-2">
-                      <Label htmlFor="sandbox-select" className="text-sm">
-                        Sandbox Provider
+                    <div className="flex-1">
+                      <Label htmlFor="sandbox-select" className="text-xs text-muted-foreground">
+                        Sandbox
                       </Label>
                       <Select value={selectedSandbox} onValueChange={setSelectedSandbox}>
-                        <SelectTrigger id="sandbox-select" className="w-full">
+                        <SelectTrigger id="sandbox-select" className="w-full h-7 text-xs mt-0.5">
                           <SelectValue placeholder="Select sandbox" />
                         </SelectTrigger>
                         <SelectContent>
@@ -383,12 +479,12 @@ export function SubtaskDetailsSheet({
                     </div>
 
                     {/* Branch Selection */}
-                    <div className="space-y-2">
-                      <Label htmlFor="branch-select" className="text-sm">
-                        Base Branch
+                    <div className="flex-1">
+                      <Label htmlFor="branch-select" className="text-xs text-muted-foreground">
+                        Branch
                       </Label>
                       <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                        <SelectTrigger id="branch-select" className="w-full">
+                        <SelectTrigger id="branch-select" className="w-full h-7 text-xs mt-0.5">
                           <SelectValue placeholder="Select branch" />
                         </SelectTrigger>
                         <SelectContent>
@@ -413,10 +509,8 @@ export function SubtaskDetailsSheet({
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-
-                  {/* Execute Button */}
-                  <div className="flex justify-end pt-2">
+                    
+                    {/* Execute Button */}
                     <Button
                       onClick={async () => {
                         if (!projectId || !projectRoot) {
@@ -522,8 +616,8 @@ export function SubtaskDetailsSheet({
                             setExecutionHistory(prev => [newExecution, ...prev]);
                             setSelectedExecution(newExecution);
                             
-                            // Switch to executions tab to show the new execution
-                            setActiveTab("executions");
+                            // Switch to logs tab to show the execution output
+                            setActiveTab("logs");
                             
                             // TODO: Update subtask status to in-progress or done
                           } else {
@@ -554,70 +648,32 @@ export function SubtaskDetailsSheet({
                         }
                       }}
                       disabled={isExecuting || !selectedAgent || !selectedSandbox || !selectedBranch || !projectId || !projectRoot || (selectedSandbox === 'dagger' && (!dockerStatus?.dockerRunning || !dockerStatus?.dockerInstalled))}
-                      className="gap-2"
+                      className="gap-1 h-7 text-xs"
                     >
-                      <Play className="h-4 w-4" />
-                      {isExecuting ? "Executing..." : "Execute Subtask"}
+                      <Play className="h-3 w-3" />
+                      {isExecuting ? "Executing..." : "Execute"}
                     </Button>
                   </div>
-                </CardContent>
+                </div>
               </Card>
             )}
 
-            {/* Description */}
-            {subtask.description && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Description
-                </h3>
-                <p className="text-sm text-muted-foreground pl-8">
-                  {subtask.description}
-                </p>
-              </div>
-            )}
-
-            {/* Details */}
-            {subtask.details && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  Details
-                </h3>
-                <div className="text-sm text-muted-foreground pl-8 whitespace-pre-wrap">
-                  {subtask.details}
-                </div>
-              </div>
-            )}
-
-            {/* Test Strategy */}
-            {subtask.testStrategy && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <TestTube className="h-4 w-4" />
-                  Test Strategy
-                </h3>
-                <p className="text-sm text-muted-foreground pl-8">
-                  {subtask.testStrategy}
-                </p>
-              </div>
-            )}
 
             {/* Dependencies */}
             {subtask.dependencies && subtask.dependencies.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Link className="h-4 w-4" />
+              <div>
+                <h3 className="text-[10px] font-semibold flex items-center gap-1.5 text-muted-foreground uppercase tracking-wider mb-1">
+                  <Link className="h-3 w-3" />
                   Dependencies
                 </h3>
-                <div className="pl-8">
-                  <div className="space-y-1">
+                <div className="pl-4">
+                  <div className="space-y-0.5">
                     {subtask.dependencies.map(dep => (
-                      <div key={dep} className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
+                      <div key={dep} className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="text-[10px] h-4 px-1">
                           #{dep}
                         </Badge>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="text-[11px] text-muted-foreground">
                           {getSubtaskTitle(dep)}
                         </span>
                       </div>
@@ -626,149 +682,151 @@ export function SubtaskDetailsSheet({
                 </div>
               </div>
             )}
+            </div>
           </div>
-          
-          {/* Tabs for Logs and Other Subtasks */}
-          <Separator className="my-6" />
-          
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-            <TabsList className="grid grid-cols-3 w-full">
-              <TabsTrigger value="executions" className="flex items-center gap-2">
-                <History className="h-4 w-4" />
-                Executions
-              </TabsTrigger>
-              <TabsTrigger value="logs" className="flex items-center gap-2">
-                <ScrollText className="h-4 w-4" />
-                Logs
-              </TabsTrigger>
-              <TabsTrigger value="subtasks" className="flex items-center gap-2">
-                <ListChecks className="h-4 w-4" />
-                Other Subtasks
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="executions" className="mt-4">
-              <div className="grid gap-4 md:grid-cols-2 h-[500px]">
-                {/* Executions List */}
-                <div className="border rounded-lg bg-background">
-                  <div className="p-3 border-b">
-                    <h4 className="text-sm font-medium">Execution History</h4>
-                  </div>
-                  <ExecutionsList 
-                    subtaskId={subtask.id}
-                    projectId={projectId || ''}
-                    selectedExecutionId={selectedExecution?.id}
-                    onSelectExecution={(execution) => {
-                      setSelectedExecution(execution);
-                      setSessionId(execution.sessionId);
-                    }}
-                    className="h-[450px]"
-                  />
-                </div>
-                
-                {/* Selected Execution Logs */}
-                <div className="border rounded-lg bg-background">
-                  <div className="p-3 border-b">
-                    <h4 className="text-sm font-medium">
-                      {selectedExecution ? `Logs - ${selectedExecution.agent}/${selectedExecution.sandbox}` : 'Select an execution to view logs'}
-                    </h4>
-                  </div>
-                  <ExecutionLogsTable 
-                    sessionId={selectedExecution?.sessionId || null} 
-                    useRealtimeStreaming={selectedExecution?.status === 'running'}
-                    className="h-[450px] p-4" 
-                  />
-                </div>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="logs" className="mt-4">
-              <div className="border rounded-lg bg-background h-[500px]">
-                <ExecutionLogsTable sessionId={sessionId} className="h-full p-4" useRealtimeStreaming={true} />
-              </div>
+
+          {/* Tab Navigation - Sticky */}
+          <div className="px-6 lg:px-8 py-2 bg-background border-t">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+              <TabsList className="grid grid-cols-3 w-full">
+                <TabsTrigger value="logs" className="flex items-center gap-2">
+                  <ScrollText className="h-4 w-4" />
+                  Logs
+                </TabsTrigger>
+                <TabsTrigger value="subtasks" className="flex items-center gap-2">
+                  <ListChecks className="h-4 w-4" />
+                  Other Subtasks
+                </TabsTrigger>
+                <TabsTrigger value="executions" className="flex items-center gap-2">
+                  <History className="h-4 w-4" />
+                  Executions
+                </TabsTrigger>
+              </TabsList>
               
-              {/* Execution History Selector */}
-              {executionHistory.length > 1 && (
-                <div className="mt-4 p-3 border rounded-lg bg-muted/20">
-                  <Label className="text-xs font-medium mb-2 block">Previous Executions</Label>
-                  <Select value={sessionId || ""} onValueChange={setSessionId}>
-                    <SelectTrigger className="w-full text-xs">
-                      <SelectValue placeholder="Select execution to view" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {executionHistory.map((exec, index) => (
-                        <SelectItem key={exec.sessionId} value={exec.sessionId}>
-                          <div className="flex items-center justify-between gap-2">
-                            <span title={dayjs(exec.timestamp).format('LLLL')}>
-                              {dayjs(exec.timestamp).fromNow()} - {exec.agent}/{exec.sandbox}
-                            </span>
-                            {index === 0 && (
-                              <Badge variant="outline" className="text-xs ml-2">Latest</Badge>
-                            )}
-                            {exec.status && (
-                              <Badge 
-                                variant="outline" 
-                                className={cn(
-                                  "text-xs ml-2",
-                                  exec.status === 'completed' ? 'text-green-600 border-green-600' :
-                                  exec.status === 'failed' ? 'text-red-600 border-red-600' :
-                                  'text-yellow-600 border-yellow-600'
-                                )}
-                              >
-                                {exec.status}
-                              </Badge>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="subtasks" className="mt-4">
-              {siblingSubtasks.length > 0 ? (
-                <div className="space-y-2">
-                  {siblingSubtasks.map(sibling => {
-                    // Find the index of this sibling in the parent's subtasks array
-                    const siblingIndex = parentTask.subtasks.findIndex(s => s.id === sibling.id);
-                    return (
-                      <div
-                        key={sibling.id}
-                        className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => {
-                          if (onSiblingSubtaskClick) {
-                            onOpenChange(false);
-                            setTimeout(() => onSiblingSubtaskClick(sibling), 100);
-                          }
-                        }}
-                      >
-                        <div>
-                          <p className="text-sm font-medium">#{siblingIndex + 1}. {sibling.title}</p>
-                          {sibling.description && (
-                            <p className="text-xs text-muted-foreground mt-1">{sibling.description}</p>
-                          )}
-                        </div>
-                        <Badge className={`text-xs ${getStatusColor(sibling.status)}`}>
-                          {sibling.status.replace("-", " ")}
-                        </Badge>
+              {/* Tab Content */}
+              <div className="flex-1 flex flex-col min-h-0">
+                <TabsContent value="logs" className="flex-1 flex flex-col min-h-0 m-0">
+                  <ScrollArea className="flex-1">
+                    <div className="p-4">
+                      <div className="border rounded-lg bg-background">
+                        <ExecutionLogsTable sessionId={sessionId} className="h-[500px] p-4" useRealtimeStreaming={true} />
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="border rounded-lg p-4 bg-muted/20">
-                  <div className="text-center py-8">
-                    <ListChecks className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-sm text-muted-foreground">No other subtasks in this task</p>
-                    <p className="text-xs text-muted-foreground mt-2">This is the only subtask for the parent task</p>
-                  </div>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </ScrollArea>
+                      
+                      {/* Execution History Selector */}
+                      {executionHistory.length > 1 && (
+                        <div className="mt-4 p-3 border rounded-lg bg-muted/20">
+                          <Label className="text-xs font-medium mb-2 block">Previous Executions</Label>
+                          <Select value={sessionId || ""} onValueChange={setSessionId}>
+                            <SelectTrigger className="w-full text-xs">
+                              <SelectValue placeholder="Select execution to view" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {executionHistory.map((exec, index) => (
+                                <SelectItem key={exec.sessionId} value={exec.sessionId}>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span title={dayjs(exec.timestamp).format('LLLL')}>
+                                      {dayjs(exec.timestamp).fromNow()} - {exec.agent}/{exec.sandbox}
+                                    </span>
+                                    {index === 0 && (
+                                      <Badge variant="outline" className="text-xs ml-2">Latest</Badge>
+                                    )}
+                                    {exec.status && (
+                                      <Badge 
+                                        variant="outline" 
+                                        className={cn(
+                                          "text-xs ml-2",
+                                          exec.status === 'completed' ? 'text-green-600 border-green-600' :
+                                          exec.status === 'failed' ? 'text-red-600 border-red-600' :
+                                          'text-yellow-600 border-yellow-600'
+                                        )}
+                                      >
+                                        {exec.status}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+                
+                <TabsContent value="subtasks" className="flex-1 flex flex-col min-h-0 m-0">
+                  <ScrollArea className="flex-1">
+                    <div className="p-4">
+                      {siblingSubtasks.length > 0 ? (
+                        <div className="space-y-2">
+                          {siblingSubtasks.map(sibling => {
+                            // Find the index of this sibling in the parent's subtasks array
+                            const siblingIndex = parentTask.subtasks.findIndex(s => s.id === sibling.id);
+                            return (
+                              <div
+                                key={sibling.id}
+                                className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => {
+                                  if (onSiblingSubtaskClick) {
+                                    onOpenChange(false);
+                                    setTimeout(() => onSiblingSubtaskClick(sibling), 100);
+                                  }
+                                }}
+                              >
+                                <div>
+                                  <p className="text-sm font-medium">#{siblingIndex + 1}. {sibling.title}</p>
+                                  {sibling.description && (
+                                    <p className="text-xs text-muted-foreground mt-1">{sibling.description}</p>
+                                  )}
+                                </div>
+                                <Badge className={`text-xs ${getStatusColor(sibling.status)}`}>
+                                  {sibling.status.replace("-", " ")}
+                                </Badge>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="border rounded-lg p-4 bg-muted/20">
+                          <div className="text-center py-8">
+                            <ListChecks className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                            <p className="text-sm text-muted-foreground">No other subtasks in this task</p>
+                            <p className="text-xs text-muted-foreground mt-2">This is the only subtask for the parent task</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+                
+                <TabsContent value="executions" className="flex-1 flex flex-col min-h-0 m-0">
+                  <ScrollArea className="flex-1">
+                    <div className="p-4">
+                      <div className="border rounded-lg bg-background">
+                        <div className="p-3 border-b">
+                          <h4 className="text-sm font-medium">Execution History</h4>
+                          <p className="text-xs text-muted-foreground mt-1">Click on an execution to view its logs in the Logs tab</p>
+                        </div>
+                        <ExecutionsList 
+                          subtaskId={subtask.id}
+                          projectId={projectId || ''}
+                          selectedExecutionId={selectedExecution?.id}
+                          onSelectExecution={(execution) => {
+                            setSelectedExecution(execution);
+                            setSessionId(execution.sessionId);
+                            // Switch to logs tab when selecting an execution
+                            setActiveTab("logs");
+                          }}
+                          className="h-[450px]"
+                        />
+                      </div>
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+              </div>
+            </Tabs>
+          </div>
+        </div>
       </SheetContent>
     </Sheet>
   );

@@ -172,7 +172,7 @@ export function ExecutionsList({
       <div className="space-y-2 p-1">
         {executions.map((execution, index) => (
           <div
-            key={execution.id}
+            key={`${execution.sessionId}-${index}`}
             className={cn(
               "p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
               selectedExecutionId === execution.id ? 

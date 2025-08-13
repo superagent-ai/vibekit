@@ -138,12 +138,22 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
     const foundTask = allTasks?.find(t => t.id === taskId);
     return foundTask ? foundTask.title : `Task #${taskId}`;
   };
+
+  // Helper function to get task by ID
+  const getTask = (taskId: number): Task | undefined => {
+    return allTasks?.find(t => t.id === taskId);
+  };
   
   // Helper function to get subtask title by ID (for subtask dependencies)
   const getSubtaskTitle = (subtaskId: number): string => {
     if (!task.subtasks) return `Subtask #${subtaskId}`;
     const foundSubtask = task.subtasks.find(s => s.id === subtaskId);
     return foundSubtask ? foundSubtask.title : `Subtask #${subtaskId}`;
+  };
+
+  // Helper function to get subtask by ID
+  const getSubtask = (subtaskId: number): Subtask | undefined => {
+    return task.subtasks?.find(s => s.id === subtaskId);
   };
 
   const getStatusIcon = (status: string) => {
@@ -214,14 +224,14 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
         <SheetHeader className="pb-6">
           <div className="flex items-start justify-between">
             <div className="space-y-1.5 flex-1 pr-2">
-              <SheetTitle className="text-xl flex items-center gap-2">
-                {getStatusIcon(task.status)}
-                <span className="line-clamp-2">{task.title}</span>
-              </SheetTitle>
-              <SheetDescription className="flex items-center gap-2 text-sm">
-                <Hash className="h-3 w-3" />
-                Task #{task.id}
-              </SheetDescription>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs font-mono">
+                  Task {task.id}
+                </Badge>
+                <SheetTitle className="text-lg">
+                  <span className="line-clamp-2">{task.title}</span>
+                </SheetTitle>
+              </div>
             </div>
             <div className="flex flex-col gap-2">
               {isManualTask && onEditClick && (
@@ -237,12 +247,14 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
                   Edit
                 </Button>
               )}
-              <Badge variant={getPriorityColor(task.priority)} className="text-xs">
-                {getPriorityIcon(task.priority)} {task.priority}
-              </Badge>
-              <Badge className={`text-xs ${getStatusColor(task.status)}`}>
-                {task.status.replace("-", " ")}
-              </Badge>
+              <div className="flex gap-2">
+                <Badge variant={getPriorityColor(task.priority)} className="text-xs">
+                  {task.priority}
+                </Badge>
+                <Badge className={`text-xs ${getStatusColor(task.status)}`}>
+                  {task.status.replace("-", " ")}
+                </Badge>
+              </div>
             </div>
           </div>
         </SheetHeader>
@@ -297,16 +309,36 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
                 </h3>
                 <div className="pl-8">
                   <div className="space-y-1">
-                    {task.dependencies.map(dep => (
-                      <div key={dep} className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          #{dep}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {getTaskTitle(dep)}
-                        </span>
-                      </div>
-                    ))}
+                    {task.dependencies.map(dep => {
+                      const dependencyTask = getTask(dep);
+                      const status = dependencyTask?.status || 'unknown';
+                      
+                      return (
+                        <div key={dep} className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            #{dep}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {getTaskTitle(dep)}
+                          </span>
+                          {status !== 'unknown' ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={`h-6 px-2 ${getStatusColor(status)} border hover:bg-opacity-80`}
+                            >
+                              <span className="text-xs">
+                                {status.replace("-", " ")}
+                              </span>
+                            </Button>
+                          ) : (
+                            <Badge variant="outline" className="text-xs text-muted-foreground">
+                              not found
+                            </Badge>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -395,16 +427,36 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
                                     <div>
                                       <p className="text-xs font-medium text-muted-foreground mb-1">Depends on:</p>
                                       <div className="space-y-1">
-                                        {subtask.dependencies.map(dep => (
-                                          <div key={dep} className="flex items-center gap-2">
-                                            <Badge variant="outline" className="text-xs">
-                                              #{dep}
-                                            </Badge>
-                                            <span className="text-xs text-muted-foreground">
-                                              {getSubtaskTitle(dep)}
-                                            </span>
-                                          </div>
-                                        ))}
+                                        {subtask.dependencies.map(dep => {
+                                          const dependencySubtask = getSubtask(dep);
+                                          const status = dependencySubtask?.status || 'unknown';
+                                          
+                                          return (
+                                            <div key={dep} className="flex items-center gap-2">
+                                              <Badge variant="outline" className="text-xs">
+                                                #{dep}
+                                              </Badge>
+                                              <span className="text-xs text-muted-foreground">
+                                                {getSubtaskTitle(dep)}
+                                              </span>
+                                              {status !== 'unknown' ? (
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className={`h-5 px-1.5 ${getStatusColor(status)} border hover:bg-opacity-80`}
+                                                >
+                                                  <span className="text-xs">
+                                                    {status.replace("-", " ")}
+                                                  </span>
+                                                </Button>
+                                              ) : (
+                                                <Badge variant="outline" className="text-xs text-muted-foreground">
+                                                  not found
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
                                       </div>
                                     </div>
                                   )}
