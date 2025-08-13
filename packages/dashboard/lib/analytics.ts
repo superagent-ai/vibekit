@@ -57,8 +57,8 @@ export async function getAnalyticsData(days = 7, agentName?: string): Promise<An
   
   const files = await fs.readdir(analyticsDir);
   const targetFiles = agentName 
-    ? files.filter(f => f.startsWith(`${agentName}-`))
-    : files.filter(f => f.endsWith('.json'));
+    ? files.filter((f: string) => f.startsWith(`${agentName}-`))
+    : files.filter((f: string) => f.endsWith('.json'));
   
   // Filter by date range
   const cutoffDate = new Date();
