@@ -5,7 +5,7 @@ import SandboxUtils from './sandbox-utils.js';
  */
 export class SandboxConfig {
   /**
-   * Resolve sandbox configuration following Gemini CLI precedence model
+   * Resolve sandbox configuration following CLI precedence model
    */
   static async resolveSandboxConfig(cliOptions = {}, settings = {}) {
     let sandboxEnabled = false;
@@ -91,6 +91,7 @@ export class SandboxConfig {
 
     return config;
   }
+
 
   /**
    * Get sandbox flags from environment

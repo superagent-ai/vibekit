@@ -38,15 +38,15 @@ docker --version
 
 ## Configuration
 
-### Using the provider directly
+VibeKit uses a builder pattern with method chaining for type safety and flexibility. Configure your Dagger provider and VibeKit instance:
 
 ```typescript
 import { VibeKit } from "@vibe-kit/sdk";
 import { createLocalProvider } from "@vibe-kit/dagger";
 
 const provider = createLocalProvider({
-  githubToken: process.env.GITHUB_TOKEN, // Optional for Git operations
   preferRegistryImages: true,             // Use optimized images when available
+  dockerHubUser: "your-username",         // For custom image uploads
 });
 
 const vibeKit = new VibeKit()
@@ -73,31 +73,6 @@ console.log(`Server running at: ${host}`);
 
 // Clean up
 await vibeKit.kill();
-```
-
-### Using configuration object
-
-```typescript
-import { VibeKit, VibeConfig } from "@vibe-kit/sdk";
-
-const config: VibeConfig = {
-  agent: {
-    type: "claude",
-    provider: "anthropic",
-    apiKey: process.env.ANTHROPIC_API_KEY!,
-    model: "claude-sonnet-4-20250514",
-  },
-  environment: {
-    type: "dagger",
-    config: {
-      githubToken: process.env.GITHUB_TOKEN,
-      preferRegistryImages: true,
-      dockerHubUser: "your-username", // For custom images
-    },
-  },
-};
-
-const vibeKit = new VibeKit(config);
 ```
 
 ## Quick Setup
@@ -137,17 +112,29 @@ GOOGLE_API_KEY=your_google_key
 Reference them in your code:
 
 ```typescript
+// Dagger provider configuration
 const provider = createLocalProvider({
-  githubToken: process.env.GITHUB_TOKEN,
+  preferRegistryImages: true,
+  dockerHubUser: "your-username",
 });
+
+// GitHub configuration at SDK level
+const vibeKit = new VibeKit()
+  .withSandbox(provider)
+  .withGithub({
+    token: process.env.GITHUB_TOKEN,
+    repository: "owner/repo-name",
+  });
 ```
 
 ## Configuration Options
 
 The `createLocalProvider` function accepts these configuration options:
 
-- **`githubToken`** (optional): GitHub personal access token for Git operations and PR creation
 - **`preferRegistryImages`** (optional): Use pre-built registry images for faster startup (default: `true`)
+- **`dockerHubUser`** (optional): Docker Hub username for uploading custom optimized images
+
+**Note**: Git operations and GitHub integration are handled at the SDK level using `.withGithub()` or the `github` configuration object, not at the provider level.
 - **`dockerHubUser`** (optional): Your Docker Hub username for custom optimized images
 - **`privateRegistry`** (optional): Alternative registry URL (e.g., `"ghcr.io"`)
 

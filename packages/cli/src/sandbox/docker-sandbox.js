@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs-extra';
 import os from 'os';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import SandboxUtils from './sandbox-utils.js';
 import SandboxConfig from './sandbox-config.js';
@@ -24,6 +25,7 @@ export class DockerSandbox {
       cpuLimit: '1.0',
       ...options
     };
+    this._projectId = null; // Cache for project ID
   }
 
 
@@ -157,7 +159,25 @@ export class DockerSandbox {
   }
 
   /**
+   * Generate consistent project ID from project root path
+   * @returns {string} Project ID hash
+   */
+  getProjectId() {
+    if (!this._projectId) {
+      // Generate consistent project ID from project root path
+      this._projectId = crypto
+        .createHash('sha256')
+        .update(this.projectRoot)
+        .digest('hex')
+        .substring(0, 12);
+    }
+    return this._projectId;
+  }
+
+
+  /**
    * Build container arguments
+   * @returns {Promise<Array>} Container args array
    */
   async buildContainerArgs(command, args, options) {
     const containerArgs = [
@@ -186,16 +206,30 @@ export class DockerSandbox {
     // Mount project directory
     containerArgs.push('-v', `${this.projectRoot}:/workspace`);
 
-    // Mount authentication files if they exist
+    // Add any additional container arguments (e.g., for OAuth credentials) BEFORE image name
+    if (options.additionalContainerArgs && Array.isArray(options.additionalContainerArgs)) {
+      containerArgs.push(...options.additionalContainerArgs);
+    }
+
+    // Mount authentication files if they exist (always enabled for persistence)
+    // This works alongside OAuth injection to provide hybrid authentication:
+    // 1. Files are mounted for base authentication and persistence
+    // 2. OAuth credentials (via additionalContainerArgs above) enhance the mounted files
     const homeDir = os.homedir();
     const claudeAuthFile = path.join(homeDir, '.claude.json');
     const anthropicDir = path.join(homeDir, '.anthropic');
     const configDir = path.join(homeDir, '.config');
 
-    // Mount Claude auth file if it exists (read-write so Claude can update it)
-    if (await fs.pathExists(claudeAuthFile)) {
-      containerArgs.push('-v', `${claudeAuthFile}:/root/.claude.json`);
-    }
+    // Note: We intentionally do NOT mount ~/.claude.json directly because:
+    // 1. Mounting the user's file directly causes issues with first time Claude initialization
+    //    and it wants to create it, but we can override settings as well using --settings
+    //    so it merges with values we extract from the user's .claude.json
+    // 2. Additionally, all the project data from the host would be included, which isn't
+    //    accessible from the sandbox and thus would make no sense and even provide
+    //    additional attack vectors to parts of the filesystem in the sandbox that should
+    //    not be configured to do so.
+    // Instead, OAuth credentials, settings, and user-scope MCP server configs are 
+    // extracted from the host file and injected via environment variables above.
 
     // Mount .anthropic directory if it exists
     if (await fs.pathExists(anthropicDir)) {
@@ -240,7 +274,11 @@ export class DockerSandbox {
       runtime: this.runtime,
       imageName: this.imageName,
       imageExists,
-      ready: available && imageExists
+      ready: available && imageExists,
+      credentials: {
+        enabled: true,
+        type: 'oauth-with-settings'
+      }
     };
   }
 }

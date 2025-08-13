@@ -1,5 +1,7 @@
 import { spawn } from 'child_process';
 import chalk from 'chalk';
+import crypto from 'crypto';
+import { ClaudeAuth } from '@vibe-kit/auth/node';
 
 /**
  * Utility functions for sandbox operations
@@ -94,6 +96,113 @@ export class SandboxUtils {
    */
   static logSandboxError(message) {
     console.log(chalk.red(`❌ [sandbox] ${message}`));
+  }
+
+  // OAuth Authentication Utilities
+
+  /**
+   * Create OAuth credentials for Claude CLI authentication
+   * @returns {Promise<Object|null>} OAuth credentials with settings or null if failed
+   */
+  static async createOAuthCredentials() {
+    try {
+      // Get valid OAuth token from @vibe-kit/auth and full token data  
+      const token = await ClaudeAuth.getValidToken();
+      const tokenData = await ClaudeAuth.getRawToken();
+      
+      if (!token || !tokenData) {
+        throw new Error('No valid authentication token');
+      }
+
+      // Generate settings JSON for onboarding bypass
+      const settings = this.generateClaudeSettings(tokenData);
+      
+      // Return OAuth token with settings for --settings flag approach
+      const credentialInfo = {
+        type: 'oauth-with-settings',
+        oauthToken: token,
+        settings: settings,
+        tokenData: tokenData
+      };
+      
+      this.logSandboxOperation('Generated OAuth credentials with settings for onboarding bypass');
+      return credentialInfo;
+    } catch (error) {
+      this.logSandboxWarning(`OAuth credential creation failed: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Generate Claude CLI settings JSON for --settings flag
+   * @param {Object} tokenData - Raw token data from ClaudeAuth
+   * @returns {Object} Settings object for Claude CLI
+   */
+  static generateClaudeSettings(tokenData) {
+    const settings = {
+      hasCompletedOnboarding: true, // KEY: Skip first-time setup
+      numStartups: 2, // Indicate it's been started before
+      installMethod: 'vibekit-oauth', // Custom install method identifier
+      autoUpdates: true,
+      userID: this.generateUserIdFromToken(tokenData),
+      tipsHistory: {
+        'new-user-warmup': 1
+      },
+      firstStartTime: new Date().toISOString(),
+      // Project-level configuration for /workspace
+      projects: {
+        "/workspace": {
+          allowedTools: [],
+          history: [],
+          mcpContextUris: [],
+          mcpServers: {},
+          enabledMcpjsonServers: [],
+          disabledMcpjsonServers: [],
+          hasTrustDialogAccepted: true, // KEY: Skip trust dialog prompts
+          hasTrustDialogHooksAccepted: false,
+          projectOnboardingSeenCount: 1,
+          hasClaudeMdExternalIncludesApproved: false,
+          hasClaudeMdExternalIncludesWarningShown: false
+        }
+      },
+      // Add OAuth account info if available
+      ...(tokenData.account && {
+        oauthAccount: {
+          uuid: tokenData.account.uuid,
+          email_address: tokenData.account.email_address
+        }
+      }),
+      // Add organization info if available  
+      ...(tokenData.organization && {
+        organization: {
+          uuid: tokenData.organization.uuid,
+          name: tokenData.organization.name
+        }
+      })
+    };
+    
+    return settings;
+  }
+
+  /**
+   * Generate consistent user ID from token data
+   * @param {Object} tokenData - Raw token data from ClaudeAuth
+   * @returns {string} SHA256 hash of user identifier
+   */
+  static generateUserIdFromToken(tokenData) {
+    // Use account UUID if available, otherwise generate from token
+    if (tokenData.account && tokenData.account.uuid) {
+      return crypto
+        .createHash('sha256')
+        .update(tokenData.account.uuid)
+        .digest('hex');
+    }
+    
+    // Fallback: generate from access token (consistent per user)
+    return crypto
+      .createHash('sha256')
+      .update(tokenData.access_token.substring(0, 50)) // Use first 50 chars for consistency
+      .digest('hex');
   }
 }
 

@@ -4,6 +4,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { setupAliases } from '../utils/aliases.js';
+import { revertAnthropicBaseURL } from '../utils/claude-settings.js';
 import proxyManager from '../proxy/manager.js';
 import dashboardManager from '../dashboard/manager.js';
 import CFonts from 'cfonts';
@@ -26,8 +27,9 @@ const Settings = ({ showWelcome = false }) => {
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [currentMenu, setCurrentMenu] = useState('main'); // 'main', 'analytics', 'proxy', 'sandbox', 'ide'
+  const [currentMenu, setCurrentMenu] = useState('main'); // 'main', 'analytics', 'proxy', 'sandbox', 'ide', 'auth', 'auth-status'
   const [logoRendered, setLogoRendered] = useState(false);
+  const [authStatus, setAuthStatus] = useState(null);
   const { exit } = useApp();
 
   const settingsPath = path.join(os.homedir(), '.vibekit', 'settings.json');
@@ -55,6 +57,11 @@ const Settings = ({ showWelcome = false }) => {
             label: 'IDE',
             description: 'Configure IDE integrations and aliases',
             action: 'open-ide'
+          },
+          {
+            label: 'Authentication',
+            description: 'Manage authentication for agents',
+            action: 'open-auth'
           },
           {
             label: 'Discord',
@@ -130,6 +137,71 @@ const Settings = ({ showWelcome = false }) => {
             action: 'back-to-main'
           }
         ];
+      case 'auth':
+        return [
+          {
+            label: 'Login to Claude',
+            description: 'Authenticate with Claude using OAuth',
+            action: 'auth-login-claude'
+          },
+          {
+            label: 'View Auth Status',
+            description: 'Check authentication status for all agents',
+            action: 'auth-status'
+          },
+          {
+            label: 'Back to Main Menu',
+            description: 'Return to main settings menu',
+            action: 'back-to-main'
+          }
+        ];
+      case 'auth-status':
+        const statusItems = [];
+        
+        if (authStatus) {
+          authStatus.forEach(({ agent, status }) => {
+            let statusText = '';
+            let color = 'white';
+            
+            if (status.supported) {
+              if (status.authenticated) {
+                statusText = `${agent.padEnd(8)} Authenticated (OAuth)`;
+                color = 'green';
+                if (status.expiresAt) {
+                  statusText += ` - Expires: ${status.expiresAt.toLocaleString()}`;
+                }
+              } else {
+                statusText = `${agent.padEnd(8)} Not authenticated`;
+                color = 'red';
+              }
+            } else {
+              statusText = `${agent.padEnd(8)} (coming soon)`;
+              color = 'gray';
+            }
+            
+            statusItems.push({
+              label: statusText,
+              description: '',
+              action: 'no-action',
+              color: color
+            });
+          });
+        } else {
+          statusItems.push({
+            label: 'Loading authentication status...',
+            description: '',
+            action: 'no-action',
+            color: 'gray'
+          });
+        }
+        
+        statusItems.push({
+          label: 'Back',
+          description: 'Return to authentication menu',
+          action: 'back-to-auth'
+        });
+        
+        return statusItems;
       default:
         return [];
     }
@@ -219,6 +291,10 @@ const Settings = ({ showWelcome = false }) => {
           setCurrentMenu('ide');
           setSelectedIndex(0);
           break;
+        case 'open-auth':
+          setCurrentMenu('auth');
+          setSelectedIndex(0);
+          break;
         case 'open-discord':
           // Open Discord invite link
           import('child_process').then(({ exec }) => {
@@ -273,9 +349,18 @@ const Settings = ({ showWelcome = false }) => {
             } catch (error) {
               console.error('\n❌ Failed to start proxy server:', error.message);
             }
-          } else if (!newProxySettings.proxy.enabled && proxyManager.isRunning()) {
-            // Stop proxy server if disabled
-            proxyManager.stop();
+          } else if (!newProxySettings.proxy.enabled) {
+            // Stop proxy server if disabled and running
+            if (proxyManager.isRunning()) {
+              proxyManager.stop();
+            }
+            
+            // Always revert ANTHROPIC_BASE_URL when proxy is disabled, regardless of server status
+            try {
+              await revertAnthropicBaseURL();
+            } catch (error) {
+              console.error('\n❌ Failed to revert ANTHROPIC_BASE_URL:', error.message);
+            }
           }
           break;
         case 'toggle-redaction':
@@ -326,6 +411,51 @@ const Settings = ({ showWelcome = false }) => {
             console.error('Failed to setup aliases:', error.message);
           });
           break;
+        case 'auth-login-claude':
+          // Exit settings and run Claude login
+          exit();
+          try {
+            const { ClaudeAuth } = await import('@vibe-kit/auth/node');
+            await ClaudeAuth.authenticate();
+            console.log('✅ Authentication successful!');
+            console.log('📝 Credentials saved to ~/.vibekit/claude-oauth-token.json');
+          } catch (error) {
+            console.error('❌ Authentication failed:', error.message);
+          }
+          break;
+        case 'auth-status':
+          // Load auth status and switch to auth-status menu
+          try {
+            const { default: AuthHelperFactory } = await import('../auth/auth-helper-factory.js');
+            const allAgents = ['claude', 'codex', 'grok', 'gemini'];
+            const statusData = [];
+            
+            for (const agentName of allAgents) {
+              const status = await AuthHelperFactory.getAuthStatus(agentName);
+              statusData.push({ agent: agentName, status });
+            }
+            
+            setAuthStatus(statusData);
+          } catch (error) {
+            setAuthStatus([{ 
+              agent: 'error', 
+              status: { 
+                supported: false, 
+                authenticated: false, 
+                message: `Failed to retrieve auth status: ${error.message}` 
+              } 
+            }]);
+          }
+          setCurrentMenu('auth-status');
+          setSelectedIndex(0);
+          break;
+        case 'back-to-auth':
+          setCurrentMenu('auth');
+          setSelectedIndex(0);
+          break;
+        case 'no-action':
+          // Do nothing for display-only items
+          break;
         case 'exit':
           exit();
           break;
@@ -361,6 +491,10 @@ const Settings = ({ showWelcome = false }) => {
         return '📦 Sandbox Settings';
       case 'ide':
         return '💻 IDE Settings';
+      case 'auth':
+        return '🔐 Authentication Settings';
+      case 'auth-status':
+        return '🔐 Authentication Status';
       default:
         return '🖖 VibeKit Settings';
     }
@@ -398,32 +532,50 @@ const Settings = ({ showWelcome = false }) => {
         <Box flexDirection="column">
           {menuItems.map((item, index) => (
             <Box key={index} marginY={0}>
-              <Text color={index === selectedIndex ? 'cyan' : (item.color || 'white')}>
-                {index === selectedIndex ? '❯ ' : '  '}
-                {item.label.includes('✓ ON') ? (
-                  <>
-                    {item.label.replace(/✓ ON.*/, '')}
-                    <Text color="green">✓ ON</Text>
-                    {item.label.includes('(requires restart)') && (
-                      <Text color="gray" dimColor> (requires restart)</Text>
-                    )}
-                  </>
-                ) : item.label.includes('✗ OFF') ? (
-                  <>
-                    {item.label.replace(/✗ OFF.*/, '')}
-                    <Text color="red">✗ OFF</Text>
-                    {item.label.includes('(requires restart)') && (
-                      <Text color="gray" dimColor> (requires restart)</Text>
-                    )}
-                  </>
-                ) : item.label.includes('Sandbox: ') ? (
-                  <>
-                    Sandbox: <Text color="green">{settings.sandbox.type}</Text>
-                  </>
-                ) : (
-                  item.label
-                )}
-              </Text>
+              {item.label.includes('Not authenticated') ? (
+                <Text color={index === selectedIndex ? 'cyan' : 'white'}>
+                  {index === selectedIndex ? '❯ ' : '  '}
+                  {item.label.replace('Not authenticated', '')}
+                  <Text color="red">Not authenticated</Text>
+                </Text>
+              ) : item.label.includes('(coming soon)') ? (
+                <Text color={index === selectedIndex ? 'cyan' : 'white'}>
+                  {index === selectedIndex ? '❯ ' : '  '}
+                  {item.label.replace('(coming soon)', '')}
+                  <Text color="gray" dimColor>(coming soon)</Text>
+                </Text>
+              ) : item.label.includes('Authenticated (OAuth)') ? (
+                <Text color={index === selectedIndex ? 'cyan' : 'white'}>
+                  {index === selectedIndex ? '❯ ' : '  '}{item.label}
+                </Text>
+              ) : (
+                <Text color={index === selectedIndex ? 'cyan' : (item.color || 'white')}>
+                  {index === selectedIndex ? '❯ ' : '  '}
+                  {item.label.includes('✓ ON') ? (
+                    <>
+                      {item.label.replace(/✓ ON.*/, '')}
+                      <Text color="green">✓ ON</Text>
+                      {item.label.includes('(requires restart)') && (
+                        <Text color="gray" dimColor> (requires restart)</Text>
+                      )}
+                    </>
+                  ) : item.label.includes('✗ OFF') ? (
+                    <>
+                      {item.label.replace(/✗ OFF.*/, '')}
+                      <Text color="red">✗ OFF</Text>
+                      {item.label.includes('(requires restart)') && (
+                        <Text color="gray" dimColor> (requires restart)</Text>
+                      )}
+                    </>
+                  ) : item.label.includes('Sandbox: ') ? (
+                    <>
+                      Sandbox: <Text color="green">{settings.sandbox.type}</Text>
+                    </>
+                  ) : (
+                    item.label
+                  )}
+                </Text>
+              )}
             </Box>
           ))}
         </Box>

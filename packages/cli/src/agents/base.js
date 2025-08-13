@@ -68,7 +68,8 @@ class BaseAgent {
         this.getAgentCommand(),
         args,
         this.sandboxOptions,
-        this.settings
+        this.settings,
+        this.agentName  // Pass agent name for simplified auth
       );
 
       // If sandbox execution succeeded, return result with analytics

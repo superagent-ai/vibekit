@@ -505,7 +505,10 @@ export class LocalSandboxProvider implements SandboxProvider {
     agentType?: AgentType,
     workingDirectory?: string
   ): Promise<SandboxInstance> {
-    const sandboxId = `dagger-${agentType || "default"}-${Date.now().toString(36)}`;
+    // Generate unique ID with timestamp + random suffix to avoid collisions
+    const timestamp = Date.now().toString(36);
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const sandboxId = `dagger-${agentType || "default"}-${timestamp}-${randomSuffix}`;
     const workDir = workingDirectory || "/vibe0";
 
     this.logger.info(`Creating sandbox instance`, { sandboxId, agentType, workDir });

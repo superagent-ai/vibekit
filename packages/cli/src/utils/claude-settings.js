@@ -3,7 +3,12 @@ import path from 'path';
 import os from 'os';
 
 // Function to setup proxy settings from ANTHROPIC_BASE_URL
-export async function setupProxySettings() {
+export async function setupProxySettings(proxyEnabled = true) {
+  // If proxy is disabled, don't modify settings
+  if (!proxyEnabled) {
+    return null;
+  }
+
   // Look for settings files starting from current directory and walking up
   let currentDir = process.cwd();
   const settingsFiles = [];
@@ -33,8 +38,8 @@ export async function setupProxySettings() {
           settings.env = {};
         }
         
-        // Store original ANTHROPIC_BASE_URL as VIBEKIT_PROXY_TARGET_URL if it exists and is not localhost
-        if (settings.env.ANTHROPIC_BASE_URL && !settings.env.ANTHROPIC_BASE_URL.includes('localhost')) {
+        // Store original ANTHROPIC_BASE_URL as VIBEKIT_PROXY_TARGET_URL if it exists
+        if (settings.env.ANTHROPIC_BASE_URL && settings.env.ANTHROPIC_BASE_URL !== 'http://localhost:8080') {
           settings.env.VIBEKIT_PROXY_TARGET_URL = settings.env.ANTHROPIC_BASE_URL;
         }
         
@@ -79,4 +84,62 @@ export async function getVibeKitProxyTargetURL() {
   }
 
   return null;
+}
+
+// Function to revert ANTHROPIC_BASE_URL when proxy is turned off
+export async function revertAnthropicBaseURL() {
+  // Look for settings files starting from current directory and walking up
+  let currentDir = process.cwd();
+  const settingsFiles = [];
+  
+  // Walk up directory tree to find .claude folder
+  while (currentDir !== path.dirname(currentDir)) {
+    settingsFiles.push(
+      path.join(currentDir, '.claude', 'settings.local.json'),
+      path.join(currentDir, '.claude', 'settings.json')
+    );
+    currentDir = path.dirname(currentDir);
+  }
+  
+  // Also check home directory
+  settingsFiles.push(
+    path.join(os.homedir(), '.claude', 'settings.local.json'),
+    path.join(os.homedir(), '.claude', 'settings.json')
+  );
+
+  let modified = false;
+
+  for (const settingsFile of settingsFiles) {
+    try {
+      if (await fs.pathExists(settingsFile)) {
+        const settings = await fs.readJson(settingsFile);
+        
+        if (settings.env) {
+          let fileModified = false;
+          
+          // If there's a VIBEKIT_PROXY_TARGET_URL, restore it as ANTHROPIC_BASE_URL
+          if (settings.env.VIBEKIT_PROXY_TARGET_URL) {
+            settings.env.ANTHROPIC_BASE_URL = settings.env.VIBEKIT_PROXY_TARGET_URL;
+            // Remove VIBEKIT_PROXY_TARGET_URL after restoring
+            delete settings.env.VIBEKIT_PROXY_TARGET_URL;
+            fileModified = true;
+          } else if (settings.env.ANTHROPIC_BASE_URL === 'http://localhost:8080') {
+            // If ANTHROPIC_BASE_URL is set to proxy but no target URL exists, remove it
+            delete settings.env.ANTHROPIC_BASE_URL;
+            fileModified = true;
+          }
+          
+          // Write back to the settings file if modified
+          if (fileModified) {
+            await fs.writeJson(settingsFile, settings, { spaces: 2 });
+            modified = true;
+          }
+        }
+      }
+    } catch (error) {
+      // Ignore JSON parse errors, continue checking other files
+    }
+  }
+
+  return modified;
 }
