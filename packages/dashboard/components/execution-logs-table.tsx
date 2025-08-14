@@ -230,6 +230,9 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
       // Not JSON, continue with text-based detection
     }
     
+    // Check for Session started messages first  
+    if (data.toLowerCase().includes('session') && data.toLowerCase().includes('started')) return <Clock className="h-4 w-4" />;
+    
     // Check for Agent initialization messages first (higher priority than container/sandbox)
     if (data.toLowerCase().includes('initializing') && data.toLowerCase().includes('agent')) return <Bot className="h-4 w-4" />;
     
@@ -303,6 +306,11 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   };
   
   const getLogTypeLabel = (type: string, data: string) => {
+    // Handle "end" type messages first
+    if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
+      return 'Session';
+    }
+    
     // Handle JSON updates first to check VibeKit update types
     try {
       const parsed = JSON.parse(data);
@@ -312,7 +320,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
         try {
           const innerParsed = JSON.parse(parsed.data);
           if (innerParsed.type === 'end') {
-            return 'Result';
+            return 'Session';
           }
         } catch (e) {
           // Continue with outer parsing
@@ -349,6 +357,11 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
       if (parsed.type === 'repository_clone') return 'Git';
     } catch (e) {
       // Not JSON, continue with text-based detection
+    }
+    
+    // Check for Session started messages first
+    if (data.toLowerCase().includes('session') && data.toLowerCase().includes('started')) {
+      return 'Start';
     }
     
     // Check for Agent initialization messages first (higher priority than container/sandbox)
@@ -452,9 +465,64 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   };
 
   const processLogMessage = (data: string, timestamp: number): string | React.ReactNode => {
-    // Handle "end" type messages - skip malformed ones
+    // Handle "end" type messages with proper error handling
     if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
-      // Simple fallback - just show session ended for now to avoid JSON errors
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.type === 'end' && parsed.output) {
+          // Parse the output field which contains execution results
+          let output;
+          try {
+            output = typeof parsed.output === 'string' ? JSON.parse(parsed.output) : parsed.output;
+          } catch {
+            return '✅ Session completed';
+          }
+          
+          if (output && output.exitCode !== undefined) {
+            const success = output.exitCode === 0;
+            
+            // Try to extract session results from stdout
+            if (output.stdout && typeof output.stdout === 'string') {
+              const lines = output.stdout.split('\n').filter(line => line.trim());
+              const resultLine = lines.find(line => {
+                try {
+                  const lineData = JSON.parse(line);
+                  return lineData.type === 'result';
+                } catch { return false; }
+              });
+              
+              if (resultLine) {
+                try {
+                  const resultData = JSON.parse(resultLine);
+                  const duration = resultData.duration_ms ? `${Math.round(resultData.duration_ms / 1000)}s` : '';
+                  const cost = resultData.total_cost_usd ? `$${resultData.total_cost_usd.toFixed(4)}` : '';
+                  const turns = resultData.num_turns ? `${resultData.num_turns} turns` : '';
+                  
+                  let summary = success ? '✅ Session completed' : '❌ Session failed';
+                  
+                  const details = [duration, cost, turns].filter(Boolean);
+                  if (details.length > 0) {
+                    summary += ` (${details.join(', ')})`;
+                  }
+                  
+                  return summary;
+                } catch {
+                  // If we can't parse the result line, fall through to simple success/failure
+                }
+              }
+            }
+            
+            // Fallback - just show success or failure
+            return success ? '✅ Session completed successfully' : '❌ Session failed';
+          }
+        }
+      } catch (parseError) {
+        // JSON parsing failed - don't throw error, just return simple message
+        console.warn('Could not parse end message JSON:', parseError.message);
+        console.warn('Problematic data (first 200 chars):', data.substring(0, 200));
+      }
+      
+      // Final fallback for any parsing issues
       return '🏁 Session ended';
     }
     
@@ -761,7 +829,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
             className="flex-1 overflow-auto min-h-0"
             onMouseEnter={() => { shouldAutoScroll.current = false; }}
             onMouseLeave={() => { shouldAutoScroll.current = true; }}
-            style={{ maxHeight: '40vh' }}
+            style={{ maxHeight: '30vh' }}
           >
             <Table>
               <TableBody>
