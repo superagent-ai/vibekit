@@ -33,6 +33,9 @@ export interface Execution {
   status: 'running' | 'completed' | 'failed';
   exitCode?: number;
   duration?: number;
+  taskId?: string;
+  taskTitle?: string;
+  subtaskTitle?: string;
 }
 
 interface ExecutionsListProps {
@@ -251,9 +254,17 @@ export function ExecutionsList({
               )}
             </div>
             
-            {/* Session ID (hidden but useful for debugging) */}
-            <div className="mt-1 text-xs text-muted-foreground/50 font-mono">
-              Session: {execution.sessionId.slice(-8)}
+            {/* Task Hierarchy and Session ID */}
+            <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground/50">
+              {execution.taskId && (
+                <span className="font-medium">
+                  Task {execution.taskId}.{subtaskId}
+                  {execution.subtaskTitle && `: ${execution.subtaskTitle}`}
+                </span>
+              )}
+              <span className="font-mono">
+                Session: {execution.sessionId.slice(-8)}
+              </span>
             </div>
           </div>
         ))}

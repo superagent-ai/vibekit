@@ -2,11 +2,13 @@ import { NextRequest } from 'next/server';
 import { SessionLogger } from '@/lib/session-logger';
 import path from 'path';
 import os from 'os';
-import { watch } from 'fs';
+import chokidar, { FSWatcher } from 'chokidar';
 import { promises as fs } from 'fs';
 
 // Keep-alive interval to prevent connection timeout
 const KEEP_ALIVE_INTERVAL = 30000; // 30 seconds
+// Polling interval for hybrid approach
+const LOG_POLL_INTERVAL = 250; // 250ms
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +17,8 @@ export async function GET(
   const { id: sessionId } = await params;
   const encoder = new TextEncoder();
   let keepAliveTimer: NodeJS.Timeout | null = null;
-  let watcher: any = null;
+  let watcher: FSWatcher | null = null;
+  let pollTimer: NodeJS.Timeout | null = null;
   let lastLine = 0;
   
   const stream = new ReadableStream({
@@ -69,11 +72,13 @@ export async function GET(
       const metadataFile = path.join(sessionDir, 'metadata.json');
       
       // Function to check for new logs
-      const checkForNewLogs = async () => {
+      const checkForNewLogs = async (source = 'unknown') => {
         try {
           const result = await SessionLogger.tailSession(sessionId, lastLine);
           
           if (result.logs.length > 0) {
+            console.log(`[SSE] Found ${result.logs.length} new logs for session ${sessionId} (source: ${source})`);
+            
             // Send new logs
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({
               type: 'logs',
@@ -86,6 +91,8 @@ export async function GET(
             // Check if session ended
             const endLog = result.logs.find(log => log.type === 'end');
             if (endLog) {
+              console.log(`[SSE] Session ${sessionId} ended`);
+              
               // Send updated metadata
               try {
                 const session = await SessionLogger.readSession(sessionId);
@@ -103,10 +110,14 @@ export async function GET(
                 console.error('Failed to read final metadata:', error);
               }
               
-              // Stop watching since session is complete
+              // Stop watching and polling since session is complete
               if (watcher) {
                 watcher.close();
                 watcher = null;
+              }
+              if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
               }
             }
           }
@@ -118,18 +129,27 @@ export async function GET(
       // Watch for changes to the log file
       try {
         // Initial check for logs
-        await checkForNewLogs();
+        await checkForNewLogs('initial');
         
-        // Set up file watcher
-        watcher = watch(logFile, async (eventType) => {
-          if (eventType === 'change') {
-            await checkForNewLogs();
-          }
+        // Set up chokidar file watcher with reliability options
+        watcher = chokidar.watch([logFile, metadataFile], {
+          persistent: true,
+          usePolling: true,    // Force polling for maximum reliability
+          interval: 100,       // Poll every 100ms
+          binaryInterval: 100, // Check binary files every 100ms
+          awaitWriteFinish: {  // Wait for write operations to finish
+            stabilityThreshold: 50,  // Wait 50ms for file to be stable
+            pollInterval: 10         // Check every 10ms during write
+          },
+          ignoreInitial: true  // Don't trigger on initial scan
         });
         
-        // Also watch metadata file for status updates
-        const metadataWatcher = watch(metadataFile, async (eventType) => {
-          if (eventType === 'change') {
+        // Handle log file changes
+        watcher.on('change', async (filePath: string) => {
+          const filename = filePath.split('/').pop();
+          if (filename === 'execution.log') {
+            await checkForNewLogs('chokidar');
+          } else if (filename === 'metadata.json') {
             try {
               const content = await fs.readFile(metadataFile, 'utf8');
               const metadata = JSON.parse(content);
@@ -145,38 +165,64 @@ export async function GET(
         });
         
         // Handle watcher errors
-        watcher.on('error', (error: Error) => {
-          console.error('Log file watcher error:', error);
+        watcher.on('error', (error: unknown) => {
+          console.error('Chokidar watcher error:', error);
         });
         
-        metadataWatcher.on('error', (error: Error) => {
-          console.error('Metadata watcher error:', error);
-        });
+        // Add hybrid polling as fallback - this ensures we never miss updates
+        pollTimer = setInterval(async () => {
+          await checkForNewLogs('polling');
+        }, LOG_POLL_INTERVAL);
+        
+        console.log(`[SSE] Set up chokidar watcher and polling for session ${sessionId}`);
       } catch (error: any) {
         // File might not exist yet - poll for it
         if (error.code === 'ENOENT') {
-          // Poll every 500ms until file exists
-          const pollInterval = setInterval(async () => {
+          console.log(`[SSE] Log file doesn't exist yet for session ${sessionId}, polling for creation...`);
+          
+          // Poll every 250ms until file exists
+          const fileExistsInterval = setInterval(async () => {
             try {
               await fs.access(logFile);
-              clearInterval(pollInterval);
+              clearInterval(fileExistsInterval);
               
-              // File exists now, set up watcher
-              await checkForNewLogs();
+              console.log(`[SSE] Log file created for session ${sessionId}, setting up watcher`);
               
-              watcher = watch(logFile, async (eventType) => {
-                if (eventType === 'change') {
-                  await checkForNewLogs();
+              // File exists now, set up chokidar watcher
+              await checkForNewLogs('file-created');
+              
+              watcher = chokidar.watch([logFile, metadataFile], {
+                persistent: true,
+                usePolling: true,
+                interval: 100,
+                binaryInterval: 100,
+                awaitWriteFinish: {
+                  stabilityThreshold: 50,
+                  pollInterval: 10
+                },
+                ignoreInitial: true
+              });
+              
+              watcher.on('change', async (filePath: string) => {
+                const filename = filePath.split('/').pop();
+                if (filename === 'execution.log') {
+                  await checkForNewLogs('chokidar-delayed');
                 }
               });
+              
+              // Also start hybrid polling
+              pollTimer = setInterval(async () => {
+                await checkForNewLogs('polling-delayed');
+              }, LOG_POLL_INTERVAL);
+              
             } catch {
               // Still doesn't exist, keep polling
             }
-          }, 500);
+          }, 250);
           
           // Clean up interval on close
           request.signal.addEventListener('abort', () => {
-            clearInterval(pollInterval);
+            clearInterval(fileExistsInterval);
           });
         } else {
           console.error('Failed to set up file watcher:', error);
@@ -195,6 +241,13 @@ export async function GET(
         watcher.close();
         watcher = null;
       }
+      
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      
+      console.log(`[SSE] Cleaned up resources for session ${sessionId}`);
     }
   });
   

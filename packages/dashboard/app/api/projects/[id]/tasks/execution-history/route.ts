@@ -4,7 +4,10 @@ import path from 'path';
 import os from 'os';
 
 interface ExecutionRecord {
+  taskId?: string;
+  taskTitle?: string;
   subtaskId: number;
+  subtaskTitle?: string;
   sessionId: string;
   timestamp: string;
   agent: string;

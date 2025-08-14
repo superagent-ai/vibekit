@@ -22,6 +22,8 @@ export interface SessionMetadata {
   projectRoot?: string;
   taskId?: string;
   taskTitle?: string;
+  subtaskId?: string;
+  subtaskTitle?: string;
   startTime: number;
   endTime?: number;
   status: 'running' | 'completed' | 'failed';
@@ -46,6 +48,8 @@ export class SessionLogger {
       projectRoot?: string;
       taskId?: string;
       taskTitle?: string;
+      subtaskId?: string;
+      subtaskTitle?: string;
     }
   ) {
     this.sessionId = sessionId;
@@ -77,13 +81,14 @@ export class SessionLogger {
     await this.log('start', `Session ${this.sessionId} started for agent ${this.metadata.agentName}`, {
       agentName: this.metadata.agentName,
       projectId: this.metadata.projectId,
-      taskId: this.metadata.taskId
+      taskId: this.metadata.taskId,
+      subtaskId: this.metadata.subtaskId
     });
     
-    // Start periodic flush every 500ms for real-time updates
+    // Start periodic flush every 250ms for faster real-time updates
     this.flushInterval = setInterval(() => {
       this.flush().catch(err => console.error('Failed to flush logs:', err));
-    }, 500);
+    }, 250);
   }
 
   async log(type: LogEntry['type'], data: string, metadata?: LogEntry['metadata']): Promise<void> {
@@ -104,6 +109,12 @@ export class SessionLogger {
     // Parse for commands if it's stdout/stderr
     if ((type === 'stdout' || type === 'stderr') && data) {
       this.detectAndLogCommands(data);
+    }
+    
+    // Immediate flush for critical events to ensure real-time visibility
+    const criticalTypes = ['start', 'end', 'error', 'command', 'update', 'info'];
+    if (criticalTypes.includes(type)) {
+      await this.flush();
     }
   }
 
@@ -438,9 +449,16 @@ export class SessionLogger {
     this.logBuffer = [];
 
     try {
-      // Append to log file
+      // Append to log file with sync flag for immediate write
       const logLines = entriesToFlush.map(entry => JSON.stringify(entry)).join('\n') + '\n';
-      await fs.appendFile(this.logFile, logLines);
+      await fs.appendFile(this.logFile, logLines, { flag: 'a' });
+      
+      // Force file system sync for immediate visibility
+      const fileHandle = await fs.open(this.logFile, 'r+');
+      await fileHandle.sync();
+      await fileHandle.close();
+      
+      console.log(`[SessionLogger] Flushed ${entriesToFlush.length} logs for session ${this.sessionId}`);
     } catch (error) {
       console.error('Failed to write logs:', error);
       // Put entries back if write failed

@@ -12,6 +12,10 @@ import { SessionLogger } from '@/lib/session-logger';
 // import { createNorthflankProvider } from '@vibe-kit/northflank';
 
 interface ExecuteSubtaskRequest {
+  parentTask: {
+    id: number;
+    title: string;
+  };
   subtask: {
     id: number;
     title: string;
@@ -77,7 +81,7 @@ export async function POST(
   try {
     const { id } = await params;
     const body: ExecuteSubtaskRequest = await request.json();
-    const { subtask, agent, sandbox, branch, projectRoot } = body;
+    const { parentTask, subtask, agent, sandbox, branch, projectRoot } = body;
     
     // Check Docker status if using Dagger sandbox
     if (sandbox === 'dagger') {
@@ -98,7 +102,10 @@ export async function POST(
     
     console.log('Executing subtask:', {
       projectId: id,
+      taskId: parentTask.id,
+      taskTitle: parentTask.title,
       subtaskId: subtask.id,
+      subtaskTitle: subtask.title,
       agent,
       sandbox,
       branch,
@@ -112,8 +119,10 @@ export async function POST(
     sessionLogger = new SessionLogger(sessionId, agent, {
       projectId: id,
       projectRoot,
-      taskId: subtask.id.toString(),
-      taskTitle: subtask.title
+      taskId: parentTask.id.toString(),
+      taskTitle: parentTask.title,
+      subtaskId: subtask.id.toString(),
+      subtaskTitle: subtask.title
     });
     await sessionLogger.initialize();
     console.log('Session logger initialized:', sessionId);

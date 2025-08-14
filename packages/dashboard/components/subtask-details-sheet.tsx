@@ -580,6 +580,10 @@ export function SubtaskDetailsSheet({
                               'Content-Type': 'application/json',
                             },
                             body: JSON.stringify({
+                              parentTask: {
+                                id: parentTask.id,
+                                title: parentTask.title,
+                              },
                               subtask: {
                                 id: subtask.id,
                                 title: subtask.title,
@@ -611,7 +615,10 @@ export function SubtaskDetailsSheet({
                                   'Content-Type': 'application/json',
                                 },
                                 body: JSON.stringify({
+                                  taskId: parentTask.id.toString(),
+                                  taskTitle: parentTask.title,
                                   subtaskId: subtask.id,
+                                  subtaskTitle: subtask.title,
                                   sessionId: executionSessionId,
                                   timestamp: new Date().toISOString(),
                                   agent: selectedAgent,
