@@ -27,6 +27,7 @@ interface ExecuteSubtaskRequest {
   sandbox: string;
   branch: string;
   projectRoot: string;
+  sessionId?: string;
 }
 
 async function checkDockerStatus() {
@@ -81,7 +82,7 @@ export async function POST(
   try {
     const { id } = await params;
     const body: ExecuteSubtaskRequest = await request.json();
-    const { parentTask, subtask, agent, sandbox, branch, projectRoot } = body;
+    const { parentTask, subtask, agent, sandbox, branch, projectRoot, sessionId: providedSessionId } = body;
     
     // Check Docker status if using Dagger sandbox
     if (sandbox === 'dagger') {
@@ -112,8 +113,9 @@ export async function POST(
       projectRoot
     });
     
-    // Generate session ID (same for both analytics and session logger)
-    const sessionId = Date.now().toString();
+    // Use provided session ID or generate new one
+    const sessionId = providedSessionId || Date.now().toString();
+    console.log('Using session ID for execution:', sessionId, providedSessionId ? '(provided)' : '(generated)');
     
     // Initialize session logger for real-time logging
     sessionLogger = new SessionLogger(sessionId, agent, {

@@ -585,14 +585,26 @@ export function SubtaskDetailsSheet({
                         
                         setIsExecuting(true);
                         
+                        // Switch to logs tab immediately to show real-time updates
+                        setActiveTab("logs");
+                        
                         try {
+                          // Generate session ID immediately to establish SSE connection
+                          const executionSessionId = Date.now().toString();
+                          console.log("Generated session ID for real-time logging:", executionSessionId);
+                          setSessionId(executionSessionId);
+                          
+                          // Small delay to allow SSE connection to establish
+                          await new Promise(resolve => setTimeout(resolve, 100));
+                          
                           console.log("Executing subtask:", {
                             projectId,
                             subtask,
                             agent: selectedAgent,
                             sandbox: selectedSandbox,
                             branch: selectedBranch,
-                            projectRoot
+                            projectRoot,
+                            sessionId: executionSessionId
                           });
                           
                           const response = await fetch(`/api/projects/${projectId}/execute-subtask`, {
@@ -616,6 +628,7 @@ export function SubtaskDetailsSheet({
                               sandbox: selectedSandbox,
                               branch: selectedBranch,
                               projectRoot: projectRoot,
+                              sessionId: executionSessionId,
                             }),
                           });
                           
@@ -624,12 +637,14 @@ export function SubtaskDetailsSheet({
                           if (result.success) {
                             console.log("Execution successful:", result);
                             
-                            // Store the session ID for real-time log streaming
-                            const executionSessionId = result.sessionId || result.analyticsId;
+                            // Verify session ID matches what we sent
+                            const returnedSessionId = result.sessionId || result.analyticsId;
+                            if (returnedSessionId && returnedSessionId !== executionSessionId) {
+                              console.warn("Session ID mismatch:", { sent: executionSessionId, returned: returnedSessionId });
+                            }
+                            
+                            // Save execution history if we have a valid session ID
                             if (executionSessionId) {
-                              setSessionId(executionSessionId);
-                              
-                              // Save execution history
                               fetch(`/api/projects/${projectId}/tasks/execution-history`, {
                                 method: 'POST',
                                 headers: {
@@ -794,6 +809,7 @@ export function SubtaskDetailsSheet({
                       {sessionId ? (
                         <div className="border rounded-lg bg-background">
                           <ExecutionLogsTable 
+                            key={sessionId} // Force re-render when session changes
                             sessionId={sessionId} 
                             className="h-[500px] p-4" 
                             useRealtimeStreaming={true}

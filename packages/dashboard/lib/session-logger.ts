@@ -85,10 +85,10 @@ export class SessionLogger {
       subtaskId: this.metadata.subtaskId
     });
     
-    // Start periodic flush every 250ms for faster real-time updates
+    // Start periodic flush every 100ms for faster real-time updates
     this.flushInterval = setInterval(() => {
       this.flush().catch(err => console.error('Failed to flush logs:', err));
-    }, 250);
+    }, 100);
   }
 
   async log(type: LogEntry['type'], data: string, metadata?: LogEntry['metadata']): Promise<void> {
@@ -225,6 +225,7 @@ export class SessionLogger {
   }
 
   async captureUpdate(update: string): Promise<void> {
+    console.log(`[SessionLogger] Capturing update for session ${this.sessionId}:`, update.substring(0, 200));
     try {
       // Try to parse JSON update
       const parsed = JSON.parse(update);
@@ -458,7 +459,8 @@ export class SessionLogger {
       await fileHandle.sync();
       await fileHandle.close();
       
-      console.log(`[SessionLogger] Flushed ${entriesToFlush.length} logs for session ${this.sessionId}`);
+      console.log(`[SessionLogger] Flushed ${entriesToFlush.length} logs for session ${this.sessionId}`, 
+        entriesToFlush.map(e => `${e.type}: ${e.data.substring(0, 50)}`));
     } catch (error) {
       console.error('Failed to write logs:', error);
       // Put entries back if write failed

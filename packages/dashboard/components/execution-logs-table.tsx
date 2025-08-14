@@ -37,7 +37,9 @@ import {
   Box,
   Container,
   Monitor,
-  CheckSquare
+  CheckSquare,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import { useSessionLogs } from "@/hooks/use-session-logs";
 import { useRealtimeSessionLogs } from "@/hooks/use-realtime-session-logs";
@@ -79,10 +81,14 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
 
   // Update log count when logs change
   useEffect(() => {
+    console.log(`[ExecutionLogsTable] Logs updated for session ${sessionId}: ${logs.length} total logs`);
+    if (logs.length > 0) {
+      console.log(`[ExecutionLogsTable] Recent log types:`, logs.slice(-5).map(log => `${log.type}: ${log.data.substring(0, 50)}`));
+    }
     if (onLogCountChange) {
       onLogCountChange(logs.length);
     }
-  }, [logs, onLogCountChange]);
+  }, [logs, onLogCountChange, sessionId]);
   
   const getLogIcon = (type: string, data: string) => {
     // Check for Agent initialization messages first (higher priority than container/sandbox)
@@ -336,13 +342,37 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
   }
   
   return (
-    <ScrollArea 
-      ref={scrollAreaRef}
-      className={cn("h-full", className)}
-      onMouseEnter={() => { shouldAutoScroll.current = false; }}
-      onMouseLeave={() => { shouldAutoScroll.current = true; }}
-    >
-      {logs.length === 0 ? (
+    <div className={cn("flex flex-col h-full", className)}>
+      {/* Connection Status Header */}
+      {useRealtimeStreaming && (
+        <div className="flex items-center justify-between p-2 border-b bg-muted/20">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium">Real-time</span>
+            {isConnected ? (
+              <div className="flex items-center gap-1 text-green-600">
+                <Wifi className="h-3 w-3" />
+                <span className="text-xs">Connected</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 text-red-600">
+                <WifiOff className="h-3 w-3" />
+                <span className="text-xs">Connecting...</span>
+              </div>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {logs.length} log{logs.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+      )}
+      
+      <ScrollArea 
+        ref={scrollAreaRef}
+        className="flex-1"
+        onMouseEnter={() => { shouldAutoScroll.current = false; }}
+        onMouseLeave={() => { shouldAutoScroll.current = true; }}
+      >
+        {logs.length === 0 ? (
         <div className="text-center py-8">
           <Terminal className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
           <p className="text-sm text-muted-foreground">Waiting for logs...</p>
@@ -397,5 +427,6 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
         </Table>
       )}
     </ScrollArea>
+    </div>
   );
 }

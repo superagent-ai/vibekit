@@ -78,6 +78,7 @@ export async function GET(
           
           if (result.logs.length > 0) {
             console.log(`[SSE] Found ${result.logs.length} new logs for session ${sessionId} (source: ${source})`);
+            console.log(`[SSE] Log types:`, result.logs.map(log => `${log.type}: ${log.data.substring(0, 50)}`));
             
             // Send new logs
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({
@@ -147,6 +148,7 @@ export async function GET(
         // Handle log file changes
         watcher.on('change', async (filePath: string) => {
           const filename = filePath.split('/').pop();
+          console.log(`[SSE] File change detected: ${filename} for session ${sessionId}`);
           if (filename === 'execution.log') {
             await checkForNewLogs('chokidar');
           } else if (filename === 'metadata.json') {

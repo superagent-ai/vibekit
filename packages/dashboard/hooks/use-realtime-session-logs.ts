@@ -83,6 +83,8 @@ export function useRealtimeSessionLogs(
             break;
             
           case 'logs':
+            console.log(`[useRealtimeSessionLogs] Received ${data.logs.length} logs (incremental: ${data.incremental})`);
+            console.log(`[useRealtimeSessionLogs] Log types:`, data.logs.map((log: any) => `${log.type}: ${log.data.substring(0, 50)}`));
             if (data.incremental) {
               // Append new logs
               setLogs(prev => [...prev, ...data.logs]);
