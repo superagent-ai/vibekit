@@ -180,6 +180,42 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
     // Handle JSON updates first
     try {
       const parsed = JSON.parse(data);
+      
+      // Check if this is an update message with end type in the data field
+      if (parsed.type === 'update' && parsed.data && typeof parsed.data === 'string') {
+        try {
+          const innerParsed = JSON.parse(parsed.data);
+          if (innerParsed.type === 'end') {
+            return <CheckSquare className="h-4 w-4" />;
+          }
+        } catch (e) {
+          // Continue with outer parsing
+        }
+      }
+      
+      // Check if this is a session result message
+      if (parsed.type === 'result') {
+        return <CheckSquare className="h-4 w-4" />;
+      }
+      // Check if this is a tool result message
+      if (parsed.type === 'user' && parsed.message?.content) {
+        const hasToolResult = parsed.message.content.some((item: any) => item.type === 'tool_result');
+        if (hasToolResult) {
+          return <Wrench className="h-4 w-4" />;
+        }
+      }
+      // Check if this is a tool use message (but exclude TodoWrite)
+      if (parsed.type === 'assistant' && parsed.message?.content) {
+        const hasTools = parsed.message.content.some((item: any) => 
+          item.type === 'tool_use' && item.name !== 'TodoWrite'
+        );
+        const hasText = parsed.message.content.some((item: any) => item.type === 'text');
+        if (hasTools && !hasText) {
+          return <Wrench className="h-4 w-4" />;
+        }
+      }
+      if (parsed.type === 'assistant') return <Bot className="h-4 w-4" />;
+      if (parsed.type === 'system' && parsed.subtype === 'init') return <Monitor className="h-4 w-4" />;
       if (parsed.type === 'git') return <GitBranch className="h-4 w-4" />;
       if (parsed.type === 'start') return <Box className="h-4 w-4" />;
       if (parsed.type === 'container_created') return <Container className="h-4 w-4" />;
@@ -225,8 +261,8 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
     // Check for Container or Sandbox messages (both use Box icon)
     if (data.toLowerCase().includes('container') || data.toLowerCase().includes('sandbox')) return <Box className="h-4 w-4" />;
     
-    // Check for Reading file messages
-    if (data.startsWith('Reading file:')) return <File className="h-4 w-4" />;
+    // Check for file operation messages
+    if (data.startsWith('Reading file:') || data.startsWith('Read file:') || data.startsWith('Writing file:') || data.startsWith('Wrote file:')) return <Wrench className="h-4 w-4" />;
     
     // Check for Todo messages
     if (data.toLowerCase().includes('todo')) return <List className="h-4 w-4" />;
@@ -265,6 +301,42 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
     // Handle JSON updates first to check VibeKit update types
     try {
       const parsed = JSON.parse(data);
+      
+      // Check if this is an update message with end type in the data field
+      if (parsed.type === 'update' && parsed.data && typeof parsed.data === 'string') {
+        try {
+          const innerParsed = JSON.parse(parsed.data);
+          if (innerParsed.type === 'end') {
+            return 'Result';
+          }
+        } catch (e) {
+          // Continue with outer parsing
+        }
+      }
+      
+      // Check if this is a session result message
+      if (parsed.type === 'result') {
+        return 'Result';
+      }
+      // Check if this is a tool result message
+      if (parsed.type === 'user' && parsed.message?.content) {
+        const hasToolResult = parsed.message.content.some((item: any) => item.type === 'tool_result');
+        if (hasToolResult) {
+          return 'Tool';
+        }
+      }
+      // Check if this is a tool use message (but exclude TodoWrite)
+      if (parsed.type === 'assistant' && parsed.message?.content) {
+        const hasTools = parsed.message.content.some((item: any) => 
+          item.type === 'tool_use' && item.name !== 'TodoWrite'
+        );
+        const hasText = parsed.message.content.some((item: any) => item.type === 'text');
+        if (hasTools && !hasText) {
+          return 'Tool';
+        }
+      }
+      if (parsed.type === 'assistant') return 'Agent';
+      if (parsed.type === 'system' && parsed.subtype === 'init') return 'Session';
       if (parsed.type === 'git') return 'Git';
       if (parsed.type === 'start') return 'Sandbox';
       if (parsed.type === 'container_created') return 'Container';
@@ -321,9 +393,9 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
       return 'Sandbox';
     }
     
-    // Check for Reading file messages
-    if (data.startsWith('Reading file:')) {
-      return 'File';
+    // Check for file operation messages
+    if (data.startsWith('Reading file:') || data.startsWith('Read file:') || data.startsWith('Writing file:') || data.startsWith('Wrote file:')) {
+      return 'Tool';
     }
     
     // Check for Todo messages
@@ -375,6 +447,57 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   };
 
   const processLogMessage = (data: string, timestamp: number): string | React.ReactNode => {
+    // Handle "end" type messages with proper summary
+    if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.type === 'end' && parsed.output) {
+          // Parse the output field which is a JSON string
+          const output = typeof parsed.output === 'string' ? 
+            JSON.parse(parsed.output) : parsed.output;
+          
+          if (output && output.exitCode !== undefined) {
+            const success = output.exitCode === 0;
+            
+            // Parse the session result from stdout if available
+            if (output.stdout && typeof output.stdout === 'string') {
+              const lines = output.stdout.split('\n').filter(line => line.trim());
+              const resultLine = lines.find(line => {
+                try {
+                  const lineData = JSON.parse(line);
+                  return lineData.type === 'result';
+                } catch { return false; }
+              });
+              
+              if (resultLine) {
+                const resultData = JSON.parse(resultLine);
+                const duration = resultData.duration_ms ? `${Math.round(resultData.duration_ms / 1000)}s` : '';
+                const cost = resultData.total_cost_usd ? `$${resultData.total_cost_usd.toFixed(4)}` : '';
+                const turns = resultData.num_turns ? `${resultData.num_turns} turns` : '';
+                
+                let summary = success ? '✅ Session completed' : '❌ Session failed';
+                
+                const details = [duration, cost, turns].filter(Boolean);
+                if (details.length > 0) {
+                  summary += ` (${details.join(', ')})`;
+                }
+                
+                return summary;
+              }
+            }
+            
+            // Fallback if no detailed result found
+            return success ? '✅ Session completed successfully' : '❌ Session failed';
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse end message:', e);
+      }
+      
+      // Final fallback
+      return 'Session ended';
+    }
+    
     // Check for TodoWrite first before other JSON parsing
     const todos = parseTodoWriteFromMessage(data);
     if (todos) {
@@ -391,8 +514,172 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
     try {
       const parsed = JSON.parse(data);
       
+      // Check if this is directly an "end" type message - skip it entirely
+      if (parsed.type === 'end') {
+        return null; // This will cause the log entry to not be rendered
+      }
+      
+      // Check if this is an update message with a data field containing the inner JSON
+      if (parsed.type === 'update' && parsed.data && typeof parsed.data === 'string') {
+        try {
+          const innerParsed = JSON.parse(parsed.data);
+          
+          // Check if the inner type is "end"
+          if (innerParsed.type === 'end') {
+            try {
+              // Parse the output field which is also a JSON string
+              const output = typeof innerParsed.output === 'string' ? 
+                JSON.parse(innerParsed.output) : innerParsed.output;
+              
+              if (output && output.exitCode !== undefined) {
+                const success = output.exitCode === 0;
+                
+                // Parse the session result from stdout if available
+                if (output.stdout && typeof output.stdout === 'string') {
+                  const lines = output.stdout.split('\n').filter(line => line.trim());
+                  const resultLine = lines.find(line => {
+                    try {
+                      const lineData = JSON.parse(line);
+                      return lineData.type === 'result';
+                    } catch { return false; }
+                  });
+                  
+                  if (resultLine) {
+                    const resultData = JSON.parse(resultLine);
+                    const duration = resultData.duration_ms ? `${Math.round(resultData.duration_ms / 1000)}s` : '';
+                    const cost = resultData.total_cost_usd ? `$${resultData.total_cost_usd.toFixed(4)}` : '';
+                    const turns = resultData.num_turns ? `${resultData.num_turns} turns` : '';
+                    
+                    let summary = success ? '✅ Session completed' : '❌ Session failed';
+                    
+                    const details = [duration, cost, turns].filter(Boolean);
+                    if (details.length > 0) {
+                      summary += ` (${details.join(', ')})`;
+                    }
+                    
+                    return summary;
+                  }
+                }
+                
+                // Fallback if no detailed result found
+                return success ? '✅ Session completed successfully' : '❌ Session failed';
+              }
+            } catch (e) {
+              // If parsing fails, show basic end message
+              console.error('Failed to parse end message output:', e);
+            }
+            
+            return 'Session ended';
+          }
+        } catch (e) {
+          // Continue with normal processing if inner parsing fails
+        }
+      }
+      
+      
+      // Format session result messages with summary
+      if (parsed.type === 'result') {
+        const subtype = parsed.subtype || 'unknown';
+        const duration = parsed.duration_ms ? `${Math.round(parsed.duration_ms / 1000)}s` : '';
+        const cost = parsed.total_cost_usd ? `$${parsed.total_cost_usd.toFixed(4)}` : '';
+        const turns = parsed.num_turns ? `${parsed.num_turns} turns` : '';
+        
+        let summary = subtype === 'success' ? '✅ Execution completed' : '❌ Execution failed';
+        
+        const details = [duration, cost, turns].filter(Boolean);
+        if (details.length > 0) {
+          summary += ` (${details.join(', ')})`;
+        }
+        
+        return summary;
+      }
+      
+      // Format session end messages with summary - skip entirely  
+      if (parsed.type === 'end') {
+        return null; // Hide end messages completely
+      }
+      
+      // Format tool result messages with summary instead of full content
+      if (parsed.type === 'user' && parsed.message?.content) {
+        const toolResults = parsed.message.content.filter((item: any) => item.type === 'tool_result');
+        if (toolResults.length > 0) {
+          const result = toolResults[0];
+          const content = result.content || '';
+          
+          // Determine file type and create summary
+          if (content.includes('→')) {
+            // This looks like a file with line numbers
+            const lines = content.split('\n').filter(line => line.trim());
+            return `File read successfully (${lines.length} lines)`;
+          } else if (content.includes('Error:') || content.includes('error')) {
+            return 'Tool execution failed';
+          } else if (content.length > 100) {
+            return `Tool completed successfully (${Math.round(content.length / 100)}00+ characters)`;
+          } else {
+            return 'Tool completed successfully';
+          }
+        }
+      }
+      
+      // Format assistant messages to show the text content or tool use
+      if (parsed.type === 'assistant') {
+        if (parsed.message?.content) {
+          const textContent = parsed.message.content
+            .filter((item: any) => item.type === 'text')
+            .map((item: any) => item.text)
+            .join(' ');
+          const toolUses = parsed.message.content
+            .filter((item: any) => item.type === 'tool_use' && item.name !== 'TodoWrite');
+          
+          // If this has only non-TodoWrite tools (no text), format as tool use
+          if (toolUses.length > 0 && !textContent) {
+            return toolUses.map((tool: any) => {
+              const toolName = tool.name || 'Unknown tool';
+              const input = tool.input || {};
+              
+              // Format specific tool details
+              switch (toolName) {
+                case 'Read':
+                  return `Read file: ${input.file_path || 'unknown file'}`;
+                case 'Write':
+                  return `Wrote file: ${input.file_path || 'unknown file'}`;
+                case 'Edit':
+                  return `Edited file: ${input.file_path || 'unknown file'}`;
+                case 'MultiEdit':
+                  return `Multi-edited file: ${input.file_path || 'unknown file'}`;
+                case 'Bash':
+                  return `Ran command: ${input.command || 'unknown command'}`;
+                case 'Grep':
+                  return `Searched for: ${input.pattern || 'unknown pattern'}`;
+                case 'Glob':
+                  return `Found files: ${input.pattern || 'unknown pattern'}`;
+                case 'WebFetch':
+                  return `Fetched URL: ${input.url || 'unknown URL'}`;
+                default:
+                  return `Used ${toolName}`;
+              }
+            }).join(', ');
+          }
+          
+          // If this has text content, return styled React element for agent voice
+          if (textContent) {
+            return (
+              <span className="italic text-[11px] text-muted-foreground">
+                {textContent}
+              </span>
+            );
+          }
+        }
+        // Fallback for assistant messages without recognizable content
+        return 'Assistant message';
+      }
+      // Format system init messages with a nice summary
+      else if (parsed.type === 'system' && parsed.subtype === 'init') {
+        const model = parsed.model || 'Unknown';
+        return `Session initialized with ${model}`;
+      }
       // Format specific message types for better readability
-      if (parsed.type === 'git' && parsed.output) {
+      else if (parsed.type === 'git' && parsed.output) {
         return parsed.output; // Just "Cloning repository: joedanz/tictactoe"
       } else if (parsed.type === 'start' && parsed.sandbox_id) {
         return `Sandbox started: ${parsed.sandbox_id}`;
@@ -511,10 +798,10 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
           {/* Scrollable Body */}
           <div 
             ref={scrollAreaRef}
-            className="flex-1 overflow-auto"
+            className="flex-1 overflow-auto min-h-0"
             onMouseEnter={() => { shouldAutoScroll.current = false; }}
             onMouseLeave={() => { shouldAutoScroll.current = true; }}
-            style={{ maxHeight: 'calc(100vh - 200px)' }}
+            style={{ maxHeight: '500px' }}
           >
             <Table>
               <TableBody>
@@ -522,6 +809,11 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
               const icon = getLogIcon(log.type, log.data);
               const typeColor = getLogTypeColor(log.type);
               const processedMessage = processLogMessage(log.data, log.timestamp);
+              
+              // Skip rendering this log entry if processedMessage is null
+              if (processedMessage === null) {
+                return null;
+              }
               
               return (
                 <TableRow key={index} className="group hover:bg-muted/50">
