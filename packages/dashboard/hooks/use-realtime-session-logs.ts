@@ -30,6 +30,7 @@ export function useRealtimeSessionLogs(
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const isConnectingRef = useRef(false);
   
   const cleanup = useCallback(() => {
     if (eventSourceRef.current) {
@@ -42,6 +43,7 @@ export function useRealtimeSessionLogs(
       reconnectTimeoutRef.current = null;
     }
     
+    isConnectingRef.current = false;
     setIsConnected(false);
     setIsLive(false);
   }, []);
@@ -50,6 +52,14 @@ export function useRealtimeSessionLogs(
     if (!sessionId || !enabled) {
       return;
     }
+    
+    // Prevent duplicate connections
+    if (isConnectingRef.current || eventSourceRef.current) {
+      console.log('SSE connection already exists or is connecting, skipping...');
+      return;
+    }
+    
+    isConnectingRef.current = true;
     
     // Clean up any existing connection
     cleanup();
@@ -63,6 +73,7 @@ export function useRealtimeSessionLogs(
     
     eventSource.onopen = () => {
       console.log('SSE connection opened for session:', sessionId);
+      isConnectingRef.current = false;
       setIsConnected(true);
       setIsLoading(false);
       reconnectAttemptsRef.current = 0;
@@ -83,8 +94,7 @@ export function useRealtimeSessionLogs(
             break;
             
           case 'logs':
-            console.log(`[useRealtimeSessionLogs] Received ${data.logs.length} logs (incremental: ${data.incremental})`);
-            console.log(`[useRealtimeSessionLogs] Log types:`, data.logs.map((log: any) => `${log.type}: ${log.data.substring(0, 50)}`));
+            console.log(`[SSE] Received ${data.logs.length} logs`);
             if (data.incremental) {
               // Append new logs
               setLogs(prev => [...prev, ...data.logs]);
@@ -109,6 +119,7 @@ export function useRealtimeSessionLogs(
     
     eventSource.onerror = (err) => {
       console.error('SSE connection error:', err);
+      isConnectingRef.current = false;
       setIsConnected(false);
       
       // Attempt to reconnect with exponential backoff
@@ -143,7 +154,7 @@ export function useRealtimeSessionLogs(
     return () => {
       cleanup();
     };
-  }, [sessionId, enabled, connect, cleanup]);
+  }, [sessionId, enabled]);
   
   // Cleanup on unmount
   useEffect(() => {

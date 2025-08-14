@@ -217,14 +217,10 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
 
   // Update log count when logs change
   useEffect(() => {
-    console.log(`[ExecutionLogsTable] Logs updated for session ${sessionId}: ${logs.length} total logs`);
-    if (logs.length > 0) {
-      console.log(`[ExecutionLogsTable] Recent log types:`, logs.slice(-5).map(log => `${log.type}: ${log.data.substring(0, 50)}`));
-    }
     if (onLogCountChange) {
       onLogCountChange(logs.length);
     }
-  }, [logs, onLogCountChange, sessionId]);
+  }, [logs, onLogCountChange]);
   
   const getLogIcon = (type: string, data: string) => {
     // Handle JSON updates first
