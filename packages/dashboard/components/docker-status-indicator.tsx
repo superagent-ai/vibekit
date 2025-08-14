@@ -18,6 +18,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Global state to prevent multiple simultaneous Docker status checks
+let lastDockerCheck = 0;
+let dockerCheckPromise: Promise<DockerStatus> | null = null;
+const DOCKER_CHECK_THROTTLE = 10000; // 10 seconds
+
 interface DockerStatus {
   dockerInstalled: boolean;
   dockerRunning: boolean;
@@ -41,23 +46,53 @@ export function DockerStatusIndicator({
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
   
   const checkDockerStatus = async () => {
+    const now = Date.now();
+    
+    // If we've checked recently, return the existing promise or skip
+    if (now - lastDockerCheck < DOCKER_CHECK_THROTTLE) {
+      if (dockerCheckPromise) {
+        try {
+          const data = await dockerCheckPromise;
+          setStatus(data);
+          onStatusChange?.(data);
+        } catch (error) {
+          console.error('Failed to get cached Docker status:', error);
+        }
+      }
+      return;
+    }
+    
     setIsChecking(true);
+    lastDockerCheck = now;
+    
+    // Create a new promise for this check
+    dockerCheckPromise = (async () => {
+      try {
+        const response = await fetch('/api/docker/status');
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error('Failed to check Docker status:', error);
+        return {
+          dockerInstalled: false,
+          dockerRunning: false,
+          dockerVersion: null,
+          error: 'Failed to check Docker status'
+        };
+      }
+    })();
+    
     try {
-      const response = await fetch('/api/docker/status');
-      const data = await response.json();
+      const data = await dockerCheckPromise;
       setStatus(data);
       setLastCheck(new Date());
       onStatusChange?.(data);
     } catch (error) {
-      console.error('Failed to check Docker status:', error);
-      setStatus({
-        dockerInstalled: false,
-        dockerRunning: false,
-        dockerVersion: null,
-        error: 'Failed to check Docker status'
-      });
+      console.error('Docker status check failed:', error);
     } finally {
       setIsChecking(false);
+      // Clear the promise after a short delay to allow other components to use it
+      setTimeout(() => { dockerCheckPromise = null; }, 1000);
     }
   };
   
@@ -65,7 +100,7 @@ export function DockerStatusIndicator({
     // Initial check
     checkDockerStatus();
     
-    // Check every 30 seconds
+    // Check every 30 seconds (at most once every 10 seconds if multiple instances)
     const interval = setInterval(checkDockerStatus, 30000);
     
     return () => clearInterval(interval);
