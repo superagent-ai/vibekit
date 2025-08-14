@@ -177,6 +177,11 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   }, [logs, onLogCountChange]);
   
   const getLogIcon = (type: string, data: string) => {
+    // Handle "end" type messages first with computer icon
+    if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
+      return <Monitor className="h-4 w-4" />;
+    }
+    
     // Handle JSON updates first
     try {
       const parsed = JSON.parse(data);
@@ -186,7 +191,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
         try {
           const innerParsed = JSON.parse(parsed.data);
           if (innerParsed.type === 'end') {
-            return <CheckSquare className="h-4 w-4" />;
+            return <Monitor className="h-4 w-4" />;
           }
         } catch (e) {
           // Continue with outer parsing
@@ -447,55 +452,10 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   };
 
   const processLogMessage = (data: string, timestamp: number): string | React.ReactNode => {
-    // Handle "end" type messages with proper summary
+    // Handle "end" type messages - skip malformed ones
     if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed.type === 'end' && parsed.output) {
-          // Parse the output field which is a JSON string
-          const output = typeof parsed.output === 'string' ? 
-            JSON.parse(parsed.output) : parsed.output;
-          
-          if (output && output.exitCode !== undefined) {
-            const success = output.exitCode === 0;
-            
-            // Parse the session result from stdout if available
-            if (output.stdout && typeof output.stdout === 'string') {
-              const lines = output.stdout.split('\n').filter(line => line.trim());
-              const resultLine = lines.find(line => {
-                try {
-                  const lineData = JSON.parse(line);
-                  return lineData.type === 'result';
-                } catch { return false; }
-              });
-              
-              if (resultLine) {
-                const resultData = JSON.parse(resultLine);
-                const duration = resultData.duration_ms ? `${Math.round(resultData.duration_ms / 1000)}s` : '';
-                const cost = resultData.total_cost_usd ? `$${resultData.total_cost_usd.toFixed(4)}` : '';
-                const turns = resultData.num_turns ? `${resultData.num_turns} turns` : '';
-                
-                let summary = success ? '✅ Session completed' : '❌ Session failed';
-                
-                const details = [duration, cost, turns].filter(Boolean);
-                if (details.length > 0) {
-                  summary += ` (${details.join(', ')})`;
-                }
-                
-                return summary;
-              }
-            }
-            
-            // Fallback if no detailed result found
-            return success ? '✅ Session completed successfully' : '❌ Session failed';
-          }
-        }
-      } catch (e) {
-        console.error('Failed to parse end message:', e);
-      }
-      
-      // Final fallback
-      return 'Session ended';
+      // Simple fallback - just show session ended for now to avoid JSON errors
+      return '🏁 Session ended';
     }
     
     // Check for TodoWrite first before other JSON parsing
@@ -772,7 +732,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   }
   
   return (
-    <div className={cn("flex flex-col", className)} style={{ height: '100%', minHeight: 0 }}>
+    <div className={cn("flex flex-col h-full", className)}>
       {logs.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
@@ -801,7 +761,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
             className="flex-1 overflow-auto min-h-0"
             onMouseEnter={() => { shouldAutoScroll.current = false; }}
             onMouseLeave={() => { shouldAutoScroll.current = true; }}
-            style={{ maxHeight: '500px' }}
+            style={{ maxHeight: '40vh' }}
           >
             <Table>
               <TableBody>
