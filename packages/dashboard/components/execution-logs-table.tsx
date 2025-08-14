@@ -43,8 +43,7 @@ import {
   Circle,
   CheckCircle
 } from "lucide-react";
-import { useSessionLogs } from "@/hooks/use-session-logs";
-import { useRealtimeSessionLogs } from "@/hooks/use-realtime-session-logs";
+import { useSmartSessionLogs } from "@/hooks/use-smart-session-logs";
 import { cn } from "@/lib/utils";
 
 // Extend Day.js with plugins
@@ -95,8 +94,8 @@ interface AssistantMessage {
 interface ExecutionLogsTableProps {
   sessionId: string | null;
   className?: string;
-  useRealtimeStreaming?: boolean;
   onLogCountChange?: (count: number) => void;
+  onTodoUpdate?: (todos: Todo[]) => void;
 }
 
 // Function to parse TodoWrite from log messages
@@ -193,15 +192,9 @@ function TodoListRenderer({ todos }: { todos: Todo[] }) {
   );
 }
 
-export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming = true, onLogCountChange }: ExecutionLogsTableProps) {
-  // Use real-time streaming hook if enabled, otherwise fall back to polling
-  const pollingData = useSessionLogs(sessionId, { enabled: !useRealtimeStreaming });
-  const realtimeData = useRealtimeSessionLogs(sessionId, { enabled: useRealtimeStreaming });
-  
-  // Select the appropriate data source
-  const { logs, metadata, isLive, isLoading, error, isConnected } = useRealtimeStreaming ? 
-    { ...realtimeData, isConnected: realtimeData.isConnected } : 
-    { ...pollingData, isConnected: false };
+export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onTodoUpdate }: ExecutionLogsTableProps) {
+  // Use smart loading strategy that automatically chooses static vs live based on session status
+  const { logs, metadata, isLive, isLoading, error, isConnected, loadingStrategy } = useSmartSessionLogs(sessionId);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
   
@@ -424,6 +417,12 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
     // Check for TodoWrite first before other JSON parsing
     const todos = parseTodoWriteFromMessage(data);
     if (todos) {
+      // Defer the callback to avoid setState during render
+      setTimeout(() => {
+        if (onTodoUpdate) {
+          onTodoUpdate(todos);
+        }
+      }, 0);
       return <TodoListRenderer todos={todos} />;
     }
     
@@ -526,28 +525,40 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
   
   return (
     <div className={cn("flex flex-col h-full", className)}>
-      {/* Connection Status Header */}
-      {useRealtimeStreaming && (
-        <div className="flex items-center justify-between p-2 border-b bg-muted/20">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium">Real-time</span>
-            {isConnected ? (
-              <div className="flex items-center gap-1 text-green-600">
-                <Wifi className="h-3 w-3" />
-                <span className="text-xs">Connected</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 text-red-600">
-                <WifiOff className="h-3 w-3" />
-                <span className="text-xs">Connecting...</span>
-              </div>
-            )}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {logs.length} log{logs.length !== 1 ? 's' : ''}
-          </div>
+      {/* Loading Strategy Header */}
+      <div className="flex items-center justify-between p-2 border-b bg-muted/20">
+        <div className="flex items-center gap-2">
+          {loadingStrategy === 'hybrid' ? (
+            <>
+              <span className="text-xs font-medium">Live</span>
+              {isConnected ? (
+                <div className="flex items-center gap-1 text-green-600">
+                  <Wifi className="h-3 w-3" />
+                  <span className="text-xs">Streaming</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-orange-600">
+                  <WifiOff className="h-3 w-3" />
+                  <span className="text-xs">Connecting...</span>
+                </div>
+              )}
+            </>
+          ) : loadingStrategy === 'static' ? (
+            <div className="flex items-center gap-1 text-blue-600">
+              <CheckCircle className="h-3 w-3" />
+              <span className="text-xs font-medium">Historical</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-gray-500">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="text-xs">Detecting...</span>
+            </div>
+          )}
         </div>
-      )}
+        <div className="text-xs text-muted-foreground">
+          {logs.length} log{logs.length !== 1 ? 's' : ''}
+        </div>
+      </div>
       
       <ScrollArea 
         ref={scrollAreaRef}

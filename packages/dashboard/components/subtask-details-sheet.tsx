@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExecutionLogsTable } from "@/components/execution-logs-table";
 import { ExecutionsList, type Execution } from "@/components/executions-list";
+import { TodoListPanel } from "@/components/todo-list-panel";
 import { DockerStatusIndicator } from "@/components/docker-status-indicator";
 import {
   Select,
@@ -89,7 +90,7 @@ interface SubtaskDetailsSheetProps {
   projectRoot?: string;
 }
 
-export function SubtaskDetailsSheet({ 
+const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({ 
   subtask, 
   parentTask, 
   allTasks, 
@@ -100,7 +101,6 @@ export function SubtaskDetailsSheet({
   projectId,
   projectRoot
 }: SubtaskDetailsSheetProps) {
-  console.log("SubtaskDetailsSheet props:", { projectId, projectRoot, open });
   const [activeTab, setActiveTab] = useState("logs");
   const [selectedAgent, setSelectedAgent] = useState<string>("claude");
   const [selectedSandbox, setSelectedSandbox] = useState<string>("dagger");
@@ -118,6 +118,11 @@ export function SubtaskDetailsSheet({
   const [hasMoreDetailsContent, setHasMoreDetailsContent] = useState(false);
   const [detailsContentHeight, setDetailsContentHeight] = useState(80);
   
+  // Todo state management
+  const [currentTodos, setCurrentTodos] = useState<any[]>([]);
+  const [hasTodos, setHasTodos] = useState(false);
+  const [todosLastUpdated, setTodosLastUpdated] = useState<string | null>(null);
+  
   // Reset state when subtask changes or dialog closes
   useEffect(() => {
     if (!open) {
@@ -128,6 +133,9 @@ export function SubtaskDetailsSheet({
       setTotalLogCount(0);
       setActiveTab("logs"); // Reset to default tab
       setIsExecuting(false); // Reset execution state
+      setCurrentTodos([]);
+      setHasTodos(false);
+      setTodosLastUpdated(null);
       return;
     }
     
@@ -137,6 +145,9 @@ export function SubtaskDetailsSheet({
       setExecutionHistory([]);
       setSelectedExecution(null);
       setTotalLogCount(0);
+      setCurrentTodos([]);
+      setHasTodos(false);
+      setTodosLastUpdated(null);
       return;
     }
   }, [open, subtask?.id]);
@@ -155,7 +166,6 @@ export function SubtaskDetailsSheet({
     fetch("/api/settings")
       .then(res => res.json())
       .then(data => {
-        console.log("Settings loaded:", data);
         setSettings(data);
         // Override with user's configured defaults if they exist
         if (data?.agents?.defaultAgent) {
@@ -222,18 +232,11 @@ export function SubtaskDetailsSheet({
   useEffect(() => {
     if (!open) return;
     
-    console.log("Branch fetch effect - projectRoot:", projectRoot, "open:", open);
-    
     if (projectRoot) {
-      console.log("Fetching branches for project root:", projectRoot);
       const params = new URLSearchParams({ projectRoot });
       fetch(`/api/projects/${projectId}/git/branches?${params}`)
-        .then(res => {
-          console.log("Branch fetch response status:", res.status);
-          return res.json();
-        })
+        .then(res => res.json())
         .then(data => {
-          console.log("Branches data received:", data);
           if (data.error) {
             console.error("Branch fetch error:", data.error);
           }
@@ -265,7 +268,7 @@ export function SubtaskDetailsSheet({
       setBranches(["main"]); // Provide a fallback branch
       setSelectedBranch("main");
     }
-  }, [open, projectRoot]);
+  }, [open, projectRoot, projectId]);
 
   // Check if details content is longer than the default height
   useEffect(() => {
@@ -312,6 +315,19 @@ export function SubtaskDetailsSheet({
       setDetailsContentHeight(80);
     }
   }, [subtask?.details, subtask?.testStrategy]);
+
+  // Handle todo updates from logs
+  const handleTodoUpdate = useCallback((todos: any[]) => {
+    setCurrentTodos(prev => {
+      // Only update if the todos actually changed
+      if (JSON.stringify(prev) !== JSON.stringify(todos)) {
+        setHasTodos(true);
+        setTodosLastUpdated(new Date().toISOString());
+        return todos;
+      }
+      return prev;
+    });
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -809,11 +825,11 @@ export function SubtaskDetailsSheet({
                       {sessionId ? (
                         <div className="border rounded-lg bg-background">
                           <ExecutionLogsTable 
-                            key={sessionId} // Force re-render when session changes
+                            key={`${sessionId}-${subtask?.id}`} // Force re-render when session or subtask changes
                             sessionId={sessionId} 
                             className="h-[500px] p-4" 
-                            useRealtimeStreaming={true}
                             onLogCountChange={setTotalLogCount}
+                            onTodoUpdate={handleTodoUpdate}
                           />
                         </div>
                       ) : (
@@ -825,6 +841,17 @@ export function SubtaskDetailsSheet({
                               Execute this subtask to see logs here
                             </p>
                           </div>
+                        </div>
+                      )}
+                      
+                      {/* Todo List Panel */}
+                      {hasTodos && currentTodos.length > 0 && (
+                        <div className="mt-4">
+                          <TodoListPanel 
+                            todos={currentTodos} 
+                            lastUpdated={todosLastUpdated || undefined}
+                            className="border rounded-lg"
+                          />
                         </div>
                       )}
                       
@@ -964,4 +991,16 @@ export function SubtaskDetailsSheet({
       </SheetContent>
     </Sheet>
   );
-}
+};
+
+// Memoize the component to prevent unnecessary re-renders
+export const SubtaskDetailsSheet = React.memo(SubtaskDetailsSheetComponent, (prevProps, nextProps) => {
+  // Custom comparison to prevent re-renders when props haven't meaningfully changed
+  return (
+    prevProps.subtask?.id === nextProps.subtask?.id &&
+    prevProps.parentTask?.id === nextProps.parentTask?.id &&
+    prevProps.open === nextProps.open &&
+    prevProps.projectId === nextProps.projectId &&
+    prevProps.projectRoot === nextProps.projectRoot
+  );
+});
