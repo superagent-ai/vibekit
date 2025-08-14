@@ -5,15 +5,54 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { RefreshCw, Wifi, WifiOff, CheckCircle, Circle, Clock } from 'lucide-react'
 
 interface LogEntry {
   id: string
   timestamp: string
-  level: 'info' | 'warn' | 'error' | 'debug'
+  level?: 'info' | 'warn' | 'error' | 'debug'
   message: string
   metadata?: Record<string, any>
   source?: 'stream' | 'file'
+}
+
+interface Todo {
+  id: string
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+  priority?: 'low' | 'medium' | 'high'
+}
+
+interface TodoWriteContent {
+  type: 'tool_use'
+  id: string
+  name: 'TodoWrite'
+  input: {
+    todos: Todo[]
+  }
+}
+
+interface MessageContent {
+  type: string
+  id?: string
+  name?: string
+  input?: any
+}
+
+interface AssistantMessage {
+  type: 'assistant'
+  message: {
+    id?: string
+    type?: string
+    role?: string
+    model?: string
+    content: MessageContent[]
+    stop_reason?: any
+    stop_sequence?: any
+    usage?: any
+  }
+  parent_tool_use_id?: string | null
+  session_id?: string
 }
 
 interface LogViewerProps {
@@ -27,16 +66,143 @@ export function LogViewer({ projectId, taskId }: LogViewerProps) {
   const [isAutoScroll, setIsAutoScroll] = useState(true)
   const [lastEventId, setLastEventId] = useState<string>('')
   
+  // Function to parse TodoWrite from log messages
+  const parseTodoWriteFromMessage = (message: string): Todo[] | null => {
+    try {
+      const parsed = JSON.parse(message) as AssistantMessage
+      
+      console.log('Parsing attempt:', {
+        type: parsed.type,
+        hasMessage: !!parsed.message,
+        hasContent: !!parsed.message?.content,
+        contentArray: parsed.message?.content || []
+      })
+      
+      if (parsed.type === 'assistant' && parsed.message?.content) {
+        const todoWriteContent = parsed.message.content.find(
+          (content): content is TodoWriteContent => 
+            content.type === 'tool_use' && content.name === 'TodoWrite'
+        )
+        
+        console.log('TodoWrite search result:', {
+          found: !!todoWriteContent,
+          contentTypes: parsed.message.content.map(c => ({ type: c.type, name: c.name }))
+        })
+        
+        if (todoWriteContent && todoWriteContent.input?.todos) {
+          console.log('Found todos:', todoWriteContent.input.todos.length)
+          return todoWriteContent.input.todos
+        }
+      }
+    } catch (error) {
+      console.log('Parse error:', error)
+    }
+    return null
+  }
+  
+  // Component to render todo list
+  const TodoListRenderer = ({ todos }: { todos: Todo[] }) => {
+    const getStatusIcon = (status: Todo['status']) => {
+      switch (status) {
+        case 'completed':
+          return <CheckCircle className="h-4 w-4 text-green-600" />
+        case 'in_progress':
+          return <Clock className="h-4 w-4 text-blue-600" />
+        case 'pending':
+        default:
+          return <Circle className="h-4 w-4 text-gray-400" />
+      }
+    }
+    
+    const getStatusColor = (status: Todo['status']) => {
+      switch (status) {
+        case 'completed':
+          return 'text-green-800 bg-green-100 dark:bg-green-900 dark:text-green-200'
+        case 'in_progress':
+          return 'text-blue-800 bg-blue-100 dark:bg-blue-900 dark:text-blue-200'
+        case 'pending':
+        default:
+          return 'text-gray-800 bg-gray-100 dark:bg-gray-800 dark:text-gray-200'
+      }
+    }
+    
+    const getPriorityColor = (priority?: string) => {
+      switch (priority) {
+        case 'high':
+          return 'text-red-700 bg-red-50 border-red-200 dark:bg-red-950 dark:text-red-300'
+        case 'medium':
+          return 'text-yellow-700 bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300'
+        case 'low':
+          return 'text-green-700 bg-green-50 border-green-200 dark:bg-green-950 dark:text-green-300'
+        default:
+          return ''
+      }
+    }
+    
+    return (
+      <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+        <div className="flex items-center gap-2 mb-2">
+          <CheckCircle className="h-4 w-4 text-blue-600" />
+          <span className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+            Todo List Updated ({todos.length} items)
+          </span>
+        </div>
+        <div className="space-y-1">
+          {todos.map((todo) => (
+            <div key={todo.id} className="flex items-start gap-2 p-2 bg-white dark:bg-gray-800 rounded border">
+              <div className="mt-0.5">
+                {getStatusIcon(todo.status)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge className={`text-xs ${getStatusColor(todo.status)}`}>
+                    {todo.status.replace('_', ' ')}
+                  </Badge>
+                  {todo.priority && (
+                    <Badge variant="outline" className={`text-xs ${getPriorityColor(todo.priority)}`}>
+                      {todo.priority}
+                    </Badge>
+                  )}
+                </div>
+                <p className={`text-sm ${todo.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
+                  {todo.content}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  
   const eventSourceRef = useRef<EventSource | null>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
+
+  // Helper to validate and sanitize log entry
+  const sanitizeLogEntry = (log: any): LogEntry | null => {
+    if (!log || typeof log !== 'object') return null
+    
+    // Ensure required fields exist
+    if (!log.id || !log.message) return null
+    
+    return {
+      id: log.id,
+      timestamp: log.timestamp || new Date().toISOString(),
+      level: ['info', 'warn', 'error', 'debug'].includes(log.level) ? log.level : undefined,
+      message: log.message,
+      metadata: log.metadata || {},
+      source: log.source || 'file'
+    }
+  }
 
   // Load logs from JSON file fallback
   const loadLogsFromFile = useCallback(async () => {
     try {
       const response = await fetch(`/api/projects/${projectId}/tasks/${taskId}/logs`)
       if (response.ok) {
-        const fileLogs: LogEntry[] = await response.json()
+        const rawLogs = await response.json()
+        const fileLogs: LogEntry[] = rawLogs.map(sanitizeLogEntry).filter(Boolean)
         setLogs(prev => {
           // Merge file logs with existing logs, avoiding duplicates
           const existing = new Set(prev.map(log => log.id))
@@ -69,20 +235,24 @@ export function LogViewer({ projectId, taskId }: LogViewerProps) {
 
     eventSource.onmessage = (event) => {
       try {
-        const logEntry: LogEntry = JSON.parse(event.data)
-        logEntry.source = 'stream'
+        const rawLogEntry = JSON.parse(event.data)
+        const logEntry = sanitizeLogEntry(rawLogEntry)
         
-        setLogs(prev => {
-          // Check if log already exists to avoid duplicates
-          if (prev.some(log => log.id === logEntry.id)) {
-            return prev
-          }
-          return [...prev, logEntry].sort((a, b) => 
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-          )
-        })
-        
-        setLastEventId(event.lastEventId || logEntry.id)
+        if (logEntry) {
+          logEntry.source = 'stream'
+          
+          setLogs(prev => {
+            // Check if log already exists to avoid duplicates
+            if (prev.some(log => log.id === logEntry.id)) {
+              return prev
+            }
+            return [...prev, logEntry].sort((a, b) => 
+              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            )
+          })
+          
+          setLastEventId(event.lastEventId || logEntry.id)
+        }
       } catch (error) {
         console.error('Failed to parse log entry:', error)
       }
@@ -129,7 +299,7 @@ export function LogViewer({ projectId, taskId }: LogViewerProps) {
     }
   }
 
-  const getLevelColor = (level: LogEntry['level']) => {
+  const getLevelColor = (level?: LogEntry['level']) => {
     switch (level) {
       case 'error':
         return 'text-red-600 dark:text-red-400'
@@ -144,7 +314,7 @@ export function LogViewer({ projectId, taskId }: LogViewerProps) {
     }
   }
 
-  const getLevelBadgeColor = (level: LogEntry['level']) => {
+  const getLevelBadgeColor = (level?: LogEntry['level']) => {
     switch (level) {
       case 'error':
         return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
@@ -214,7 +384,7 @@ export function LogViewer({ projectId, taskId }: LogViewerProps) {
                 <div className="flex items-start gap-2 p-2 rounded hover:bg-muted/50">
                   <div className="flex-shrink-0">
                     <Badge className={`text-xs ${getLevelBadgeColor(log.level)}`}>
-                      {log.level.toUpperCase()}
+                      {(log.level || 'unknown').toUpperCase()}
                     </Badge>
                   </div>
                   <div className="flex-1 min-w-0">
@@ -228,9 +398,37 @@ export function LogViewer({ projectId, taskId }: LogViewerProps) {
                         </Badge>
                       )}
                     </div>
-                    <div className={`text-sm ${getLevelColor(log.level)}`}>
-                      {log.message}
-                    </div>
+                    {(() => {
+                      // Check if this log message contains TodoWrite tool usage
+                      const todos = parseTodoWriteFromMessage(log.message)
+                      
+                      // Debug logging to see what's happening
+                      if (log.message.includes('TodoWrite')) {
+                        console.log('Found TodoWrite message:', {
+                          messageLength: log.message.length,
+                          startsWithBrace: log.message.trim().startsWith('{'),
+                          parsedTodos: todos?.length || 0,
+                          message: log.message.substring(0, 200) + '...'
+                        })
+                      }
+                      
+                      if (todos) {
+                        return (
+                          <div className="text-sm">
+                            <span className={getLevelColor(log.level)}>
+                              TodoWrite tool executed
+                            </span>
+                            <TodoListRenderer todos={todos} />
+                          </div>
+                        )
+                      } else {
+                        return (
+                          <div className={`text-sm ${getLevelColor(log.level)}`}>
+                            {log.message}
+                          </div>
+                        )
+                      }
+                    })()}
                     {log.metadata && Object.keys(log.metadata).length > 0 && (
                       <details className="mt-1 text-xs text-muted-foreground">
                         <summary className="cursor-pointer">Metadata</summary>

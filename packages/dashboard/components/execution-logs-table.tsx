@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import localizedFormat from "dayjs/plugin/localizedFormat";
@@ -39,7 +39,9 @@ import {
   Monitor,
   CheckSquare,
   Wifi,
-  WifiOff
+  WifiOff,
+  Circle,
+  CheckCircle
 } from "lucide-react";
 import { useSessionLogs } from "@/hooks/use-session-logs";
 import { useRealtimeSessionLogs } from "@/hooks/use-realtime-session-logs";
@@ -50,11 +52,145 @@ dayjs.extend(relativeTime);
 dayjs.extend(localizedFormat);
 dayjs.extend(duration);
 
+// TodoWrite types for parsing
+interface Todo {
+  id: string;
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  priority?: 'low' | 'medium' | 'high';
+}
+
+interface TodoWriteContent {
+  type: 'tool_use';
+  id: string;
+  name: 'TodoWrite';
+  input: {
+    todos: Todo[];
+  };
+}
+
+interface MessageContent {
+  type: string;
+  id?: string;
+  name?: string;
+  input?: any;
+}
+
+interface AssistantMessage {
+  type: 'assistant';
+  message: {
+    id?: string;
+    type?: string;
+    role?: string;
+    model?: string;
+    content: MessageContent[];
+    stop_reason?: any;
+    stop_sequence?: any;
+    usage?: any;
+  };
+  parent_tool_use_id?: string | null;
+  session_id?: string;
+}
+
 interface ExecutionLogsTableProps {
   sessionId: string | null;
   className?: string;
   useRealtimeStreaming?: boolean;
   onLogCountChange?: (count: number) => void;
+}
+
+// Function to parse TodoWrite from log messages
+function parseTodoWriteFromMessage(message: string): Todo[] | null {
+  try {
+    const parsed = JSON.parse(message) as AssistantMessage;
+    
+    if (parsed.type === 'assistant' && parsed.message?.content) {
+      const todoWriteContent = parsed.message.content.find(
+        (content): content is TodoWriteContent => 
+          content.type === 'tool_use' && content.name === 'TodoWrite'
+      );
+      
+      if (todoWriteContent && todoWriteContent.input?.todos) {
+        return todoWriteContent.input.todos;
+      }
+    }
+  } catch (error) {
+    // Not JSON or doesn't match expected structure
+  }
+  return null;
+}
+
+// Component to render todo list inline in the table
+function TodoListRenderer({ todos }: { todos: Todo[] }) {
+  const getStatusIcon = (status: Todo['status']) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="h-2.5 w-2.5 text-green-600" />;
+      case 'in_progress':
+        return <Clock className="h-2.5 w-2.5 text-blue-600" />;
+      case 'pending':
+      default:
+        return <Circle className="h-2.5 w-2.5 text-gray-400" />;
+    }
+  };
+  
+  const getPriorityButton = (priority?: string) => {
+    if (!priority) return null;
+    
+    let letter: string;
+    let className: string;
+    
+    switch (priority) {
+      case 'high':
+        letter = 'H';
+        className = 'bg-red-500 text-white text-[8px] w-2.5 h-2.5';
+        break;
+      case 'medium':
+        letter = 'M';
+        className = 'bg-orange-500 text-white text-[8px] w-2.5 h-2.5';
+        break;
+      case 'low':
+        letter = 'L';
+        className = 'bg-green-500 text-white text-[8px] w-2.5 h-2.5';
+        break;
+      default:
+        return null;
+    }
+    
+    return (
+      <div className={`rounded-full flex items-center justify-center font-bold ${className}`}>
+        {letter}
+      </div>
+    );
+  };
+  
+  return (
+    <div className="mt-1 p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
+      <div className="flex items-center gap-1 mb-1">
+        <List className="h-2.5 w-2.5 text-blue-600" />
+        <span className="text-[10px] font-medium text-blue-800 dark:text-blue-200">
+          Todos ({todos.length})
+        </span>
+      </div>
+      <div className="space-y-0.5">
+        {todos.map((todo) => (
+          <div key={todo.id} className="flex items-start gap-1.5 text-[10px]">
+            <div className="mt-0.5 flex-shrink-0">
+              {getStatusIcon(todo.status)}
+            </div>
+            <p className={`flex-1 leading-tight ${todo.status === 'completed' ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+              {todo.content}
+            </p>
+            {todo.priority && (
+              <div className="mt-0.5 flex-shrink-0">
+                {getPriorityButton(todo.priority)}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming = true, onLogCountChange }: ExecutionLogsTableProps) {
@@ -288,8 +424,14 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
     }
   };
 
-  const processLogMessage = (data: string) => {
-    // Try to parse as JSON first (for raw VibeKit updates)
+  const processLogMessage = (data: string): string | React.ReactNode => {
+    // Check for TodoWrite first before other JSON parsing
+    const todos = parseTodoWriteFromMessage(data);
+    if (todos) {
+      return <TodoListRenderer todos={todos} />;
+    }
+    
+    // Try to parse as JSON for other VibeKit updates
     try {
       const parsed = JSON.parse(data);
       
@@ -457,7 +599,7 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
                   </TableCell>
                   <TableCell>
                     <div className="font-mono text-xs break-all whitespace-pre-wrap">
-                      {log.type === 'command' && !processedMessage.startsWith('$') && !processedMessage.startsWith('Tool:') && (
+                      {typeof processedMessage === 'string' && log.type === 'command' && !processedMessage.startsWith('$') && !processedMessage.startsWith('Tool:') && (
                         <span className="text-blue-600 font-semibold mr-1">$</span>
                       )}
                       <span className="text-foreground">

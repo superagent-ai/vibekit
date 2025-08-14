@@ -90,4 +90,3 @@ export class TaskLogger {
 export function createTaskLogger(projectId: string, taskId: string): TaskLogger {
   return new TaskLogger(projectId, taskId)
 }
-
