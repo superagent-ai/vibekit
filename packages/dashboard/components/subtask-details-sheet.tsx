@@ -111,6 +111,7 @@ export function SubtaskDetailsSheet({
   const [executionLogs, setExecutionLogs] = useState<string>("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [executionHistory, setExecutionHistory] = useState<any[]>([]);
+  const [totalLogCount, setTotalLogCount] = useState<number>(0);
   const [selectedExecution, setSelectedExecution] = useState<Execution | null>(null);
   const [dockerStatus, setDockerStatus] = useState<any>(null);
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
@@ -686,7 +687,7 @@ export function SubtaskDetailsSheet({
               <TabsList size="xs" variant="line" className="grid grid-cols-3 w-full">
                 <TabsTrigger value="logs">
                   <ScrollText />
-                  Logs ({sessionId ? 1 : 0})
+                  Log ({totalLogCount})
                 </TabsTrigger>
                 <TabsTrigger value="subtasks">
                   <ListChecks />
@@ -704,7 +705,12 @@ export function SubtaskDetailsSheet({
                   <ScrollArea className="flex-1">
                     <div className="p-4">
                       <div className="border rounded-lg bg-background">
-                        <ExecutionLogsTable sessionId={sessionId} className="h-[500px] p-4" useRealtimeStreaming={true} />
+                        <ExecutionLogsTable 
+                          sessionId={sessionId} 
+                          className="h-[500px] p-4" 
+                          useRealtimeStreaming={true}
+                          onLogCountChange={setTotalLogCount}
+                        />
                       </div>
                       
                       {/* Execution History Selector */}
