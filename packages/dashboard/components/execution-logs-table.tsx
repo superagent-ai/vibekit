@@ -95,7 +95,7 @@ interface ExecutionLogsTableProps {
   sessionId: string | null;
   className?: string;
   onLogCountChange?: (count: number) => void;
-  onTodoUpdate?: (todos: Todo[]) => void;
+  onTodoUpdate?: (todos: Todo[], timestamp: number) => void;
 }
 
 // Function to parse TodoWrite from log messages
@@ -413,14 +413,14 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
     }
   };
 
-  const processLogMessage = (data: string): string | React.ReactNode => {
+  const processLogMessage = (data: string, timestamp: number): string | React.ReactNode => {
     // Check for TodoWrite first before other JSON parsing
     const todos = parseTodoWriteFromMessage(data);
     if (todos) {
       // Defer the callback to avoid setState during render
       setTimeout(() => {
         if (onTodoUpdate) {
-          onTodoUpdate(todos);
+          onTodoUpdate(todos, timestamp);
         }
       }, 0);
       return <TodoListRenderer todos={todos} />;
@@ -559,7 +559,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
             {logs.map((log, index) => {
               const icon = getLogIcon(log.type, log.data);
               const typeColor = getLogTypeColor(log.type);
-              const processedMessage = processLogMessage(log.data);
+              const processedMessage = processLogMessage(log.data, log.timestamp);
               
               return (
                 <TableRow key={index} className="group hover:bg-muted/50">

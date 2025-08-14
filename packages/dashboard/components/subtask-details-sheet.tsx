@@ -317,12 +317,13 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
   }, [subtask?.details, subtask?.testStrategy]);
 
   // Handle todo updates from logs
-  const handleTodoUpdate = useCallback((todos: any[]) => {
+  const handleTodoUpdate = useCallback((todos: any[], timestamp: number) => {
     setCurrentTodos(prev => {
       // Only update if the todos actually changed
       if (JSON.stringify(prev) !== JSON.stringify(todos)) {
         setHasTodos(true);
-        setTodosLastUpdated(new Date().toISOString());
+        // Use the actual timestamp from the log entry instead of current time
+        setTodosLastUpdated(new Date(timestamp).toISOString());
         return todos;
       }
       return prev;
@@ -772,6 +773,16 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
               </Card>
             )}
 
+            {/* Todo List Panel - moved from underneath logs */}
+            {hasTodos && currentTodos.length > 0 && (
+              <div className="mt-3">
+                <TodoListPanel 
+                  todos={currentTodos} 
+                  lastUpdated={todosLastUpdated || undefined}
+                  className="border rounded-lg"
+                />
+              </div>
+            )}
 
             {/* Dependencies */}
             {subtask.dependencies && subtask.dependencies.length > 0 && (
@@ -841,17 +852,6 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                               Execute this subtask to see logs here
                             </p>
                           </div>
-                        </div>
-                      )}
-                      
-                      {/* Todo List Panel */}
-                      {hasTodos && currentTodos.length > 0 && (
-                        <div className="mt-4">
-                          <TodoListPanel 
-                            todos={currentTodos} 
-                            lastUpdated={todosLastUpdated || undefined}
-                            className="border rounded-lg"
-                          />
                         </div>
                       )}
                       
