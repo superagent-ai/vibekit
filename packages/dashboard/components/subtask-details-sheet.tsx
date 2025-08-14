@@ -118,9 +118,27 @@ export function SubtaskDetailsSheet({
   const [hasMoreDetailsContent, setHasMoreDetailsContent] = useState(false);
   const [detailsContentHeight, setDetailsContentHeight] = useState(80);
   
+  // Reset state when subtask changes
+  useEffect(() => {
+    if (!open || !subtask) {
+      // Clear state when dialog closes
+      setSessionId(null);
+      setExecutionHistory([]);
+      setSelectedExecution(null);
+      setTotalLogCount(0);
+      return;
+    }
+  }, [open, subtask?.id]);
+
   // Fetch settings and execution history on mount/open
   useEffect(() => {
     if (!open || !subtask || !projectId) return;
+    
+    // Reset execution-related state for new subtask
+    setSessionId(null);
+    setExecutionHistory([]);
+    setSelectedExecution(null);
+    setTotalLogCount(0);
     
     // Fetch user settings for defaults
     fetch("/api/settings")
@@ -141,23 +159,53 @@ export function SubtaskDetailsSheet({
         // Defaults are already set in useState, so no need to set them again
       });
     
-    // Fetch execution history for this subtask
+    // Fetch execution history for this specific subtask
     fetch(`/api/projects/${projectId}/tasks/execution-history?subtaskId=${subtask.id}`)
       .then(res => res.json())
       .then(data => {
         if (data.success && data.executions?.length > 0) {
           setExecutionHistory(data.executions);
-          // Set the most recent sessionId for viewing logs
+          // Set the most recent sessionId for viewing logs for THIS subtask
           const mostRecent = data.executions[0];
           if (mostRecent?.sessionId) {
             setSessionId(mostRecent.sessionId);
           }
+        } else {
+          // No executions for this subtask - ensure sessionId is null
+          setSessionId(null);
+          setExecutionHistory([]);
         }
       })
       .catch(err => {
         console.error("Failed to load execution history:", err);
+        // Reset state on error
+        setSessionId(null);
+        setExecutionHistory([]);
       });
   }, [open, subtask?.id, projectId]);
+
+  // Fetch Docker status when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    
+    const fetchDockerStatus = async () => {
+      try {
+        const response = await fetch('/api/docker/status');
+        const data = await response.json();
+        setDockerStatus(data);
+      } catch (error) {
+        console.error('Failed to fetch Docker status:', error);
+        // Set a default status that assumes Docker is available to prevent blocking
+        setDockerStatus({
+          dockerInstalled: true,
+          dockerRunning: true,
+          error: null
+        });
+      }
+    };
+
+    fetchDockerStatus();
+  }, [open]);
   
   // Fetch git branches when projectRoot is available
   useEffect(() => {
@@ -646,6 +694,17 @@ export function SubtaskDetailsSheet({
                       }}
                       disabled={isExecuting || !selectedAgent || !selectedSandbox || !selectedBranch || !projectId || !projectRoot || (selectedSandbox === 'dagger' && (!dockerStatus?.dockerRunning || !dockerStatus?.dockerInstalled))}
                       className="gap-1 h-7 text-xs"
+                      title={
+                        isExecuting ? "Executing..." :
+                        !selectedAgent ? "Please select an agent" :
+                        !selectedSandbox ? "Please select a sandbox" :
+                        !selectedBranch ? "Please select a branch" :
+                        !projectId ? "Project ID missing" :
+                        !projectRoot ? "Project root missing" :
+                        (selectedSandbox === 'dagger' && !dockerStatus?.dockerInstalled) ? "Docker is not installed" :
+                        (selectedSandbox === 'dagger' && !dockerStatus?.dockerRunning) ? "Docker is not running" :
+                        "Execute subtask"
+                      }
                     >
                       <Play className="h-3 w-3" />
                       {isExecuting ? "Executing..." : "Execute"}
@@ -704,14 +763,26 @@ export function SubtaskDetailsSheet({
                 <TabsContent value="logs" className="flex-1 flex flex-col min-h-0 m-0">
                   <ScrollArea className="flex-1">
                     <div className="p-4">
-                      <div className="border rounded-lg bg-background">
-                        <ExecutionLogsTable 
-                          sessionId={sessionId} 
-                          className="h-[500px] p-4" 
-                          useRealtimeStreaming={true}
-                          onLogCountChange={setTotalLogCount}
-                        />
-                      </div>
+                      {sessionId ? (
+                        <div className="border rounded-lg bg-background">
+                          <ExecutionLogsTable 
+                            sessionId={sessionId} 
+                            className="h-[500px] p-4" 
+                            useRealtimeStreaming={true}
+                            onLogCountChange={setTotalLogCount}
+                          />
+                        </div>
+                      ) : (
+                        <div className="border rounded-lg bg-background h-[500px] p-4 flex items-center justify-center">
+                          <div className="text-center text-muted-foreground">
+                            <ScrollText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p className="text-sm font-medium mb-1">No execution logs</p>
+                            <p className="text-xs">
+                              Execute this subtask to see logs here
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Execution History Selector */}
                       {executionHistory.length > 1 && (
@@ -808,20 +879,37 @@ export function SubtaskDetailsSheet({
                       <div className="border rounded-lg bg-background">
                         <div className="p-3 border-b">
                           <h4 className="text-sm font-medium">Execution History</h4>
-                          <p className="text-xs text-muted-foreground mt-1">Click on an execution to view its logs in the Logs tab</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {executionHistory.length > 0 
+                              ? "Click on an execution to view its logs in the Logs tab"
+                              : "No executions yet for this subtask"
+                            }
+                          </p>
                         </div>
-                        <ExecutionsList 
-                          subtaskId={subtask.id}
-                          projectId={projectId || ''}
-                          selectedExecutionId={selectedExecution?.id}
-                          onSelectExecution={(execution) => {
-                            setSelectedExecution(execution);
-                            setSessionId(execution.sessionId);
-                            // Switch to logs tab when selecting an execution
-                            setActiveTab("logs");
-                          }}
-                          className="h-[450px]"
-                        />
+                        {executionHistory.length > 0 ? (
+                          <ExecutionsList 
+                            subtaskId={subtask.id}
+                            projectId={projectId || ''}
+                            selectedExecutionId={selectedExecution?.id}
+                            onSelectExecution={(execution) => {
+                              setSelectedExecution(execution);
+                              setSessionId(execution.sessionId);
+                              // Switch to logs tab when selecting an execution
+                              setActiveTab("logs");
+                            }}
+                            className="h-[450px]"
+                          />
+                        ) : (
+                          <div className="h-[450px] flex items-center justify-center">
+                            <div className="text-center text-muted-foreground">
+                              <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                              <p className="text-sm font-medium mb-1">No executions yet</p>
+                              <p className="text-xs">
+                                Execute this subtask to see execution history here
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </ScrollArea>
