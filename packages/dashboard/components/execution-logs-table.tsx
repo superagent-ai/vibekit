@@ -138,16 +138,36 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   const { logs, metadata, isLive, isLoading, error, isConnected, loadingStrategy } = useSmartSessionLogs(sessionId);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
+  const hasInitiallyLoaded = useRef(false);
+  const previousLogCount = useRef(0);
   
-  // Auto-scroll to bottom when new logs arrive
+  // Handle scrolling behavior - start at top on first load, then auto-scroll for new logs
   useEffect(() => {
-    if (shouldAutoScroll.current && scrollAreaRef.current) {
-      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
-      }
+    if (!scrollAreaRef.current || logs.length === 0) return;
+    
+    // First time logs are loaded - scroll to top
+    if (!hasInitiallyLoaded.current) {
+      scrollAreaRef.current.scrollTop = 0;
+      hasInitiallyLoaded.current = true;
+      previousLogCount.current = logs.length;
+    } 
+    // New logs added after initial load - auto-scroll to bottom if enabled
+    else if (logs.length > previousLogCount.current && shouldAutoScroll.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+      previousLogCount.current = logs.length;
+    } 
+    // Update count even if not scrolling
+    else {
+      previousLogCount.current = logs.length;
     }
   }, [logs]);
+
+  // Reset scroll state when session changes
+  useEffect(() => {
+    hasInitiallyLoaded.current = false;
+    previousLogCount.current = 0;
+    shouldAutoScroll.current = true;
+  }, [sessionId]);
 
   // Update log count when logs change
   useEffect(() => {
@@ -465,38 +485,39 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   }
   
   return (
-    <div className={cn("flex flex-col h-full", className)}>
-      {/* Simple header with log count */}
-      <div className="flex items-center justify-between p-2 border-b bg-muted/20">
-        <div className="text-xs text-muted-foreground">
-          Execution Logs
-        </div>
-        <div className="text-xs text-muted-foreground">
-          {logs.length} log{logs.length !== 1 ? 's' : ''}
-        </div>
-      </div>
-      
-      <ScrollArea 
-        ref={scrollAreaRef}
-        className="flex-1"
-        onMouseEnter={() => { shouldAutoScroll.current = false; }}
-        onMouseLeave={() => { shouldAutoScroll.current = true; }}
-      >
-        {logs.length === 0 ? (
-        <div className="text-center py-8">
-          <Terminal className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
-          <p className="text-sm text-muted-foreground">Waiting for logs...</p>
+    <div className={cn("flex flex-col", className)} style={{ height: '100%', minHeight: 0 }}>
+      {logs.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Terminal className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+            <p className="text-sm text-muted-foreground">Waiting for logs...</p>
+          </div>
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[120px]">Time</TableHead>
-              <TableHead className="w-[100px]">Type</TableHead>
-              <TableHead>Message</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <>
+          {/* Fixed Header */}
+          <div className="flex-shrink-0 border-b bg-muted/50">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[120px]">Time</TableHead>
+                  <TableHead className="w-[100px]">Type</TableHead>
+                  <TableHead>Message</TableHead>
+                </TableRow>
+              </TableHeader>
+            </Table>
+          </div>
+          
+          {/* Scrollable Body */}
+          <div 
+            ref={scrollAreaRef}
+            className="flex-1 overflow-auto"
+            onMouseEnter={() => { shouldAutoScroll.current = false; }}
+            onMouseLeave={() => { shouldAutoScroll.current = true; }}
+            style={{ maxHeight: 'calc(100vh - 200px)' }}
+          >
+            <Table>
+              <TableBody>
             {logs.map((log, index) => {
               const icon = getLogIcon(log.type, log.data);
               const typeColor = getLogTypeColor(log.type);
@@ -504,10 +525,10 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
               
               return (
                 <TableRow key={index} className="group hover:bg-muted/50">
-                  <TableCell className="font-mono text-xs text-muted-foreground" title={dayjs(log.timestamp).format('LLLL')}>
+                  <TableCell className="w-[120px] font-mono text-xs text-muted-foreground" title={dayjs(log.timestamp).format('LLLL')}>
                     {formatTimestamp(log.timestamp, true)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="w-[100px]">
                     <div className="flex items-center gap-1.5">
                       <span className={cn("opacity-70", typeColor.replace('bg-', 'text-'))}>
                         {icon}
@@ -533,10 +554,11 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
                 </TableRow>
               );
             })}
-          </TableBody>
-        </Table>
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
-    </ScrollArea>
     </div>
   );
 }

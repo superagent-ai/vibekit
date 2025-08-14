@@ -831,31 +831,28 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
               {/* Tab Content */}
               <div className="flex-1 flex flex-col min-h-0">
                 <TabsContent value="logs" className="flex-1 flex flex-col min-h-0 m-0">
-                  <ScrollArea className="flex-1">
-                    <div className="p-4">
-                      {sessionId ? (
-                        <div className="border rounded-lg bg-background">
-                          <ExecutionLogsTable 
-                            key={`${sessionId}-${subtask?.id}`} // Force re-render when session or subtask changes
-                            sessionId={sessionId} 
-                            className="h-[500px] p-4" 
-                            onLogCountChange={setTotalLogCount}
-                            onTodoUpdate={handleTodoUpdate}
-                          />
-                        </div>
-                      ) : (
-                        <div className="border rounded-lg bg-background h-[500px] p-4 flex items-center justify-center">
-                          <div className="text-center text-muted-foreground">
-                            <ScrollText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                            <p className="text-sm font-medium mb-1">No execution logs</p>
-                            <p className="text-xs">
-                              Execute this subtask to see logs here
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Execution History Selector */}
+                  {sessionId ? (
+                    <ExecutionLogsTable 
+                      key={`${sessionId}-${subtask?.id}`} // Force re-render when session or subtask changes
+                      sessionId={sessionId} 
+                      className="flex-1" 
+                      onLogCountChange={setTotalLogCount}
+                      onTodoUpdate={handleTodoUpdate}
+                    />
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="text-center text-muted-foreground">
+                        <ScrollText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-sm font-medium mb-1">No execution logs</p>
+                        <p className="text-xs">
+                          Execute this subtask to see logs here
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Execution History Selector */}
+                  <div className="p-4 pt-0">{/* Move the execution history selector into a padded div */}
                       {executionHistory.length > 1 && (
                         <div className="mt-4 p-3 border rounded-lg bg-muted/20">
                           <Label className="text-xs font-medium mb-2 block">Previous Executions</Label>
@@ -893,8 +890,7 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                           </Select>
                         </div>
                       )}
-                    </div>
-                  </ScrollArea>
+                  </div>
                 </TabsContent>
                 
                 <TabsContent value="subtasks" className="flex-1 flex flex-col min-h-0 m-0">
