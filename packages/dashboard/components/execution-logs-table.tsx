@@ -45,51 +45,12 @@ import {
 } from "lucide-react";
 import { useSmartSessionLogs } from "@/hooks/use-smart-session-logs";
 import { cn } from "@/lib/utils";
+import { Todo, parseTodoWriteFromMessage } from "@/lib/todo-parser";
 
 // Extend Day.js with plugins
 dayjs.extend(relativeTime);
 dayjs.extend(localizedFormat);
 dayjs.extend(duration);
-
-// TodoWrite types for parsing
-interface Todo {
-  id: string;
-  content: string;
-  status: 'pending' | 'in_progress' | 'completed';
-  priority?: 'low' | 'medium' | 'high';
-}
-
-interface TodoWriteContent {
-  type: 'tool_use';
-  id: string;
-  name: 'TodoWrite';
-  input: {
-    todos: Todo[];
-  };
-}
-
-interface MessageContent {
-  type: string;
-  id?: string;
-  name?: string;
-  input?: any;
-}
-
-interface AssistantMessage {
-  type: 'assistant';
-  message: {
-    id?: string;
-    type?: string;
-    role?: string;
-    model?: string;
-    content: MessageContent[];
-    stop_reason?: any;
-    stop_sequence?: any;
-    usage?: any;
-  };
-  parent_tool_use_id?: string | null;
-  session_id?: string;
-}
 
 interface ExecutionLogsTableProps {
   sessionId: string | null;
@@ -98,26 +59,6 @@ interface ExecutionLogsTableProps {
   onTodoUpdate?: (todos: Todo[], timestamp: number) => void;
 }
 
-// Function to parse TodoWrite from log messages
-function parseTodoWriteFromMessage(message: string): Todo[] | null {
-  try {
-    const parsed = JSON.parse(message) as AssistantMessage;
-    
-    if (parsed.type === 'assistant' && parsed.message?.content) {
-      const todoWriteContent = parsed.message.content.find(
-        (content): content is TodoWriteContent => 
-          content.type === 'tool_use' && content.name === 'TodoWrite'
-      );
-      
-      if (todoWriteContent && todoWriteContent.input?.todos) {
-        return todoWriteContent.input.todos;
-      }
-    }
-  } catch (error) {
-    // Not JSON or doesn't match expected structure
-  }
-  return null;
-}
 
 // Component to render todo list inline in the table
 function TodoListRenderer({ todos }: { todos: Todo[] }) {

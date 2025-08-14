@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { RefreshCw, Wifi, WifiOff, CheckCircle, Circle, Clock } from 'lucide-react'
+import { Todo, parseTodoWriteFromMessage } from '@/lib/todo-parser'
 
 interface LogEntry {
   id: string
@@ -14,45 +15,6 @@ interface LogEntry {
   message: string
   metadata?: Record<string, any>
   source?: 'stream' | 'file'
-}
-
-interface Todo {
-  id: string
-  content: string
-  status: 'pending' | 'in_progress' | 'completed'
-  priority?: 'low' | 'medium' | 'high'
-}
-
-interface TodoWriteContent {
-  type: 'tool_use'
-  id: string
-  name: 'TodoWrite'
-  input: {
-    todos: Todo[]
-  }
-}
-
-interface MessageContent {
-  type: string
-  id?: string
-  name?: string
-  input?: any
-}
-
-interface AssistantMessage {
-  type: 'assistant'
-  message: {
-    id?: string
-    type?: string
-    role?: string
-    model?: string
-    content: MessageContent[]
-    stop_reason?: any
-    stop_sequence?: any
-    usage?: any
-  }
-  parent_tool_use_id?: string | null
-  session_id?: string
 }
 
 interface LogViewerProps {
@@ -65,40 +27,6 @@ export function LogViewer({ projectId, taskId }: LogViewerProps) {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected')
   const [isAutoScroll, setIsAutoScroll] = useState(true)
   const [lastEventId, setLastEventId] = useState<string>('')
-  
-  // Function to parse TodoWrite from log messages
-  const parseTodoWriteFromMessage = (message: string): Todo[] | null => {
-    try {
-      const parsed = JSON.parse(message) as AssistantMessage
-      
-      console.log('Parsing attempt:', {
-        type: parsed.type,
-        hasMessage: !!parsed.message,
-        hasContent: !!parsed.message?.content,
-        contentArray: parsed.message?.content || []
-      })
-      
-      if (parsed.type === 'assistant' && parsed.message?.content) {
-        const todoWriteContent = parsed.message.content.find(
-          (content): content is TodoWriteContent => 
-            content.type === 'tool_use' && content.name === 'TodoWrite'
-        )
-        
-        console.log('TodoWrite search result:', {
-          found: !!todoWriteContent,
-          contentTypes: parsed.message.content.map(c => ({ type: c.type, name: c.name }))
-        })
-        
-        if (todoWriteContent && todoWriteContent.input?.todos) {
-          console.log('Found todos:', todoWriteContent.input.todos.length)
-          return todoWriteContent.input.todos
-        }
-      }
-    } catch (error) {
-      console.log('Parse error:', error)
-    }
-    return null
-  }
   
   // Component to render todo list
   const TodoListRenderer = ({ todos }: { todos: Todo[] }) => {
