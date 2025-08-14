@@ -681,18 +681,18 @@ export function SubtaskDetailsSheet({
 
           {/* Tab Navigation - Sticky */}
           <div className="px-6 lg:px-8 py-2 bg-background border-t">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-              <TabsList className="grid grid-cols-3 w-full">
-                <TabsTrigger value="logs" className="flex items-center gap-2">
-                  <ScrollText className="h-4 w-4" />
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col text-sm text-muted-foreground">
+              <TabsList size="xs" variant="line" className="grid grid-cols-3 w-full">
+                <TabsTrigger value="logs">
+                  <ScrollText />
                   Logs
                 </TabsTrigger>
-                <TabsTrigger value="subtasks" className="flex items-center gap-2">
-                  <ListChecks className="h-4 w-4" />
+                <TabsTrigger value="subtasks">
+                  <ListChecks />
                   Other Subtasks
                 </TabsTrigger>
-                <TabsTrigger value="executions" className="flex items-center gap-2">
-                  <History className="h-4 w-4" />
+                <TabsTrigger value="executions">
+                  <History />
                   Executions
                 </TabsTrigger>
               </TabsList>
