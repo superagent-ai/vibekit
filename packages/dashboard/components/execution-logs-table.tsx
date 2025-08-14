@@ -177,7 +177,12 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   }, [logs, onLogCountChange]);
   
   const getLogIcon = (type: string, data: string) => {
-    // Handle "end" type messages first with computer icon
+    // Handle "result" type messages first with check icon
+    if (data.includes('"type":"result"')) {
+      return <CheckSquare className="h-4 w-4" />;
+    }
+    
+    // Handle "end" type messages with computer icon
     if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
       return <Monitor className="h-4 w-4" />;
     }
@@ -306,7 +311,12 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   };
   
   const getLogTypeLabel = (type: string, data: string) => {
-    // Handle "end" type messages first
+    // Handle "result" type messages first
+    if (data.includes('"type":"result"')) {
+      return 'Result';
+    }
+    
+    // Handle "end" type messages
     if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
       return 'Session';
     }
@@ -464,121 +474,275 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
     }
   };
 
+  const processEndMessage = (endData: any): string => {
+    // If we have a sandbox_id, show it
+    if (endData.sandbox_id) {
+      return `Sandbox ended: ${endData.sandbox_id}`;
+    }
+    
+    try {
+      // Parse the output field which contains execution results
+      let output;
+      try {
+        output = typeof endData.output === 'string' ? JSON.parse(endData.output) : endData.output;
+      } catch (e) {
+        console.warn('Failed to parse end message output:', e);
+        return endData.sandbox_id ? `Sandbox ended: ${endData.sandbox_id}` : '✅ Session completed';
+      }
+      
+      if (output && output.exitCode !== undefined) {
+        const success = output.exitCode === 0;
+        
+        // Try to extract session results from stdout
+        if (output.stdout && typeof output.stdout === 'string') {
+          // Important: Split on actual newlines, not escaped \\n
+          const lines = output.stdout.split('\n').filter((line: string) => line.trim());
+          
+          // Look for the final result line (contains session summary)
+          let resultLine = null;
+          for (const line of lines) {
+            try {
+              const lineData = JSON.parse(line);
+              if (lineData.type === 'result') {
+                resultLine = line;
+                break;
+              }
+            } catch { 
+              // Not a JSON line, skip
+            }
+          }
+          
+          if (resultLine) {
+            try {
+              const resultData = JSON.parse(resultLine);
+              const duration = resultData.duration_ms ? `${Math.round(resultData.duration_ms / 1000)}s` : '';
+              const cost = resultData.total_cost_usd ? `$${resultData.total_cost_usd.toFixed(4)}` : '';
+              const turns = resultData.num_turns ? `${resultData.num_turns} turns` : '';
+              
+              // Extract token information from usage field
+              let tokenInfo = '';
+              if (resultData.usage) {
+                const usage = resultData.usage;
+                const totalTokens = (usage.input_tokens || 0) + 
+                                   (usage.output_tokens || 0) + 
+                                   (usage.cache_creation_input_tokens || 0) + 
+                                   (usage.cache_read_input_tokens || 0);
+                if (totalTokens > 0) {
+                  tokenInfo = `${totalTokens.toLocaleString()} tokens`;
+                }
+              }
+              
+              // Try to extract meaningful task summary from result text
+              let taskSummary = '';
+              if (resultData.result && typeof resultData.result === 'string') {
+                const result = resultData.result;
+                
+                // Look for completed tasks marked with ✅
+                const completedMatch = result.match(/✅\s*\*\*([^*]+)\*\*/);
+                if (completedMatch) {
+                  taskSummary = completedMatch[1].trim();
+                } else {
+                  // Look for specific task descriptions
+                  const taskPatterns = [
+                    /Main Container \([^)]+\)/,
+                    /implemented[^.!?]+(?:styling|styles|container)/i,
+                    /completed[^.!?]+(?:styling|styles|implementation)/i,
+                    /(?:CSS|styling|styles)[^.!?]+implemented/i
+                  ];
+                  
+                  for (const pattern of taskPatterns) {
+                    const match = result.match(pattern);
+                    if (match) {
+                      taskSummary = match[0].trim();
+                      break;
+                    }
+                  }
+                  
+                  // If still no match, try to extract first meaningful line
+                  if (!taskSummary) {
+                    const lines = result.split('\n');
+                    for (const line of lines) {
+                      const trimmed = line.trim();
+                      if (trimmed.startsWith('✅') || trimmed.includes('completed') || trimmed.includes('implemented')) {
+                        // Extract the key part
+                        taskSummary = trimmed.replace(/^[✅\s*]+/, '').substring(0, 60);
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+              
+              let summary = success ? '✅ Session completed' : '❌ Session failed';
+              if (taskSummary) {
+                summary += `: ${taskSummary}`;
+              }
+              
+              const details = [duration, cost, turns, tokenInfo].filter(Boolean);
+              if (details.length > 0) {
+                summary += ` (${details.join(', ')})`;
+              }
+              
+              return summary;
+            } catch (e) {
+              console.warn('Failed to parse result line:', e);
+              // Fall through to simple success/failure
+            }
+          }
+        }
+        
+        // Fallback - just show success or failure
+        return success ? '✅ Session completed successfully' : '❌ Session failed';
+      }
+    } catch (e) {
+      console.warn('Error processing end message:', e);
+    }
+    
+    // Final fallback - check if we have sandbox_id anywhere in the data
+    if (endData?.sandbox_id) {
+      return `Sandbox ended: ${endData.sandbox_id}`;
+    }
+    
+    return '🏁 Session ended';
+  };
+
   const processLogMessage = (data: string, timestamp: number): string | React.ReactNode => {
+    // Handle "result" type messages FIRST (they contain the metrics we want)
+    if (data.includes('"type":"result"')) {
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.type === 'result') {
+          const success = parsed.subtype === 'success';
+          
+          // Build the metrics array directly - no task description extraction
+          const details = [];
+          
+          if (parsed.duration_ms) {
+            details.push(`${Math.round(parsed.duration_ms / 1000)}s`);
+          }
+          
+          if (parsed.total_cost_usd) {
+            details.push(`$${parsed.total_cost_usd.toFixed(4)}`);
+          }
+          
+          if (parsed.num_turns) {
+            details.push(`${parsed.num_turns} turns`);
+          }
+          
+          // Extract token information from usage field
+          if (parsed.usage) {
+            const usage = parsed.usage;
+            const totalTokens = (usage.input_tokens || 0) + 
+                               (usage.output_tokens || 0) + 
+                               (usage.cache_creation_input_tokens || 0) + 
+                               (usage.cache_read_input_tokens || 0);
+            if (totalTokens > 0) {
+              details.push(`${totalTokens.toLocaleString()} tokens`);
+            }
+          }
+          
+          // Build the summary without task description
+          let summary = success ? '✅ Session completed' : '❌ Session failed';
+          
+          if (details.length > 0) {
+            summary += `: ${details.join(', ')}`;
+          }
+          
+          return summary;
+        }
+      } catch (e) {
+        // Continue to other processing
+      }
+    }
+    
     // Handle "end" type messages with proper error handling
     if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
       try {
         const parsed = JSON.parse(data);
-        if (parsed.type === 'end' && parsed.output) {
-          // Parse the output field which contains execution results
-          let output;
+        
+        // Check if this is an update message with nested end data
+        if (parsed.type === 'update' && parsed.data && typeof parsed.data === 'string') {
           try {
-            output = typeof parsed.output === 'string' ? JSON.parse(parsed.output) : parsed.output;
-          } catch {
-            return '✅ Session completed';
-          }
-          
-          if (output && output.exitCode !== undefined) {
-            const success = output.exitCode === 0;
-            
-            // Try to extract session results from stdout
-            if (output.stdout && typeof output.stdout === 'string') {
-              const lines = output.stdout.split('\n').filter((line: string) => line.trim());
-              const resultLine = lines.find((line: string) => {
-                try {
-                  const lineData = JSON.parse(line);
-                  return lineData.type === 'result';
-                } catch { return false; }
-              });
-              
-              if (resultLine) {
-                try {
-                  const resultData = JSON.parse(resultLine);
-                  const duration = resultData.duration_ms ? `${Math.round(resultData.duration_ms / 1000)}s` : '';
-                  const cost = resultData.total_cost_usd ? `$${resultData.total_cost_usd.toFixed(4)}` : '';
-                  const turns = resultData.num_turns ? `${resultData.num_turns} turns` : '';
-                  
-                  // Extract token information from usage field
-                  let tokenInfo = '';
-                  if (resultData.usage) {
-                    const usage = resultData.usage;
-                    const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
-                    if (totalTokens > 0) {
-                      tokenInfo = `${totalTokens.toLocaleString()} tokens`;
-                    }
-                  }
-                  
-                  let summary = success ? '✅ Session completed' : '❌ Session failed';
-                  
-                  const details = [duration, cost, turns, tokenInfo].filter(Boolean);
-                  if (details.length > 0) {
-                    summary += ` (${details.join(', ')})`;
-                  }
-                  
-                  return summary;
-                } catch {
-                  // If we can't parse the result line, fall through to simple success/failure
-                }
-              }
+            const endData = JSON.parse(parsed.data);
+            if (endData.type === 'end' && endData.output) {
+              return processEndMessage(endData);
             }
-            
-            // Fallback - just show success or failure
-            return success ? '✅ Session completed successfully' : '❌ Session failed';
+          } catch (e) {
+            console.warn('Failed to parse nested end data:', e);
           }
         }
+        // Direct end message
+        else if (parsed.type === 'end' && parsed.output) {
+          return processEndMessage(parsed);
+        }
       } catch (parseError) {
-        // JSON parsing failed - try to extract any available summary details
         console.warn('Could not parse end message JSON:', parseError instanceof Error ? parseError.message : String(parseError));
-        console.warn('Problematic data (first 200 chars):', data.substring(0, 200));
+        console.warn('Attempting fallback parsing for potentially truncated data...');
         
-        // Try to extract basic information even if full parsing fails
+        // Fallback: Try to extract key metrics from the raw string using regex
         try {
-          // Look for common patterns in the data even if JSON parsing failed
-          if (data.includes('exitCode')) {
+          // Check if this looks like a truncated update message with end data
+          if (data.includes('"type":"update"') && data.includes('"type": "end"')) {
+            // Try to extract metrics directly from the string
             const exitCodeMatch = data.match(/exitCode["\s]*:\s*(\d+)/);
-            const success = exitCodeMatch ? parseInt(exitCodeMatch[1]) === 0 : null;
-            
-            // Try to extract other metrics if they exist in the raw data
             const durationMatch = data.match(/duration_ms["\s]*:\s*(\d+)/);
             const costMatch = data.match(/total_cost_usd["\s]*:\s*([0-9.]+)/);
             const turnsMatch = data.match(/num_turns["\s]*:\s*(\d+)/);
-            
-            // Try to extract token counts from usage data
             const inputTokensMatch = data.match(/input_tokens["\s]*:\s*(\d+)/);
             const outputTokensMatch = data.match(/output_tokens["\s]*:\s*(\d+)/);
+            const cacheCreationMatch = data.match(/cache_creation_input_tokens["\s]*:\s*(\d+)/);
+            const cacheReadMatch = data.match(/cache_read_input_tokens["\s]*:\s*(\d+)/);
             
-            const duration = durationMatch ? `${Math.round(parseInt(durationMatch[1]) / 1000)}s` : '';
-            const cost = costMatch ? `$${parseFloat(costMatch[1]).toFixed(4)}` : '';
-            const turns = turnsMatch ? `${turnsMatch[1]} turns` : '';
-            
-            let tokenInfo = '';
-            if (inputTokensMatch || outputTokensMatch) {
+            if (exitCodeMatch || durationMatch || costMatch || turnsMatch) {
+              const success = exitCodeMatch ? parseInt(exitCodeMatch[1]) === 0 : true;
+              
+              const duration = durationMatch ? `${Math.round(parseInt(durationMatch[1]) / 1000)}s` : '';
+              const cost = costMatch ? `$${parseFloat(costMatch[1]).toFixed(4)}` : '';
+              const turns = turnsMatch ? `${turnsMatch[1]} turns` : '';
+              
+              let tokenInfo = '';
               const inputTokens = inputTokensMatch ? parseInt(inputTokensMatch[1]) : 0;
               const outputTokens = outputTokensMatch ? parseInt(outputTokensMatch[1]) : 0;
-              const totalTokens = inputTokens + outputTokens;
+              const cacheCreation = cacheCreationMatch ? parseInt(cacheCreationMatch[1]) : 0;
+              const cacheRead = cacheReadMatch ? parseInt(cacheReadMatch[1]) : 0;
+              const totalTokens = inputTokens + outputTokens + cacheCreation + cacheRead;
               if (totalTokens > 0) {
                 tokenInfo = `${totalTokens.toLocaleString()} tokens`;
               }
+              
+              // Try to extract task description
+              let taskSummary = '';
+              const mainContainerMatch = data.match(/Main Container[^"\\]*/);
+              if (mainContainerMatch) {
+                taskSummary = mainContainerMatch[0].substring(0, 50);
+              }
+              
+              let summary = success ? '✅ Session completed' : '❌ Session failed';
+              if (taskSummary) {
+                summary += `: ${taskSummary}`;
+              }
+              
+              const details = [duration, cost, turns, tokenInfo].filter(Boolean);
+              if (details.length > 0) {
+                summary += ` (${details.join(', ')})`;
+              }
+              
+              console.log('✅ Fallback parsing successful:', summary);
+              return summary;
             }
-            
-            let summary = success === true ? '✅ Session completed' : 
-                         success === false ? '❌ Session failed' : 
-                         'Session ended';
-            
-            const details = [duration, cost, turns, tokenInfo].filter(Boolean);
-            if (details.length > 0) {
-              summary += ` (${details.join(', ')})`;
-            }
-            
-            return summary;
           }
-        } catch {
-          // Even the fallback parsing failed, continue to final fallback
+        } catch (fallbackError) {
+          console.warn('Fallback parsing also failed:', fallbackError);
         }
+        
+        // Check for sandbox_id in the raw data as last resort
+        const sandboxIdMatch = data.match(/sandbox_id["\s]*:\s*["']([^"']+)["']/);
+        if (sandboxIdMatch && sandboxIdMatch[1]) {
+          return `Sandbox ended: ${sandboxIdMatch[1]}`;
+        }
+        
+        return '🏁 Session ended';
       }
-      
-      // Final fallback for any parsing issues
-      return '🏁 Session ended';
     }
     
     // Check for TodoWrite first before other JSON parsing
@@ -609,105 +773,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
           
           // Check if the inner type is "end"
           if (innerParsed.type === 'end') {
-            try {
-              // Parse the output field which is also a JSON string
-              const output = typeof innerParsed.output === 'string' ? 
-                JSON.parse(innerParsed.output) : innerParsed.output;
-              
-              if (output && output.exitCode !== undefined) {
-                const success = output.exitCode === 0;
-                
-                // Parse the session result from stdout if available
-                if (output.stdout && typeof output.stdout === 'string') {
-                  const lines = output.stdout.split('\n').filter((line: string) => line.trim());
-                  const resultLine = lines.find((line: string) => {
-                    try {
-                      const lineData = JSON.parse(line);
-                      return lineData.type === 'result';
-                    } catch { return false; }
-                  });
-                  
-                  if (resultLine) {
-                    const resultData = JSON.parse(resultLine);
-                    const duration = resultData.duration_ms ? `${Math.round(resultData.duration_ms / 1000)}s` : '';
-                    const cost = resultData.total_cost_usd ? `$${resultData.total_cost_usd.toFixed(4)}` : '';
-                    const turns = resultData.num_turns ? `${resultData.num_turns} turns` : '';
-                    
-                    // Extract token information from usage field
-                    let tokenInfo = '';
-                    if (resultData.usage) {
-                      const usage = resultData.usage;
-                      const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
-                      if (totalTokens > 0) {
-                        tokenInfo = `${totalTokens.toLocaleString()} tokens`;
-                      }
-                    }
-                    
-                    let summary = success ? '✅ Session completed' : '❌ Session failed';
-                    
-                    const details = [duration, cost, turns, tokenInfo].filter(Boolean);
-                    if (details.length > 0) {
-                      summary += ` (${details.join(', ')})`;
-                    }
-                    
-                    return summary;
-                  }
-                }
-                
-                // Fallback if no detailed result found
-                return success ? '✅ Session completed successfully' : '❌ Session failed';
-              }
-            } catch (e) {
-              // If parsing fails, try to extract basic information from the raw data
-              console.error('Failed to parse end message output:', e);
-              
-              try {
-                // Look for patterns in the nested data even if parsing failed
-                const innerDataStr = innerParsed.output || '';
-                if (typeof innerDataStr === 'string' && innerDataStr.includes('exitCode')) {
-                  const exitCodeMatch = innerDataStr.match(/exitCode["\s]*:\s*(\d+)/);
-                  const success = exitCodeMatch ? parseInt(exitCodeMatch[1]) === 0 : null;
-                  
-                  // Try to extract other metrics from the raw string
-                  const durationMatch = innerDataStr.match(/duration_ms["\s]*:\s*(\d+)/);
-                  const costMatch = innerDataStr.match(/total_cost_usd["\s]*:\s*([0-9.]+)/);
-                  const turnsMatch = innerDataStr.match(/num_turns["\s]*:\s*(\d+)/);
-                  
-                  // Try to extract token counts from usage data
-                  const inputTokensMatch = innerDataStr.match(/input_tokens["\s]*:\s*(\d+)/);
-                  const outputTokensMatch = innerDataStr.match(/output_tokens["\s]*:\s*(\d+)/);
-                  
-                  const duration = durationMatch ? `${Math.round(parseInt(durationMatch[1]) / 1000)}s` : '';
-                  const cost = costMatch ? `$${parseFloat(costMatch[1]).toFixed(4)}` : '';
-                  const turns = turnsMatch ? `${turnsMatch[1]} turns` : '';
-                  
-                  let tokenInfo = '';
-                  if (inputTokensMatch || outputTokensMatch) {
-                    const inputTokens = inputTokensMatch ? parseInt(inputTokensMatch[1]) : 0;
-                    const outputTokens = outputTokensMatch ? parseInt(outputTokensMatch[1]) : 0;
-                    const totalTokens = inputTokens + outputTokens;
-                    if (totalTokens > 0) {
-                      tokenInfo = `${totalTokens.toLocaleString()} tokens`;
-                    }
-                  }
-                  
-                  let summary = success === true ? '✅ Session completed' : 
-                               success === false ? '❌ Session failed' : 
-                               'Session ended';
-                  
-                  const details = [duration, cost, turns, tokenInfo].filter(Boolean);
-                  if (details.length > 0) {
-                    summary += ` (${details.join(', ')})`;
-                  }
-                  
-                  return summary;
-                }
-              } catch {
-                // Even the fallback parsing failed
-              }
-            }
-            
-            return 'Session ended';
+            return processEndMessage(innerParsed);
           }
         } catch (e) {
           // Continue with normal processing if inner parsing fails
