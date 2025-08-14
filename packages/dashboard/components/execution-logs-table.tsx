@@ -525,35 +525,10 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   
   return (
     <div className={cn("flex flex-col h-full", className)}>
-      {/* Loading Strategy Header */}
+      {/* Simple header with log count */}
       <div className="flex items-center justify-between p-2 border-b bg-muted/20">
-        <div className="flex items-center gap-2">
-          {loadingStrategy === 'hybrid' ? (
-            <>
-              <span className="text-xs font-medium">Live</span>
-              {isConnected ? (
-                <div className="flex items-center gap-1 text-green-600">
-                  <Wifi className="h-3 w-3" />
-                  <span className="text-xs">Streaming</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 text-orange-600">
-                  <WifiOff className="h-3 w-3" />
-                  <span className="text-xs">Connecting...</span>
-                </div>
-              )}
-            </>
-          ) : loadingStrategy === 'static' ? (
-            <div className="flex items-center gap-1 text-blue-600">
-              <CheckCircle className="h-3 w-3" />
-              <span className="text-xs font-medium">Historical</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1 text-gray-500">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span className="text-xs">Detecting...</span>
-            </div>
-          )}
+        <div className="text-xs text-muted-foreground">
+          Execution Logs
         </div>
         <div className="text-xs text-muted-foreground">
           {logs.length} log{logs.length !== 1 ? 's' : ''}

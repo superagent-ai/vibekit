@@ -23,7 +23,6 @@ export function useSmartSessionLogs(
 ): UseSmartSessionLogsReturn {
   const { enabled = true } = options;
   
-  console.log(`[SmartLogs] Hook called with sessionId: ${sessionId}, enabled: ${enabled}`);
   
   const [loadingStrategy, setLoadingStrategy] = useState<'static' | 'hybrid' | 'unknown'>('unknown');
   const [sessionMetadata, setSessionMetadata] = useState<SessionMetadata | null>(null);
@@ -35,11 +34,6 @@ export function useSmartSessionLogs(
     enabled: enabled && loadingStrategy === 'static'
   });
   
-  console.log(`[SmartLogs] Static hook params:`, { 
-    sessionId, 
-    enabled: enabled && loadingStrategy === 'static',
-    loadingStrategy 
-  });
   
   // Hybrid loading for running sessions (loads initial data, then streams)
   const realtimeData = useRealtimeSessionLogs(sessionId, { 
@@ -67,10 +61,8 @@ export function useSmartSessionLogs(
       
       // Determine loading strategy based on session status
       if (metadata.status === 'running') {
-        console.log(`[SmartLogs] Session ${sessionId} is running, using hybrid strategy`);
         setLoadingStrategy('hybrid');
       } else {
-        console.log(`[SmartLogs] Session ${sessionId} is ${metadata.status}, using static strategy`);
         setLoadingStrategy('static');
       }
     } catch (error: any) {
@@ -92,7 +84,6 @@ export function useSmartSessionLogs(
       return;
     }
     
-    console.log(`[SmartLogs] Starting metadata fetch for session ${sessionId}`);
     fetchMetadata();
   }, [sessionId, enabled, fetchMetadata]);
   
@@ -100,7 +91,6 @@ export function useSmartSessionLogs(
   useEffect(() => {
     if (loadingStrategy === 'hybrid' && realtimeData.metadata?.status !== 'running') {
       // Session completed during streaming, switch to static mode
-      console.log(`[SmartLogs] Session ${sessionId} completed, switching to static loading`);
       setLoadingStrategy('static');
     }
   }, [loadingStrategy, sessionId, realtimeData.metadata?.status]);
@@ -119,11 +109,6 @@ export function useSmartSessionLogs(
   }
   
   if (loadingStrategy === 'static') {
-    console.log(`[SmartLogs] Returning static data:`, { 
-      logsLength: staticData.logs.length, 
-      isLoading: staticData.isLoading, 
-      error: staticData.error 
-    });
     return {
       ...staticData,
       isConnected: false,
@@ -133,11 +118,6 @@ export function useSmartSessionLogs(
   }
   
   // Hybrid mode
-  console.log(`[SmartLogs] Returning hybrid data:`, { 
-    logsLength: realtimeData.logs.length, 
-    isLoading: realtimeData.isLoading, 
-    error: realtimeData.error 
-  });
   return {
     ...realtimeData,
     loadingStrategy,
