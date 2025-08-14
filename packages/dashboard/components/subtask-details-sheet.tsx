@@ -568,7 +568,8 @@ export function SubtaskDetailsSheet({
                                   agent: selectedAgent,
                                   sandbox: selectedSandbox,
                                   branch: selectedBranch,
-                                  status: 'completed'
+                                  status: result.exitCode === 0 ? 'completed' : 'failed',
+                                  duration: parseFloat(result.executionTime) * 1000
                                 }),
                               }).catch(err => {
                                 console.error('Failed to save execution history:', err);
@@ -685,15 +686,15 @@ export function SubtaskDetailsSheet({
               <TabsList size="xs" variant="line" className="grid grid-cols-3 w-full">
                 <TabsTrigger value="logs">
                   <ScrollText />
-                  Logs
+                  Logs ({sessionId ? 1 : 0})
                 </TabsTrigger>
                 <TabsTrigger value="subtasks">
                   <ListChecks />
-                  Other Subtasks
+                  Subtasks ({parentTask.subtasks.length})
                 </TabsTrigger>
                 <TabsTrigger value="executions">
                   <History />
-                  Executions
+                  Executions ({executionHistory.length})
                 </TabsTrigger>
               </TabsList>
               
@@ -751,44 +752,46 @@ export function SubtaskDetailsSheet({
                 <TabsContent value="subtasks" className="flex-1 flex flex-col min-h-0 m-0">
                   <ScrollArea className="flex-1">
                     <div className="p-4">
-                      {siblingSubtasks.length > 0 ? (
-                        <div className="space-y-2">
-                          {siblingSubtasks.map(sibling => {
-                            // Find the index of this sibling in the parent's subtasks array
-                            const siblingIndex = parentTask.subtasks.findIndex(s => s.id === sibling.id);
-                            return (
-                              <div
-                                key={sibling.id}
-                                className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                                onClick={() => {
-                                  if (onSiblingSubtaskClick) {
-                                    onOpenChange(false);
-                                    setTimeout(() => onSiblingSubtaskClick(sibling), 100);
-                                  }
-                                }}
-                              >
-                                <div>
-                                  <p className="text-sm font-medium">#{siblingIndex + 1}. {sibling.title}</p>
-                                  {sibling.description && (
-                                    <p className="text-xs text-muted-foreground mt-1">{sibling.description}</p>
+                      <div className="space-y-2">
+                        {parentTask.subtasks.map((taskSubtask, index) => {
+                          const isCurrentSubtask = taskSubtask.id === subtask.id;
+                          return (
+                            <div
+                              key={taskSubtask.id}
+                              className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                                isCurrentSubtask 
+                                  ? 'border-primary bg-primary/5 cursor-default' 
+                                  : 'cursor-pointer hover:bg-muted/50'
+                              }`}
+                              onClick={() => {
+                                if (!isCurrentSubtask && onSiblingSubtaskClick) {
+                                  onOpenChange(false);
+                                  setTimeout(() => onSiblingSubtaskClick(taskSubtask), 100);
+                                }
+                              }}
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className={`text-sm font-medium ${isCurrentSubtask ? 'text-primary' : ''}`}>
+                                    #{index + 1}. {taskSubtask.title}
+                                  </p>
+                                  {isCurrentSubtask && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Current
+                                    </Badge>
                                   )}
                                 </div>
-                                <Badge className={`text-xs ${getStatusColor(sibling.status)}`}>
-                                  {sibling.status.replace("-", " ")}
-                                </Badge>
+                                {taskSubtask.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">{taskSubtask.description}</p>
+                                )}
                               </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="border rounded-lg p-4 bg-muted/20">
-                          <div className="text-center py-8">
-                            <ListChecks className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                            <p className="text-sm text-muted-foreground">No other subtasks in this task</p>
-                            <p className="text-xs text-muted-foreground mt-2">This is the only subtask for the parent task</p>
-                          </div>
-                        </div>
-                      )}
+                              <Badge className={`text-xs ${getStatusColor(taskSubtask.status)}`}>
+                                {taskSubtask.status.replace("-", " ")}
+                              </Badge>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </ScrollArea>
                 </TabsContent>
