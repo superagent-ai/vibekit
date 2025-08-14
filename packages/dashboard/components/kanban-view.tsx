@@ -367,8 +367,9 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
   };
 
   const handleSiblingSubtaskClick = (subtask: Subtask) => {
+    // Update subtask selection immediately without closing/reopening dialog
     setSelectedSubtask(subtask);
-    setSubtaskDialogOpen(true);
+    // Keep dialog open - no need to toggle
   };
 
   const toggleColumnVisibility = (columnId: string) => {

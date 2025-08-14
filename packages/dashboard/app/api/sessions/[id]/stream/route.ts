@@ -8,7 +8,7 @@ import { promises as fs } from 'fs';
 // Keep-alive interval to prevent connection timeout
 const KEEP_ALIVE_INTERVAL = 30000; // 30 seconds
 // Polling interval for hybrid approach
-const LOG_POLL_INTERVAL = 250; // 250ms
+const LOG_POLL_INTERVAL = 100; // 100ms for faster real-time updates
 
 export async function GET(
   request: NextRequest,
@@ -131,15 +131,15 @@ export async function GET(
         // Initial check for logs
         await checkForNewLogs('initial');
         
-        // Set up chokidar file watcher with reliability options
+        // Set up chokidar file watcher with optimized real-time settings
         watcher = chokidar.watch([logFile, metadataFile], {
           persistent: true,
           usePolling: true,    // Force polling for maximum reliability
-          interval: 100,       // Poll every 100ms
-          binaryInterval: 100, // Check binary files every 100ms
+          interval: 50,        // Poll every 50ms for faster updates
+          binaryInterval: 50,  // Check binary files every 50ms
           awaitWriteFinish: {  // Wait for write operations to finish
-            stabilityThreshold: 50,  // Wait 50ms for file to be stable
-            pollInterval: 10         // Check every 10ms during write
+            stabilityThreshold: 25,  // Wait 25ms for file to be stable
+            pollInterval: 5          // Check every 5ms during write
           },
           ignoreInitial: true  // Don't trigger on initial scan
         });
@@ -180,7 +180,7 @@ export async function GET(
         if (error.code === 'ENOENT') {
           console.log(`[SSE] Log file doesn't exist yet for session ${sessionId}, polling for creation...`);
           
-          // Poll every 250ms until file exists
+          // Poll every 100ms until file exists
           const fileExistsInterval = setInterval(async () => {
             try {
               await fs.access(logFile);
@@ -194,11 +194,11 @@ export async function GET(
               watcher = chokidar.watch([logFile, metadataFile], {
                 persistent: true,
                 usePolling: true,
-                interval: 100,
-                binaryInterval: 100,
+                interval: 50,
+                binaryInterval: 50,
                 awaitWriteFinish: {
-                  stabilityThreshold: 50,
-                  pollInterval: 10
+                  stabilityThreshold: 25,
+                  pollInterval: 5
                 },
                 ignoreInitial: true
               });
@@ -218,7 +218,7 @@ export async function GET(
             } catch {
               // Still doesn't exist, keep polling
             }
-          }, 250);
+          }, 100);
           
           // Clean up interval on close
           request.signal.addEventListener('abort', () => {

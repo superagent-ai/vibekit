@@ -118,10 +118,21 @@ export function SubtaskDetailsSheet({
   const [hasMoreDetailsContent, setHasMoreDetailsContent] = useState(false);
   const [detailsContentHeight, setDetailsContentHeight] = useState(80);
   
-  // Reset state when subtask changes
+  // Reset state when subtask changes or dialog closes
   useEffect(() => {
-    if (!open || !subtask) {
-      // Clear state when dialog closes
+    if (!open) {
+      // Clear state when dialog closes to prevent stale data
+      setSessionId(null);
+      setExecutionHistory([]);
+      setSelectedExecution(null);
+      setTotalLogCount(0);
+      setActiveTab("logs"); // Reset to default tab
+      setIsExecuting(false); // Reset execution state
+      return;
+    }
+    
+    if (!subtask) {
+      // Clear state when no subtask selected
       setSessionId(null);
       setExecutionHistory([]);
       setSelectedExecution(null);
@@ -301,17 +312,6 @@ export function SubtaskDetailsSheet({
       setDetailsContentHeight(80);
     }
   }, [subtask?.details, subtask?.testStrategy]);
-  
-  if (!subtask || !parentTask) return null;
-  
-  // Get sibling subtasks (excluding current)
-  const siblingSubtasks = parentTask.subtasks.filter(s => s.id !== subtask.id);
-  
-  // Helper function to get subtask title by ID (for dependencies)
-  const getSubtaskTitle = (subtaskId: number): string => {
-    const foundSubtask = parentTask.subtasks.find(s => s.id === subtaskId);
-    return foundSubtask ? foundSubtask.title : `Subtask #${subtaskId}`;
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -331,8 +331,30 @@ export function SubtaskDetailsSheet({
     }
   };
 
+  // Ensure we have valid data before rendering
+  if (!subtask || !parentTask) return null;
+
+  // Get sibling subtasks (excluding current)
+  const siblingSubtasks = parentTask.subtasks.filter(s => s.id !== subtask.id);
+  
+  // Helper function to get subtask title by ID (for dependencies)
+  const getSubtaskTitle = (subtaskId: number): string => {
+    const foundSubtask = parentTask.subtasks.find(s => s.id === subtaskId);
+    return foundSubtask ? foundSubtask.title : `Subtask #${subtaskId}`;
+  };
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet 
+      open={open} 
+      onOpenChange={(newOpen) => {
+        // Ensure proper cleanup when closing
+        if (!newOpen) {
+          setActiveTab("logs");
+          setIsExecuting(false);
+        }
+        onOpenChange(newOpen);
+      }}
+    >
       <SheetContent className="w-full sm:max-w-2xl lg:max-w-3xl overflow-hidden p-0">
         <div className="flex flex-col h-full">
           <SheetHeader className="px-6 py-3 border-b">
@@ -344,7 +366,6 @@ export function SubtaskDetailsSheet({
                   size="sm"
                   onClick={() => {
                     if (onParentTaskClick) {
-                      onOpenChange(false);
                       onParentTaskClick();
                     }
                   }}
@@ -849,8 +870,7 @@ export function SubtaskDetailsSheet({
                               }`}
                               onClick={() => {
                                 if (!isCurrentSubtask && onSiblingSubtaskClick) {
-                                  onOpenChange(false);
-                                  setTimeout(() => onSiblingSubtaskClick(taskSubtask), 100);
+                                  onSiblingSubtaskClick(taskSubtask);
                                 }
                               }}
                             >
