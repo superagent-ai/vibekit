@@ -483,8 +483,8 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
             
             // Try to extract session results from stdout
             if (output.stdout && typeof output.stdout === 'string') {
-              const lines = output.stdout.split('\n').filter(line => line.trim());
-              const resultLine = lines.find(line => {
+              const lines = output.stdout.split('\n').filter((line: string) => line.trim());
+              const resultLine = lines.find((line: string) => {
                 try {
                   const lineData = JSON.parse(line);
                   return lineData.type === 'result';
@@ -498,9 +498,19 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
                   const cost = resultData.total_cost_usd ? `$${resultData.total_cost_usd.toFixed(4)}` : '';
                   const turns = resultData.num_turns ? `${resultData.num_turns} turns` : '';
                   
+                  // Extract token information from usage field
+                  let tokenInfo = '';
+                  if (resultData.usage) {
+                    const usage = resultData.usage;
+                    const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
+                    if (totalTokens > 0) {
+                      tokenInfo = `${totalTokens.toLocaleString()} tokens`;
+                    }
+                  }
+                  
                   let summary = success ? '✅ Session completed' : '❌ Session failed';
                   
-                  const details = [duration, cost, turns].filter(Boolean);
+                  const details = [duration, cost, turns, tokenInfo].filter(Boolean);
                   if (details.length > 0) {
                     summary += ` (${details.join(', ')})`;
                   }
@@ -517,9 +527,54 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
           }
         }
       } catch (parseError) {
-        // JSON parsing failed - don't throw error, just return simple message
-        console.warn('Could not parse end message JSON:', parseError.message);
+        // JSON parsing failed - try to extract any available summary details
+        console.warn('Could not parse end message JSON:', parseError instanceof Error ? parseError.message : String(parseError));
         console.warn('Problematic data (first 200 chars):', data.substring(0, 200));
+        
+        // Try to extract basic information even if full parsing fails
+        try {
+          // Look for common patterns in the data even if JSON parsing failed
+          if (data.includes('exitCode')) {
+            const exitCodeMatch = data.match(/exitCode["\s]*:\s*(\d+)/);
+            const success = exitCodeMatch ? parseInt(exitCodeMatch[1]) === 0 : null;
+            
+            // Try to extract other metrics if they exist in the raw data
+            const durationMatch = data.match(/duration_ms["\s]*:\s*(\d+)/);
+            const costMatch = data.match(/total_cost_usd["\s]*:\s*([0-9.]+)/);
+            const turnsMatch = data.match(/num_turns["\s]*:\s*(\d+)/);
+            
+            // Try to extract token counts from usage data
+            const inputTokensMatch = data.match(/input_tokens["\s]*:\s*(\d+)/);
+            const outputTokensMatch = data.match(/output_tokens["\s]*:\s*(\d+)/);
+            
+            const duration = durationMatch ? `${Math.round(parseInt(durationMatch[1]) / 1000)}s` : '';
+            const cost = costMatch ? `$${parseFloat(costMatch[1]).toFixed(4)}` : '';
+            const turns = turnsMatch ? `${turnsMatch[1]} turns` : '';
+            
+            let tokenInfo = '';
+            if (inputTokensMatch || outputTokensMatch) {
+              const inputTokens = inputTokensMatch ? parseInt(inputTokensMatch[1]) : 0;
+              const outputTokens = outputTokensMatch ? parseInt(outputTokensMatch[1]) : 0;
+              const totalTokens = inputTokens + outputTokens;
+              if (totalTokens > 0) {
+                tokenInfo = `${totalTokens.toLocaleString()} tokens`;
+              }
+            }
+            
+            let summary = success === true ? '✅ Session completed' : 
+                         success === false ? '❌ Session failed' : 
+                         'Session ended';
+            
+            const details = [duration, cost, turns, tokenInfo].filter(Boolean);
+            if (details.length > 0) {
+              summary += ` (${details.join(', ')})`;
+            }
+            
+            return summary;
+          }
+        } catch {
+          // Even the fallback parsing failed, continue to final fallback
+        }
       }
       
       // Final fallback for any parsing issues
@@ -564,8 +619,8 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
                 
                 // Parse the session result from stdout if available
                 if (output.stdout && typeof output.stdout === 'string') {
-                  const lines = output.stdout.split('\n').filter(line => line.trim());
-                  const resultLine = lines.find(line => {
+                  const lines = output.stdout.split('\n').filter((line: string) => line.trim());
+                  const resultLine = lines.find((line: string) => {
                     try {
                       const lineData = JSON.parse(line);
                       return lineData.type === 'result';
@@ -578,9 +633,19 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
                     const cost = resultData.total_cost_usd ? `$${resultData.total_cost_usd.toFixed(4)}` : '';
                     const turns = resultData.num_turns ? `${resultData.num_turns} turns` : '';
                     
+                    // Extract token information from usage field
+                    let tokenInfo = '';
+                    if (resultData.usage) {
+                      const usage = resultData.usage;
+                      const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
+                      if (totalTokens > 0) {
+                        tokenInfo = `${totalTokens.toLocaleString()} tokens`;
+                      }
+                    }
+                    
                     let summary = success ? '✅ Session completed' : '❌ Session failed';
                     
-                    const details = [duration, cost, turns].filter(Boolean);
+                    const details = [duration, cost, turns, tokenInfo].filter(Boolean);
                     if (details.length > 0) {
                       summary += ` (${details.join(', ')})`;
                     }
@@ -593,8 +658,53 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
                 return success ? '✅ Session completed successfully' : '❌ Session failed';
               }
             } catch (e) {
-              // If parsing fails, show basic end message
+              // If parsing fails, try to extract basic information from the raw data
               console.error('Failed to parse end message output:', e);
+              
+              try {
+                // Look for patterns in the nested data even if parsing failed
+                const innerDataStr = innerParsed.output || '';
+                if (typeof innerDataStr === 'string' && innerDataStr.includes('exitCode')) {
+                  const exitCodeMatch = innerDataStr.match(/exitCode["\s]*:\s*(\d+)/);
+                  const success = exitCodeMatch ? parseInt(exitCodeMatch[1]) === 0 : null;
+                  
+                  // Try to extract other metrics from the raw string
+                  const durationMatch = innerDataStr.match(/duration_ms["\s]*:\s*(\d+)/);
+                  const costMatch = innerDataStr.match(/total_cost_usd["\s]*:\s*([0-9.]+)/);
+                  const turnsMatch = innerDataStr.match(/num_turns["\s]*:\s*(\d+)/);
+                  
+                  // Try to extract token counts from usage data
+                  const inputTokensMatch = innerDataStr.match(/input_tokens["\s]*:\s*(\d+)/);
+                  const outputTokensMatch = innerDataStr.match(/output_tokens["\s]*:\s*(\d+)/);
+                  
+                  const duration = durationMatch ? `${Math.round(parseInt(durationMatch[1]) / 1000)}s` : '';
+                  const cost = costMatch ? `$${parseFloat(costMatch[1]).toFixed(4)}` : '';
+                  const turns = turnsMatch ? `${turnsMatch[1]} turns` : '';
+                  
+                  let tokenInfo = '';
+                  if (inputTokensMatch || outputTokensMatch) {
+                    const inputTokens = inputTokensMatch ? parseInt(inputTokensMatch[1]) : 0;
+                    const outputTokens = outputTokensMatch ? parseInt(outputTokensMatch[1]) : 0;
+                    const totalTokens = inputTokens + outputTokens;
+                    if (totalTokens > 0) {
+                      tokenInfo = `${totalTokens.toLocaleString()} tokens`;
+                    }
+                  }
+                  
+                  let summary = success === true ? '✅ Session completed' : 
+                               success === false ? '❌ Session failed' : 
+                               'Session ended';
+                  
+                  const details = [duration, cost, turns, tokenInfo].filter(Boolean);
+                  if (details.length > 0) {
+                    summary += ` (${details.join(', ')})`;
+                  }
+                  
+                  return summary;
+                }
+              } catch {
+                // Even the fallback parsing failed
+              }
             }
             
             return 'Session ended';
@@ -637,7 +747,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
           // Determine file type and create summary
           if (content.includes('→')) {
             // This looks like a file with line numbers
-            const lines = content.split('\n').filter(line => line.trim());
+            const lines = content.split('\n').filter((line: string) => line.trim());
             return `File read successfully (${lines.length} lines)`;
           } else if (content.includes('Error:') || content.includes('error')) {
             return 'Tool execution failed';
