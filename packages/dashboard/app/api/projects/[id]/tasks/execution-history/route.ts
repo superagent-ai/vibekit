@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 
 interface ExecutionRecord {
-  taskId?: string;
+  taskId?: number;
   taskTitle?: string;
   subtaskId: number;
   subtaskTitle?: string;

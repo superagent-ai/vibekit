@@ -91,6 +91,18 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
   }, [logs, onLogCountChange, sessionId]);
   
   const getLogIcon = (type: string, data: string) => {
+    // Handle JSON updates first
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed.type === 'git') return <GitBranch className="h-4 w-4" />;
+      if (parsed.type === 'start') return <Box className="h-4 w-4" />;
+      if (parsed.type === 'container_created') return <Container className="h-4 w-4" />;
+      if (parsed.type === 'image_pull') return <Package className="h-4 w-4" />;
+      if (parsed.type === 'repository_clone') return <GitBranch className="h-4 w-4" />;
+    } catch (e) {
+      // Not JSON, continue with text-based detection
+    }
+    
     // Check for Agent initialization messages first (higher priority than container/sandbox)
     if (data.toLowerCase().includes('initializing') && data.toLowerCase().includes('agent')) return <Bot className="h-4 w-4" />;
     
@@ -164,6 +176,18 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
   };
   
   const getLogTypeLabel = (type: string, data: string) => {
+    // Handle JSON updates first to check VibeKit update types
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed.type === 'git') return 'Git';
+      if (parsed.type === 'start') return 'Sandbox';
+      if (parsed.type === 'container_created') return 'Container';
+      if (parsed.type === 'image_pull') return 'Image';
+      if (parsed.type === 'repository_clone') return 'Git';
+    } catch (e) {
+      // Not JSON, continue with text-based detection
+    }
+    
     // Check for Agent initialization messages first (higher priority than container/sandbox)
     if (data.toLowerCase().includes('initializing') && data.toLowerCase().includes('agent')) {
       return 'Agent';
@@ -185,10 +209,10 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
       return 'Success';
     }
     
-    // Check for Git-related messages (including those with emojis)
+    // Check for Git-related messages (including exact VibeKit output)
     if (data.includes('Git:') || 
-        data.includes('Cloning repository:') || 
-        data.includes('Switching to branch:') || 
+        data.includes('Cloning repository') || // Remove colon to match exact VibeKit output
+        data.includes('Switching to branch') || 
         data.includes('GitHub integration configured') ||
         data.includes('git clone') ||
         data.includes('git push') ||
@@ -265,6 +289,27 @@ export function ExecutionLogsTable({ sessionId, className, useRealtimeStreaming 
   };
 
   const processLogMessage = (data: string) => {
+    // Try to parse as JSON first (for raw VibeKit updates)
+    try {
+      const parsed = JSON.parse(data);
+      
+      // Format specific message types for better readability
+      if (parsed.type === 'git' && parsed.output) {
+        return parsed.output; // Just "Cloning repository: joedanz/tictactoe"
+      } else if (parsed.type === 'start' && parsed.sandbox_id) {
+        return `Sandbox started: ${parsed.sandbox_id}`;
+      } else if (parsed.stdout) {
+        return parsed.stdout;
+      } else if (parsed.stderr) {
+        return parsed.stderr;
+      } else {
+        // For other JSON, show the raw JSON exactly as emitted
+        return JSON.stringify(parsed);
+      }
+    } catch (e) {
+      // Not JSON, process as regular text
+    }
+    
     // Remove all non-printable characters from the beginning including emojis, spaces, and control chars
     // This regex removes any character that's not a normal printable ASCII or common punctuation
     let processed = data.replace(/^[^\x21-\x7E\xA1-\xFF]+/, '');

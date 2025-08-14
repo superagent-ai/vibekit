@@ -130,7 +130,7 @@ export async function POST(
     console.log('Session logger initialized:', sessionId);
     
     // Log initial sandbox configuration
-    await sessionLogger.captureInfo(`🚀 Initializing ${agent} agent with ${sandbox} sandbox`, { 
+    await sessionLogger.captureInfo(`Initializing ${agent} agent with ${sandbox} sandbox`, { 
       agent, 
       sandbox,
       branch,
@@ -280,7 +280,7 @@ export async function POST(
             
             // Log the repository detection and configuration
             if (sessionLogger) {
-              await sessionLogger.captureInfo(`🐙 GitHub integration configured`, { 
+              await sessionLogger.captureInfo(`GitHub integration configured`, { 
                 repository: repoUrl,
                 branch: branch,
                 hasToken: true
@@ -289,7 +289,7 @@ export async function POST(
           } else {
             console.log('Git repository detected but not a GitHub repository');
             if (sessionLogger) {
-              await sessionLogger.captureInfo(`⚠️ Non-GitHub repository detected`, { 
+              await sessionLogger.captureInfo(`Non-GitHub repository detected`, { 
                 remoteUrl: remoteUrl.substring(0, 50)
               });
             }
@@ -297,7 +297,7 @@ export async function POST(
         } else {
           console.log('Project is not a Git repository');
           if (sessionLogger) {
-            await sessionLogger.captureInfo(`ℹ️ Project is not a Git repository`, { 
+            await sessionLogger.captureInfo(`Project is not a Git repository`, { 
               projectRoot 
             });
           }
@@ -305,7 +305,7 @@ export async function POST(
       } catch (error) {
         console.log('Error detecting Git repository:', error);
         if (sessionLogger) {
-          await sessionLogger.captureInfo(`⚠️ Could not detect Git repository configuration`, { 
+          await sessionLogger.captureInfo(`Could not detect Git repository configuration`, { 
             error: String(error).substring(0, 100)
           });
         }
@@ -313,7 +313,7 @@ export async function POST(
     } else {
       console.log('GitHub token not configured');
       if (sessionLogger) {
-        await sessionLogger.captureInfo(`⚠️ GitHub token not configured - GitHub features disabled`, {});
+        await sessionLogger.captureInfo(`GitHub token not configured - GitHub features disabled`, {});
       }
     }
     
@@ -426,7 +426,7 @@ export async function POST(
     
     // Execute code generation
     console.log('Starting code generation with SDK...');
-    await sessionLogger.captureInfo(`🏗️ Launching sandbox and cloning repository...`, { 
+    await sessionLogger.captureInfo(`Launching sandbox and cloning repository...`, { 
       mode: 'code',
       promptLength: prompt.length 
     });

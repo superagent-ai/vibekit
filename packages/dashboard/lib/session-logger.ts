@@ -226,211 +226,22 @@ export class SessionLogger {
 
   async captureUpdate(update: string): Promise<void> {
     console.log(`[SessionLogger] Capturing update for session ${this.sessionId}:`, update.substring(0, 200));
-    try {
-      // Try to parse JSON update
-      const parsed = JSON.parse(update);
-      
-      // Handle different update types
-      if (parsed.type === 'system' && parsed.subtype === 'init') {
-        await this.log('info', `Session initialized | Model: ${parsed.model} | CWD: ${parsed.cwd}`, {
-          sessionId: parsed.session_id,
-          tools: parsed.tools,
-          model: parsed.model
-        });
-      } else if (parsed.type === 'assistant' && parsed.message) {
-        const message = parsed.message;
-        if (message.content && Array.isArray(message.content)) {
-          for (const content of message.content) {
-            if (content.type === 'text' && content.text) {
-              // Log assistant text responses
-              await this.log('info', `Assistant: ${content.text.substring(0, 200)}${content.text.length > 200 ? '...' : ''}`);
-            } else if (content.type === 'tool_use') {
-              // Log tool usage
-              await this.log('command', `Tool: ${content.name}`, { 
-                toolId: content.id,
-                input: content.input 
-              });
-              
-              // Parse specific tool commands for better readability
-              if (content.name === 'Bash' && content.input?.command) {
-                const cmd = content.input.command;
-                await this.log('command', `$ ${cmd}`);
-                
-                // Explicitly detect and log Git commands
-                if (cmd.startsWith('git ')) {
-                  // Extract the git operation type
-                  const gitOp = cmd.split(' ')[1];
-                  const gitOps: Record<string, string> = {
-                    'clone': '📥 Cloning repository',
-                    'init': '🎯 Initializing repository',
-                    'add': '➕ Staging changes',
-                    'commit': '💾 Creating commit',
-                    'push': '🚀 Pushing to remote',
-                    'pull': '📨 Pulling from remote',
-                    'checkout': '🔀 Switching branch',
-                    'branch': '🌿 Managing branches',
-                    'merge': '🔗 Merging branches',
-                    'status': '📊 Checking status',
-                    'diff': '📝 Viewing differences',
-                    'log': '📜 Viewing history',
-                    'fetch': '🔄 Fetching updates',
-                    'stash': '📦 Stashing changes',
-                    'rebase': '🔧 Rebasing commits',
-                    'reset': '↩️ Resetting changes',
-                    'config': '⚙️ Configuring Git',
-                    'remote': '🌐 Managing remotes',
-                    'tag': '🏷️ Managing tags',
-                  };
-                  
-                  const description = gitOps[gitOp] || `🔧 Git ${gitOp}`;
-                  await this.log('info', description, { gitCommand: cmd });
-                } else if (cmd.startsWith('gh ')) {
-                  // GitHub CLI commands
-                  await this.log('info', `🐙 GitHub CLI: ${cmd}`, { ghCommand: cmd });
-                }
-              } else if (content.name === 'Write' && content.input?.file_path) {
-                await this.log('info', `✏️ Writing file: ${content.input.file_path}`);
-              } else if (content.name === 'Edit' && content.input?.file_path) {
-                await this.log('info', `Editing file: ${content.input.file_path}`);
-              } else if (content.name === 'MultiEdit' && content.input?.file_path) {
-                await this.log('info', `Editing file: ${content.input.file_path} (${content.input.edits?.length || 0} changes)`);
-              } else if (content.name === 'Read' && content.input?.file_path) {
-                await this.log('info', `Reading file: ${content.input.file_path}`);
-              } else if (content.name === 'TodoWrite') {
-                await this.log('info', `Updating todo list`);
-              } else if (content.name === 'Glob' && content.input?.pattern) {
-                await this.log('info', `Searching files: ${content.input.pattern}`);
-              } else if (content.name === 'Grep' && content.input?.pattern) {
-                await this.log('info', `Searching in files: ${content.input.pattern}`);
-              } else if (content.name === 'LS' && content.input?.path) {
-                await this.log('info', `Listing directory: ${content.input.path}`);
-              }
-            }
-          }
-        }
-      } else if (parsed.type === 'user' && parsed.message) {
-        // Log tool results
-        if (parsed.message.content && Array.isArray(parsed.message.content)) {
-          for (const content of parsed.message.content) {
-            if (content.type === 'tool_result' && content.content) {
-              // Truncate long tool results
-              const result = typeof content.content === 'string' ? content.content : JSON.stringify(content.content);
-              const truncated = result.substring(0, 500);
-              await this.log('stdout', truncated + (result.length > 500 ? '\n... [output truncated]' : ''));
-            }
-          }
-        }
-      } else if (parsed.type === 'result') {
-        // Log final result
-        if (parsed.is_error) {
-          await this.log('error', `Execution failed: ${parsed.result || 'Unknown error'}`);
-        } else {
-          await this.log('info', `Execution completed successfully`);
-          if (parsed.result) {
-            await this.log('info', parsed.result.substring(0, 500) + (parsed.result.length > 500 ? '...' : ''));
-          }
-        }
-      } else if (parsed.type === 'start') {
-        await this.log('start', `🏗️ Starting execution in sandbox: ${parsed.sandbox_id || 'unknown'}`);
-        if (parsed.sandbox_id) {
-          await this.log('info', `🐳 Container launching...`, { sandboxId: parsed.sandbox_id });
-        }
-      } else if (parsed.type === 'end') {
-        await this.log('end', `Execution ended | Exit code: ${parsed.exitCode || 0}`);
-      } else if (parsed.type === 'container_created') {
-        await this.log('info', `🐳 Container created: ${parsed.container_id || 'unknown'}`, { containerId: parsed.container_id });
-      } else if (parsed.type === 'image_pull') {
-        await this.log('info', `🖼️ Pulling Docker image: ${parsed.image || 'unknown'}`, { image: parsed.image });
-      } else if (parsed.type === 'repository_clone') {
-        await this.log('info', `📥 Cloning repository: ${parsed.repository || 'unknown'}`, { repository: parsed.repository });
-      } else if (parsed.type === 'branch_checkout') {
-        await this.log('info', `🔀 Checking out branch: ${parsed.branch || 'main'}`, { branch: parsed.branch });
-      } else if (parsed.type === 'git' && parsed.output) {
-        // Handle Git events from SDK
-        const output = parsed.output;
-        if (output.includes('Cloning repository')) {
-          await this.log('info', `📥 ${output}`, { source: 'sdk', operation: 'clone' });
-        } else if (output.includes('Switching to branch')) {
-          await this.log('info', `🔀 ${output}`, { source: 'sdk', operation: 'checkout' });
-        } else if (output.includes('Branch') && output.includes('not found')) {
-          await this.log('info', `🌿 ${output}`, { source: 'sdk', operation: 'branch-create' });
-        } else if (output.includes('creating new branch')) {
-          await this.log('info', `🌿 ${output}`, { source: 'sdk', operation: 'branch-create' });
-        } else if (output.includes('Pushing to')) {
-          await this.log('info', `🚀 ${output}`, { source: 'sdk', operation: 'push' });
-        } else if (output.includes('Creating pull request')) {
-          await this.log('info', `🔀 ${output}`, { source: 'sdk', operation: 'pr-create' });
-        } else if (output.includes('Committing changes')) {
-          await this.log('info', `💾 ${output}`, { source: 'sdk', operation: 'commit' });
-        } else {
-          await this.log('info', `🔧 Git: ${output}`, { source: 'sdk', operation: 'other' });
-        }
-      } else if (parsed.stdout && typeof parsed.stdout === 'string') {
-        // Check if stdout contains Git operations
-        const stdout = parsed.stdout;
-        if (stdout.includes('Cloning into') || stdout.includes('git clone')) {
-          await this.log('info', `📥 Git: ${stdout.substring(0, 200)}`);
-        } else if (stdout.includes('Switched to') || stdout.includes('git checkout')) {
-          await this.log('info', `🔀 Git: ${stdout.substring(0, 200)}`);
-        } else if (stdout.includes('Already on') || stdout.includes('Your branch is')) {
-          await this.log('info', `📊 Git: ${stdout.substring(0, 200)}`);
-        } else if (stdout.includes('[') && stdout.includes(']') && stdout.includes('commit')) {
-          // Git commit output like "[main abc123] commit message"
-          await this.log('info', `💾 Git commit: ${stdout.substring(0, 200)}`);
-        } else if (stdout.includes('file changed') || stdout.includes('files changed')) {
-          // Git add/status output
-          await this.log('info', `➕ Git changes: ${stdout.substring(0, 200)}`);
-        } else {
-          // Log other stdout
-          await this.log('stdout', stdout.substring(0, 500));
-        }
-      } else {
-        // For other update types, store a simplified version
-        await this.log('update', JSON.stringify(parsed, null, 2).substring(0, 500));
-      }
-    } catch (e) {
-      // If not JSON or parsing fails, log as plain text
-      await this.log('update', update);
-    }
+    
+    // Store ONLY the raw update to preserve original format without any transformation
+    await this.log('update', update);
+    
+    // Note: Removed all additional processing to preserve exact VibeKit SDK output
+    // The UI will handle parsing and display formatting, but logs should contain raw data
   }
 
   async captureStdout(data: string): Promise<void> {
-    // Check for Git operations in stdout
-    if (data.includes('Cloning into')) {
-      await this.log('info', `📥 Cloning repository: ${data.trim()}`);
-    } else if (data.includes('Initialized empty Git repository')) {
-      await this.log('info', `🎯 Git repository initialized: ${data.trim()}`);
-    } else if (data.includes('Switched to a new branch') || data.includes('Switched to branch')) {
-      await this.log('info', `🔀 Branch switched: ${data.trim()}`);
-    } else if (data.includes('Your branch is up to date') || data.includes('Already on')) {
-      await this.log('info', `📊 Git status: ${data.trim()}`);
-    } else if (data.includes('[') && data.includes(']') && (data.includes('commit') || data.includes('files changed'))) {
-      // Git commit or status output
-      await this.log('info', `💾 Git: ${data.trim()}`);
-    } else if (data.includes('Changes to be committed') || data.includes('Changes not staged')) {
-      await this.log('info', `📝 Git status: ${data.trim()}`);
-    } else if (data.includes('file changed') || data.includes('files changed')) {
-      await this.log('info', `➕ Git changes: ${data.trim()}`);
-    } else if (data.includes('create mode') || data.includes('delete mode') || data.includes('rename')) {
-      await this.log('info', `📁 Git file operation: ${data.trim()}`);
-    } else if (data.includes('remote:') || data.includes('Counting objects') || data.includes('Receiving objects')) {
-      await this.log('info', `🔄 Git remote operation: ${data.trim()}`);
-    } else if (data.includes('From ') && data.includes('github.com')) {
-      await this.log('info', `🐙 GitHub: ${data.trim()}`);
-    } else {
-      await this.log('stdout', data);
-    }
+    // Store raw stdout data without any transformation
+    await this.log('stdout', data);
   }
 
   async captureStderr(data: string): Promise<void> {
-    // Check for Git operations in stderr (Git often outputs to stderr)
-    if (data.includes('Cloning into') || data.includes('remote:') || data.includes('Receiving objects')) {
-      await this.log('info', `📥 Git: ${data.trim()}`);
-    } else if (data.includes('warning:') && data.includes('git')) {
-      await this.log('info', `⚠️ Git warning: ${data.trim()}`);
-    } else {
-      await this.log('stderr', data);
-    }
+    // Store raw stderr data without any transformation
+    await this.log('stderr', data);
   }
 
   async captureError(error: string): Promise<void> {

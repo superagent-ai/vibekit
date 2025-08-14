@@ -651,7 +651,7 @@ export function SubtaskDetailsSheet({
                                   'Content-Type': 'application/json',
                                 },
                                 body: JSON.stringify({
-                                  taskId: parentTask.id.toString(),
+                                  taskId: parentTask.id,
                                   taskTitle: parentTask.title,
                                   subtaskId: subtask.id,
                                   subtaskTitle: subtask.title,
