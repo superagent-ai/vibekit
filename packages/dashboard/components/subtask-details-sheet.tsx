@@ -811,8 +811,8 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
           </div>
 
           {/* Tab Navigation - Sticky */}
-          <div className="px-6 lg:px-8 py-2 bg-background border-t">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col text-sm text-muted-foreground">
+          <div className="flex-1 flex flex-col px-6 lg:px-8 py-2 bg-background border-t min-h-0">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col text-sm text-muted-foreground min-h-0">
               <TabsList size="xs" variant="line" className="grid grid-cols-3 w-full">
                 <TabsTrigger value="logs">
                   <ScrollText />
@@ -942,17 +942,7 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                 <TabsContent value="executions" className="flex-1 flex flex-col min-h-0 m-0">
                   <ScrollArea className="flex-1">
                     <div className="p-4">
-                      <div className="border rounded-lg bg-background">
-                        <div className="p-3 border-b">
-                          <h4 className="text-sm font-medium">Execution History</h4>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {executionHistory.length > 0 
-                              ? "Click on an execution to view its logs in the Logs tab"
-                              : "No executions yet for this subtask"
-                            }
-                          </p>
-                        </div>
-                        {executionHistory.length > 0 ? (
+                      {executionHistory.length > 0 ? (
                           <ExecutionsList 
                             subtaskId={subtask.id}
                             projectId={projectId || ''}
@@ -963,10 +953,9 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                               // Switch to logs tab when selecting an execution
                               setActiveTab("logs");
                             }}
-                            className="h-[450px]"
                           />
                         ) : (
-                          <div className="h-[450px] flex items-center justify-center">
+                          <div className="min-h-[200px] flex items-center justify-center">
                             <div className="text-center text-muted-foreground">
                               <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
                               <p className="text-sm font-medium mb-1">No executions yet</p>
@@ -976,7 +965,6 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                             </div>
                           </div>
                         )}
-                      </div>
                     </div>
                   </ScrollArea>
                 </TabsContent>
