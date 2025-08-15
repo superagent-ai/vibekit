@@ -321,29 +321,16 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
     return columns.filter(column => columnVisibility[column.id] !== false);
   }, [columnVisibility]);
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority: string): "destructive" | "warning" | "success" | "outline" => {
     switch (priority) {
       case "high":
         return "destructive";
       case "medium":
-        return "default";
+        return "warning";
       case "low":
-        return "secondary";
+        return "success";
       default:
         return "outline";
-    }
-  };
-
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "🔴";
-      case "medium":
-        return "🟡";
-      case "low":
-        return "🔵";
-      default:
-        return "⚪";
     }
   };
 
@@ -414,8 +401,8 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
       <div className="flex items-start justify-between">
         <h3 className="font-medium text-sm line-clamp-2 flex-1">{item.task.title}</h3>
         <div className="flex items-center gap-1">
-          <Badge variant={getPriorityColor(item.task.priority)} className="text-xs">
-            {getPriorityIcon(item.task.priority)} {item.task.priority}
+          <Badge variant={getPriorityColor(item.task.priority) as "default" | "secondary" | "destructive" | "warning" | "success" | "outline"} className="text-xs">
+            {item.task.priority}
           </Badge>
         </div>
       </div>
