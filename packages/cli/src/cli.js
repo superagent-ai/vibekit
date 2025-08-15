@@ -13,8 +13,7 @@ import CursorAgent from './agents/cursor.js';
 import OpenCodeAgent from './agents/opencode.js';
 import Logger from './logging/logger.js';
 import Analytics from './analytics/analytics.js';
-import ProxyServer from './proxy/server.js';
-import proxyManager from './proxy/manager.js';
+import { proxyManager } from './utils/proxy-manager.js';
 // Dashboard manager will be imported lazily when needed
 import React from 'react';
 import { render } from 'ink';
@@ -100,13 +99,11 @@ program
     
     // Get proxy from global option, environment variable, or default if proxy enabled in settings
     let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-    let proxyStarted = false;
     
-    // Determine if we need to start proxy server later (lazy startup)
-    let shouldStartProxy = false;
+    // Ensure proxy is running if needed
     if (!proxy && settings.proxy.enabled) {
-      proxy = 'http://localhost:8080';
-      shouldStartProxy = !proxyManager.isRunning();
+      const proxyPort = await proxyManager.ensureProxy(8080);
+      proxy = `http://localhost:${proxyPort}`;
     }
     
     // Set proxy target for the proxy server if we have one
@@ -119,7 +116,6 @@ program
     
     const agentOptions = {
       proxy: proxy,
-      shouldStartProxy: shouldStartProxy,
       proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
@@ -129,9 +125,9 @@ program
     };
     const agent = new ClaudeAgent(logger, agentOptions);
     
-    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    // Setup cleanup handlers for proxy server
     const cleanup = () => {
-      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+      if (proxyManager.isRunning()) {
         proxyManager.stop();
       }
     };
@@ -145,8 +141,8 @@ program
     try {
       await agent.run(args);
     } finally {
-      // Clean up proxy server if we or the agent started it
-      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+      // Clean up proxy server if running
+      if (proxyManager.isRunning()) {
         proxyManager.stop();
       }
     }
@@ -165,18 +161,15 @@ program
     
     // Get proxy from global option, environment variable, or default if proxy enabled in settings
     let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-    let proxyStarted = false;
     
-    // Determine if we need to start proxy server later (lazy startup)
-    let shouldStartProxy = false;
+    // Ensure proxy is running if needed
     if (!proxy && settings.proxy.enabled) {
-      proxy = 'http://localhost:8080';
-      shouldStartProxy = !proxyManager.isRunning();
+      const proxyPort = await proxyManager.ensureProxy(8080);
+      proxy = `http://localhost:${proxyPort}`;
     }
     
     const agentOptions = {
       proxy: proxy,
-      shouldStartProxy: shouldStartProxy,
       proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
@@ -186,9 +179,9 @@ program
     };
     const agent = new GeminiAgent(logger, agentOptions);
     
-    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    // Setup cleanup handlers for proxy server
     const cleanup = () => {
-      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+      if (proxyManager.isRunning()) {
         proxyManager.stop();
       }
     };
@@ -202,8 +195,8 @@ program
     try {
       await agent.run(args);
     } finally {
-      // Clean up proxy server if we or the agent started it
-      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+      // Clean up proxy server if running
+      if (proxyManager.isRunning()) {
         proxyManager.stop();
       }
     }
@@ -222,18 +215,20 @@ program
     
     // Get proxy from global option, environment variable, or default if proxy enabled in settings
     let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-    let proxyStarted = false;
     
-    // Determine if we need to start proxy server later (lazy startup)
-    let shouldStartProxy = false;
+    // Ensure proxy is running if needed
     if (!proxy && settings.proxy.enabled) {
-      proxy = 'http://localhost:8080';
-      shouldStartProxy = !proxyManager.isRunning();
+      const proxyPort = await proxyManager.ensureProxy(8080);
+      proxy = `http://localhost:${proxyPort}`;
+    }
+    
+    // Set OPENAI_BASE_URL for codex instead of ANTHROPIC_BASE_URL
+    if (proxy) {
+      process.env.OPENAI_BASE_URL = proxy;
     }
     
     const agentOptions = {
       proxy: proxy,
-      shouldStartProxy: shouldStartProxy,
       proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
@@ -243,9 +238,9 @@ program
     };
     const agent = new CodexAgent(logger, agentOptions);
     
-    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    // Setup cleanup handlers for proxy server
     const cleanup = () => {
-      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+      if (proxyManager.isRunning()) {
         proxyManager.stop();
       }
     };
@@ -259,8 +254,8 @@ program
     try {
       await agent.run(args);
     } finally {
-      // Clean up proxy server if we or the agent started it
-      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+      // Clean up proxy server if running
+      if (proxyManager.isRunning()) {
         proxyManager.stop();
       }
     }
@@ -279,18 +274,15 @@ program
     
     // Get proxy from global option, environment variable, or default if proxy enabled in settings
     let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-    let proxyStarted = false;
     
-    // Determine if we need to start proxy server later (lazy startup)
-    let shouldStartProxy = false;
+    // Ensure proxy is running if needed
     if (!proxy && settings.proxy.enabled) {
-      proxy = 'http://localhost:8080';
-      shouldStartProxy = !proxyManager.isRunning();
+      const proxyPort = await proxyManager.ensureProxy(8080);
+      proxy = `http://localhost:${proxyPort}`;
     }
     
     const agentOptions = {
       proxy: proxy,
-      shouldStartProxy: shouldStartProxy,
       proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
@@ -300,9 +292,9 @@ program
     };
     const agent = new CursorAgent(logger, agentOptions);
     
-    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    // Setup cleanup handlers for proxy server
     const cleanup = () => {
-      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+      if (proxyManager.isRunning()) {
         proxyManager.stop();
       }
     };
@@ -316,8 +308,8 @@ program
     try {
       await agent.run(args);
     } finally {
-      // Clean up proxy server if we or the agent started it
-      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+      // Clean up proxy server if running
+      if (proxyManager.isRunning()) {
         proxyManager.stop();
       }
     }
@@ -336,18 +328,15 @@ program
     
     // Get proxy from global option, environment variable, or default if proxy enabled in settings
     let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-    let proxyStarted = false;
     
-    // Determine if we need to start proxy server later (lazy startup)
-    let shouldStartProxy = false;
+    // Ensure proxy is running if needed
     if (!proxy && settings.proxy.enabled) {
-      proxy = 'http://localhost:8080';
-      shouldStartProxy = !proxyManager.isRunning();
+      const proxyPort = await proxyManager.ensureProxy(8080);
+      proxy = `http://localhost:${proxyPort}`;
     }
     
     const agentOptions = {
       proxy: proxy,
-      shouldStartProxy: shouldStartProxy,
       proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
@@ -357,9 +346,9 @@ program
     };
     const agent = new OpenCodeAgent(logger, agentOptions);
     
-    // Setup cleanup handlers for proxy server (including lazy-started proxy)
+    // Setup cleanup handlers for proxy server
     const cleanup = () => {
-      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+      if (proxyManager.isRunning()) {
         proxyManager.stop();
       }
     };
@@ -373,8 +362,8 @@ program
     try {
       await agent.run(args);
     } finally {
-      // Clean up proxy server if we or the agent started it
-      if ((proxyStarted || agent.proxyStarted) && proxyManager.isRunning()) {
+      // Clean up proxy server if running
+      if (proxyManager.isRunning()) {
         proxyManager.stop();
       }
     }
@@ -714,10 +703,21 @@ proxyCommand
   .option('-p, --port <number>', 'Port to run proxy server on', '8080')
   .action(async (options) => {
     const port = parseInt(options.port) || 8080;
-    const proxyServer = proxyManager.getProxyServer(port);
     
     try {
-      await proxyServer.start();
+      const { spawn } = await import('child_process');
+      
+      const proxyProcess = spawn('node', [path.join(__dirname, '../../proxy/src/index.js')], {
+        env: { ...process.env, PORT: port.toString() },
+        stdio: 'inherit'
+      });
+      
+      proxyProcess.on('exit', (code) => {
+        if (code !== 0) {
+          console.error(chalk.red(`❌ Proxy server exited with code ${code}`));
+        }
+      });
+      
     } catch (error) {
       console.error(chalk.red('Failed to start proxy server:'), error.message);
       process.exit(1);
@@ -731,15 +731,55 @@ proxyCommand
     // If no subcommand was provided, start the proxy
     if (command.args.length === 0) {
       const port = parseInt(options.port) || 8080;
-      const proxyServer = proxyManager.getProxyServer(port);
       
       try {
-        await proxyServer.start();
+        const { spawn } = await import('child_process');
+        
+        const proxyProcess = spawn('npx', ['@vibe-kit/proxy'], {
+          env: { ...process.env, PORT: port.toString() },
+          stdio: 'inherit'
+        });
+        
+        proxyProcess.on('exit', (code) => {
+          if (code !== 0) {
+            console.error(chalk.red(`❌ Proxy server exited with code ${code}`));
+          }
+        });
       } catch (error) {
         console.error(chalk.red('Failed to start proxy server:'), error.message);
         process.exit(1);
       }
     }
+  });
+
+proxyCommand
+  .command('stop')
+  .description('Stop the managed proxy server')
+  .action(async () => {
+    try {
+      await proxyManager.stop();
+    } catch (error) {
+      console.error(chalk.red('Failed to stop proxy server:'), error.message);
+      process.exit(1);
+    }
+  });
+
+proxyCommand
+  .command('status')
+  .description('Show proxy server status')
+  .option('-p, --port <number>', 'Check specific port', '8080')
+  .action(async (options) => {
+    const port = parseInt(options.port) || 8080;
+    const isRunning = proxyManager.isRunning();
+    const externalRunning = await proxyManager.detectExternalProxy(port);
+    
+    console.log(chalk.blue('🌐 Proxy Status'));
+    console.log(chalk.gray('─'.repeat(30)));
+    console.log(`Managed proxy: ${isRunning ? chalk.green('RUNNING') : chalk.red('STOPPED')}`);
+    if (isRunning) {
+      console.log(`Port: ${chalk.cyan(proxyManager.getPort())}`);
+    }
+    console.log(`External proxy (port ${port}): ${externalRunning ? chalk.green('DETECTED') : chalk.red('NOT DETECTED')}`);
   });
 
 proxyCommand

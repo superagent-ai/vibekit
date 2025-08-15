@@ -15,8 +15,17 @@ export class CodexAgent extends BaseAgent {
   private model?: string;
 
   private escapePrompt(prompt: string): string {
-    // Escape backticks and other special characters
-    return prompt.replace(/[`"$\\]/g, "\\$&");
+    // Comprehensive escaping for bash double quotes - production ready
+    return prompt
+      .replace(/\\/g, '\\\\')    // Escape backslashes FIRST
+      .replace(/"/g, '\\"')      // Escape double quotes
+      .replace(/'/g, "'\\\'")    // Escape single quotes (close quote, escaped quote, reopen)
+      .replace(/\$/g, '\\$')     // Escape dollar signs
+      .replace(/`/g, '\\`')      // Escape backticks (command substitution)
+      .replace(/!/g, '\\!')      // Escape exclamation (history expansion)
+      .replace(/\n/g, '\\n')     // Escape newlines
+      .replace(/\r/g, '\\r')     // Escape carriage returns
+      .replace(/\t/g, '\\t');    // Escape tabs
   }
 
   constructor(config: CodexConfig) {
@@ -64,7 +73,7 @@ export class CodexAgent extends BaseAgent {
     return {
       command: `codex exec --full-auto --skip-git-repo-check${
         this.model ? ` --model ${this.model}` : ""
-      } "${_prompt}"`,
+      } "${this.escapePrompt(_prompt)}"`,
       errorPrefix: "Codex",
       labelName: "codex",
       labelColor: "ededed",
@@ -125,7 +134,7 @@ export class CodexAgent extends BaseAgent {
 
     if (history) {
       _prompt += `\n\nConversation history: ${history
-        .map((h) => `${h.role}\n ${h.content}`)
+        .map((h) => `${h.role}\n ${this.escapePrompt(h.content)}`)
         .join("\n\n")}`;
     }
     // Override the command config with history-aware prompt
@@ -134,7 +143,7 @@ export class CodexAgent extends BaseAgent {
       ...originalGetCommandConfig(p, m),
       command: `codex exec --full-auto --skip-git-repo-check${
         this.model ? ` --model ${this.model}` : ""
-      } "${_prompt}"`,
+      } "${this.escapePrompt(_prompt)}"`,
     });
 
     const result = await super.generateCode(

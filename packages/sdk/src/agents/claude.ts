@@ -17,8 +17,17 @@ export class ClaudeAgent extends BaseAgent {
   private tokenInitialized: boolean = false;
 
   private escapePrompt(prompt: string): string {
-    // Escape backticks and other special characters
-    return prompt.replace(/[`"$\\]/g, "\\$&");
+    // Comprehensive escaping for bash double quotes - production ready
+    return prompt
+      .replace(/\\/g, '\\\\')    // Escape backslashes FIRST
+      .replace(/"/g, '\\"')      // Escape double quotes
+      .replace(/'/g, "'\\''")    // Escape single quotes (close quote, escaped quote, reopen)
+      .replace(/\$/g, '\\$')     // Escape dollar signs
+      .replace(/`/g, '\\`')      // Escape backticks (command substitution)
+      .replace(/!/g, '\\!')      // Escape exclamation (history expansion)
+      .replace(/\n/g, '\\n')     // Escape newlines
+      .replace(/\r/g, '\\r')     // Escape carriage returns
+      .replace(/\t/g, '\\t');    // Escape tabs
   }
 
   constructor(config: ClaudeConfig) {
@@ -106,7 +115,7 @@ export class ClaudeAgent extends BaseAgent {
     const escapedPrompt = this.escapePrompt(prompt);
 
     return {
-      command: `echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}"${
+      command: `echo "${escapedPrompt}" | claude -p --append-system-prompt "${this.escapePrompt(instruction)}"${
         mode === "ask" ? ' --disallowedTools "Edit" "Replace" "Write"' : ""
       } --output-format stream-json --verbose --model ${
         this.model || "claude-sonnet-4-20250514"
@@ -177,7 +186,7 @@ export class ClaudeAgent extends BaseAgent {
 
     if (history && history.length > 0) {
       instruction += `\n\nConversation history: ${history
-        .map((h) => `${h.role}\n ${h.content}`)
+        .map((h) => `${h.role}\n ${this.escapePrompt(h.content)}`)  // Escape history content too!
         .join("\n\n")}`;
     }
     
@@ -192,7 +201,7 @@ export class ClaudeAgent extends BaseAgent {
     const originalGetCommandConfig = this.getCommandConfig.bind(this);
     this.getCommandConfig = (p: string, m?: "ask" | "code") => ({
       ...originalGetCommandConfig(p, m),
-      command: `echo "${escapedPrompt}" | claude -p --append-system-prompt "${instruction}"${
+      command: `echo "${escapedPrompt}" | claude -p --append-system-prompt "${this.escapePrompt(instruction)}"${
         mode === "ask" ? ' --disallowedTools "Edit" "Replace" "Write"' : ""
       } --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model ${
         this.model || "claude-sonnet-4-20250514"

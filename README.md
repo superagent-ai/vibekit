@@ -39,6 +39,44 @@ vibekit claude
 
 💻 **Works offline & locally** - No cloud dependencies or internet required — works entirely on your machine
 
+## 🌐 Proxy Server Deployment
+
+VibeKit includes a proxy server for secure API routing with built-in data redaction. Deploy it as a service:
+
+### Local Development
+```bash
+# Run proxy directly with npx (recommended)
+npx @vibe-kit/proxy start
+
+# Or with specific commands
+npx @vibe-kit/proxy stop              # Stop proxy  
+npx @vibe-kit/proxy status            # Check status
+
+# Or install globally and run
+npm install -g @vibe-kit/proxy
+```
+
+### Docker Deployment
+```bash
+# Use the published image
+docker run -p 8080:8080 -e PORT=8080 vibekit/proxy
+
+# Or build from source
+docker build -t vibekit-proxy packages/proxy
+docker run -p 8080:8080 vibekit-proxy
+```
+
+### Environment Variables
+- `PORT` or `VIBEKIT_PROXY_PORT` - Proxy port (default: 8080)
+- `VIBEKIT_PROXY_TARGET_URL` - Target API URL
+
+### Cloud Deployment
+Deploy to any container platform (AWS ECS, Google Cloud Run, Azure Container Instances, etc.):
+```bash
+# Example with Google Cloud Run
+gcloud run deploy vibekit-proxy --image vibekit-proxy --port 8080
+```
+
 ## 📦 Related Packages
 
 Looking to integrate VibeKit into your application? Check out these packages:

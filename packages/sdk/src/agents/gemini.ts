@@ -14,8 +14,17 @@ export class GeminiAgent extends BaseAgent {
   private model?: string;
 
   private escapePrompt(prompt: string): string {
-    // Escape backticks and other special characters
-    return prompt.replace(/[`"$\\]/g, "\\$&");
+    // Comprehensive escaping for bash double quotes - production ready
+    return prompt
+      .replace(/\\/g, '\\\\')    // Escape backslashes FIRST
+      .replace(/"/g, '\\"')      // Escape double quotes
+      .replace(/'/g, "'\\''")    // Escape single quotes (close quote, escaped quote, reopen)
+      .replace(/\$/g, '\\$')     // Escape dollar signs
+      .replace(/`/g, '\\`')      // Escape backticks (command substitution)
+      .replace(/!/g, '\\!')      // Escape exclamation (history expansion)
+      .replace(/\n/g, '\\n')     // Escape newlines
+      .replace(/\r/g, '\\r')     // Escape carriage returns
+      .replace(/\t/g, '\\t');    // Escape tabs
   }
 
   constructor(config: GeminiConfig) {
@@ -60,7 +69,7 @@ export class GeminiAgent extends BaseAgent {
     let _prompt = `${instruction}\n\nUser: ${escapedPrompt}`;
 
     return {
-      command: `echo "${_prompt}" | gemini --model ${
+      command: `echo "${this.escapePrompt(_prompt)}" | gemini --model ${
         this.model || "gemini-2.5-pro"
       } --yolo`,
       errorPrefix: "Gemini",
@@ -119,7 +128,7 @@ export class GeminiAgent extends BaseAgent {
 
     if (history && history.length > 0) {
       instruction += `\n\nConversation history: ${history
-        .map((h) => `${h.role}\n ${h.content}`)
+        .map((h) => `${h.role}\n ${this.escapePrompt(h.content)}`)  // Escape history content too!
         .join("\n\n")}`;
     }
 
@@ -131,7 +140,7 @@ export class GeminiAgent extends BaseAgent {
     const originalGetCommandConfig = this.getCommandConfig.bind(this);
     this.getCommandConfig = (p: string, m?: "ask" | "code") => ({
       ...originalGetCommandConfig(p, m),
-      command: `echo "${_prompt}" | gemini --model ${
+      command: `echo "${this.escapePrompt(_prompt)}" | gemini --model ${
         this.model || "gemini-2.5-pro"
       } --yolo`,
     });

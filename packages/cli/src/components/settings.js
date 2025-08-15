@@ -5,7 +5,7 @@ import path from 'path';
 import os from 'os';
 import { setupAliases } from '../utils/aliases.js';
 import { revertAnthropicBaseURL } from '../utils/claude-settings.js';
-import proxyManager from '../proxy/manager.js';
+import { proxyManager } from '../utils/proxy-manager.js';
 import dashboardManager from '../dashboard/manager.js';
 import CFonts from 'cfonts';
 
@@ -344,8 +344,7 @@ const Settings = ({ showWelcome = false }) => {
           // Auto-start proxy server if enabled and not already running
           if (newProxySettings.proxy.enabled && !proxyManager.isRunning()) {
             try {
-              const proxyServer = proxyManager.getProxyServer(8080);
-              await proxyServer.start();
+              await proxyManager.start(8080);
             } catch (error) {
               console.error('\n❌ Failed to start proxy server:', error.message);
             }

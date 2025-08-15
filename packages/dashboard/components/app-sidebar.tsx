@@ -1,7 +1,17 @@
 "use client";
 
 import type * as React from "react";
-import { ChartSpline, LucideGithub as Github, BookOpen, Palette, Info, Settings, FolderOpen, Server, MessageSquare } from "lucide-react";
+import {
+  ChartSpline,
+  LucideGithub as Github,
+  BookOpen,
+  Palette,
+  Info,
+  Settings, 
+  FolderOpen,
+  Server,
+  MessageSquare,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -90,59 +100,65 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <TooltipProvider>
       <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Link href="/">
-                <div className="bg-muted flex aspect-square size-4 items-center justify-center rounded-lg">
-                  <span className="text-lg">🖖</span>
-                </div>
-                <div
-                  className="grid flex-1 text-left leading-tight"
-                  style={{ fontFamily: "helvetica, sans-serif" }}
-                >
-                  <span className="truncate text-md font-bold">VibeKit</span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
-      <SidebarContent>
-        <NavMain items={data.navMain} />
-      </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          {data.footerLinks.map((link) => (
-            <SidebarMenuItem key={link.title}>
-              {link.isThemeToggle ? (
-                <ThemeToggle />
-              ) : link.isVersion ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SidebarMenuButton>
-                      <link.icon className="text-muted-foreground" />
-                      <span className="text-muted-foreground">{link.title}</span>
-                    </SidebarMenuButton>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <p>VibeKit Version {packageJson.version}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <SidebarMenuButton asChild>
-                  <a href={link.url} target="_blank" rel="noopener noreferrer">
-                    <link.icon />
-                    <span>{link.title}</span>
-                  </a>
-                </SidebarMenuButton>
-              )}
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild>
+                <Link href="/">
+                  <div className="bg-muted flex aspect-square size-4 items-center justify-center rounded-lg">
+                    <span className="text-lg">🖖</span>
+                  </div>
+                  <div
+                    className="grid flex-1 text-left leading-tight"
+                    style={{ fontFamily: "helvetica, sans-serif" }}
+                  >
+                    <span className="truncate text-md font-bold">VibeKit</span>
+                  </div>
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarFooter>
-      <SidebarRail />
+          </SidebarMenu>
+        </SidebarHeader>
+        <SidebarContent>
+          <NavMain items={data.navMain} />
+        </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            {data.footerLinks.map((link) => (
+              <SidebarMenuItem key={link.title}>
+                {link.isThemeToggle ? (
+                  <ThemeToggle />
+                ) : link.isVersion ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton>
+                        <link.icon className="text-muted-foreground" />
+                        <span className="text-muted-foreground">
+                          {link.title}
+                        </span>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <p>VibeKit Version {packageJson.version}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <SidebarMenuButton asChild>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <link.icon />
+                      <span>{link.title}</span>
+                    </a>
+                  </SidebarMenuButton>
+                )}
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarFooter>
+        <SidebarRail />
       </Sidebar>
     </TooltipProvider>
   );

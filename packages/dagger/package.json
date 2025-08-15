@@ -1,6 +1,6 @@
 {
   "name": "@vibe-kit/dagger",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Local sandbox provider for Vibekit using Dagger",
   "type": "module",
   "main": "dist/index.js",

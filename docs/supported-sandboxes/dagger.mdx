@@ -40,13 +40,18 @@ docker --version
 
 VibeKit uses a builder pattern with method chaining for type safety and flexibility. Configure your Dagger provider and VibeKit instance:
 
+Dagger supports multiple container registries for storing and sharing pre-built agent images. Choose the registry that best fits your infrastructure and security requirements.
+
+### Default Configuration (Docker Hub)
+
 ```typescript
 import { VibeKit } from "@vibe-kit/sdk";
 import { createLocalProvider } from "@vibe-kit/dagger";
 
 const provider = createLocalProvider({
   preferRegistryImages: true,             // Use optimized images when available
-  dockerHubUser: "your-username",         // For custom image uploads
+  registryName: "dockerhub",              // Defaults to DockerHub
+  registryUser: "your-dockerhub-username" // Optional: for pushing/pulling images
 });
 
 const vibeKit = new VibeKit()
@@ -75,6 +80,62 @@ console.log(`Server running at: ${host}`);
 await vibeKit.kill();
 ```
 
+### Using GitHub Container Registry
+
+GitHub Container Registry provides seamless integration with GitHub workflows:
+
+```typescript
+const provider = createLocalProvider({
+  registryName: "ghcr",
+  registryUser: "github-username",
+  githubToken: process.env.GITHUB_TOKEN, // Required for GHCR
+});
+```
+
+**Setting up GHCR:**
+```bash
+# Set GitHub token (requires packages:write permission)
+export GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+
+# Login to GHCR
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+
+# Initialize with GHCR
+vibekit init --providers dagger --agents claude,codex \
+  --registry ghcr --registry-user github-username
+```
+
+### Using AWS ECR
+
+AWS Elastic Container Registry for enterprise AWS deployments:
+
+```typescript
+const provider = createLocalProvider({
+  registryName: "ecr",
+  registryUser: process.env.AWS_ACCOUNT_ID,
+  // AWS CLI must be configured with credentials
+});
+```
+
+**Setting up AWS ECR:**
+```bash
+# Configure AWS credentials
+aws configure
+
+# Set environment variables
+export AWS_ACCOUNT_ID=123456789012
+export AWS_REGION=us-east-1
+
+# Login to ECR
+aws ecr get-login-password --region $AWS_REGION | \
+  docker login --username AWS --password-stdin \
+  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+# Initialize with ECR
+vibekit init --providers dagger --agents claude,codex \
+  --registry ecr --registry-user $AWS_ACCOUNT_ID
+```
+
 ## Quick Setup
 
 Initialize with automatic dependency installation:
@@ -83,15 +144,24 @@ Initialize with automatic dependency installation:
 # Interactive setup with agent selection
 vibekit init --providers dagger --agents claude,codex
 
-# With Docker Hub image optimization
+# With Docker Hub image optimization (default)
 docker login
 vibekit init --providers dagger --agents claude,codex --upload-images
+
+# With GitHub Container Registry
+vibekit init --providers dagger --agents claude,codex \
+  --registry ghcr --registry-user github-username --upload-images
+
+# With AWS ECR
+vibekit init --providers dagger --agents claude,codex \
+  --registry ecr --registry-user $AWS_ACCOUNT_ID --upload-images
 ```
 
 The setup will:
 - Install Docker and Dagger CLI if needed
 - Pre-build agent images for faster startup
-- Optionally upload optimized images to your Docker Hub
+- Optionally upload optimized images to your chosen registry
+- Configure registry authentication
 
 
 
@@ -107,6 +177,26 @@ GITHUB_TOKEN=your_github_token_here
 ANTHROPIC_API_KEY=your_anthropic_key
 OPENAI_API_KEY=your_openai_key
 GOOGLE_API_KEY=your_google_key
+GEMINI_API_KEY=your_gemini_key
+GROK_API_KEY=your_grok_key
+
+# Registry configuration
+VIBEKIT_REGISTRY_NAME=ghcr          # Registry type (dockerhub, ghcr, ecr)
+VIBEKIT_REGISTRY_USER=myusername    # Registry username
+VIBEKIT_PREFER_REGISTRY=true        # Use registry images when available
+VIBEKIT_PUSH_IMAGES=true            # Auto-push built images
+
+# Registry-specific authentication
+GITHUB_TOKEN=ghp_xxxx               # For GitHub Container Registry
+AWS_ACCOUNT_ID=123456789012         # For AWS ECR
+AWS_REGION=us-east-1                # For AWS ECR
+
+# Advanced configuration
+VIBEKIT_RETRY_ATTEMPTS=3            # Registry operation retries
+VIBEKIT_RETRY_DELAY=1000            # Retry delay in ms
+VIBEKIT_CONNECTION_TIMEOUT=30000    # Connection timeout in ms
+VIBEKIT_CONFIG_PATH=~/.vibekit      # Config directory path
+VIBEKIT_LOG_LEVEL=debug              # Enable debug logging
 ```
 
 Reference them in your code:
@@ -116,6 +206,7 @@ Reference them in your code:
 const provider = createLocalProvider({
   preferRegistryImages: true,
   dockerHubUser: "your-username",
+  // All other config is auto-loaded from env vars
 });
 
 // GitHub configuration at SDK level
@@ -132,11 +223,17 @@ const vibeKit = new VibeKit()
 The `createLocalProvider` function accepts these configuration options:
 
 - **`preferRegistryImages`** (optional): Use pre-built registry images for faster startup (default: `true`)
-- **`dockerHubUser`** (optional): Docker Hub username for uploading custom optimized images
-
-**Note**: Git operations and GitHub integration are handled at the SDK level using `.withGithub()` or the `github` configuration object, not at the provider level.
-- **`dockerHubUser`** (optional): Your Docker Hub username for custom optimized images
-- **`privateRegistry`** (optional): Alternative registry URL (e.g., `"ghcr.io"`)
+- **`registryUser`** (optional): Registry username for pulling/pushing custom images (works with any registry)
+- **`registryName`** (optional): Which registry to use - supported values:
+  - `"dockerhub"` - Docker Hub (default)
+  - `"ghcr"` - GitHub Container Registry
+  - `"ecr"` - AWS Elastic Container Registry
+- **`dockerHubUser`** (optional, deprecated): Legacy Docker Hub username - use `registryUser` instead
+- **`privateRegistry`** (optional): Alternative registry URL for enterprise setups
+- **`pushImages`** (optional): Automatically push built images to registry (default: `true`)
+- **`autoInstall`** (optional): Automatically install missing dependencies (default: `false`)
+- **`retryAttempts`** (optional): Number of retry attempts for registry operations (default: `3`)
+- **`retryDelayMs`** (optional): Delay between retry attempts in milliseconds (default: `1000`)
 
 ## Unique Features
 
@@ -147,7 +244,46 @@ The `createLocalProvider` function accepts these configuration options:
 
 ### Performance Optimization
 - **Local execution** - No network latency for container operations
-- **Docker Hub integration** - Share optimized images across machines and teams
+- **Multi-registry support** - Choose the best registry for your infrastructure:
+  - **Docker Hub** - Public registry, easy sharing
+  - **GitHub Container Registry** - Integrated with GitHub workflows
+  - **AWS ECR** - Enterprise AWS deployments
+- **Automatic image caching** - Reuse images across sessions
+- **Registry fallback** - Automatically falls back to local builds if registry is unavailable
+
+## Registry Architecture
+
+VibeKit's Dagger provider supports multiple container registries through a flexible factory pattern:
+
+### Registry Selection
+The registry is selected based on the `registryName` configuration:
+- **`dockerhub`** (default) - Public Docker Hub registry
+- **`ghcr`** - GitHub Container Registry (requires GitHub token)
+- **`ecr`** - AWS Elastic Container Registry (requires AWS credentials)
+
+### Image Resolution Strategy
+1. **Check local cache** - Look for existing Docker images locally
+2. **Pull from registry** - Attempt to pull pre-built images from configured registry
+3. **Build from Dockerfile** - Fall back to building from source if needed
+
+### Migration Guide
+
+If you're upgrading from an older version that only supported Docker Hub:
+
+```typescript
+// Old configuration (still supported)
+const provider = createLocalProvider({
+  dockerHubUser: "myusername"
+});
+
+// New configuration (recommended)
+const provider = createLocalProvider({
+  registryUser: "myusername",     // Universal field
+  registryName: "dockerhub"       // Explicit registry selection
+});
+```
+
+The `dockerHubUser` field is maintained for backward compatibility but `registryUser` is now the recommended universal field that works with all registries.
 
 ## System Requirements
 
@@ -155,6 +291,9 @@ The `createLocalProvider` function accepts these configuration options:
 - **Dagger CLI** - Container orchestration engine (automatically installed during setup)  
 - **Node.js 18+** - Runtime environment
 - **8GB RAM recommended** - For running multiple containers
+- **Registry-specific requirements:**
+  - **GitHub Container Registry**: GitHub account with packages:write permission
+  - **AWS ECR**: AWS account with ECR permissions and configured AWS CLI
 
 ## Troubleshooting
 
@@ -162,6 +301,12 @@ The `createLocalProvider` function accepts these configuration options:
 ```bash
 # Check Docker status
 docker ps
+
+# Start Docker (macOS)
+open -a Docker
+
+# Start Docker (Linux)
+sudo systemctl start docker
 ```
 
 **Dagger CLI not found:**
@@ -171,9 +316,31 @@ curl -fsSL https://dl.dagger.io/install.sh | bash
 dagger version
 ```
 
+**Registry authentication issues:**
+
+```bash
+# Docker Hub
+docker logout
+docker login
+
+# GitHub Container Registry
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+
+# AWS ECR
+aws ecr get-login-password --region $AWS_REGION | \
+  docker login --username AWS --password-stdin \
+  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+```
+
 **Permission errors (Linux):**
 ```bash
 # Add user to docker group
 sudo usermod -aG docker $USER
 # Then log out and back in
+```
+
+**Registry image not found:**
+```bash
+# Rebuild and push images
+vibekit prebuild --agents claude,codex --push
 ``` 

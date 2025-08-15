@@ -1,6 +1,6 @@
 {
   "name": "@vibe-kit/dashboard",
-  "version": "0.0.9",
+  "version": "0.0.11",
   "description": "Analytics dashboard for VibeKit CLI middleware",
   "private": false,
   "publishConfig": {

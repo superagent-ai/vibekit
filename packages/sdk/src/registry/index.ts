@@ -6,6 +6,8 @@
  */
 
 export { DockerHubRegistry, type DockerHubConfig } from './docker-hub';
+export { GitHubContainerRegistry, type GitHubContainerRegistryConfig } from './github-container-registry';
+export { AWSECRRegistry, type AWSECRConfig } from './aws-ecr';
 export { 
   RegistryManager, 
   type RegistryProvider, 

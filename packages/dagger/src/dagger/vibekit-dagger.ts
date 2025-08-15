@@ -148,7 +148,9 @@ export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
 
 export interface LocalConfig {
   preferRegistryImages?: boolean;
-  dockerHubUser?: string;
+  dockerHubUser?: string;  // Deprecated - use registryUser
+  registryUser?: string;    // Universal registry username
+  registryName?: string;    // Registry type: 'dockerhub', 'ghcr', 'ecr', etc.
   pushImages?: boolean;
   privateRegistry?: string;
   autoInstall?: boolean;
@@ -166,9 +168,15 @@ export class Configuration {
   private logger: Logger;
 
   private constructor(config: LocalConfig = {}) {
+    // Support both registryUser and dockerHubUser for backward compatibility
+    const registryUser = process.env.VIBEKIT_REGISTRY_USER || config.registryUser || 
+                        process.env.VIBEKIT_DOCKER_USER || config.dockerHubUser;
+    
     this.config = {
       preferRegistryImages: this.getEnvBoolean("VIBEKIT_PREFER_REGISTRY", config.preferRegistryImages ?? true),
-      dockerHubUser: process.env.VIBEKIT_DOCKER_USER || config.dockerHubUser,
+      dockerHubUser: registryUser,  // Keep for backward compatibility
+      registryUser: registryUser,
+      registryName: process.env.VIBEKIT_REGISTRY_NAME || config.registryName || "dockerhub",
       pushImages: this.getEnvBoolean("VIBEKIT_PUSH_IMAGES", config.pushImages ?? true),
       privateRegistry: process.env.VIBEKIT_REGISTRY || config.privateRegistry,
       autoInstall: this.getEnvBoolean("VIBEKIT_AUTO_INSTALL", config.autoInstall ?? false),
@@ -235,6 +243,53 @@ function sanitizeCommand(command: string): string {
   return command;
 }
 
+// Registry factory - creates appropriate registry based on config
+async function createRegistryManager(config: LocalConfig, logger: any): Promise<any> {
+  const modulePath = '@vibe-kit/sdk/registry';
+  const registryModule = await import(modulePath).catch(() => null);
+  
+  if (!registryModule) {
+    logger.warn("Registry module not available");
+    return null;
+  }
+  
+  const { RegistryManager, DockerHubRegistry, GitHubContainerRegistry, AWSECRRegistry } = registryModule;
+  const registryName = config.registryName || 'dockerhub';
+  
+  const registryManager = new RegistryManager({
+    defaultRegistry: registryName,
+    logger,
+  });
+  
+  // Register the appropriate registry based on configuration
+  switch (registryName) {
+    case 'ghcr':
+      const ghcrRegistry = new GitHubContainerRegistry({ 
+        logger,
+        githubToken: process.env.GITHUB_TOKEN,
+      });
+      registryManager.registerRegistry('ghcr', ghcrRegistry);
+      break;
+      
+    case 'ecr':
+      const ecrRegistry = new AWSECRRegistry({ 
+        logger,
+        awsRegion: process.env.AWS_REGION,
+        awsAccountId: process.env.AWS_ACCOUNT_ID,
+      });
+      registryManager.registerRegistry('ecr', ecrRegistry);
+      break;
+      
+    case 'dockerhub':
+    default:
+      const dockerHubRegistry = new DockerHubRegistry({ logger });
+      registryManager.registerRegistry('dockerhub', dockerHubRegistry);
+      break;
+  }
+  
+  return registryManager;
+}
+
 // Image resolution using shared infrastructure
 class ImageResolver {
   private sharedResolver: any;
@@ -242,12 +297,17 @@ class ImageResolver {
 
   constructor(config: LocalConfig, logger: Logger) {
     this.config = config;
+    // Support both registryUser and dockerHubUser for backward compatibility
+    const registryUser = config.registryUser || config.dockerHubUser;
+    
     // Import and use the shared ImageResolver
     const sharedConfig = {
       preferRegistryImages: config.preferRegistryImages,
       pushImages: config.pushImages,
       privateRegistry: config.privateRegistry,
-      dockerHubUser: config.dockerHubUser,
+      dockerHubUser: registryUser,  // For backward compatibility
+      registryUser: registryUser,
+      registryName: config.registryName,
       retryAttempts: config.retryAttempts,
       retryDelayMs: config.retryDelayMs,
       logger,
@@ -266,15 +326,14 @@ class ImageResolver {
         return;
       }
       
-      const { ImageResolver: SharedImageResolver, RegistryManager, DockerHubRegistry } = registryModule;
+      const { ImageResolver: SharedImageResolver } = registryModule;
       
-      // Create registry manager with Docker Hub
-      const dockerHubRegistry = new DockerHubRegistry({ logger: config.logger });
-      const registryManager = new RegistryManager({
-        defaultRegistry: 'dockerhub',
-        logger: config.logger,
-      });
-      registryManager.registerRegistry('dockerhub', dockerHubRegistry);
+      // Use the factory to create registry manager with appropriate registry
+      const registryManager = await createRegistryManager(this.config, config.logger);
+      if (!registryManager) {
+        config.logger.warn("Failed to create registry manager, using fallback");
+        return;
+      }
 
       this.sharedResolver = new SharedImageResolver(config, registryManager);
     } catch (error) {
@@ -285,8 +344,9 @@ class ImageResolver {
   async resolveImage(agentType?: AgentType): Promise<string> {
     if (!this.sharedResolver) {
       // Fallback if shared resolver not initialized yet
-      if (agentType && this.config.dockerHubUser) {
-        return `${this.config.dockerHubUser}/vibekit-${agentType}:latest`;
+      const registryUser = this.config.registryUser || this.config.dockerHubUser;
+      if (agentType && registryUser) {
+        return `${registryUser}/vibekit-${agentType}:latest`;
       }
       return agentType ? `vibekit-${agentType}:latest` : "ubuntu:24.04";
     }
@@ -560,26 +620,27 @@ export async function prebuildAgentImages(
     const modulePath = '@vibe-kit/sdk/registry';
     const registryModule = await import(modulePath).catch(() => null);
     if (registryModule) {
-      const { ImageResolver: SharedImageResolver, RegistryManager, DockerHubRegistry } = registryModule;
+      const { ImageResolver: SharedImageResolver } = registryModule;
       
-      const dockerHubRegistry = new DockerHubRegistry({ logger });
-      const registryManager = new RegistryManager({
-        defaultRegistry: 'dockerhub',
-        logger,
-      });
-      registryManager.registerRegistry('dockerhub', dockerHubRegistry);
+      // Use the factory to create registry manager with appropriate registry
+      const registryManager = await createRegistryManager(config, logger);
+      if (registryManager) {
+        const registryUser = config.registryUser || config.dockerHubUser;
+        
+        const imageResolver = new SharedImageResolver({
+          preferRegistryImages: config.preferRegistryImages,
+          pushImages: config.pushImages,
+          privateRegistry: config.privateRegistry,
+          dockerHubUser: registryUser,  // For backward compatibility
+          registryUser: registryUser,
+          registryName: config.registryName,
+          retryAttempts: config.retryAttempts,
+          retryDelayMs: config.retryDelayMs,
+          logger,
+        }, registryManager);
 
-      const imageResolver = new SharedImageResolver({
-        preferRegistryImages: config.preferRegistryImages,
-        pushImages: config.pushImages,
-        privateRegistry: config.privateRegistry,
-        dockerHubUser: config.dockerHubUser,
-        retryAttempts: config.retryAttempts,
-        retryDelayMs: config.retryDelayMs,
-        logger,
-      }, registryManager);
-
-      return await imageResolver.prebuildImages(selectedAgents);
+        return await imageResolver.prebuildImages(selectedAgents);
+      }
     }
   } catch (error) {
     logger.warn("Failed to use shared image resolver, falling back to basic prebuilding:", error);

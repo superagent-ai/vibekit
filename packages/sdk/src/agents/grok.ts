@@ -15,8 +15,17 @@ export class GrokAgent extends BaseAgent {
   private baseUrl?: string;
 
   private escapePrompt(prompt: string): string {
-    // Escape backticks and other special characters
-    return prompt.replace(/[`"$\\]/g, "\\$&");
+    // Comprehensive escaping for bash double quotes - production ready
+    return prompt
+      .replace(/\\/g, '\\\\')    // Escape backslashes FIRST
+      .replace(/"/g, '\\"')      // Escape double quotes
+      .replace(/'/g, "'\\\'")    // Escape single quotes (close quote, escaped quote, reopen)
+      .replace(/\$/g, '\\$')     // Escape dollar signs
+      .replace(/`/g, '\\`')      // Escape backticks (command substitution)
+      .replace(/!/g, '\\!')      // Escape exclamation (history expansion)
+      .replace(/\n/g, '\\n')     // Escape newlines
+      .replace(/\r/g, '\\r')     // Escape carriage returns
+      .replace(/\t/g, '\\t');    // Escape tabs
   }
 
   constructor(config: GrokConfig) {
@@ -71,7 +80,7 @@ export class GrokAgent extends BaseAgent {
     const baseUrlFlag = this.baseUrl ? `--base-url ${this.baseUrl}` : "";
 
     return {
-      command: `echo "${escapedPrompt}" | grok ${modelFlag} ${baseUrlFlag} --prompt "${instruction}"`,
+      command: `echo "${escapedPrompt}" | grok ${modelFlag} ${baseUrlFlag} --prompt "${this.escapePrompt(instruction)}"`,
       errorPrefix: "Grok",
       labelName: "grok",
       labelColor: "00D4AA",
@@ -134,7 +143,7 @@ export class GrokAgent extends BaseAgent {
 
     if (history && history.length > 0) {
       instruction += `\n\nConversation history: ${history
-        .map((h) => `${h.role}\n ${h.content}`)
+        .map((h) => `${h.role}\n ${this.escapePrompt(h.content)}`)
         .join("\n\n")}`;
     }
 
@@ -146,7 +155,7 @@ export class GrokAgent extends BaseAgent {
     const originalGetCommandConfig = this.getCommandConfig.bind(this);
     this.getCommandConfig = (p: string, m?: "ask" | "code") => ({
       ...originalGetCommandConfig(p, m),
-      command: `echo "${escapedPrompt}" | grok ${modelFlag} ${baseUrlFlag} --prompt "${instruction}"`,
+      command: `echo "${escapedPrompt}" | grok ${modelFlag} ${baseUrlFlag} --prompt "${this.escapePrompt(instruction)}"`,
     });
 
     const result = await super.generateCode(
