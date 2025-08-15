@@ -10,6 +10,9 @@ export interface AnalyticsSession {
   duration: number | null;
   status?: 'active' | 'terminated';
   executionMode?: 'sandbox' | 'local';
+  projectId?: string | null;
+  projectName?: string | null;
+  projectRoot?: string | null;
   inputBytes: number;
   outputBytes: number;
   commands: Array<{
@@ -46,8 +49,9 @@ export interface AnalyticsSummary {
   }>;
 }
 
-export async function getAnalyticsData(days = 7, agentName?: string): Promise<AnalyticsSession[]> {
-  const analyticsDir = path.join(os.homedir(), '.vibekit', 'analytics');
+export async function getAnalyticsData(days = 7, agentName?: string, projectId?: string): Promise<AnalyticsSession[]> {
+  const baseDir = path.join(os.homedir(), '.vibekit', 'analytics');
+  const analyticsDir = projectId ? path.join(baseDir, 'projects', projectId) : baseDir;
   
   try {
     await fs.access(analyticsDir);
@@ -84,6 +88,10 @@ export async function getAnalyticsData(days = 7, agentName?: string): Promise<An
   }
   
   return allAnalytics.sort((a, b) => b.startTime - a.startTime);
+}
+
+export async function getProjectAnalyticsData(projectId: string, days = 7, agentName?: string): Promise<AnalyticsSession[]> {
+  return getAnalyticsData(days, agentName, projectId);
 }
 
 export function generateSummary(analytics: AnalyticsSession[]): AnalyticsSummary {

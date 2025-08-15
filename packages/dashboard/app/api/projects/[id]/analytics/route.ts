@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProject } from '@/lib/projects';
-import { getAnalyticsData } from '@/lib/analytics';
+import { getProjectAnalyticsData } from '@/lib/analytics';
 
 export async function GET(
   request: NextRequest,
@@ -24,26 +24,8 @@ export async function GET(
       );
     }
     
-    // Get all analytics data
-    const allAnalytics = await getAnalyticsData(days);
-    
-    // Filter analytics for this project's root path
-    const projectPath = project.projectRoot;
-    const projectAnalytics = allAnalytics.filter(session => {
-      // Try to match the project path with the session's system info or commands
-      if (session.systemInfo?.gitBranch && session.systemInfo?.projectName) {
-        // If we have git branch info, try to match against the project's path
-        return session.systemInfo.projectName === project.name ||
-               session.filesChanged?.some(file => file.startsWith(projectPath)) ||
-               session.filesCreated?.some(file => file.startsWith(projectPath)) ||
-               session.filesDeleted?.some(file => file.startsWith(projectPath));
-      }
-      
-      // Fallback: check if any file operations match the project's path
-      return session.filesChanged?.some(file => file.startsWith(projectPath)) ||
-             session.filesCreated?.some(file => file.startsWith(projectPath)) ||
-             session.filesDeleted?.some(file => file.startsWith(projectPath));
-    });
+    // Get project-specific analytics data
+    const projectAnalytics = await getProjectAnalyticsData(id, days);
     
     // Calculate project-specific metrics
     const metrics = {
