@@ -497,7 +497,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
         output = typeof endData.output === 'string' ? JSON.parse(endData.output) : endData.output;
       } catch (e) {
         console.warn('Failed to parse end message output:', e);
-        return endData.sandbox_id ? `Sandbox ended: ${endData.sandbox_id}` : '✅ Session completed';
+        return endData.sandbox_id ? `Sandbox ended: ${endData.sandbox_id}` : 'Session completed';
       }
       
       if (output && output.exitCode !== undefined) {
@@ -583,7 +583,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
                 }
               }
               
-              let summary = success ? '✅ Session completed' : '❌ Session failed';
+              let summary = success ? 'Session completed' : '❌ Session failed';
               if (taskSummary) {
                 summary += `: ${taskSummary}`;
               }
@@ -602,7 +602,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
         }
         
         // Fallback - just show success or failure
-        return success ? '✅ Session completed successfully' : '❌ Session failed';
+        return success ? 'Session completed successfully' : '❌ Session failed';
       }
     } catch (e) {
       console.warn('Error processing end message:', e);
@@ -652,7 +652,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
           }
           
           // Build the summary without task description
-          let summary = success ? '✅ Session completed' : '❌ Session failed';
+          let summary = success ? 'Session completed' : '❌ Session failed';
           
           if (details.length > 0) {
             summary += `: ${details.join(', ')}`;
@@ -727,7 +727,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
                 taskSummary = mainContainerMatch[0].substring(0, 50);
               }
               
-              let summary = success ? '✅ Session completed' : '❌ Session failed';
+              let summary = success ? 'Session completed' : '❌ Session failed';
               if (taskSummary) {
                 summary += `: ${taskSummary}`;
               }
