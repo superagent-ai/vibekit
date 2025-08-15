@@ -177,14 +177,19 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   }, [logs, onLogCountChange]);
   
   const getLogIcon = (type: string, data: string) => {
-    // Handle "result" type messages first with check icon
-    if (data.includes('"type":"result"')) {
-      return <CheckSquare className="h-4 w-4" />;
+    // Check if this is specifically a "Sandbox ended" message
+    if (data.includes('Sandbox ended:')) {
+      return <Box className="h-4 w-4" />;
     }
     
-    // Handle "end" type messages with computer icon
-    if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
+    // Handle "result" type messages first with monitor icon
+    if (data.includes('"type":"result"')) {
       return <Monitor className="h-4 w-4" />;
+    }
+    
+    // Handle "end" type messages with box icon (these become "Sandbox ended" messages)
+    if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
+      return <Box className="h-4 w-4" />;
     }
     
     // Handle JSON updates first
@@ -196,7 +201,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
         try {
           const innerParsed = JSON.parse(parsed.data);
           if (innerParsed.type === 'end') {
-            return <Monitor className="h-4 w-4" />;
+            return <Box className="h-4 w-4" />;
           }
         } catch (e) {
           // Continue with outer parsing
@@ -205,7 +210,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
       
       // Check if this is a session result message
       if (parsed.type === 'result') {
-        return <CheckSquare className="h-4 w-4" />;
+        return <Monitor className="h-4 w-4" />;
       }
       // Check if this is a tool result message
       if (parsed.type === 'user' && parsed.message?.content) {
@@ -311,14 +316,19 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
   };
   
   const getLogTypeLabel = (type: string, data: string) => {
-    // Handle "result" type messages first
-    if (data.includes('"type":"result"')) {
-      return 'Result';
+    // Check if this is specifically a "Sandbox ended" message
+    if (data.includes('Sandbox ended:')) {
+      return 'Sandbox';
     }
     
-    // Handle "end" type messages
-    if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
+    // Handle "result" type messages first
+    if (data.includes('"type":"result"')) {
       return 'Session';
+    }
+    
+    // Handle "end" type messages (these become "Sandbox ended" messages)
+    if (data.includes('"type":"end"') || data.includes('"type": "end"')) {
+      return 'Sandbox';
     }
     
     // Handle JSON updates first to check VibeKit update types
@@ -330,7 +340,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
         try {
           const innerParsed = JSON.parse(parsed.data);
           if (innerParsed.type === 'end') {
-            return 'Session';
+            return 'Sandbox';
           }
         } catch (e) {
           // Continue with outer parsing
@@ -339,7 +349,7 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
       
       // Check if this is a session result message
       if (parsed.type === 'result') {
-        return 'Result';
+        return 'Session';
       }
       // Check if this is a tool result message
       if (parsed.type === 'user' && parsed.message?.content) {
