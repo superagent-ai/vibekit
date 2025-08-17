@@ -351,7 +351,7 @@ export async function POST(
     const stdout: string[] = [];
     const stderr: string[] = [];
     
-    vibeKit.on('update', (update) => {
+    vibeKit.on('update', async (update) => {
       updates.push(update);
       console.log('VibeKit Update:', update);
       
@@ -378,11 +378,11 @@ export async function POST(
         analytics.captureUpdate(update);
       }
       if (sessionLogger) {
-        sessionLogger.captureUpdate(update);
+        await sessionLogger.captureUpdate(update);
       }
     });
     
-    vibeKit.on('stdout', (data) => {
+    vibeKit.on('stdout', async (data) => {
       stdout.push(data);
       console.log('Sandbox STDOUT:', data);
       
@@ -399,28 +399,28 @@ export async function POST(
         analytics.captureOutput(data);
       }
       if (sessionLogger) {
-        sessionLogger.captureStdout(data);
+        await sessionLogger.captureStdout(data);
       }
     });
     
-    vibeKit.on('stderr', (data) => {
+    vibeKit.on('stderr', async (data) => {
       stderr.push(data);
       console.log('Sandbox STDERR:', data);
       if (analytics) {
         analytics.captureOutput(data);
       }
       if (sessionLogger) {
-        sessionLogger.captureStderr(data);
+        await sessionLogger.captureStderr(data);
       }
     });
     
-    vibeKit.on('error', (error) => {
+    vibeKit.on('error', async (error) => {
       console.error('VibeKit Error:', error);
       if (analytics) {
         analytics.captureOutput(`Error: ${error}`);
       }
       if (sessionLogger) {
-        sessionLogger.captureError(`${error}`);
+        await sessionLogger.captureError(`${error}`);
       }
     });
     
