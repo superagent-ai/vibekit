@@ -480,7 +480,7 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
         };
       } else {
         // Foreground execution with timeout
-        const timeout = options?.timeoutMs || 120000; // 2 minutes default
+        const timeout = options?.timeoutMs || 600000; // 10 minutes default
         const execContainer = container.withExec(["sh", "-c", command]);
 
         try {
