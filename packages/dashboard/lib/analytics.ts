@@ -5,12 +5,12 @@ import os from 'os';
 export interface AnalyticsSession {
   sessionId: string;
   agentName: string;
+  projectId?: string;
   startTime: number;
   endTime: number | null;
   duration: number | null;
   status?: 'active' | 'terminated';
   executionMode?: 'sandbox' | 'local';
-  projectId?: string | null;
   projectName?: string | null;
   projectRoot?: string | null;
   inputBytes: number;
@@ -50,8 +50,7 @@ export interface AnalyticsSummary {
 }
 
 export async function getAnalyticsData(days = 7, agentName?: string, projectId?: string): Promise<AnalyticsSession[]> {
-  const baseDir = path.join(os.homedir(), '.vibekit', 'analytics');
-  const analyticsDir = projectId ? path.join(baseDir, 'projects', projectId) : baseDir;
+  const analyticsDir = path.join(os.homedir(), '.vibekit', 'analytics');
   
   try {
     await fs.access(analyticsDir);
@@ -76,10 +75,17 @@ export async function getAnalyticsData(days = 7, agentName?: string, projectId?:
       const content = await fs.readFile(filePath, 'utf8');
       const data = JSON.parse(content);
       
-      const filteredData = data.filter((session: AnalyticsSession) => {
+      let filteredData = data.filter((session: AnalyticsSession) => {
         const sessionDate = new Date(session.startTime);
         return sessionDate >= cutoffDate;
       });
+      
+      // Filter by projectId if specified
+      if (projectId) {
+        filteredData = filteredData.filter((session: AnalyticsSession) => 
+          session.projectId === projectId
+        );
+      }
       
       allAnalytics.push(...filteredData);
     } catch (error) {

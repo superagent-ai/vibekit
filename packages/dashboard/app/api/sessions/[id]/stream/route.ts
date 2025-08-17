@@ -65,11 +65,10 @@ export async function GET(
         }
       }, KEEP_ALIVE_INTERVAL);
       
-      // Set up file watcher for the session log file
+      // Set up file watcher for daily log files
       const sessionsRoot = path.join(os.homedir(), '.vibekit', 'sessions');
-      const sessionDir = path.join(sessionsRoot, sessionId);
-      const logFile = path.join(sessionDir, 'execution.log');
-      const metadataFile = path.join(sessionDir, 'metadata.json');
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const dailyLogFile = path.join(sessionsRoot, `${today}.jsonl`);
       
       // Function to check for new logs
       const checkForNewLogs = async (source = 'unknown') => {
@@ -132,8 +131,8 @@ export async function GET(
         // Initial check for logs
         await checkForNewLogs('initial');
         
-        // Set up chokidar file watcher with optimized real-time settings
-        watcher = chokidar.watch([logFile, metadataFile], {
+        // Set up chokidar file watcher for daily log file
+        watcher = chokidar.watch(dailyLogFile, {
           persistent: true,
           usePolling: true,    // Force polling for maximum reliability
           interval: 50,        // Poll every 50ms for faster updates
@@ -145,24 +144,12 @@ export async function GET(
           ignoreInitial: true  // Don't trigger on initial scan
         });
         
-        // Handle log file changes
+        // Handle daily log file changes
         watcher.on('change', async (filePath: string) => {
           const filename = filePath.split('/').pop();
           console.log(`[SSE] File change detected: ${filename} for session ${sessionId}`);
-          if (filename === 'execution.log') {
+          if (filename?.endsWith('.jsonl')) {
             await checkForNewLogs('chokidar');
-          } else if (filename === 'metadata.json') {
-            try {
-              const content = await fs.readFile(metadataFile, 'utf8');
-              const metadata = JSON.parse(content);
-              
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-                type: 'metadata',
-                metadata
-              })}\n\n`));
-            } catch (error) {
-              console.error('Failed to read metadata update:', error);
-            }
           }
         });
         
@@ -180,20 +167,20 @@ export async function GET(
       } catch (error: any) {
         // File might not exist yet - poll for it
         if (error.code === 'ENOENT') {
-          console.log(`[SSE] Log file doesn't exist yet for session ${sessionId}, polling for creation...`);
+          console.log(`[SSE] Daily log file doesn't exist yet for session ${sessionId}, polling for creation...`);
           
           // Poll every 100ms until file exists
           const fileExistsInterval = setInterval(async () => {
             try {
-              await fs.access(logFile);
+              await fs.access(dailyLogFile);
               clearInterval(fileExistsInterval);
               
-              console.log(`[SSE] Log file created for session ${sessionId}, setting up watcher`);
+              console.log(`[SSE] Daily log file created for session ${sessionId}, setting up watcher`);
               
               // File exists now, set up chokidar watcher
               await checkForNewLogs('file-created');
               
-              watcher = chokidar.watch([logFile, metadataFile], {
+              watcher = chokidar.watch(dailyLogFile, {
                 persistent: true,
                 usePolling: true,
                 interval: 50,
@@ -207,7 +194,7 @@ export async function GET(
               
               watcher.on('change', async (filePath: string) => {
                 const filename = filePath.split('/').pop();
-                if (filename === 'execution.log') {
+                if (filename?.endsWith('.jsonl')) {
                   await checkForNewLogs('chokidar-delayed');
                 }
               });

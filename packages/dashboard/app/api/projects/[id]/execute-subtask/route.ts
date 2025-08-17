@@ -122,9 +122,7 @@ export async function POST(
       projectId: id,
       projectRoot,
       taskId: parentTask.id.toString(),
-      taskTitle: parentTask.title,
-      subtaskId: subtask.id.toString(),
-      subtaskTitle: subtask.title
+      subtaskId: subtask.id.toString()
     });
     await sessionLogger.initialize();
     console.log('Session logger initialized:', sessionId);
@@ -140,7 +138,7 @@ export async function POST(
     // Check if analytics are enabled and initialize if so
     const analyticsEnabled = await AgentAnalytics.isEnabled();
     if (analyticsEnabled) {
-      analytics = new AgentAnalytics(agent, projectRoot);
+      analytics = new AgentAnalytics(agent, projectRoot, id);
       await analytics.initialize();
       console.log('Analytics initialized for session');
     }

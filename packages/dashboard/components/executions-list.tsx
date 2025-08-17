@@ -33,9 +33,8 @@ export interface Execution {
   status: 'running' | 'completed' | 'failed';
   exitCode?: number;
   duration?: number;
-  taskId?: string;
-  taskTitle?: string;
-  subtaskTitle?: string;
+  taskId?: number;
+  projectId?: string;
 }
 
 interface ExecutionsListProps {
@@ -44,6 +43,17 @@ interface ExecutionsListProps {
   onSelectExecution: (execution: Execution) => void;
   selectedExecutionId?: string;
   className?: string;
+  // Project data for fetching titles
+  project?: {
+    tasks: Array<{
+      id: number;
+      title: string;
+      subtasks: Array<{
+        id: number;
+        title: string;
+      }>;
+    }>;
+  };
 }
 
 export function ExecutionsList({ 
@@ -51,11 +61,27 @@ export function ExecutionsList({
   projectId, 
   onSelectExecution,
   selectedExecutionId,
-  className 
+  className,
+  project 
 }: ExecutionsListProps) {
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Helper function to get task and subtask titles
+  const getTaskTitles = (taskId?: number, subtaskId?: number) => {
+    if (!project || !taskId) return { taskTitle: undefined, subtaskTitle: undefined };
+    
+    const task = project.tasks.find(t => t.id === taskId);
+    if (!task) return { taskTitle: undefined, subtaskTitle: undefined };
+    
+    const subtask = subtaskId ? task.subtasks.find(s => s.id === subtaskId) : undefined;
+    
+    return {
+      taskTitle: task.title,
+      subtaskTitle: subtask?.title
+    };
+  };
   
   // Fetch execution history
   useEffect(() => {
@@ -256,12 +282,15 @@ export function ExecutionsList({
             
             {/* Task Hierarchy and Session ID */}
             <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground/50">
-              {execution.taskId && (
-                <span className="font-medium">
-                  Task {execution.taskId}.{subtaskId}
-                  {execution.subtaskTitle && `: ${execution.subtaskTitle}`}
-                </span>
-              )}
+              {execution.taskId && (() => {
+                const { taskTitle, subtaskTitle } = getTaskTitles(execution.taskId, subtaskId);
+                return (
+                  <span className="font-medium">
+                    Task {execution.taskId}.{subtaskId}
+                    {subtaskTitle && `: ${subtaskTitle}`}
+                  </span>
+                );
+              })()}
               <span className="font-mono">
                 Session: {execution.sessionId.slice(-8)}
               </span>

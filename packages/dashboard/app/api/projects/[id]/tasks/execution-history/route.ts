@@ -4,10 +4,9 @@ import path from 'path';
 import os from 'os';
 
 interface ExecutionRecord {
+  projectId: string;
   taskId?: number;
-  taskTitle?: string;
   subtaskId: number;
-  subtaskTitle?: string;
   sessionId: string;
   timestamp: string;
   agent: string;
@@ -26,17 +25,11 @@ export async function GET(
   const subtaskId = searchParams.get('subtaskId');
   
   try {
-    // Path to execution history file
-    const historyPath = path.join(
-      os.homedir(),
-      '.vibekit',
-      'execution-history',
-      `${projectId}.json`
-    );
+    const historyDir = path.join(os.homedir(), '.vibekit', 'execution-history');
     
-    // Check if history file exists
+    // Check if history directory exists
     try {
-      await fs.access(historyPath);
+      await fs.access(historyDir);
     } catch {
       return NextResponse.json({ 
         success: true, 
@@ -44,14 +37,31 @@ export async function GET(
       });
     }
     
-    // Read history file
-    const data = await fs.readFile(historyPath, 'utf-8');
-    const history: ExecutionRecord[] = JSON.parse(data);
+    // Read all daily history files
+    const files = await fs.readdir(historyDir);
+    const jsonFiles = files.filter(f => f.endsWith('.json'));
+    
+    let allExecutions: ExecutionRecord[] = [];
+    
+    for (const file of jsonFiles) {
+      try {
+        const filePath = path.join(historyDir, file);
+        const data = await fs.readFile(filePath, 'utf-8');
+        const dailyHistory: ExecutionRecord[] = JSON.parse(data);
+        
+        // Filter by projectId
+        const projectExecutions = dailyHistory.filter(exec => exec.projectId === projectId);
+        allExecutions.push(...projectExecutions);
+      } catch (error) {
+        console.error(`Failed to read history file ${file}:`, error);
+        // Continue with other files
+      }
+    }
     
     // Filter by subtaskId if provided
-    let executions = history;
+    let executions = allExecutions;
     if (subtaskId) {
-      executions = history.filter(exec => exec.subtaskId === parseInt(subtaskId, 10));
+      executions = allExecutions.filter(exec => exec.subtaskId === parseInt(subtaskId, 10));
     }
     
     // Sort by timestamp descending (most recent first)
@@ -88,10 +98,11 @@ export async function POST(
     const historyDir = path.join(os.homedir(), '.vibekit', 'execution-history');
     await fs.mkdir(historyDir, { recursive: true });
     
-    // Path to execution history file
-    const historyPath = path.join(historyDir, `${projectId}.json`);
+    // Get today's date for filename
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const historyPath = path.join(historyDir, `${today}.json`);
     
-    // Read existing history or create new
+    // Read existing history for today or create new
     let history: ExecutionRecord[] = [];
     try {
       const data = await fs.readFile(historyPath, 'utf-8');
@@ -100,23 +111,21 @@ export async function POST(
       // File doesn't exist yet
     }
     
-    // Add new execution record
-    history.push({
+    // Add new execution record with projectId
+    const newRecord: ExecutionRecord = {
       ...body,
+      projectId,
       timestamp: body.timestamp || new Date().toISOString()
-    });
+    };
     
-    // Keep only last 100 executions per project
-    if (history.length > 100) {
-      history = history.slice(-100);
-    }
+    history.push(newRecord);
     
     // Write updated history
     await fs.writeFile(historyPath, JSON.stringify(history, null, 2));
     
     return NextResponse.json({
       success: true,
-      execution: body
+      execution: newRecord
     });
   } catch (error: any) {
     console.error('Failed to save execution history:', error);
@@ -147,48 +156,57 @@ export async function PATCH(
       );
     }
     
-    // Path to execution history file
-    const historyPath = path.join(
-      os.homedir(),
-      '.vibekit',
-      'execution-history',
-      `${projectId}.json`
-    );
+    const historyDir = path.join(os.homedir(), '.vibekit', 'execution-history');
     
-    // Read existing history
-    let history: ExecutionRecord[] = [];
-    try {
-      const data = await fs.readFile(historyPath, 'utf-8');
-      history = JSON.parse(data);
-    } catch {
-      return NextResponse.json(
-        { success: false, error: 'No execution history found' },
-        { status: 404 }
-      );
+    // Read all daily history files to find the record
+    const files = await fs.readdir(historyDir);
+    const jsonFiles = files.filter(f => f.endsWith('.json'));
+    
+    let foundRecord = false;
+    let updatedRecord: ExecutionRecord | null = null;
+    
+    for (const file of jsonFiles) {
+      try {
+        const filePath = path.join(historyDir, file);
+        const data = await fs.readFile(filePath, 'utf-8');
+        let history: ExecutionRecord[] = JSON.parse(data);
+        
+        // Find the record by sessionId and projectId
+        const recordIndex = history.findIndex(exec => 
+          exec.sessionId === sessionId && exec.projectId === projectId
+        );
+        
+        if (recordIndex !== -1) {
+          // Update the record
+          history[recordIndex] = {
+            ...history[recordIndex],
+            status,
+            duration
+          };
+          
+          // Write updated history back to file
+          await fs.writeFile(filePath, JSON.stringify(history, null, 2));
+          
+          updatedRecord = history[recordIndex];
+          foundRecord = true;
+          break;
+        }
+      } catch (error) {
+        console.error(`Failed to process history file ${file}:`, error);
+        // Continue with other files
+      }
     }
     
-    // Find and update the execution record
-    const recordIndex = history.findIndex(exec => exec.sessionId === sessionId);
-    if (recordIndex === -1) {
+    if (!foundRecord) {
       return NextResponse.json(
         { success: false, error: 'Execution record not found' },
         { status: 404 }
       );
     }
     
-    // Update the record
-    history[recordIndex] = {
-      ...history[recordIndex],
-      status,
-      duration
-    };
-    
-    // Write updated history
-    await fs.writeFile(historyPath, JSON.stringify(history, null, 2));
-    
     return NextResponse.json({
       success: true,
-      execution: history[recordIndex]
+      execution: updatedRecord
     });
   } catch (error: any) {
     console.error('Failed to update execution history:', error);

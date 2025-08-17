@@ -669,9 +669,7 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                                 },
                                 body: JSON.stringify({
                                   taskId: parentTask.id,
-                                  taskTitle: parentTask.title,
                                   subtaskId: subtask.id,
-                                  subtaskTitle: subtask.title,
                                   sessionId: executionSessionId,
                                   timestamp: new Date().toISOString(),
                                   agent: selectedAgent,
@@ -715,7 +713,9 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                               branch: selectedBranch,
                               status: result.exitCode === 0 ? 'completed' : 'failed',
                               exitCode: result.exitCode,
-                              duration: parseFloat(result.executionTime) * 1000
+                              duration: parseFloat(result.executionTime) * 1000,
+                              projectId: projectId || undefined,
+                              taskId: parentTask.id
                             };
                             
                             setExecutionHistory(prev => [newExecution, ...prev]);
@@ -953,6 +953,7 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                               // Switch to logs tab when selecting an execution
                               setActiveTab("logs");
                             }}
+                            project={allTasks ? { tasks: allTasks } : undefined}
                           />
                         ) : (
                           <div className="min-h-[200px] flex items-center justify-center">

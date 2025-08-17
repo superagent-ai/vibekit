@@ -21,22 +21,27 @@ export interface SessionMetadata {
   projectId?: string;
   projectRoot?: string;
   taskId?: string;
-  taskTitle?: string;
   subtaskId?: string;
-  subtaskTitle?: string;
   startTime: number;
   endTime?: number;
   status: 'running' | 'completed' | 'failed';
   exitCode?: number;
 }
 
+export interface SessionLogEntry {
+  sessionId: string;
+  type: 'metadata' | 'log';
+  timestamp: number;
+  logType?: LogEntry['type'];
+  data?: string;
+  metadata?: LogEntry['metadata'] | SessionMetadata;
+}
+
 export class SessionLogger {
   private sessionId: string;
-  private sessionDir: string;
-  private logFile: string;
-  private metadataFile: string;
+  private dailyLogFile: string;
   private metadata: SessionMetadata;
-  private logBuffer: LogEntry[] = [];
+  private logBuffer: SessionLogEntry[] = [];
   private flushInterval: NodeJS.Timeout | null = null;
   private isClosed = false;
 
@@ -47,18 +52,15 @@ export class SessionLogger {
       projectId?: string;
       projectRoot?: string;
       taskId?: string;
-      taskTitle?: string;
       subtaskId?: string;
-      subtaskTitle?: string;
     }
   ) {
     this.sessionId = sessionId;
     
-    // Create session directory structure
+    // Create daily log file path
     const sessionsRoot = path.join(os.homedir(), '.vibekit', 'sessions');
-    this.sessionDir = path.join(sessionsRoot, sessionId);
-    this.logFile = path.join(this.sessionDir, 'execution.log');
-    this.metadataFile = path.join(this.sessionDir, 'metadata.json');
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    this.dailyLogFile = path.join(sessionsRoot, `${today}.jsonl`);
     
     // Initialize metadata
     this.metadata = {
@@ -71,11 +73,17 @@ export class SessionLogger {
   }
 
   async initialize(): Promise<void> {
-    // Ensure session directory exists
-    await fs.mkdir(this.sessionDir, { recursive: true });
+    // Ensure sessions directory exists
+    const sessionsRoot = path.dirname(this.dailyLogFile);
+    await fs.mkdir(sessionsRoot, { recursive: true });
     
-    // Write initial metadata
-    await this.saveMetadata();
+    // Write initial metadata as first entry
+    await this.addLogEntry({
+      sessionId: this.sessionId,
+      type: 'metadata',
+      timestamp: this.metadata.startTime,
+      metadata: this.metadata
+    });
     
     // Add start log entry
     await this.log('start', `Session ${this.sessionId} started for agent ${this.metadata.agentName}`, {
@@ -97,14 +105,14 @@ export class SessionLogger {
       return;
     }
 
-    const entry: LogEntry = {
+    await this.addLogEntry({
+      sessionId: this.sessionId,
+      type: 'log',
       timestamp: Date.now(),
-      type,
+      logType: type,
       data,
       metadata
-    };
-    
-    this.logBuffer.push(entry);
+    });
     
     // Parse for commands if it's stdout/stderr
     if ((type === 'stdout' || type === 'stderr') && data) {
@@ -117,8 +125,12 @@ export class SessionLogger {
       await this.flush();
     }
   }
+  
+  private async addLogEntry(entry: SessionLogEntry): Promise<void> {
+    this.logBuffer.push(entry);
+  }
 
-  private detectAndLogCommands(output: string): void {
+  private async detectAndLogCommands(output: string): Promise<void> {
     // Detect common commands in output - enhanced with more Git operations
     const commandPatterns = [
       // Git operations - comprehensive list
@@ -212,14 +224,16 @@ export class SessionLogger {
     for (const { pattern, command } of commandPatterns) {
       const matches = output.match(pattern);
       if (matches) {
-        matches.forEach(match => {
-          this.logBuffer.push({
+        for (const match of matches) {
+          await this.addLogEntry({
+            sessionId: this.sessionId,
+            type: 'log',
             timestamp: Date.now(),
-            type: 'command',
+            logType: 'command',
             data: match,
             metadata: { command, detected: true }
           });
-        });
+        }
       }
     }
   }
@@ -261,17 +275,17 @@ export class SessionLogger {
     this.logBuffer = [];
 
     try {
-      // Append to log file with sync flag for immediate write
+      // Append to daily log file in JSONL format
       const logLines = entriesToFlush.map(entry => JSON.stringify(entry)).join('\n') + '\n';
-      await fs.appendFile(this.logFile, logLines, { flag: 'a' });
+      await fs.appendFile(this.dailyLogFile, logLines, { flag: 'a' });
       
       // Force file system sync for immediate visibility
-      const fileHandle = await fs.open(this.logFile, 'r+');
+      const fileHandle = await fs.open(this.dailyLogFile, 'r+');
       await fileHandle.sync();
       await fileHandle.close();
       
       console.log(`[SessionLogger] Flushed ${entriesToFlush.length} logs for session ${this.sessionId}`, 
-        entriesToFlush.map(e => `${e.type}: ${e.data.substring(0, 50)}`));
+        entriesToFlush.map(e => `${e.type}: ${e.data?.substring(0, 50) || JSON.stringify(e.metadata)?.substring(0, 50) || ''}`));
     } catch (error) {
       console.error('Failed to write logs:', error);
       // Put entries back if write failed
@@ -279,8 +293,26 @@ export class SessionLogger {
     }
   }
 
-  private async saveMetadata(): Promise<void> {
-    await fs.writeFile(this.metadataFile, JSON.stringify(this.metadata, null, 2));
+  private async updateMetadata(): Promise<void> {
+    // Find and update the metadata entry in the buffer
+    const metadataIndex = this.logBuffer.findIndex(entry => 
+      entry.sessionId === this.sessionId && entry.type === 'metadata'
+    );
+    
+    if (metadataIndex !== -1) {
+      this.logBuffer[metadataIndex] = {
+        ...this.logBuffer[metadataIndex],
+        metadata: this.metadata
+      };
+    } else {
+      // Add new metadata entry if not found
+      await this.addLogEntry({
+        sessionId: this.sessionId,
+        type: 'metadata',
+        timestamp: Date.now(),
+        metadata: this.metadata
+      });
+    }
   }
 
   async finalize(exitCode: number): Promise<void> {
@@ -299,6 +331,9 @@ export class SessionLogger {
     this.metadata.exitCode = exitCode;
     this.metadata.status = exitCode === 0 ? 'completed' : 'failed';
 
+    // Update metadata in buffer
+    await this.updateMetadata();
+
     // Add end log entry
     await this.log('end', `Session ${this.sessionId} ended with exit code ${exitCode}`, {
       exitCode,
@@ -307,9 +342,6 @@ export class SessionLogger {
 
     // Final flush
     await this.flush();
-
-    // Save final metadata
-    await this.saveMetadata();
 
     this.isClosed = true;
   }
@@ -325,21 +357,45 @@ export class SessionLogger {
   // Static method to read session logs
   static async readSession(sessionId: string): Promise<{ metadata: SessionMetadata; logs: LogEntry[] }> {
     const sessionsRoot = path.join(os.homedir(), '.vibekit', 'sessions');
-    const sessionDir = path.join(sessionsRoot, sessionId);
-    const logFile = path.join(sessionDir, 'execution.log');
-    const metadataFile = path.join(sessionDir, 'metadata.json');
-
-    // Read metadata
-    const metadataContent = await fs.readFile(metadataFile, 'utf8');
-    const metadata = JSON.parse(metadataContent) as SessionMetadata;
-
-    // Read logs
-    const logContent = await fs.readFile(logFile, 'utf8');
-    const logs = logContent
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => JSON.parse(line) as LogEntry);
-
+    
+    // Read all daily log files to find the session
+    const files = await fs.readdir(sessionsRoot);
+    const jsonlFiles = files.filter(f => f.endsWith('.jsonl'));
+    
+    let metadata: SessionMetadata | null = null;
+    const logs: LogEntry[] = [];
+    
+    for (const file of jsonlFiles) {
+      try {
+        const filePath = path.join(sessionsRoot, file);
+        const content = await fs.readFile(filePath, 'utf8');
+        const lines = content.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          const entry = JSON.parse(line) as SessionLogEntry;
+          
+          if (entry.sessionId === sessionId) {
+            if (entry.type === 'metadata') {
+              metadata = entry.metadata as SessionMetadata;
+            } else if (entry.type === 'log' && entry.logType && entry.data !== undefined) {
+              logs.push({
+                timestamp: entry.timestamp,
+                type: entry.logType,
+                data: entry.data,
+                metadata: entry.metadata as LogEntry['metadata']
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to read session file ${file}:`, error);
+      }
+    }
+    
+    if (!metadata) {
+      throw new Error(`Session ${sessionId} not found`);
+    }
+    
     return { metadata, logs };
   }
 
@@ -353,16 +409,25 @@ export class SessionLogger {
       return [];
     }
 
-    const sessionDirs = await fs.readdir(sessionsRoot);
+    const files = await fs.readdir(sessionsRoot);
+    const jsonlFiles = files.filter(f => f.endsWith('.jsonl'));
     const sessions: SessionMetadata[] = [];
 
-    for (const dir of sessionDirs) {
+    for (const file of jsonlFiles) {
       try {
-        const metadataFile = path.join(sessionsRoot, dir, 'metadata.json');
-        const content = await fs.readFile(metadataFile, 'utf8');
-        sessions.push(JSON.parse(content));
-      } catch {
-        // Skip invalid sessions
+        const filePath = path.join(sessionsRoot, file);
+        const content = await fs.readFile(filePath, 'utf8');
+        const lines = content.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          const entry = JSON.parse(line) as SessionLogEntry;
+          
+          if (entry.type === 'metadata' && entry.metadata) {
+            sessions.push(entry.metadata as SessionMetadata);
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to read session file ${file}:`, error);
       }
     }
 
@@ -375,23 +440,45 @@ export class SessionLogger {
   // Static method to tail session logs (for real-time updates)
   static async tailSession(sessionId: string, fromLine = 0): Promise<{ logs: LogEntry[]; nextLine: number }> {
     const sessionsRoot = path.join(os.homedir(), '.vibekit', 'sessions');
-    const logFile = path.join(sessionsRoot, sessionId, 'execution.log');
-
-    try {
-      const content = await fs.readFile(logFile, 'utf8');
-      const lines = content.split('\n').filter(line => line.trim());
-      
-      if (fromLine >= lines.length) {
-        return { logs: [], nextLine: lines.length };
+    
+    // Read all daily log files to find the session logs
+    const files = await fs.readdir(sessionsRoot);
+    const jsonlFiles = files.filter(f => f.endsWith('.jsonl'));
+    
+    const allSessionLogs: LogEntry[] = [];
+    
+    for (const file of jsonlFiles) {
+      try {
+        const filePath = path.join(sessionsRoot, file);
+        const content = await fs.readFile(filePath, 'utf8');
+        const lines = content.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          const entry = JSON.parse(line) as SessionLogEntry;
+          
+          if (entry.sessionId === sessionId && entry.type === 'log' && 
+              entry.logType && entry.data !== undefined) {
+            allSessionLogs.push({
+              timestamp: entry.timestamp,
+              type: entry.logType,
+              data: entry.data,
+              metadata: entry.metadata as LogEntry['metadata']
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to read session file ${file}:`, error);
       }
-
-      const newLogs = lines
-        .slice(fromLine)
-        .map(line => JSON.parse(line) as LogEntry);
-
-      return { logs: newLogs, nextLine: lines.length };
-    } catch {
-      return { logs: [], nextLine: fromLine };
     }
+    
+    // Sort by timestamp
+    allSessionLogs.sort((a, b) => a.timestamp - b.timestamp);
+    
+    if (fromLine >= allSessionLogs.length) {
+      return { logs: [], nextLine: allSessionLogs.length };
+    }
+
+    const newLogs = allSessionLogs.slice(fromLine);
+    return { logs: newLogs, nextLine: allSessionLogs.length };
   }
 }

@@ -30,6 +30,7 @@ interface SystemInfo {
 interface AnalyticsMetrics {
   sessionId: string;
   agentName: string;
+  projectId?: string;
   startTime: number;
   endTime: number | null;
   duration: number | null;
@@ -59,13 +60,15 @@ export class AgentAnalytics {
   
   constructor(
     agentName: string,
-    projectRoot?: string
+    projectRoot?: string,
+    projectId?: string
   ) {
     const sessionId = Date.now().toString();
     
     this.metrics = {
       sessionId,
       agentName,
+      projectId,
       startTime: Date.now(),
       endTime: null,
       duration: null,
@@ -83,6 +86,7 @@ export class AgentAnalytics {
     };
     
     this.projectRoot = projectRoot;
+    // Always use base analytics directory, no subdirectories
     this.analyticsDir = path.join(os.homedir(), '.vibekit', 'analytics');
   }
   
