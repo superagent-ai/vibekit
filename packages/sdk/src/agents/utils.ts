@@ -153,6 +153,58 @@ export async function generatePRMetadata(
   prompt: string
 ) {
   const _prompt = `You are tasked to create title and body for a pull request based on the following task:\n${prompt}\n\npatch:\n\n${patch}`;
+  
+  // Check if we have OAuth token (Claude Code OAuth flow)
+  const isOAuthToken = modelConfig.provider === 'anthropic' && 
+                       modelConfig.apiKey?.startsWith('sk-ant-oat');
+  
+  if (isOAuthToken) {
+    // Use Claude Code SDK with OAuth token
+    try {
+      const { query } = await import("@anthropic-ai/claude-code");
+      
+      const jsonPrompt = `${_prompt}\n\nRespond ONLY with a valid JSON object (no markdown, no explanation) with these fields:\n- title: PR title (max 50 chars)\n- body: PR description\n- branchName: branch name (lowercase, hyphens, no spaces)\n- commitMessage: commit message\n\nExample format:\n{"title":"Add feature X","body":"This PR adds...","branchName":"add-feature-x","commitMessage":"Add feature X"}`;
+      
+      let jsonResponse = '';
+      const options: any = {
+        authToken: modelConfig.apiKey,
+        outputFormat: 'json',
+        model: modelConfig.model || 'claude-3-5-sonnet-20241022',
+        maxTurns: 1
+      };
+      
+      for await (const message of query({
+        prompt: jsonPrompt,
+        ...options
+      })) {
+        // Messages can be objects with various types
+        if (typeof message === 'string') {
+          jsonResponse += message;
+        } else if (typeof message === 'object' && message !== null) {
+          // Extract text content from different message types
+          const msgStr = JSON.stringify(message);
+          if (msgStr.includes('{') && msgStr.includes('title')) {
+            jsonResponse += msgStr;
+          }
+        }
+      }
+      
+      // Parse the JSON response - look for our metadata object
+      const jsonMatch = jsonResponse.match(/\{"title":[^}]+\}/);
+      if (jsonMatch) {
+        const metadata = JSON.parse(jsonMatch[0]);
+        if (metadata.title && metadata.body && metadata.branchName && metadata.commitMessage) {
+          return metadata;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to generate PR metadata with Claude Code SDK:', error);
+      // OAuth failed - throw error, no fallback
+      throw new Error(`Failed to generate PR metadata with OAuth token: ${error}`);
+    }
+  }
+  
+  // Standard API flow for regular API keys
   const provider = await createProvider(modelConfig);
   const model = getDefaultModel(modelConfig.provider);
 
@@ -175,12 +227,63 @@ export async function generatePRMetadata(
   return object;
 }
 
+
 export async function generateCommitMessage(
   patch: string,
   modelConfig: ModelConfig,
   prompt: string
 ) {
   const _prompt = `You are tasked to create a commit message based on the following task:\n${prompt}\n\npatch:\n\n${patch}`;
+  
+  // Check if we have OAuth token (Claude Code OAuth flow)
+  const isOAuthToken = modelConfig.provider === 'anthropic' && 
+                       modelConfig.apiKey?.startsWith('sk-ant-oat');
+  
+  if (isOAuthToken) {
+    // Use Claude Code SDK with OAuth token
+    try {
+      const { query } = await import("@anthropic-ai/claude-code");
+      
+      const jsonPrompt = `${_prompt}\n\nRespond ONLY with a valid JSON object (no markdown, no explanation) with this field:\n- commitMessage: commit message\n\nExample format:\n{"commitMessage":"Fix bug in user authentication"}`;
+      
+      let jsonResponse = '';
+      const options: any = {
+        authToken: modelConfig.apiKey,
+        outputFormat: 'json',
+        model: modelConfig.model || 'claude-3-5-sonnet-20241022',
+        maxTurns: 1
+      };
+      
+      for await (const message of query({
+        prompt: jsonPrompt,
+        ...options
+      })) {
+        if (typeof message === 'string') {
+          jsonResponse += message;
+        } else if (typeof message === 'object' && message !== null) {
+          const msgStr = JSON.stringify(message);
+          if (msgStr.includes('{') && msgStr.includes('commitMessage')) {
+            jsonResponse += msgStr;
+          }
+        }
+      }
+      
+      // Parse the JSON response
+      const jsonMatch = jsonResponse.match(/\{"commitMessage":[^}]+\}/);
+      if (jsonMatch) {
+        const metadata = JSON.parse(jsonMatch[0]);
+        if (metadata.commitMessage) {
+          return metadata;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to generate commit message with Claude Code SDK:', error);
+      // OAuth failed - throw error, no fallback
+      throw new Error(`Failed to generate commit message with OAuth token: ${error}`);
+    }
+  }
+  
+  // Standard API flow for regular API keys
   const provider = await createProvider(modelConfig);
   const model = modelConfig.model || getDefaultModel(modelConfig.provider);
 

@@ -155,9 +155,12 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   protected getModelConfig(): ModelConfig {
+    // Prioritize OAuth token over API key
+    // OAuth tokens will be handled specially in generatePRMetadata via Claude Code SDK
+    const apiKey = this.oauthToken || this.anthropicApiKey!;
     return {
       provider: "anthropic",
-      apiKey: this.useOAuth ? this.oauthToken! : this.anthropicApiKey!,
+      apiKey,
       model: this.model,
     };
   }
