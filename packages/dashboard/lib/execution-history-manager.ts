@@ -1,570 +1,600 @@
+/**
+ * Execution History Manager
+ * 
+ * Comprehensive tracking system for agent executions with daily JSONL storage,
+ * smart caching, and advanced querying capabilities.
+ */
+
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
-import { createLogger } from './structured-logger';
 import { SafeFileWriter } from './safe-file-writer';
-import { createSafeVibeKitPath, validateSessionId } from './security-utils';
+import { createSafeVibeKitPath, ValidationError } from './security-utils';
+import { createLogger } from './structured-logger';
 
-const logger = createLogger('ExecutionHistoryManager');
+// ============================================================================
+// Type Definitions
+// ============================================================================
 
 export interface ExecutionRecord {
-  id: string;
+  // Core identification
+  executionId: string;          // Short UUID (12 chars)
+  sessionId: string;            // Associated session ID
+  projectId: string;            // Project identifier
+  timestamp: number;            // Execution start time
+
+  // Environment details
+  agent: string;                // Agent type (claude, gemini, etc.)
+  sandbox: string;              // Sandbox provider (dagger, e2b, etc.)
+  branch: string;               // Git branch
+  projectRoot: string;          // Project directory
+
+  // Task information
+  task: {
+    id: number;
+    title: string;
+  };
+  subtask: {
+    id: number;
+    title: string;
+    description: string;
+    details?: string;
+    testStrategy?: string;
+  };
+
+  // Execution details
+  prompt: string;               // AI prompt sent to agent
+  status: 'started' | 'running' | 'completed' | 'failed' | 'abandoned';
+  startTime: number;            // Execution start timestamp
+  endTime?: number;             // Execution end timestamp
+  duration?: number;            // Total duration in milliseconds
+  exitCode?: number;            // Process exit code
+  success?: boolean;            // Execution success flag
+
+  // Output and updates
+  stdout?: string;              // Standard output
+  stderr?: string;              // Standard error
+  updates?: string[];           // Real-time updates during execution
+
+  // GitHub integration
+  pullRequest?: {
+    url: string;
+    number: number;
+    created: boolean;
+  };
+  github?: {
+    repository?: string;
+    hasToken: boolean;
+    branch: string;
+  };
+
+  // Error information
+  error?: string;               // Error message if failed
+  errorDetails?: any;           // Structured error information
+
+  // Analytics and metadata
+  analyticsSessionId?: string;  // Associated analytics session
+  metadata?: Record<string, any>; // Additional metadata
+}
+
+export interface ExecutionSummary {
+  executionId: string;
   sessionId: string;
-  projectId?: string;
-  projectRoot?: string;
-  taskId?: string;
-  subtaskId?: string;
+  projectId: string;
+  timestamp: number;
   agent: string;
   sandbox: string;
-  status: 'started' | 'running' | 'completed' | 'failed' | 'abandoned';
-  timestamp: number;
-  startTime: number;
-  endTime?: number;
+  status: ExecutionRecord['status'];
   duration?: number;
   success?: boolean;
-  exitCode?: number;
-  prompt?: string;
-  promptLength?: number;
-  pullRequestUrl?: string;
-  pullRequestNumber?: number;
-  error?: string;
-  stdoutLines?: number;
-  stderrLines?: number;
-  updateCount?: number;
+  taskTitle: string;
+  subtaskTitle: string;
+  pullRequestCreated?: boolean;
 }
 
-export interface ExecutionStatistics {
-  total: number;
-  completed: number;
-  failed: number;
-  running: number;
-  successRate: number;
-  averageDuration: number;
-  pullRequestsCreated: number;
-  byAgent: Record<string, number>;
-  bySandbox: Record<string, number>;
-  byStatus: Record<string, number>;
-  lastExecution?: number;
-}
-
-export interface SystemHealth {
-  isHealthy: boolean;
-  totalExecutions: number;
-  activeExecutions: number;
-  failedExecutions: number;
-  lastExecution?: number;
-  lastError?: string;
-  databaseSize: number;
-  averageResponseTime: number;
-}
-
-export interface QueryOptions {
+export interface ExecutionQuery {
   projectId?: string;
-  sessionId?: string;
   agent?: string;
   sandbox?: string;
   status?: ExecutionRecord['status'];
-  dateFrom?: Date;
-  dateTo?: Date;
+  success?: boolean;
+  dateFrom?: number;
+  dateTo?: number;
   limit?: number;
   offset?: number;
 }
 
-/**
- * ExecutionHistoryManager manages execution records and provides analytics
- * 
- * Features:
- * - Persistent storage of execution records
- * - Query and analytics capabilities
- * - Health monitoring
- * - Resource limits and cleanup
- */
+export interface ExecutionStatistics {
+  total: number;
+  byStatus: Record<string, number>;
+  byAgent: Record<string, number>;
+  bySandbox: Record<string, number>;
+  successRate: number;
+  averageDuration: number;
+  totalDuration: number;
+  pullRequestsCreated: number;
+  lastExecution?: number;
+  activeExecutions: number;
+}
+
+// ============================================================================
+// Main ExecutionHistoryManager Class
+// ============================================================================
+
 export class ExecutionHistoryManager {
-  private static readonly EXECUTION_HISTORY_DIR = createSafeVibeKitPath('', 'execution-history');
-  private static readonly MAX_RECORDS_PER_FILE = 1000;
-  private static readonly MAX_TOTAL_RECORDS = 50000;
-  private static readonly CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
-  
-  private static isInitialized = false;
-  private static cleanupTimer?: NodeJS.Timeout;
-  
-  /**
-   * Initialize the execution history manager
-   */
-  static async initialize(): Promise<void> {
-    if (this.isInitialized) {
-      return;
+  private static instance: ExecutionHistoryManager;
+  private readonly logger = createLogger('ExecutionHistoryManager');
+  private readonly historyRoot: string;
+  private readonly cacheFile: string;
+  private cache: Map<string, ExecutionSummary[]> = new Map();
+  private cacheTimestamp = 0;
+  private readonly cacheTtl = 30000; // 30 seconds
+
+  private constructor() {
+    this.historyRoot = createSafeVibeKitPath('execution-history');
+    this.cacheFile = path.join(this.historyRoot, 'index.json');
+  }
+
+  static getInstance(): ExecutionHistoryManager {
+    if (!ExecutionHistoryManager.instance) {
+      ExecutionHistoryManager.instance = new ExecutionHistoryManager();
     }
-    
+    return ExecutionHistoryManager.instance;
+  }
+
+  /**
+   * Initialize the execution history system
+   */
+  async initialize(): Promise<void> {
     try {
       // Ensure directory exists
-      await fs.mkdir(this.EXECUTION_HISTORY_DIR, { recursive: true });
+      await fs.mkdir(this.historyRoot, { recursive: true });
       
-      // Start cleanup timer
-      if (!this.cleanupTimer) {
-        this.cleanupTimer = setInterval(() => {
-          this.cleanup().catch(error => {
-            logger.logError('Cleanup failed', error as Error);
-          });
-        }, this.CLEANUP_INTERVAL);
-      }
+      // Load cache if it exists
+      await this.loadCache();
       
-      this.isInitialized = true;
-      logger.info('ExecutionHistoryManager initialized');
-      
+      this.logger.info('Execution history manager initialized', {
+        historyRoot: this.historyRoot,
+        cacheSize: this.cache.size
+      });
     } catch (error) {
-      logger.logError('Failed to initialize ExecutionHistoryManager', error as Error);
-      throw error;
+      this.logger.error('Failed to initialize execution history manager', error);
+      throw new ValidationError('Failed to initialize execution history manager');
     }
   }
-  
+
   /**
-   * Record the start of an execution
+   * Start tracking a new execution
    */
-  static async recordExecutionStart(data: {
+  async startExecution(params: {
     sessionId: string;
-    projectId?: string;
-    projectRoot?: string;
-    taskId?: string;
-    subtaskId?: string;
+    projectId: string;
     agent: string;
     sandbox: string;
-    prompt?: string;
-  }): Promise<string> {
-    await this.initialize();
-    
-    const executionId = `exec_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    const record: ExecutionRecord = {
-      id: executionId,
-      sessionId: data.sessionId,
-      projectId: data.projectId,
-      projectRoot: data.projectRoot,
-      taskId: data.taskId,
-      subtaskId: data.subtaskId,
-      agent: data.agent,
-      sandbox: data.sandbox,
-      status: 'started',
-      timestamp: Date.now(),
-      startTime: Date.now(),
-      promptLength: data.prompt?.length,
-      stdoutLines: 0,
-      stderrLines: 0,
-      updateCount: 0
+    branch: string;
+    projectRoot: string;
+    task: { id: number; title: string };
+    subtask: {
+      id: number;
+      title: string;
+      description: string;
+      details?: string;
+      testStrategy?: string;
     };
-    
-    await this.writeRecord(record);
-    logger.debug('Recorded execution start', { executionId, sessionId: data.sessionId });
-    
+    prompt: string;
+    github?: {
+      repository?: string;
+      hasToken: boolean;
+      branch: string;
+    };
+  }): Promise<string> {
+    const executionId = this.generateExecutionId();
+    const now = Date.now();
+
+    const record: ExecutionRecord = {
+      executionId,
+      sessionId: params.sessionId,
+      projectId: params.projectId,
+      timestamp: now,
+      agent: params.agent,
+      sandbox: params.sandbox,
+      branch: params.branch,
+      projectRoot: params.projectRoot,
+      task: params.task,
+      subtask: params.subtask,
+      prompt: params.prompt,
+      status: 'started',
+      startTime: now,
+      github: params.github
+    };
+
+    await this.writeExecution(record);
+    await this.invalidateCache();
+
+    this.logger.info('Execution started', {
+      executionId,
+      sessionId: params.sessionId,
+      projectId: params.projectId,
+      agent: params.agent,
+      taskTitle: params.task.title
+    });
+
     return executionId;
   }
-  
+
   /**
-   * Update an execution record
+   * Update an existing execution
    */
-  static async updateExecution(executionId: string, updates: Partial<ExecutionRecord>): Promise<void> {
-    await this.initialize();
-    
+  async updateExecution(executionId: string, updates: Partial<ExecutionRecord>): Promise<void> {
     try {
-      const record = await this.getExecution(executionId);
-      if (!record) {
-        logger.warn('Execution not found for update', { executionId });
-        return;
+      // Find the execution in daily files
+      const execution = await this.findExecution(executionId);
+      if (!execution) {
+        throw new Error(`Execution ${executionId} not found`);
       }
-      
-      const updatedRecord = { ...record, ...updates };
+
+      // Apply updates
+      const updatedExecution = { ...execution, ...updates };
       
       // Calculate duration if endTime is provided
       if (updates.endTime && !updates.duration) {
-        updatedRecord.duration = updates.endTime - record.startTime;
+        updatedExecution.duration = updates.endTime - execution.startTime;
       }
-      
-      // Update success flag based on status/exitCode
-      if (updates.status === 'completed' && updates.exitCode !== undefined) {
-        updatedRecord.success = updates.exitCode === 0;
-      } else if (updates.status === 'failed') {
-        updatedRecord.success = false;
+
+      // Update success flag based on exit code
+      if (updates.exitCode !== undefined) {
+        updatedExecution.success = updates.exitCode === 0;
       }
-      
-      updatedRecord.timestamp = Date.now(); // Update last modified time
-      
-      await this.writeRecord(updatedRecord);
-      logger.debug('Updated execution record', { executionId, updates });
-      
-    } catch (error) {
-      logger.logError('Failed to update execution', error as Error, { executionId });
-    }
-  }
-  
-  /**
-   * Get a specific execution record
-   */
-  static async getExecution(executionId: string): Promise<ExecutionRecord | null> {
-    await this.initialize();
-    
-    try {
-      const files = await fs.readdir(this.EXECUTION_HISTORY_DIR);
-      const jsonlFiles = files.filter(f => f.endsWith('.jsonl')).sort().reverse(); // Start with most recent
-      
-      for (const file of jsonlFiles) {
-        try {
-          const filePath = path.join(this.EXECUTION_HISTORY_DIR, file);
-          const content = await fs.readFile(filePath, 'utf8');
-          const lines = content.split('\n').filter(line => line.trim());
-          
-          for (const line of lines) {
-            const record = JSON.parse(line) as ExecutionRecord;
-            if (record.id === executionId) {
-              return record;
-            }
-          }
-        } catch (error) {
-          logger.warn('Failed to read execution file', { file, error });
-        }
-      }
-      
-      return null;
-      
-    } catch (error) {
-      logger.logError('Failed to get execution', error as Error, { executionId });
-      return null;
-    }
-  }
-  
-  /**
-   * Query execution records
-   */
-  static async queryExecutions(options: QueryOptions = {}): Promise<ExecutionRecord[]> {
-    await this.initialize();
-    
-    try {
-      const files = await fs.readdir(this.EXECUTION_HISTORY_DIR);
-      const jsonlFiles = files.filter(f => f.endsWith('.jsonl')).sort().reverse(); // Most recent first
-      
-      const results: ExecutionRecord[] = [];
-      const limit = options.limit || 100;
-      let count = 0;
-      let skip = options.offset || 0;
-      
-      for (const file of jsonlFiles) {
-        if (count >= limit) break;
-        
-        try {
-          const filePath = path.join(this.EXECUTION_HISTORY_DIR, file);
-          const content = await fs.readFile(filePath, 'utf8');
-          const lines = content.split('\n').filter(line => line.trim());
-          
-          // Process lines in reverse order (most recent first)
-          for (let i = lines.length - 1; i >= 0; i--) {
-            if (count >= limit) break;
-            
-            const record = JSON.parse(lines[i]) as ExecutionRecord;
-            
-            // Apply filters
-            if (options.projectId && record.projectId !== options.projectId) continue;
-            if (options.sessionId && record.sessionId !== options.sessionId) continue;
-            if (options.agent && record.agent !== options.agent) continue;
-            if (options.sandbox && record.sandbox !== options.sandbox) continue;
-            if (options.status && record.status !== options.status) continue;
-            if (options.dateFrom && record.timestamp < options.dateFrom.getTime()) continue;
-            if (options.dateTo && record.timestamp > options.dateTo.getTime()) continue;
-            
-            if (skip > 0) {
-              skip--;
-              continue;
-            }
-            
-            results.push(record);
-            count++;
-          }
-        } catch (error) {
-          logger.warn('Failed to read execution file for query', { file, error });
-        }
-      }
-      
-      return results;
-      
-    } catch (error) {
-      logger.logError('Failed to query executions', error as Error, { options });
-      return [];
-    }
-  }
-  
-  /**
-   * Get execution statistics
-   */
-  static async getStatistics(projectId?: string): Promise<ExecutionStatistics> {
-    await this.initialize();
-    
-    try {
-      const executions = await this.queryExecutions({ 
-        projectId, 
-        limit: 10000 // Get more records for accurate statistics
+
+      await this.writeExecution(updatedExecution);
+      await this.invalidateCache();
+
+      this.logger.info('Execution updated', {
+        executionId,
+        status: updates.status,
+        duration: updatedExecution.duration,
+        success: updatedExecution.success
       });
+    } catch (error) {
+      this.logger.error('Failed to update execution', error, { executionId });
+      throw error;
+    }
+  }
+
+  /**
+   * Query executions with filtering
+   */
+  async queryExecutions(query: ExecutionQuery = {}): Promise<{
+    executions: ExecutionSummary[];
+    count: number;
+    query: ExecutionQuery;
+  }> {
+    try {
+      const cacheKey = JSON.stringify(query);
       
+      // Check cache first
+      if (this.isCacheValid() && this.cache.has(cacheKey)) {
+        const cached = this.cache.get(cacheKey)!;
+        return {
+          executions: this.paginateResults(cached, query.offset, query.limit),
+          count: cached.length,
+          query
+        };
+      }
+
+      // Load executions from files
+      const executions = await this.loadExecutions(query);
+      
+      // Cache results
+      this.cache.set(cacheKey, executions);
+      this.cacheTimestamp = Date.now();
+
+      return {
+        executions: this.paginateResults(executions, query.offset, query.limit),
+        count: executions.length,
+        query
+      };
+    } catch (error) {
+      this.logger.error('Failed to query executions', error, { query });
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed execution record
+   */
+  async getExecution(executionId: string): Promise<ExecutionRecord | null> {
+    try {
+      return await this.findExecution(executionId);
+    } catch (error) {
+      this.logger.error('Failed to get execution', error, { executionId });
+      return null;
+    }
+  }
+
+  /**
+   * Generate execution statistics
+   */
+  async getStatistics(projectId?: string): Promise<ExecutionStatistics> {
+    try {
+      const query: ExecutionQuery = projectId ? { projectId } : {};
+      const { executions } = await this.queryExecutions({ ...query, limit: 10000 });
+
       const stats: ExecutionStatistics = {
         total: executions.length,
-        completed: 0,
-        failed: 0,
-        running: 0,
-        successRate: 0,
-        averageDuration: 0,
-        pullRequestsCreated: 0,
+        byStatus: {},
         byAgent: {},
         bySandbox: {},
-        byStatus: {},
-        lastExecution: 0
+        successRate: 0,
+        averageDuration: 0,
+        totalDuration: 0,
+        pullRequestsCreated: 0,
+        activeExecutions: 0
       };
-      
+
+      // Calculate statistics
       let totalDuration = 0;
-      let durationCount = 0;
-      
+      let successCount = 0;
+
       for (const execution of executions) {
-        // Count by status
+        // Status breakdown
         stats.byStatus[execution.status] = (stats.byStatus[execution.status] || 0) + 1;
         
-        if (execution.status === 'completed') stats.completed++;
-        if (execution.status === 'failed') stats.failed++;
-        if (execution.status === 'running' || execution.status === 'started') stats.running++;
-        
-        // Count by agent
+        // Agent breakdown
         stats.byAgent[execution.agent] = (stats.byAgent[execution.agent] || 0) + 1;
         
-        // Count by sandbox
+        // Sandbox breakdown
         stats.bySandbox[execution.sandbox] = (stats.bySandbox[execution.sandbox] || 0) + 1;
         
-        // Calculate duration
+        // Duration calculation
         if (execution.duration) {
           totalDuration += execution.duration;
-          durationCount++;
         }
         
-        // Count pull requests
-        if (execution.pullRequestUrl) {
+        // Success counting
+        if (execution.success) {
+          successCount++;
+        }
+        
+        // PR counting
+        if (execution.pullRequestCreated) {
           stats.pullRequestsCreated++;
         }
         
+        // Active executions
+        if (execution.status === 'running' || execution.status === 'started') {
+          stats.activeExecutions++;
+        }
+        
         // Track latest execution
-        if (execution.timestamp > (stats.lastExecution || 0)) {
+        if (!stats.lastExecution || execution.timestamp > stats.lastExecution) {
           stats.lastExecution = execution.timestamp;
         }
       }
-      
-      // Calculate averages
-      stats.successRate = stats.total > 0 ? (stats.completed / (stats.completed + stats.failed)) * 100 : 0;
-      stats.averageDuration = durationCount > 0 ? totalDuration / durationCount : 0;
-      
+
+      stats.totalDuration = totalDuration;
+      stats.averageDuration = executions.length > 0 ? totalDuration / executions.length : 0;
+      stats.successRate = executions.length > 0 ? (successCount / executions.length) * 100 : 0;
+
       return stats;
-      
     } catch (error) {
-      logger.logError('Failed to get statistics', error as Error, { projectId });
-      return {
-        total: 0,
-        completed: 0,
-        failed: 0,
-        running: 0,
-        successRate: 0,
-        averageDuration: 0,
-        pullRequestsCreated: 0,
-        byAgent: {},
-        bySandbox: {},
-        byStatus: {}
-      };
+      this.logger.error('Failed to generate statistics', error, { projectId });
+      throw error;
     }
   }
-  
+
   /**
-   * Get system health information
+   * Export executions in various formats
    */
-  static async getSystemHealth(): Promise<SystemHealth> {
-    await this.initialize();
-    
+  async exportExecutions(query: ExecutionQuery = {}, format: 'json' | 'csv' | 'jsonl' = 'json'): Promise<string> {
     try {
-      const stats = await this.getStatistics();
-      const startTime = Date.now();
-      
-      // Test database performance
-      const testQuery = await this.queryExecutions({ limit: 10 });
-      const responseTime = Date.now() - startTime;
-      
-      // Calculate database size
-      const databaseSize = await this.getDatabaseSize();
-      
-      const health: SystemHealth = {
-        isHealthy: true,
-        totalExecutions: stats.total,
-        activeExecutions: stats.running,
-        failedExecutions: stats.failed,
-        lastExecution: stats.lastExecution,
-        databaseSize,
-        averageResponseTime: responseTime
-      };
-      
-      // Health checks
-      if (stats.successRate < 50) health.isHealthy = false;
-      if (responseTime > 5000) health.isHealthy = false; // 5 second threshold
-      if (stats.running > 20) health.isHealthy = false; // Too many concurrent executions
-      
-      return health;
-      
-    } catch (error) {
-      logger.logError('Failed to get system health', error as Error);
-      return {
-        isHealthy: false,
-        totalExecutions: 0,
-        activeExecutions: 0,
-        failedExecutions: 0,
-        databaseSize: 0,
-        averageResponseTime: 0,
-        lastError: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
-  
-  /**
-   * Write a record to disk
-   */
-  private static async writeRecord(record: ExecutionRecord): Promise<void> {
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const filename = `executions-${today}.jsonl`;
-    const filePath = path.join(this.EXECUTION_HISTORY_DIR, filename);
-    
-    const recordLine = JSON.stringify(record) + '\n';
-    await SafeFileWriter.appendFile(filePath, recordLine);
-  }
-  
-  /**
-   * Calculate database size
-   */
-  private static async getDatabaseSize(): Promise<number> {
-    try {
-      const files = await fs.readdir(this.EXECUTION_HISTORY_DIR);
-      let totalSize = 0;
-      
-      for (const file of files) {
-        try {
-          const filePath = path.join(this.EXECUTION_HISTORY_DIR, file);
-          const stats = await fs.stat(filePath);
-          totalSize += stats.size;
-        } catch (error) {
-          // Skip files that can't be accessed
-        }
+      const { executions } = await this.queryExecutions({ ...query, limit: 10000 });
+
+      switch (format) {
+        case 'json':
+          return JSON.stringify(executions, null, 2);
+        
+        case 'csv':
+          return this.convertToCsv(executions);
+        
+        case 'jsonl':
+          return executions.map(exec => JSON.stringify(exec)).join('\n');
+        
+        default:
+          throw new Error(`Unsupported export format: ${format}`);
       }
-      
-      return totalSize;
-      
     } catch (error) {
-      return 0;
+      this.logger.error('Failed to export executions', error, { query, format });
+      throw error;
     }
   }
-  
-  /**
-   * Cleanup old records to manage disk space
-   */
-  private static async cleanup(): Promise<void> {
+
+  // ============================================================================
+  // Private Helper Methods
+  // ============================================================================
+
+  private generateExecutionId(): string {
+    // Generate a short, unique execution ID (12 characters)
+    return Math.random().toString(36).substring(2, 14);
+  }
+
+  private getDailyFileName(timestamp: number): string {
+    const date = new Date(timestamp);
+    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    return `${dateStr}.jsonl`;
+  }
+
+  private async writeExecution(record: ExecutionRecord): Promise<void> {
+    const fileName = this.getDailyFileName(record.timestamp);
+    const filePath = path.join(this.historyRoot, fileName);
+    const line = JSON.stringify(record) + '\n';
+    
+    await SafeFileWriter.appendFile(filePath, line);
+  }
+
+  private async findExecution(executionId: string): Promise<ExecutionRecord | null> {
+    // Search through recent daily files (last 30 days)
+    const now = Date.now();
+    const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+    
     try {
-      const files = await fs.readdir(this.EXECUTION_HISTORY_DIR);
-      const jsonlFiles = files.filter(f => f.endsWith('.jsonl')).sort();
-      
-      // Remove files older than 90 days
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - 90);
-      const cutoffString = cutoffDate.toISOString().split('T')[0];
-      
-      for (const file of jsonlFiles) {
-        if (file.includes('-') && file.split('-')[1] < cutoffString) {
+      const files = await fs.readdir(this.historyRoot);
+      const jsonlFiles = files
+        .filter(f => f.endsWith('.jsonl'))
+        .sort()
+        .reverse(); // Search newest files first
+
+      for (const fileName of jsonlFiles) {
+        const filePath = path.join(this.historyRoot, fileName);
+        const content = await fs.readFile(filePath, 'utf8');
+        const lines = content.split('\n').filter(line => line.trim());
+
+        for (const line of lines) {
           try {
-            const filePath = path.join(this.EXECUTION_HISTORY_DIR, file);
-            await fs.unlink(filePath);
-            logger.info('Cleaned up old execution file', { file });
-          } catch (error) {
-            logger.warn('Failed to cleanup file', { file, error });
+            const record: ExecutionRecord = JSON.parse(line);
+            if (record.executionId === executionId) {
+              return record;
+            }
+          } catch (parseError) {
+            // Skip malformed lines
+            continue;
           }
         }
       }
-      
-      // Check total record count and cleanup if needed
-      const totalRecords = await this.getTotalRecordCount();
-      if (totalRecords > this.MAX_TOTAL_RECORDS) {
-        await this.cleanupOldestRecords(totalRecords - this.MAX_TOTAL_RECORDS);
-      }
-      
     } catch (error) {
-      logger.logError('Cleanup operation failed', error as Error);
+      this.logger.error('Error searching for execution', error, { executionId });
     }
+
+    return null;
   }
-  
-  /**
-   * Get total record count across all files
-   */
-  private static async getTotalRecordCount(): Promise<number> {
-    try {
-      const files = await fs.readdir(this.EXECUTION_HISTORY_DIR);
-      const jsonlFiles = files.filter(f => f.endsWith('.jsonl'));
+
+  private async loadExecutions(query: ExecutionQuery): Promise<ExecutionSummary[]> {
+    const executions: ExecutionSummary[] = [];
+    const files = await fs.readdir(this.historyRoot);
+    const jsonlFiles = files
+      .filter(f => f.endsWith('.jsonl'))
+      .sort()
+      .reverse(); // Newest first
+
+    for (const fileName of jsonlFiles) {
+      const filePath = path.join(this.historyRoot, fileName);
       
-      let totalCount = 0;
-      
-      for (const file of jsonlFiles) {
-        try {
-          const filePath = path.join(this.EXECUTION_HISTORY_DIR, file);
-          const content = await fs.readFile(filePath, 'utf8');
-          const lines = content.split('\n').filter(line => line.trim());
-          totalCount += lines.length;
-        } catch (error) {
-          // Skip files that can't be read
+      try {
+        const content = await fs.readFile(filePath, 'utf8');
+        const lines = content.split('\n').filter(line => line.trim());
+
+        for (const line of lines) {
+          try {
+            const record: ExecutionRecord = JSON.parse(line);
+            
+            // Apply filters
+            if (!this.matchesQuery(record, query)) {
+              continue;
+            }
+
+            // Convert to summary
+            const summary: ExecutionSummary = {
+              executionId: record.executionId,
+              sessionId: record.sessionId,
+              projectId: record.projectId,
+              timestamp: record.timestamp,
+              agent: record.agent,
+              sandbox: record.sandbox,
+              status: record.status,
+              duration: record.duration,
+              success: record.success,
+              taskTitle: record.task.title,
+              subtaskTitle: record.subtask.title,
+              pullRequestCreated: record.pullRequest?.created
+            };
+
+            executions.push(summary);
+          } catch (parseError) {
+            // Skip malformed lines
+            continue;
+          }
         }
+      } catch (fileError) {
+        this.logger.warn('Failed to read execution file', fileError, { fileName });
+        continue;
       }
-      
-      return totalCount;
-      
-    } catch (error) {
-      return 0;
     }
+
+    return executions.sort((a, b) => b.timestamp - a.timestamp);
   }
-  
-  /**
-   * Remove oldest records to stay within limits
-   */
-  private static async cleanupOldestRecords(recordsToRemove: number): Promise<void> {
-    try {
-      const files = await fs.readdir(this.EXECUTION_HISTORY_DIR);
-      const jsonlFiles = files.filter(f => f.endsWith('.jsonl')).sort(); // Oldest first
-      
-      let removedCount = 0;
-      
-      for (const file of jsonlFiles) {
-        if (removedCount >= recordsToRemove) break;
-        
-        const filePath = path.join(this.EXECUTION_HISTORY_DIR, file);
-        try {
-          await fs.unlink(filePath);
-          
-          // Estimate removed records (assume average file size)
-          const stats = await fs.stat(filePath).catch(() => null);
-          const estimatedRecords = stats ? Math.floor(stats.size / 500) : 100; // Rough estimate
-          removedCount += estimatedRecords;
-          
-          logger.info('Removed old execution file for cleanup', { file, estimatedRecords });
-          
-        } catch (error) {
-          // File might not exist anymore
-        }
-      }
-      
-    } catch (error) {
-      logger.logError('Failed to cleanup oldest records', error as Error);
-    }
+
+  private matchesQuery(record: ExecutionRecord, query: ExecutionQuery): boolean {
+    if (query.projectId && record.projectId !== query.projectId) return false;
+    if (query.agent && record.agent !== query.agent) return false;
+    if (query.sandbox && record.sandbox !== query.sandbox) return false;
+    if (query.status && record.status !== query.status) return false;
+    if (query.success !== undefined && record.success !== query.success) return false;
+    if (query.dateFrom && record.timestamp < query.dateFrom) return false;
+    if (query.dateTo && record.timestamp > query.dateTo) return false;
+
+    return true;
   }
-  
-  /**
-   * Shutdown the execution history manager
-   */
-  static async shutdown(): Promise<void> {
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer);
-      this.cleanupTimer = undefined;
-    }
+
+  private paginateResults<T>(results: T[], offset = 0, limit = 100): T[] {
+    return results.slice(offset, offset + limit);
+  }
+
+  private convertToCsv(executions: ExecutionSummary[]): string {
+    if (executions.length === 0) return '';
+
+    const headers = [
+      'executionId', 'sessionId', 'projectId', 'timestamp', 'agent', 
+      'sandbox', 'status', 'duration', 'success', 'taskTitle', 'subtaskTitle'
+    ];
+
+    const csvRows = [headers.join(',')];
     
-    this.isInitialized = false;
-    logger.info('ExecutionHistoryManager shutdown');
+    for (const execution of executions) {
+      const row = headers.map(header => {
+        const value = execution[header as keyof ExecutionSummary];
+        // Escape commas and quotes in CSV
+        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value?.toString() || '';
+      });
+      csvRows.push(row.join(','));
+    }
+
+    return csvRows.join('\n');
+  }
+
+  private async loadCache(): Promise<void> {
+    try {
+      const content = await fs.readFile(this.cacheFile, 'utf8');
+      const cacheData = JSON.parse(content);
+      
+      if (cacheData.timestamp && Date.now() - cacheData.timestamp < this.cacheTtl) {
+        this.cache = new Map(cacheData.entries);
+        this.cacheTimestamp = cacheData.timestamp;
+      }
+    } catch (error) {
+      // Cache file doesn't exist or is invalid, start fresh
+      this.cache.clear();
+      this.cacheTimestamp = 0;
+    }
+  }
+
+  private async invalidateCache(): Promise<void> {
+    this.cache.clear();
+    this.cacheTimestamp = 0;
+    
+    try {
+      await fs.unlink(this.cacheFile);
+    } catch (error) {
+      // Cache file might not exist
+    }
+  }
+
+  private isCacheValid(): boolean {
+    return Date.now() - this.cacheTimestamp < this.cacheTtl;
   }
 }
+
+// Export singleton instance
+export const executionHistoryManager = ExecutionHistoryManager.getInstance();

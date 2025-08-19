@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ExecutionHistoryManager } from '@/lib/execution-history-manager';
+import { executionHistoryManager } from '@/lib/execution-history-manager';
 import { SessionManager } from '@/lib/session-manager';
 import { SessionRecovery } from '@/lib/session-recovery';
 
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     const timeRange = searchParams.get('timeRange') || '24h'; // 1h, 24h, 7d, 30d
     
     // Initialize managers
-    await ExecutionHistoryManager.initialize();
+    await executionHistoryManager.initialize();
     await SessionManager.initialize();
     
     // Calculate date range
@@ -52,14 +52,15 @@ export async function GET(request: NextRequest): Promise<Response> {
     const dateFrom = new Date(now.getTime() - (ranges[timeRange as keyof typeof ranges] || ranges['24h']));
     
     // Get execution statistics
-    const stats = await ExecutionHistoryManager.getStatistics(projectId);
+    const stats = await executionHistoryManager.getStatistics(projectId);
     
     // Get recent executions
-    const recentExecutions = await ExecutionHistoryManager.queryExecutions({
+    const recentExecutionsResult = await executionHistoryManager.queryExecutions({
       projectId,
-      dateFrom,
+      dateFrom: dateFrom.getTime(),
       limit: 50
     });
+    const recentExecutions = recentExecutionsResult.executions;
     
     // Get session statistics
     const sessionStats = await SessionManager.getStats();
@@ -126,12 +127,13 @@ async function calculateHourlyVolume(
   projectId?: string
 ): Promise<Array<{ hour: string; count: number; success: number; failed: number }>> {
   try {
-    const executions = await ExecutionHistoryManager.queryExecutions({
+    const executionsResult = await executionHistoryManager.queryExecutions({
       projectId,
-      dateFrom,
-      dateTo,
+      dateFrom: dateFrom.getTime(),
+      dateTo: dateTo.getTime(),
       limit: 10000
     });
+    const executions = executionsResult.executions;
     
     const hourlyData = new Map<string, { count: number; success: number; failed: number }>();
     
@@ -183,12 +185,13 @@ async function calculateDailyTrends(
   projectId?: string
 ): Promise<Array<{ date: string; executions: number; successRate: number; avgDuration: number }>> {
   try {
-    const executions = await ExecutionHistoryManager.queryExecutions({
+    const executionsResult = await executionHistoryManager.queryExecutions({
       projectId,
-      dateFrom,
-      dateTo,
+      dateFrom: dateFrom.getTime(),
+      dateTo: dateTo.getTime(),
       limit: 10000
     });
+    const executions = executionsResult.executions;
     
     const dailyData = new Map<string, { 
       executions: number; 

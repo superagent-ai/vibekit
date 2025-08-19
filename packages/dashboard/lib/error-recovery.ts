@@ -52,7 +52,7 @@
 import { createLogger } from './structured-logger';
 import { ErrorClassifier, ErrorCategory, ErrorSeverity, RetryHandler, CircuitBreaker } from './error-handler';
 import { SessionManager } from './session-manager';
-import { ExecutionHistoryManager } from './execution-history-manager';
+import { executionHistoryManager } from './execution-history-manager';
 import { getFileWatcherPool } from './file-watcher-pool';
 
 const logger = createLogger('ErrorRecovery');
@@ -487,7 +487,7 @@ class SessionRecoveryManagerImpl {
   private async verifyDatabaseAccess(): Promise<void> {
     try {
       // Test ExecutionHistoryManager initialization
-      await ExecutionHistoryManager.initialize();
+      await executionHistoryManager.initialize();
       logger.debug('Database dependency verified');
     } catch (error) {
       throw new Error('Database dependency not available');

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { ExecutionHistoryManager } from '@/lib/execution-history-manager';
+import { executionHistoryManager } from '@/lib/execution-history-manager';
 import { SessionManager } from '@/lib/session-manager';
 import { createLogger, logUtils } from '@/lib/structured-logger';
 
@@ -54,7 +54,7 @@ function cleanupStaleConnections() {
 /**
  * Add activity event to buffer and broadcast to all connected clients
  */
-export function broadcastActivity(event: ActivityEvent) {
+function broadcastActivity(event: ActivityEvent) {
   // Add to buffer
   activityBuffer.unshift(event);
   
@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Export utility functions for other parts of the system to use
-export const ActivityStream = {
+const ActivityStream = {
   /**
    * Log execution started
    */

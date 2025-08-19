@@ -11,6 +11,8 @@ import {
   FolderOpen,
   Server,
   MessageSquare,
+  Monitor,
+  Cog,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -60,6 +62,18 @@ const getNavData = (pathname: string) => ({
       url: "/mcp-servers",
       icon: Server,
       isActive: pathname === "/mcp-servers" || pathname.startsWith("/mcp-servers/"),
+    },
+    {
+      title: "Monitoring",
+      url: "/monitoring",
+      icon: Monitor,
+      isActive: pathname === "/monitoring",
+    },
+    {
+      title: "Configuration",
+      url: "/configuration",
+      icon: Cog,
+      isActive: pathname === "/configuration",
     },
     {
       title: "Settings",

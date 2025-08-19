@@ -10,7 +10,7 @@ import { join } from 'path';
 import { AgentAnalytics } from '@/lib/agent-analytics';
 import { SessionLogger } from '@/lib/session-logger';
 import { SessionIdGenerator } from '@/lib/session-id-generator';
-import { ExecutionHistoryManager } from '@/lib/execution-history-manager';
+import { executionHistoryManager } from '@/lib/execution-history-manager';
 // Import other providers as needed
 // import { createE2BProvider } from '@vibe-kit/e2b';
 // import { createDaytonaProvider } from '@vibe-kit/daytona';
@@ -382,15 +382,16 @@ export async function POST(
     logger.info('Executing with prompt', { prompt: prompt.substring(0, 200) + '...', sessionId });
     
     // Initialize ExecutionHistoryManager and record execution start
-    await ExecutionHistoryManager.initialize();
-    executionId = await ExecutionHistoryManager.recordExecutionStart({
+    await executionHistoryManager.initialize();
+    executionId = await executionHistoryManager.startExecution({
       sessionId,
       projectId: id,
       projectRoot,
-      taskId: parentTask.id.toString(),
-      subtaskId: subtask.id.toString(),
+      task: parentTask,
+      subtask: subtask,
       agent,
       sandbox,
+      branch,
       prompt
     });
     logger.info('Execution recorded', { executionId, sessionId });
@@ -503,14 +504,14 @@ export async function POST(
     
     // Update execution record with completion
     if (executionId) {
-      await ExecutionHistoryManager.updateExecution(executionId, {
+      await executionHistoryManager.updateExecution(executionId, {
         status: result?.exitCode === 0 ? 'completed' : 'failed',
         endTime: Date.now(),
         exitCode: result?.exitCode,
         success: result?.exitCode === 0,
-        stdoutLines: result?.stdout ? result.stdout.split('\n').length : stdout.length,
-        stderrLines: result?.stderr ? result.stderr.split('\n').length : stderr.length,
-        updateCount: updates.length
+        stdout: result?.stdout || stdout.join('\n'),
+        stderr: result?.stderr || stderr.join('\n'),
+        updates: updates
       });
       logger.debug('Execution record updated', { executionId, sessionId });
     }
@@ -548,9 +549,12 @@ export async function POST(
         
         // Update execution record with PR information
         if (executionId && pullRequestResult) {
-          await ExecutionHistoryManager.updateExecution(executionId, {
-            pullRequestUrl: pullRequestResult.html_url,
-            pullRequestNumber: pullRequestResult.number
+          await executionHistoryManager.updateExecution(executionId, {
+            pullRequest: {
+              url: pullRequestResult.html_url,
+              number: pullRequestResult.number,
+              created: true
+            }
           });
         }
       } catch (prError: any) {
@@ -616,7 +620,7 @@ export async function POST(
     // Update execution record with error
     if (executionId) {
       try {
-        await ExecutionHistoryManager.updateExecution(executionId, {
+        await executionHistoryManager.updateExecution(executionId, {
           status: 'failed',
           endTime: Date.now(),
           exitCode: -1,
