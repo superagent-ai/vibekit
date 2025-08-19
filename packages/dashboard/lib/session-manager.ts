@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import { SafeFileWriter } from './safe-file-writer';
 import { SessionIdGenerator } from './session-id-generator';
+import { createLogger } from './structured-logger';
 
 export interface SessionInfo {
   sessionId: string;
@@ -50,6 +51,7 @@ export class SessionManager {
   }>();
   
   private static cleanupTimer?: NodeJS.Timeout;
+  private static logger = createLogger('SessionManager');
   
   /**
    * Initialize the session manager
@@ -61,7 +63,7 @@ export class SessionManager {
     // Start cleanup timer for abandoned session detection
     if (!this.cleanupTimer) {
       this.cleanupTimer = setInterval(() => {
-        this.detectAbandonedSessions().catch(console.error);
+        this.detectAbandonedSessions().catch(err => this.logger.error('Failed to detect abandoned sessions', err));
       }, 60000); // Check every minute
     }
     
@@ -157,7 +159,7 @@ export class SessionManager {
       try {
         await this.updateHeartbeat(sessionId);
       } catch (error) {
-        console.error(`Failed to update heartbeat for session ${sessionId}:`, error);
+        this.logger.error('Failed to update heartbeat for session', error, { sessionId });
         // Stop heartbeat if session no longer exists
         this.stopHeartbeat(sessionId);
       }
@@ -232,7 +234,7 @@ export class SessionManager {
       }
     }
     
-    console.log(`Session ${sessionId} marked as abandoned`);
+    this.logger.info('Session marked as abandoned', { sessionId });
   }
   
   /**
@@ -312,7 +314,7 @@ export class SessionManager {
       await fs.unlink(checkpointFile);
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
-        console.error(`Failed to delete checkpoint for session ${sessionId}:`, error);
+        this.logger.error('Failed to delete checkpoint for session', error, { sessionId });
       }
     }
   }
@@ -371,12 +373,12 @@ export class SessionManager {
               }
             }
           } catch (error) {
-            console.error(`Failed to load session from ${file}:`, error);
+            this.logger.error('Failed to load session from file', error, { file });
           }
         }
       }
     } catch (error) {
-      console.error('Failed to load active sessions:', error);
+      this.logger.error('Failed to load active sessions', error);
     }
   }
   
@@ -417,12 +419,12 @@ export class SessionManager {
               await this.markAsAbandoned(sessionId);
             }
           } catch (error) {
-            console.error(`Failed to process session file ${file}:`, error);
+            this.logger.error('Failed to process session file', error, { file });
           }
         }
       }
     } catch (error) {
-      console.error('Failed to cleanup disk sessions:', error);
+      this.logger.error('Failed to cleanup disk sessions', error);
     }
   }
   

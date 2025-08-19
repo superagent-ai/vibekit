@@ -1,5 +1,6 @@
 // Load environment variables from root .env file
 import '@/load-env';
+import { createLogger } from '@/lib/structured-logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { VibeKit } from '@vibe-kit/sdk';
@@ -85,6 +86,9 @@ export async function POST(
   let sessionLogger: SessionLogger | null = null;
   let executionId: string | null = null;
   
+  // Initialize logger with request context
+  const logger = createLogger('ExecuteSubtask');
+  
   try {
     const { id } = await params;
     const body: ExecuteSubtaskRequest = await request.json();
@@ -92,7 +96,15 @@ export async function POST(
     
     // Use provided session ID or generate new one - do this immediately
     const sessionId = providedSessionId || SessionIdGenerator.generate();
-    console.log('Using session ID for execution:', sessionId, providedSessionId ? '(provided)' : '(generated)');
+    logger.info('Starting subtask execution', { 
+      sessionId, 
+      projectId: id,
+      parentTaskId: parentTask.id,
+      subtaskId: subtask.id,
+      agent,
+      sandbox,
+      provided: !!providedSessionId
+    });
     
     // Initialize session logger immediately to prevent race conditions with SSE connections
     try {
@@ -102,20 +114,19 @@ export async function POST(
         taskId: parentTask.id.toString(),
         subtaskId: subtask.id.toString()
       });
-      console.log('SessionLogger created, about to initialize...', sessionId);
-      console.log(`[Execute API] Current working directory: ${process.cwd()}`);
+      logger.debug('SessionLogger created, initializing', { sessionId, cwd: process.cwd() });
       await sessionLogger.initialize();
-      console.log('✅ Session logger initialized early:', sessionId);
+      logger.info('Session logger initialized', { sessionId });
       
       // Verify session can be read immediately after initialization
       try {
         const testRead = await SessionLogger.readSession(sessionId);
-        console.log('✅ Session verified readable immediately after init:', sessionId, 'logs:', testRead.logs.length);
+        logger.debug('Session verified readable after init', { sessionId, logCount: testRead.logs.length });
       } catch (verifyError) {
-        console.error('❌ CRITICAL: Session not readable immediately after init:', sessionId, verifyError.message);
+        logger.error('Session not readable immediately after init', verifyError, { sessionId });
       }
     } catch (sessionError) {
-      console.error('❌ CRITICAL: Failed to initialize session logger:', sessionError);
+      logger.error('Failed to initialize session logger', sessionError, { sessionId });
       throw new Error(`Failed to initialize session logger: ${sessionError.message}`);
     }
     
@@ -123,7 +134,11 @@ export async function POST(
     if (sandbox === 'dagger') {
       const dockerCheck = await checkDockerStatus();
       if (!dockerCheck.success) {
-        console.error('Docker check failed:', dockerCheck);
+        logger.warn('Docker not available for Dagger sandbox', { 
+          sessionId,
+          error: dockerCheck.error,
+          userMessage: dockerCheck.userMessage 
+        });
         return NextResponse.json(
           { 
             success: false,
@@ -136,7 +151,7 @@ export async function POST(
       }
     }
     
-    console.log('Executing subtask:', {
+    logger.info('Executing subtask', {
       projectId: id,
       taskId: parentTask.id,
       taskTitle: parentTask.title,
@@ -145,7 +160,8 @@ export async function POST(
       agent,
       sandbox,
       branch,
-      projectRoot
+      projectRoot,
+      sessionId
     });
     
     // Session ID and logger already initialized at the start of the request
@@ -164,7 +180,7 @@ export async function POST(
     if (analyticsEnabled) {
       analytics = new AgentAnalytics(agent, projectRoot, id, sessionId);
       await analytics.initialize();
-      console.log('Analytics initialized for session:', sessionId);
+      logger.debug('Analytics initialized', { sessionId });
     }
     
     // Fetch settings to get Docker Hub username
@@ -178,7 +194,7 @@ export async function POST(
         dockerHubUser = settings.agents.dockerHubUser;
       }
     } catch (error) {
-      console.log('Could not read settings, using environment variable or default');
+      logger.debug('Could not read settings, using environment variable or default', { sessionId });
     }
     
     // Create sandbox provider based on selection
@@ -294,7 +310,7 @@ export async function POST(
           }
           
           if (repoUrl) {
-            console.log('Detected GitHub repository:', repoUrl);
+            logger.info('GitHub repository detected', { repoUrl, sessionId });
             
             // Configure GitHub integration
             vibeKit.withGithub({
@@ -311,7 +327,7 @@ export async function POST(
               });
             }
           } else {
-            console.log('Git repository detected but not a GitHub repository');
+            logger.debug('Git repository detected but not a GitHub repository', { sessionId });
             if (sessionLogger) {
               await sessionLogger.captureInfo(`Non-GitHub repository detected`, { 
                 remoteUrl: remoteUrl.substring(0, 50)
@@ -319,7 +335,7 @@ export async function POST(
             }
           }
         } else {
-          console.log('Project is not a Git repository');
+          logger.debug('Project is not a Git repository', { sessionId });
           if (sessionLogger) {
             await sessionLogger.captureInfo(`Project is not a Git repository`, { 
               projectRoot 
@@ -327,7 +343,7 @@ export async function POST(
           }
         }
       } catch (error) {
-        console.log('Error detecting Git repository:', error);
+        logger.warn('Error detecting Git repository', error, { sessionId });
         if (sessionLogger) {
           await sessionLogger.captureInfo(`Could not detect Git repository configuration`, { 
             error: String(error).substring(0, 100)
@@ -335,7 +351,7 @@ export async function POST(
         }
       }
     } else {
-      console.log('GitHub token not configured');
+      logger.debug('GitHub token not configured', { sessionId });
       if (sessionLogger) {
         await sessionLogger.captureInfo(`GitHub token not configured - GitHub features disabled`, {});
       }
@@ -363,7 +379,7 @@ export async function POST(
     
     const prompt = promptParts.join('\n');
     
-    console.log('Executing with prompt:', prompt);
+    logger.info('Executing with prompt', { prompt: prompt.substring(0, 200) + '...', sessionId });
     
     // Initialize ExecutionHistoryManager and record execution start
     await ExecutionHistoryManager.initialize();
@@ -377,7 +393,7 @@ export async function POST(
       sandbox,
       prompt
     });
-    console.log('Execution recorded:', executionId);
+    logger.info('Execution recorded', { executionId, sessionId });
     
     // Capture prompt in analytics if enabled
     if (analytics) {
@@ -391,24 +407,24 @@ export async function POST(
     
     vibeKit.on('update', async (update) => {
       updates.push(update);
-      console.log('VibeKit Update:', update);
+      logger.debug('VibeKit update received', { update: update.substring(0, 200), sessionId });
       
       // Try to parse for specific events
       try {
         const parsed = JSON.parse(update);
         if (parsed.type === 'start' && parsed.sandbox_id) {
-          console.log(`🏗️ Sandbox Launch Started: ${parsed.sandbox_id}`);
+          logger.info('Sandbox launch started', { sandboxId: parsed.sandbox_id, sessionId });
         } else if (parsed.type === 'container_created') {
-          console.log(`🐳 Container Created: ${parsed.container_id || 'unknown'}`);
+          logger.info('Container created', { containerId: parsed.container_id || 'unknown', sessionId });
         } else if (parsed.type === 'image_pull') {
-          console.log(`🖼️ Image Pull: ${parsed.image || 'unknown'}`);
+          logger.info('Image pull detected', { image: parsed.image || 'unknown', sessionId });
         } else if (parsed.type === 'repository_clone') {
-          console.log(`📥 Repository Clone: ${parsed.repository || 'unknown'}`);
+          logger.info('Repository clone detected', { repository: parsed.repository || 'unknown', sessionId });
         }
       } catch (parseError) {
         // Not JSON, check for Git operations in plain text
         if (update.includes('Cloning into') || update.includes('git clone')) {
-          console.log(`📥 Git operation detected: ${update.substring(0, 100)}`);
+          logger.debug('Git operation detected', { operation: update.substring(0, 100), sessionId });
         }
       }
       
@@ -422,15 +438,15 @@ export async function POST(
     
     vibeKit.on('stdout', async (data) => {
       stdout.push(data);
-      console.log('Sandbox STDOUT:', data);
+      logger.debug('Sandbox stdout', { data: data.substring(0, 200), sessionId });
       
       // Detect Git operations in stdout
       if (data.includes('Cloning into') || data.includes('Initialized empty Git repository')) {
-        console.log('📥 Git repository operation detected');
+        logger.debug('Git repository operation detected', { sessionId });
       } else if (data.includes('Switched to') || data.includes('Your branch is')) {
-        console.log('🔀 Git branch operation detected');
+        logger.debug('Git branch operation detected', { sessionId });
       } else if (data.includes('[') && data.includes(']') && data.includes('commit')) {
-        console.log('💾 Git commit detected');
+        logger.debug('Git commit detected', { sessionId });
       }
       
       if (analytics) {
@@ -443,7 +459,7 @@ export async function POST(
     
     vibeKit.on('stderr', async (data) => {
       stderr.push(data);
-      console.log('Sandbox STDERR:', data);
+      logger.debug('Sandbox stderr', { data: data.substring(0, 200), sessionId });
       if (analytics) {
         analytics.captureOutput(data);
       }
@@ -453,7 +469,7 @@ export async function POST(
     });
     
     vibeKit.on('error', async (error) => {
-      console.error('VibeKit Error:', error);
+      logger.error('VibeKit execution error', error, { sessionId });
       if (analytics) {
         analytics.captureOutput(`Error: ${error}`);
       }
@@ -463,7 +479,7 @@ export async function POST(
     });
     
     // Execute code generation
-    console.log('Starting code generation with SDK...');
+    logger.info('Starting code generation with SDK', { sessionId });
     await sessionLogger.captureInfo(`Launching sandbox and cloning repository...`, { 
       mode: 'code',
       promptLength: prompt.length 
@@ -477,11 +493,12 @@ export async function POST(
     });
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
     
-    console.log(`Execution completed in ${elapsedTime} seconds`);
-    console.log('Result:', {
+    logger.info('Execution completed', { elapsedTime, sessionId });
+    logger.info('Execution result', {
       sandboxId: result?.sandboxId,
       exitCode: result?.exitCode,
-      success: result?.exitCode === 0
+      success: result?.exitCode === 0,
+      sessionId
     });
     
     // Update execution record with completion
@@ -495,14 +512,14 @@ export async function POST(
         stderrLines: result?.stderr ? result.stderr.split('\n').length : stderr.length,
         updateCount: updates.length
       });
-      console.log('Execution record updated:', executionId);
+      logger.debug('Execution record updated', { executionId, sessionId });
     }
     
     // Create pull request if code generation was successful and GitHub is configured
     let pullRequestResult = null;
     if (result?.exitCode === 0 && githubToken && vibeKit) {
       try {
-        console.log('Creating pull request...');
+        logger.info('Creating pull request', { sessionId });
         if (sessionLogger) {
           await sessionLogger.captureInfo('Creating GitHub pull request...', {});
         }
@@ -518,7 +535,7 @@ export async function POST(
         const branchPrefix = `vibekit-task-${parentTask.id}-subtask-${subtask.id}`;
         pullRequestResult = await vibeKit.createPullRequest(labelOptions, branchPrefix);
         
-        console.log('Pull request created:', pullRequestResult);
+        logger.info('Pull request created', { pullRequestResult, sessionId });
         if (sessionLogger) {
           await sessionLogger.captureInfo(`Pull request #${pullRequestResult?.number} created successfully: ${pullRequestResult?.html_url}`, {
             prUrl: pullRequestResult?.html_url,
@@ -537,7 +554,7 @@ export async function POST(
           });
         }
       } catch (prError: any) {
-        console.error('Failed to create pull request:', prError);
+        logger.error('Failed to create pull request', prError, { sessionId });
         if (sessionLogger) {
           await sessionLogger.captureError(`Failed to create pull request: ${prError.message}`);
         }
@@ -548,15 +565,15 @@ export async function POST(
     
     // Finalize session logger
     if (sessionLogger) {
-      await sessionLogger.finalize(result?.exitCode || 0);
-      console.log('Session logger finalized');
+      await sessionLogger.finalize(result?.exitCode ?? 0);
+      logger.debug('Session logger finalized', { sessionId });
     }
     
     // Finalize analytics if enabled
     let analyticsData = null;
     if (analytics) {
-      analyticsData = await analytics.finalize(result?.exitCode || 0, (Date.now() - startTime));
-      console.log('Analytics finalized:', {
+      analyticsData = await analytics.finalize(result?.exitCode ?? 0, (Date.now() - startTime));
+      logger.debug('Analytics finalized', {
         sessionId: analyticsData.sessionId,
         duration: analyticsData.duration,
         exitCode: analyticsData.exitCode
@@ -566,9 +583,9 @@ export async function POST(
     // Clean up
     try {
       await vibeKit.kill();
-      console.log('Sandbox terminated successfully');
+      logger.debug('Sandbox terminated successfully', { sessionId });
     } catch (cleanupError) {
-      console.warn('Cleanup warning:', cleanupError);
+      logger.warn('Cleanup warning', cleanupError, { sessionId });
     }
     
     return NextResponse.json({
@@ -594,7 +611,7 @@ export async function POST(
     });
     
   } catch (error: any) {
-    console.error('Failed to execute subtask:', error);
+    logger.error('Failed to execute subtask', error, { sessionId: 'unknown' });
     
     // Update execution record with error
     if (executionId) {
@@ -607,7 +624,7 @@ export async function POST(
           error: error.message
         });
       } catch (updateError) {
-        console.warn('Failed to update execution record with error:', updateError);
+        logger.warn('Failed to update execution record with error', updateError, { executionId });
       }
     }
     
@@ -617,7 +634,7 @@ export async function POST(
         await sessionLogger.captureError(`Execution failed: ${error.message}`);
         await sessionLogger.finalize(-1);
       } catch (logError) {
-        console.warn('Failed to finalize session logger:', logError);
+        logger.warn('Failed to finalize session logger', logError);
       }
     }
     
@@ -626,7 +643,7 @@ export async function POST(
       try {
         await analytics.finalize(-1, Date.now() - analytics.getStartTime());
       } catch (analyticsError) {
-        console.warn('Failed to finalize analytics:', analyticsError);
+        logger.warn('Failed to finalize analytics', analyticsError);
       }
     }
     
@@ -635,7 +652,7 @@ export async function POST(
       try {
         await vibeKit.kill();
       } catch (cleanupError) {
-        console.warn('Cleanup error:', cleanupError);
+        logger.warn('Cleanup error', cleanupError);
       }
     }
     

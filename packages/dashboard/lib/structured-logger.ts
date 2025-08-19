@@ -1,16 +1,21 @@
 /**
- * Structured logging system for VibeKit Dashboard
+ * Enhanced structured logging system for VibeKit Dashboard
  * 
  * Provides:
+ * - Production-safe log levels with filtering
+ * - Automatic data sanitization for sensitive information
  * - Consistent log formatting with timestamps
- * - Log levels (debug, info, warn, error)
  * - Context-aware logging with component names
  * - JSON structured output for production
  * - Request ID tracking for tracing
  * - Performance timing utilities
+ * - Memory and performance optimizations
  */
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+import { LogLevel, LoggerConfig, getLoggerConfig, shouldLog, LOG_LEVEL_NAMES } from './logger-config';
+import { sanitizeLogData, sanitizeMessage } from './log-sanitizer';
+
+export type { LogLevel };
 
 export interface LogContext {
   component?: string;
@@ -38,34 +43,22 @@ export interface LogEntry {
 
 export class StructuredLogger {
   private static instance: StructuredLogger;
+  private readonly config: LoggerConfig;
   private readonly environment: 'development' | 'production';
-  private readonly minLevel: LogLevel;
-  private readonly enableConsole: boolean;
-  private readonly enableFile: boolean;
-  
-  // Log level priority (higher number = more severe)
-  private static readonly LOG_LEVELS: Record<LogLevel, number> = {
-    debug: 0,
-    info: 1,
-    warn: 2,
-    error: 3
-  };
   
   // ANSI color codes for console output
-  private static readonly COLORS: Record<LogLevel, string> = {
-    debug: '\x1b[36m', // Cyan
-    info: '\x1b[32m',  // Green
-    warn: '\x1b[33m',  // Yellow
-    error: '\x1b[31m'  // Red
+  private static readonly COLORS: Record<string, string> = {
+    ERROR: '\x1b[31m', // Red
+    WARN: '\x1b[33m',  // Yellow
+    INFO: '\x1b[32m',  // Green
+    DEBUG: '\x1b[36m'  // Cyan
   };
   
   private static readonly RESET_COLOR = '\x1b[0m';
   
-  private constructor() {
+  private constructor(config?: LoggerConfig) {
     this.environment = (process.env.NODE_ENV as 'development' | 'production') || 'development';
-    this.minLevel = (process.env.LOG_LEVEL as LogLevel) || (this.environment === 'production' ? 'info' : 'debug');
-    this.enableConsole = process.env.LOG_CONSOLE !== 'false';
-    this.enableFile = process.env.LOG_FILE === 'true';
+    this.config = config || getLoggerConfig();
   }
   
   /**
@@ -90,49 +83,59 @@ export class StructuredLogger {
    */
   log(level: LogLevel, message: string, context: LogContext = {}): void {
     // Check if this log level should be output
-    if (StructuredLogger.LOG_LEVELS[level] < StructuredLogger.LOG_LEVELS[this.minLevel]) {
+    if (!shouldLog(level, this.config)) {
       return;
     }
     
+    // Sanitize message and context
+    const sanitizedMessage = this.config.sanitize ? sanitizeMessage(message) : message;
+    const sanitizedContext = this.config.sanitize ? sanitizeLogData(context) : context;
+    
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
-      level,
-      message,
-      context
+      level: LOG_LEVEL_NAMES[level] as any,
+      message: sanitizedMessage,
+      context: sanitizedContext
     };
     
     // Add error details if context contains an error
     if (context.error && context.error instanceof Error) {
       entry.error = {
         name: context.error.name,
-        message: context.error.message,
+        message: this.config.sanitize ? sanitizeMessage(context.error.message) : context.error.message,
         stack: context.error.stack
       };
       // Remove error from context to avoid duplication
-      const { error, ...contextWithoutError } = context;
+      const { error, ...contextWithoutError } = sanitizedContext;
       entry.context = contextWithoutError;
     }
     
-    // Output to console if enabled
-    if (this.enableConsole) {
-      this.outputToConsole(entry);
-    }
-    
-    // TODO: Output to file if enabled
-    if (this.enableFile) {
-      this.outputToFile(entry);
-    }
+    // Output to console
+    this.outputToConsole(entry);
   }
   
   /**
    * Output formatted log to console
    */
   private outputToConsole(entry: LogEntry): void {
-    const color = StructuredLogger.COLORS[entry.level];
-    const timestamp = entry.timestamp.substring(11, 23); // HH:mm:ss.SSS
+    const levelName = entry.level;
+    const color = StructuredLogger.COLORS[levelName];
+    const logString = JSON.stringify(entry);
+    
+    // Enforce size limits
+    if (logString.length > this.config.maxSize) {
+      const truncated = {
+        ...entry,
+        message: entry.message.substring(0, Math.floor(this.config.maxSize / 2)),
+        context: { ...entry.context, _truncated: true, _originalSize: logString.length },
+      };
+      console.error(JSON.stringify(truncated));
+      return;
+    }
     
     if (this.environment === 'development') {
       // Human-readable format for development
+      const timestamp = entry.timestamp.substring(11, 23); // HH:mm:ss.SSS
       const contextStr = Object.keys(entry.context).length > 0 
         ? ` ${JSON.stringify(entry.context)}`
         : '';
@@ -142,11 +145,21 @@ export class StructuredLogger {
         : '';
       
       console.log(
-        `${color}${timestamp} [${entry.level.toUpperCase()}]${StructuredLogger.RESET_COLOR} ${entry.message}${contextStr}${errorStr}`
+        `${color}${timestamp} [${levelName}]${StructuredLogger.RESET_COLOR} ${entry.message}${contextStr}${errorStr}`
       );
     } else {
-      // JSON format for production
-      console.log(JSON.stringify(entry));
+      // JSON format for production - emit to appropriate console method
+      switch (entry.level) {
+        case 'ERROR':
+          console.error(logString);
+          break;
+        case 'WARN':
+          console.warn(logString);
+          break;
+        default:
+          console.log(logString);
+          break;
+      }
     }
   }
   
@@ -162,26 +175,40 @@ export class StructuredLogger {
    * Convenience methods for different log levels
    */
   debug(message: string, context?: LogContext): void {
-    this.log('debug', message, context || {});
+    this.log(LogLevel.DEBUG, message, context || {});
   }
   
   info(message: string, context?: LogContext): void {
-    this.log('info', message, context || {});
+    this.log(LogLevel.INFO, message, context || {});
   }
   
-  warn(message: string, context?: LogContext): void {
-    this.log('warn', message, context || {});
+  warn(message: string, error?: Error | any, context?: LogContext): void {
+    const errorData = error instanceof Error ? {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      ...(error.cause && { cause: error.cause })
+    } : error;
+    
+    this.log(LogLevel.WARN, message, { ...context, ...(errorData && { error: errorData }) });
   }
   
-  error(message: string, context?: LogContext): void {
-    this.log('error', message, context || {});
+  error(message: string, error?: Error | any, context?: LogContext): void {
+    const errorData = error instanceof Error ? {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      ...(error.cause && { cause: error.cause })
+    } : error;
+    
+    this.log(LogLevel.ERROR, message, { ...context, error: errorData });
   }
   
   /**
    * Create a timer for performance measurement
    */
   timer(operation: string): LogTimer {
-    return new LogTimer(operation);
+    return new LogTimer(operation, {}, this.config);
   }
 }
 
@@ -192,7 +219,7 @@ export class ComponentLogger {
   private logger: StructuredLogger;
   private baseContext: LogContext;
   
-  constructor(component: string, baseContext: LogContext = {}) {
+  constructor(component: string, baseContext: LogContext = {}, config?: LoggerConfig) {
     this.logger = StructuredLogger.getInstance();
     this.baseContext = { component, ...baseContext };
   }
@@ -218,12 +245,12 @@ export class ComponentLogger {
     this.logger.info(message, { ...this.baseContext, ...context });
   }
   
-  warn(message: string, context: LogContext = {}): void {
-    this.logger.warn(message, { ...this.baseContext, ...context });
+  warn(message: string, error?: Error | any, context: LogContext = {}): void {
+    this.logger.warn(message, error, { ...this.baseContext, ...context });
   }
   
-  error(message: string, context: LogContext = {}): void {
-    this.logger.error(message, { ...this.baseContext, ...context });
+  error(message: string, error?: Error | any, context: LogContext = {}): void {
+    this.logger.error(message, error, { ...this.baseContext, ...context });
   }
   
   /**
@@ -241,7 +268,7 @@ export class ComponentLogger {
    * Create a timer with component context
    */
   timer(operation: string): LogTimer {
-    return new LogTimer(operation, this.baseContext);
+    return new LogTimer(operation, this.baseContext, getLoggerConfig());
   }
 }
 
@@ -253,18 +280,20 @@ export class LogTimer {
   private operation: string;
   private context: LogContext;
   private logger: StructuredLogger;
+  private config: LoggerConfig;
   
-  constructor(operation: string, baseContext: LogContext = {}) {
+  constructor(operation: string, baseContext: LogContext = {}, config?: LoggerConfig) {
     this.startTime = performance.now();
     this.operation = operation;
     this.context = baseContext;
     this.logger = StructuredLogger.getInstance();
+    this.config = config || getLoggerConfig();
   }
   
   /**
    * Stop the timer and log the duration
    */
-  stop(level: LogLevel = 'debug', additionalContext: LogContext = {}): number {
+  stop(level: LogLevel = LogLevel.DEBUG, additionalContext: LogContext = {}): number {
     const duration = Math.round(performance.now() - this.startTime);
     
     this.logger.log(level, `Operation completed: ${this.operation}`, {
@@ -281,14 +310,14 @@ export class LogTimer {
    * Stop the timer and log as info level
    */
   stopInfo(additionalContext: LogContext = {}): number {
-    return this.stop('info', additionalContext);
+    return this.stop(LogLevel.INFO, additionalContext);
   }
   
   /**
    * Stop the timer and log as warn level (for slow operations)
    */
   stopWarn(additionalContext: LogContext = {}): number {
-    return this.stop('warn', additionalContext);
+    return this.stop(LogLevel.WARN, additionalContext);
   }
 }
 
@@ -325,7 +354,7 @@ export const logUtils = {
    * Log a request completion
    */
   requestComplete(timer: LogTimer, statusCode: number, requestId: string): void {
-    const level: LogLevel = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
+    const level: LogLevel = statusCode >= 500 ? LogLevel.ERROR : statusCode >= 400 ? LogLevel.WARN : LogLevel.INFO;
     timer.stop(level, { statusCode, requestId });
   },
   

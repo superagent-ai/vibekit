@@ -12,6 +12,7 @@ import {
 import { SessionManager, SessionCheckpoint } from './session-manager';
 import { SessionIdGenerator } from './session-id-generator';
 import { createLogger, LogTimer } from './structured-logger';
+import { LogLevel } from './logger-config';
 
 export interface LogEntry {
   timestamp: number;
@@ -118,13 +119,13 @@ export class SessionLogger {
 
   async initialize(): Promise<void> {
     // Debug path information
-    console.log(`[SessionLogger] Initializing session ${this.sessionId}`);
-    console.log(`[SessionLogger] Daily log file path: ${this.dailyLogFile}`);
-    console.log(`[SessionLogger] Home directory: ${require('os').homedir()}`);
+    this.logger.info('Initializing session', { sessionId: this.sessionId });
+    this.logger.debug('Daily log file path', { path: this.dailyLogFile, sessionId: this.sessionId });
+    this.logger.debug('Home directory', { homeDir: require('os').homedir(), sessionId: this.sessionId });
     
     // Ensure sessions directory exists
     const sessionsRoot = path.dirname(this.dailyLogFile);
-    console.log(`[SessionLogger] Sessions root directory: ${sessionsRoot}`);
+    this.logger.debug('Sessions root directory', { sessionsRoot, sessionId: this.sessionId });
     await fs.mkdir(sessionsRoot, { recursive: true });
     
     // Initialize SessionManager for this session
@@ -159,13 +160,13 @@ export class SessionLogger {
     
     // Start periodic flush with production improvements
     this.flushInterval = setInterval(() => {
-      this.flush().catch(err => console.error('Failed to flush logs:', err));
+      this.flush().catch(err => this.logger.error('Failed to flush logs', err, { sessionId: this.sessionId }));
     }, SessionLogger.FLUSH_INTERVAL);
   }
 
   async log(type: LogEntry['type'], data: string, metadata?: LogEntry['metadata']): Promise<void> {
     if (this.isClosed) {
-      console.warn('Attempting to log to closed session:', this.sessionId);
+      this.logger.warn('Attempting to log to closed session', { sessionId: this.sessionId });
       return;
     }
 
@@ -522,8 +523,10 @@ export class SessionLogger {
     validateSessionId(sessionId);
     
     const sessionsRoot = createSafeVibeKitPath('', 'sessions');
-    console.log(`[SessionLogger.readSession] Searching for session ${sessionId} in: ${sessionsRoot}`);
-    console.log(`[SessionLogger.readSession] Home directory: ${require('os').homedir()}`);
+    // Use static logger since this is a static method
+    const logger = createLogger('SessionLogger');
+    logger.debug('Searching for session', { sessionId, sessionsRoot });
+    logger.debug('Home directory', { homeDir: require('os').homedir() });
     
     // Read all daily log files to find the session
     const files = await fs.readdir(sessionsRoot);
@@ -557,7 +560,7 @@ export class SessionLogger {
           }
         }
       } catch (error) {
-        console.error(`Failed to read session file ${file}:`, error);
+        logger.error('Failed to read session file', error, { file });
       }
     }
     
@@ -570,6 +573,7 @@ export class SessionLogger {
 
   // Static method to list recent sessions
   static async listSessions(limit = 10): Promise<SessionMetadata[]> {
+    const logger = createLogger('SessionLogger');
     const sessionsRoot = path.join(os.homedir(), '.vibekit', 'sessions');
     
     try {
@@ -596,7 +600,7 @@ export class SessionLogger {
           }
         }
       } catch (error) {
-        console.error(`Failed to read session file ${file}:`, error);
+        logger.error('Failed to read session file', error, { file });
       }
     }
 
@@ -608,6 +612,7 @@ export class SessionLogger {
 
   // Static method to tail session logs (for real-time updates)
   static async tailSession(sessionId: string, fromLine = 0): Promise<{ logs: LogEntry[]; nextLine: number }> {
+    const logger = createLogger('SessionLogger');
     const sessionsRoot = path.join(os.homedir(), '.vibekit', 'sessions');
     
     // Read all daily log files to find the session logs
@@ -636,7 +641,7 @@ export class SessionLogger {
           }
         }
       } catch (error) {
-        console.error(`Failed to read session file ${file}:`, error);
+        logger.error('Failed to read session file', error, { file });
       }
     }
     
