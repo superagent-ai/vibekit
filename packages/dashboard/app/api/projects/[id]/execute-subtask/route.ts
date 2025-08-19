@@ -5,6 +5,8 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { AgentAnalytics } from '@/lib/agent-analytics';
 import { SessionLogger } from '@/lib/session-logger';
+import { SessionIdGenerator } from '@/lib/session-id-generator';
+import { ExecutionHistoryManager } from '@/lib/execution-history-manager';
 // Import other providers as needed
 // import { createE2BProvider } from '@vibe-kit/e2b';
 // import { createDaytonaProvider } from '@vibe-kit/daytona';
@@ -78,6 +80,7 @@ export async function POST(
   let vibeKit: VibeKit | null = null;
   let analytics: AgentAnalytics | null = null;
   let sessionLogger: SessionLogger | null = null;
+  let executionId: string | null = null;
   
   try {
     const { id } = await params;
@@ -114,7 +117,7 @@ export async function POST(
     });
     
     // Use provided session ID or generate new one
-    const sessionId = providedSessionId || Date.now().toString();
+    const sessionId = providedSessionId || SessionIdGenerator.generateWithPrefix('exec');
     console.log('Using session ID for execution:', sessionId, providedSessionId ? '(provided)' : '(generated)');
     
     // Initialize session logger for real-time logging
@@ -126,6 +129,7 @@ export async function POST(
     });
     await sessionLogger.initialize();
     console.log('Session logger initialized:', sessionId);
+    
     
     // Log initial sandbox configuration
     await sessionLogger.captureInfo(`Initializing ${agent} agent with ${sandbox} sandbox`, { 
@@ -339,6 +343,20 @@ export async function POST(
     
     console.log('Executing with prompt:', prompt);
     
+    // Initialize ExecutionHistoryManager and record execution start
+    await ExecutionHistoryManager.initialize();
+    executionId = await ExecutionHistoryManager.recordExecutionStart({
+      sessionId,
+      projectId: id,
+      projectRoot,
+      taskId: parentTask.id.toString(),
+      subtaskId: subtask.id.toString(),
+      agent,
+      sandbox,
+      prompt
+    });
+    console.log('Execution recorded:', executionId);
+    
     // Capture prompt in analytics if enabled
     if (analytics) {
       analytics.capturePrompt(prompt);
@@ -444,6 +462,20 @@ export async function POST(
       success: result?.exitCode === 0
     });
     
+    // Update execution record with completion
+    if (executionId) {
+      await ExecutionHistoryManager.updateExecution(executionId, {
+        status: result?.exitCode === 0 ? 'completed' : 'failed',
+        endTime: Date.now(),
+        exitCode: result?.exitCode,
+        success: result?.exitCode === 0,
+        stdoutLines: result?.stdout ? result.stdout.split('\n').length : stdout.length,
+        stderrLines: result?.stderr ? result.stderr.split('\n').length : stderr.length,
+        updateCount: updates.length
+      });
+      console.log('Execution record updated:', executionId);
+    }
+    
     // Create pull request if code generation was successful and GitHub is configured
     let pullRequestResult = null;
     if (result?.exitCode === 0 && githubToken && vibeKit) {
@@ -469,6 +501,14 @@ export async function POST(
           await sessionLogger.captureInfo('Pull request created successfully', {
             prUrl: pullRequestResult?.html_url,
             prNumber: pullRequestResult?.number
+          });
+        }
+        
+        // Update execution record with PR information
+        if (executionId && pullRequestResult) {
+          await ExecutionHistoryManager.updateExecution(executionId, {
+            pullRequestUrl: pullRequestResult.html_url,
+            pullRequestNumber: pullRequestResult.number
           });
         }
       } catch (prError: any) {
@@ -530,6 +570,21 @@ export async function POST(
     
   } catch (error: any) {
     console.error('Failed to execute subtask:', error);
+    
+    // Update execution record with error
+    if (executionId) {
+      try {
+        await ExecutionHistoryManager.updateExecution(executionId, {
+          status: 'failed',
+          endTime: Date.now(),
+          exitCode: -1,
+          success: false,
+          error: error.message
+        });
+      } catch (updateError) {
+        console.warn('Failed to update execution record with error:', updateError);
+      }
+    }
     
     // Finalize session logger with error
     if (sessionLogger) {

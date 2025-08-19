@@ -189,18 +189,40 @@ export async function generatePRMetadata(
         }
       }
       
-      // Parse the JSON response - look for our metadata object
-      const jsonMatch = jsonResponse.match(/\{"title":[^}]+\}/);
-      if (jsonMatch) {
-        const metadata = JSON.parse(jsonMatch[0]);
-        if (metadata.title && metadata.body && metadata.branchName && metadata.commitMessage) {
-          return metadata;
+      // Parse the JSON response - Claude Code SDK puts final result in "result" field
+      const resultMatch = jsonResponse.match(/"result":"(\{.*?\})"/);
+      if (resultMatch) {
+        try {
+          // Unescape the JSON content  
+          const unescapedResult = resultMatch[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+          const metadata = JSON.parse(unescapedResult);
+          if (metadata.title && metadata.body && metadata.branchName && metadata.commitMessage) {
+            return metadata;
+          }
+        } catch (e) {
+          // Continue to other parsing methods
         }
       }
+
+      // Fallback: try to find JSON in text field
+      const textMatch = jsonResponse.match(/"text":"(\{.*?\})"/);
+      if (textMatch) {
+        try {
+          const unescapedText = textMatch[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+          const metadata = JSON.parse(unescapedText);
+          if (metadata.title && metadata.body && metadata.branchName && metadata.commitMessage) {
+            return metadata;
+          }
+        } catch (e) {
+          // Continue to other parsing methods
+        }
+      }
+      
+      // If we couldn't parse valid JSON, throw error
+      throw new Error('Failed to parse valid JSON from Claude Code SDK response');
     } catch (error) {
-      console.error('Failed to generate PR metadata with Claude Code SDK:', error);
       // OAuth failed - throw error, no fallback
-      throw new Error(`Failed to generate PR metadata with OAuth token: ${error}`);
+      throw new Error(`Failed to generate PR metadata with OAuth token: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   
