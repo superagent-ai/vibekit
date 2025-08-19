@@ -117,7 +117,7 @@ export async function POST(
     });
     
     // Use provided session ID or generate new one
-    const sessionId = providedSessionId || SessionIdGenerator.generateWithPrefix('exec');
+    const sessionId = providedSessionId || SessionIdGenerator.generate();
     console.log('Using session ID for execution:', sessionId, providedSessionId ? '(provided)' : '(generated)');
     
     // Initialize session logger for real-time logging

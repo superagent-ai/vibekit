@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { cn } from "@/lib/utils";
+import { SessionIdGenerator } from "@/lib/session-id-generator";
 
 // Extend Day.js with plugins
 dayjs.extend(relativeTime);
@@ -607,7 +608,7 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                         
                         try {
                           // Generate session ID immediately to establish SSE connection
-                          const executionSessionId = Date.now().toString();
+                          const executionSessionId = SessionIdGenerator.generate();
                           console.log("Generated session ID for real-time logging:", executionSessionId);
                           setSessionId(executionSessionId);
                           
