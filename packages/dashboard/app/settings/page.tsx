@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Settings, Shield, BarChart3, Link, RefreshCw, Bot } from "lucide-react";
+import { Settings, Shield, BarChart3, Link, RefreshCw, Bot, Server, FileText, Cpu, Package } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 
@@ -43,7 +43,18 @@ interface VibeKitSettings {
   agents?: {
     defaultAgent: string;
     defaultSandbox: string;
-    dockerHubUser?: string;
+  };
+  registry?: {
+    type: string;
+    username?: string;
+  };
+  system?: {
+    port: number;
+    logLevel: string;
+  };
+  resources?: {
+    maxConcurrentExecutions: number;
+    monitoringRefreshInterval: number;
   };
 }
 
@@ -67,6 +78,18 @@ export default function SettingsPage() {
     agents: {
       defaultAgent: 'claude',
       defaultSandbox: 'dagger',
+    },
+    registry: {
+      type: 'docker-hub',
+      username: '',
+    },
+    system: {
+      port: 3001,
+      logLevel: 'info',
+    },
+    resources: {
+      maxConcurrentExecutions: 10,
+      monitoringRefreshInterval: 30,
     },
   });
   const [loading, setLoading] = useState(true);
@@ -154,13 +177,40 @@ export default function SettingsPage() {
     saveSettings(newSettings);
   };
 
-  const handleDockerHubUserChange = (dockerHubUser: string) => {
+  const handleRegistryChange = (field: string, value: string) => {
     const newSettings = {
       ...settings,
-      agents: {
-        defaultAgent: settings.agents?.defaultAgent || 'claude',
-        defaultSandbox: settings.agents?.defaultSandbox || 'dagger',
-        dockerHubUser: dockerHubUser,
+      registry: {
+        type: settings.registry?.type || 'docker-hub',
+        username: settings.registry?.username || '',
+        ...settings.registry,
+        [field]: value,
+      },
+    };
+    saveSettings(newSettings);
+  };
+
+  const handleSystemChange = (field: string, value: string | number) => {
+    const newSettings = {
+      ...settings,
+      system: {
+        port: settings.system?.port || 3001,
+        logLevel: settings.system?.logLevel || 'info',
+        ...settings.system,
+        [field]: value,
+      },
+    };
+    saveSettings(newSettings);
+  };
+
+  const handleResourceChange = (field: string, value: number) => {
+    const newSettings = {
+      ...settings,
+      resources: {
+        maxConcurrentExecutions: settings.resources?.maxConcurrentExecutions || 10,
+        monitoringRefreshInterval: settings.resources?.monitoringRefreshInterval || 30,
+        ...settings.resources,
+        [field]: value,
       },
     };
     saveSettings(newSettings);
@@ -333,6 +383,122 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* System Settings */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Server className="h-5 w-5" />
+              <CardTitle>System</CardTitle>
+            </div>
+            <CardDescription>
+              Core system configuration and server settings
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="system-port">Dashboard Port</Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Port number for the dashboard server (requires restart)
+              </p>
+              <Input
+                id="system-port"
+                type="number"
+                min={1024}
+                max={65535}
+                value={settings.system?.port || 3001}
+                onChange={(e) => handleSystemChange('port', parseInt(e.target.value) || 3001)}
+                disabled={saving}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="log-level">Log Level</Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Minimum log level for system logging
+              </p>
+              <Select
+                value={settings.system?.logLevel || 'info'}
+                onValueChange={(value) => handleSystemChange('logLevel', value)}
+                disabled={saving}
+              >
+                <SelectTrigger id="log-level" className="w-full">
+                  <SelectValue placeholder="Select log level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="debug">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      <span>Debug</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="info">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      <span>Info</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="warn">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      <span>Warning</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="error">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      <span>Error</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Resource Settings */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Cpu className="h-5 w-5" />
+              <CardTitle>Resources</CardTitle>
+            </div>
+            <CardDescription>
+              Resource limits and performance settings
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="max-executions">Max Concurrent Executions</Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Maximum number of agent executions that can run simultaneously
+              </p>
+              <Input
+                id="max-executions"
+                type="number"
+                min={1}
+                max={50}
+                value={settings.resources?.maxConcurrentExecutions || 10}
+                onChange={(e) => handleResourceChange('maxConcurrentExecutions', parseInt(e.target.value) || 10)}
+                disabled={saving}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="refresh-interval">Monitoring Refresh Interval</Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                How often to refresh monitoring data (seconds)
+              </p>
+              <Input
+                id="refresh-interval"
+                type="number"
+                min={5}
+                max={300}
+                value={settings.resources?.monitoringRefreshInterval || 30}
+                onChange={(e) => handleResourceChange('monitoringRefreshInterval', parseInt(e.target.value) || 30)}
+                disabled={saving}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Agents Settings */}
         <Card>
           <CardHeader>
@@ -341,7 +507,7 @@ export default function SettingsPage() {
               <CardTitle>Agents</CardTitle>
             </div>
             <CardDescription>
-              Configure default agent for task execution
+              Configure default agent and sandbox for task execution
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -439,17 +605,79 @@ export default function SettingsPage() {
                 </SelectContent>
               </Select>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Registry Settings */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              <CardTitle>Registry</CardTitle>
+            </div>
+            <CardDescription>
+              Container registry configuration for pulling agent images
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="docker-hub-user">Docker Hub Username</Label>
+              <Label htmlFor="registry-type">Registry Type</Label>
               <p className="text-sm text-muted-foreground mb-3">
-                Your Docker Hub username for pulling agent images (optional)
+                Select the container registry to use for agent images
+              </p>
+              <Select
+                value={settings.registry?.type || 'docker-hub'}
+                onValueChange={(value) => handleRegistryChange('type', value)}
+                disabled={saving}
+              >
+                <SelectTrigger id="registry-type" className="w-full">
+                  <SelectValue placeholder="Select registry" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="docker-hub">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      <span>Docker Hub</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="ghcr">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      <span>GitHub Container Registry</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="gcr">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      <span>Google Container Registry</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="ecr">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      <span>Amazon ECR</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="acr">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      <span>Azure Container Registry</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="registry-username">Registry Username</Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Your username for the selected registry (optional)
               </p>
               <Input
-                id="docker-hub-user"
+                id="registry-username"
                 type="text"
-                placeholder="Enter your Docker Hub username"
-                value={settings.agents?.dockerHubUser || ''}
-                onChange={(e) => handleDockerHubUserChange(e.target.value)}
+                placeholder="Enter your registry username"
+                value={settings.registry?.username || ''}
+                onChange={(e) => handleRegistryChange('username', e.target.value)}
                 disabled={saving}
               />
               <p className="text-xs text-muted-foreground">
