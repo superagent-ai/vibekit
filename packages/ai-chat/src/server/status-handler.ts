@@ -14,6 +14,7 @@ export async function handleStatusRequest() {
         error: 'Failed to check auth status',
         authMethod: 'none',
         hasApiKey: false,
+        hasOAuthToken: false,
         isConfigured: false,
         needsApiKey: true,
       },

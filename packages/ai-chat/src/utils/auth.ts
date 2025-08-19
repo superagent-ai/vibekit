@@ -11,6 +11,8 @@ export interface AuthStatus {
   authMethod: string;
   /** Whether an API key is configured */
   hasApiKey: boolean;
+  /** Whether an OAuth token is configured */
+  hasOAuthToken: boolean;
   /** Whether authentication is properly configured */
   isConfigured: boolean;
   /** Claude Code Max user if detected */
@@ -36,6 +38,7 @@ export interface OAuthToken {
 export class AuthManager {
   private static instance: AuthManager;
   private apiKey?: string;
+  private oauthToken?: string;
   private authMethod: string = 'none';
   private claudeCodeMaxUser?: string;
   private initialized: boolean = false;
@@ -64,11 +67,42 @@ export class AuthManager {
     if (this.initialized) return;
     this.initialized = true;
     
+    // Check for OAuth token first (priority authentication)
+    this.loadOAuthToken();
+    
     // Check for Claude Code Max OAuth token (informational only)
     this.checkOAuthToken();
     
-    // Load API key
+    // Load API key as fallback
     this.loadApiKey();
+  }
+
+  /**
+   * Load OAuth token for Claude Code authentication
+   * Checks environment variable first, then JSON file
+   */
+  private loadOAuthToken(): void {
+    // First check environment variable (explicit OAuth)
+    if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+      this.oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+      this.authMethod = 'OAuth Token (env)';
+      return;
+    }
+
+    // Then check the OAuth token file
+    const oauthTokenPath = path.join(os.homedir(), '.vibekit', 'claude-oauth-token.json');
+    if (existsSync(oauthTokenPath)) {
+      try {
+        const tokenContent = readFileSync(oauthTokenPath, 'utf-8');
+        const oauthTokenData: OAuthToken = JSON.parse(tokenContent);
+        if (oauthTokenData.access_token) {
+          this.oauthToken = oauthTokenData.access_token;
+          this.authMethod = 'OAuth Token (file)';
+        }
+      } catch (e) {
+        // Ignore error - OAuth token is optional
+      }
+    }
   }
 
   /**
@@ -92,8 +126,14 @@ export class AuthManager {
 
   /**
    * Load API key from environment or .env files
+   * Only used as fallback if no OAuth token is available
    */
   private loadApiKey(): void {
+    // Skip if OAuth token is already available (OAuth has priority)
+    if (this.oauthToken) {
+      return;
+    }
+
     // First check if API key is already in environment
     if (process.env.ANTHROPIC_API_KEY) {
       this.apiKey = process.env.ANTHROPIC_API_KEY;
@@ -136,16 +176,30 @@ export class AuthManager {
   }
 
   /**
+   * Get the OAuth token if available
+   */
+  getOAuthToken(): string | undefined {
+    if (!this.initialized && typeof window === 'undefined') {
+      this.initialize();
+    }
+    return this.oauthToken;
+  }
+
+  /**
    * Get current authentication status
    */
   getAuthStatus(): AuthStatus {
     const hasApiKey = !!this.apiKey;
+    const hasOAuthToken = !!this.oauthToken;
+    const isConfigured = hasOAuthToken || hasApiKey;
+    
     return {
       authMethod: this.authMethod,
       hasApiKey,
-      isConfigured: hasApiKey,
+      hasOAuthToken,
+      isConfigured,
       claudeCodeMaxUser: this.claudeCodeMaxUser,
-      needsApiKey: !hasApiKey,
+      needsApiKey: !isConfigured,
     };
   }
 
@@ -153,18 +207,18 @@ export class AuthManager {
    * Check if valid authentication is available
    */
   hasValidAuth(): boolean {
-    return !!this.apiKey;
+    return !!this.oauthToken || !!this.apiKey;
   }
 
   /**
    * Get error message if authentication is not configured
    */
   getErrorMessage(): string | null {
-    if (!this.apiKey) {
+    if (!this.oauthToken && !this.apiKey) {
       if (this.claudeCodeMaxUser) {
-        return `Claude Code Max account detected (${this.claudeCodeMaxUser}). Claude Code Max tokens are for Claude.ai only. To use the API, please set ANTHROPIC_API_KEY in your .env file.`;
+        return `Claude Code Max account detected (${this.claudeCodeMaxUser}). Please run 'claude login' or set CLAUDE_CODE_OAUTH_TOKEN to authenticate, or set ANTHROPIC_API_KEY for API access.`;
       }
-      return 'No ANTHROPIC_API_KEY found. Please set it in your .env file.';
+      return 'No authentication configured. Please run \'claude login\' or set CLAUDE_CODE_OAUTH_TOKEN environment variable, or set ANTHROPIC_API_KEY in your .env file.';
     }
     return null;
   }

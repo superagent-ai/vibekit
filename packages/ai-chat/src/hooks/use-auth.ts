@@ -26,6 +26,7 @@ export function useAuthStatus() {
       setAuthStatus({
         authMethod: 'none',
         hasApiKey: false,
+        hasOAuthToken: false,
         isConfigured: false,
         needsApiKey: true,
       });

@@ -1,6 +1,7 @@
 import { streamText } from 'ai';
-import { createAnthropic } from '@ai-sdk/anthropic';
 import { AuthManager } from '../utils/auth';
+import { createAnthropicProviderWithModel, getAuthInfo, shouldUseClaudeCodeSDK } from '../utils/provider-factory';
+import { createClaudeCodeProvider } from '../utils/claude-sdk-streaming';
 import type { NextRequest } from 'next/server';
 
 interface ChatMessage {
@@ -40,14 +41,16 @@ export async function handleChatRequest(req: NextRequest): Promise<Response> {
     
     // Get auth manager instance
     const authManager = AuthManager.getInstance();
-    const apiKey = authManager.getApiKey();
+    const authInfo = getAuthInfo(authManager);
     
-    if (!apiKey) {
+    console.log('[CHAT HANDLER] Auth info:', authInfo);
+    
+    if (!authManager.hasValidAuth()) {
       const errorMessage = authManager.getErrorMessage();
       console.error('Chat API: Auth error:', errorMessage);
       return new Response(
         JSON.stringify({ 
-          error: errorMessage || 'API key not configured'
+          error: errorMessage || 'No authentication configured'
         }),
         { 
           status: 500,
@@ -55,13 +58,8 @@ export async function handleChatRequest(req: NextRequest): Promise<Response> {
         }
       );
     }
-    
-    // Create Anthropic client
-    const anthropic = createAnthropic({
-      apiKey,
-    });
-    
-    // Convert messages to the format expected by the AI SDK
+
+    // Convert messages to the format expected by both AI SDK and Claude Code SDK
     const formattedMessages = messages.map((msg: ChatMessage) => {
       // For assistant messages with parts array, extract the text content
       if (msg.role === 'assistant' && Array.isArray(msg.parts)) {
@@ -98,10 +96,53 @@ export async function handleChatRequest(req: NextRequest): Promise<Response> {
       };
     });
     
+    // Check if we should use Claude Code SDK (OAuth) or AI SDK (API key)
+    if (shouldUseClaudeCodeSDK(authManager)) {
+      console.log('[CHAT HANDLER] Using Claude Code SDK with AI SDK streamText for OAuth authentication');
+      
+      try {
+        // Create Claude Code provider that uses OAuth
+        const claudeProvider = createClaudeCodeProvider(authManager);
+        const claudeModel = claudeProvider.createLanguageModel(model);
+        
+        // Use AI SDK's streamText with Claude Code provider
+        const result = streamText({
+          model: claudeModel,
+          messages: formattedMessages,
+          temperature: data?.temperature || 0.7,
+          maxOutputTokens: data?.maxTokens || 4096,
+        });
+
+        return result.toUIMessageStreamResponse();
+      } catch (error: any) {
+        console.error('Chat API: Claude Code SDK error, falling back to Anthropic API:', error);
+        
+        // Don't return error immediately - fall through to Anthropic API fallback
+        console.log('[CHAT HANDLER] Falling back to Anthropic API due to Claude Code SDK error');
+      }
+    }
+
+    // Fallback to Anthropic API with API key
+    let aiProvider;
+    try {
+      aiProvider = createAnthropicProviderWithModel(model, authManager);
+    } catch (error: any) {
+      console.error('Chat API: Anthropic provider creation error:', error);
+      return new Response(
+        JSON.stringify({ 
+          error: error?.message || 'Failed to create Anthropic provider'
+        }),
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+    
     // Stream the response
     try {
       const result = streamText({
-        model: anthropic(model),
+        model: aiProvider,
         messages: formattedMessages,
         temperature: data?.temperature || 0.7,
         maxOutputTokens: data?.maxTokens || 4096,

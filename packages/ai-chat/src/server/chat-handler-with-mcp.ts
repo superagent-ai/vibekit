@@ -1,7 +1,8 @@
 import { streamText, tool } from 'ai';
-import { createAnthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { AuthManager } from '../utils/auth';
+import { createAnthropicProviderWithModel, getAuthInfo, shouldUseClaudeCodeSDK } from '../utils/provider-factory';
+import { createClaudeCodeProvider } from '../utils/claude-sdk-streaming';
 import type { NextRequest } from 'next/server';
 
 interface ChatMessage {
@@ -82,14 +83,16 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
     
     // Get auth manager instance
     const authManager = AuthManager.getInstance();
-    const apiKey = authManager.getApiKey();
+    const authInfo = getAuthInfo(authManager);
     
-    if (!apiKey) {
+    console.log('[MCP HANDLER] Auth info:', authInfo);
+    
+    if (!authManager.hasValidAuth()) {
       const errorMessage = authManager.getErrorMessage();
       console.error('Chat API: Auth error:', errorMessage);
       return new Response(
         JSON.stringify({ 
-          error: errorMessage || 'API key not configured'
+          error: errorMessage || 'No authentication configured'
         }),
         { 
           status: 500,
@@ -98,12 +101,7 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
       );
     }
     
-    // Create Anthropic client
-    const anthropic = createAnthropic({
-      apiKey,
-    });
-    
-    // Convert messages to the format expected by the AI SDK
+    // Convert messages to the format expected by both AI SDK and Claude Code SDK
     const formattedMessages = messages.map((msg: ChatMessage) => {
       // For assistant messages with parts array, extract the text content
       if (msg.role === 'assistant' && Array.isArray(msg.parts)) {
@@ -398,11 +396,73 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
       });
       console.log('[MCP DEBUG] Added system message for tool usage guidance' + (projectName ? ` with project context: ${projectName}` : ''));
     }
+
+    // Check if we should use Claude Code SDK (OAuth) or AI SDK (API key)
+    if (shouldUseClaudeCodeSDK(authManager)) {
+      console.log('[MCP HANDLER] Using Claude Code SDK with AI SDK streamText for OAuth authentication');
+      
+      try {
+        // Create Claude Code provider that uses OAuth
+        const claudeProvider = createClaudeCodeProvider(authManager);
+        const claudeModel = claudeProvider.createLanguageModel(model);
+        
+        // Configure streaming with tools if available
+        const streamConfig: any = {
+          model: claudeModel,
+          messages: formattedMessages,
+          temperature: temperature,
+          maxOutputTokens: maxTokens,
+        };
+        
+        // Only add tools if we have any
+        if (tools && Object.keys(tools).length > 0) {
+          streamConfig.tools = tools;
+          streamConfig.maxSteps = 10; // Enable multi-step execution
+          streamConfig.toolChoice = 'auto';
+          
+          console.log('[MCP HANDLER] Using Claude Code SDK with', Object.keys(tools).length, 'MCP tools');
+        } else {
+          console.log('[MCP HANDLER] Using Claude Code SDK without tools');
+        }
+        
+        // Use AI SDK's streamText with Claude Code provider
+        const result = streamText(streamConfig);
+        return result.toUIMessageStreamResponse();
+      } catch (error: any) {
+        console.error('Chat API: Claude Code SDK MCP error:', error);
+        return new Response(
+          JSON.stringify({ 
+            error: error?.message || 'Failed to create Claude Code SDK MCP response'
+          }),
+          { 
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
+    }
+
+    // Fallback to Anthropic API with API key - create AI provider
+    let aiProvider;
+    try {
+      aiProvider = createAnthropicProviderWithModel(model, authManager);
+    } catch (error: any) {
+      console.error('Chat API: Anthropic provider creation error:', error);
+      return new Response(
+        JSON.stringify({ 
+          error: error?.message || 'Failed to create Anthropic provider'
+        }),
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
     
     // Stream response with optional tools
     try {
       const streamConfig: any = {
-        model: anthropic(model),
+        model: aiProvider,
         messages: formattedMessages,
         temperature: temperature,
         maxOutputTokens: maxTokens,

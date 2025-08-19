@@ -212,7 +212,10 @@ export function ChatInterface({
                   ) : (
                     <div className="space-y-1">
                       <p className="text-primary">
-                        ✓ Using Anthropic API Key
+                        {authStatus.hasOAuthToken 
+                          ? '✓ Using Claude Code OAuth' 
+                          : '✓ Using Anthropic API Key'
+                        }
                       </p>
                       {authStatus.claudeCodeMaxUser && (
                         <p className="text-muted-foreground text-xs">
