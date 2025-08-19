@@ -360,13 +360,13 @@ export default function ProjectDetailPage() {
               <Info className="h-4 w-4" />
               Overview
             </TabsTrigger>
-            <TabsTrigger value="log" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Log
-            </TabsTrigger>
             <TabsTrigger value="tasks" className="flex items-center gap-2">
               <ListTodo className="h-4 w-4" />
               Tasks
+            </TabsTrigger>
+            <TabsTrigger value="log" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Log
             </TabsTrigger>
             <TabsTrigger value="git" className="flex items-center gap-2">
               <GitBranch className="h-4 w-4" />
