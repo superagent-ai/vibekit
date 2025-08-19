@@ -189,36 +189,87 @@ export async function generatePRMetadata(
         }
       }
       
-      // Parse the JSON response - Claude Code SDK puts final result in "result" field
-      const resultMatch = jsonResponse.match(/"result":"(\{.*?\})"/);
-      if (resultMatch) {
-        try {
-          // Unescape the JSON content  
-          const unescapedResult = resultMatch[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-          const metadata = JSON.parse(unescapedResult);
-          if (metadata.title && metadata.body && metadata.branchName && metadata.commitMessage) {
-            return metadata;
+      console.log('Claude Code SDK raw response:', jsonResponse);
+      
+      // Try multiple JSON parsing strategies
+      const parseStrategies = [
+        // Strategy 1: Direct JSON parse (if response is already JSON)
+        () => {
+          const parsed = JSON.parse(jsonResponse);
+          if (parsed.title && parsed.body && parsed.branchName && parsed.commitMessage) {
+            return parsed;
           }
-        } catch (e) {
-          // Continue to other parsing methods
+          return null;
+        },
+        
+        // Strategy 2: Parse as escaped JSON in result field
+        () => {
+          const resultMatch = jsonResponse.match(/"result":"(\{.*?\})"/);
+          if (resultMatch) {
+            const unescapedResult = resultMatch[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            const metadata = JSON.parse(unescapedResult);
+            if (metadata.title && metadata.body && metadata.branchName && metadata.commitMessage) {
+              return metadata;
+            }
+          }
+          return null;
+        },
+        
+        // Strategy 3: Parse as escaped JSON in text field
+        () => {
+          const textMatch = jsonResponse.match(/"text":"(\{.*?\})"/);
+          if (textMatch) {
+            const unescapedText = textMatch[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            const metadata = JSON.parse(unescapedText);
+            if (metadata.title && metadata.body && metadata.branchName && metadata.commitMessage) {
+              return metadata;
+            }
+          }
+          return null;
+        },
+        
+        // Strategy 4: Find any JSON object in the response
+        () => {
+          const jsonMatch = jsonResponse.match(/\{[^{}]*"title"[^{}]*\}/);
+          if (jsonMatch) {
+            const metadata = JSON.parse(jsonMatch[0]);
+            if (metadata.title && metadata.body && metadata.branchName && metadata.commitMessage) {
+              return metadata;
+            }
+          }
+          return null;
+        },
+        
+        // Strategy 5: Extract JSON from various message formats
+        () => {
+          // Look for JSON in content field
+          const contentMatch = jsonResponse.match(/"content":\s*"([^"]*\{[^"]*\})"/);
+          if (contentMatch) {
+            const unescaped = contentMatch[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            const metadata = JSON.parse(unescaped);
+            if (metadata.title && metadata.body && metadata.branchName && metadata.commitMessage) {
+              return metadata;
+            }
+          }
+          return null;
         }
-      }
-
-      // Fallback: try to find JSON in text field
-      const textMatch = jsonResponse.match(/"text":"(\{.*?\})"/);
-      if (textMatch) {
+      ];
+      
+      // Try each parsing strategy
+      for (let i = 0; i < parseStrategies.length; i++) {
         try {
-          const unescapedText = textMatch[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-          const metadata = JSON.parse(unescapedText);
-          if (metadata.title && metadata.body && metadata.branchName && metadata.commitMessage) {
-            return metadata;
+          const result = parseStrategies[i]();
+          if (result) {
+            console.log(`Successfully parsed with strategy ${i + 1}:`, result);
+            return result;
           }
         } catch (e) {
-          // Continue to other parsing methods
+          console.log(`Parsing strategy ${i + 1} failed:`, e instanceof Error ? e.message : String(e));
         }
       }
       
-      // If we couldn't parse valid JSON, throw error
+      // If all strategies failed, throw error with the response for debugging
+      console.error('All JSON parsing strategies failed. Response was:', jsonResponse);
       throw new Error('Failed to parse valid JSON from Claude Code SDK response');
     } catch (error) {
       // OAuth failed - throw error, no fallback

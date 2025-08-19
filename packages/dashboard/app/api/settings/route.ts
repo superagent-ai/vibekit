@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     const settings = await request.json();
     
     await fs.mkdir(path.dirname(settingsPath), { recursive: true });
-    await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
+    await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
     
     return NextResponse.json({ success: true });
   } catch (error) {

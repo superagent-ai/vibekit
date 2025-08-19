@@ -1,6 +1,17 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { SafeFileWriter } from './safe-file-writer';
+import { 
+  createSafeVibeKitPath, 
+  validateDailyLogFilename, 
+  validateSessionId,
+  sanitizeForLogging,
+  ValidationError 
+} from './security-utils';
+import { SessionManager, SessionCheckpoint } from './session-manager';
+import { SessionIdGenerator } from './session-id-generator';
+import { createLogger, LogTimer } from './structured-logger';
 
 export interface LogEntry {
   timestamp: number;
@@ -38,12 +49,25 @@ export interface SessionLogEntry {
 }
 
 export class SessionLogger {
-  private sessionId: string;
+  public readonly sessionId: string;
   private dailyLogFile: string;
   private metadata: SessionMetadata;
   private logBuffer: SessionLogEntry[] = [];
   private flushInterval: NodeJS.Timeout | null = null;
   private isClosed = false;
+  private isFlushInProgress = false;
+  private pendingFlushPromise: Promise<void> | null = null;
+  private logger = createLogger('SessionLogger');
+  
+  // Production improvements and resource limits
+  private static readonly MAX_BUFFER_SIZE = 1000; // Maximum entries in buffer
+  private static readonly MAX_BUFFER_BYTES = 10 * 1024 * 1024; // 10MB max buffer size
+  private static readonly MAX_LOG_ENTRY_SIZE = 100 * 1024; // 100KB max per log entry
+  private static readonly MAX_TOTAL_LOG_ENTRIES = 50000; // Maximum total entries per session
+  private static readonly FLUSH_INTERVAL = 100; // ms
+  private bufferSizeBytes = 0;
+  private lastFlushTime = Date.now();
+  private logCount = 0;
 
   constructor(
     sessionId: string,
@@ -55,16 +79,36 @@ export class SessionLogger {
       subtaskId?: string;
     }
   ) {
-    this.sessionId = sessionId;
+    // Validate session ID
+    try {
+      validateSessionId(sessionId);
+      this.sessionId = sessionId;
+    } catch (error) {
+      // Generate a new session ID if validation fails
+      this.sessionId = SessionIdGenerator.generate();
+      this.logger.warn('Invalid session ID provided, generated new one', {
+        originalSessionId: sessionId,
+        newSessionId: this.sessionId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
     
-    // Create daily log file path
-    const sessionsRoot = path.join(os.homedir(), '.vibekit', 'sessions');
+    // Create logger with session context
+    this.logger = createLogger('SessionLogger', { 
+      sessionId: this.sessionId,
+      agentName,
+      projectId: metadata?.projectId
+    });
+    
+    // Create daily log file path with security validation
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    this.dailyLogFile = path.join(sessionsRoot, `${today}.jsonl`);
+    const filename = `${today}.jsonl`;
+    validateDailyLogFilename(filename);
+    this.dailyLogFile = createSafeVibeKitPath(filename, 'sessions');
     
     // Initialize metadata
     this.metadata = {
-      sessionId,
+      sessionId: this.sessionId, // Use the validated/corrected session ID
       agentName,
       startTime: Date.now(),
       status: 'running',
@@ -73,9 +117,25 @@ export class SessionLogger {
   }
 
   async initialize(): Promise<void> {
+    // Debug path information
+    console.log(`[SessionLogger] Initializing session ${this.sessionId}`);
+    console.log(`[SessionLogger] Daily log file path: ${this.dailyLogFile}`);
+    console.log(`[SessionLogger] Home directory: ${require('os').homedir()}`);
+    
     // Ensure sessions directory exists
     const sessionsRoot = path.dirname(this.dailyLogFile);
+    console.log(`[SessionLogger] Sessions root directory: ${sessionsRoot}`);
     await fs.mkdir(sessionsRoot, { recursive: true });
+    
+    // Initialize SessionManager for this session
+    await SessionManager.initialize();
+    await SessionManager.createSession(this.metadata.agentName, {
+      sessionId: this.sessionId,
+      projectId: this.metadata.projectId,
+      projectRoot: this.metadata.projectRoot,
+      taskId: this.metadata.taskId,
+      subtaskId: this.metadata.subtaskId
+    });
     
     // Write initial metadata as first entry
     await this.addLogEntry({
@@ -93,10 +153,14 @@ export class SessionLogger {
       subtaskId: this.metadata.subtaskId
     });
     
-    // Start periodic flush every 100ms for faster real-time updates
+    // Immediately flush the initial metadata and start log to ensure they're written to disk
+    // This prevents race conditions where the UI starts streaming before the session exists
+    await this.flush();
+    
+    // Start periodic flush with production improvements
     this.flushInterval = setInterval(() => {
       this.flush().catch(err => console.error('Failed to flush logs:', err));
-    }, 100);
+    }, SessionLogger.FLUSH_INTERVAL);
   }
 
   async log(type: LogEntry['type'], data: string, metadata?: LogEntry['metadata']): Promise<void> {
@@ -127,7 +191,40 @@ export class SessionLogger {
   }
   
   private async addLogEntry(entry: SessionLogEntry): Promise<void> {
+    // Resource limit checks
+    if (this.logCount >= SessionLogger.MAX_TOTAL_LOG_ENTRIES) {
+      this.logger.warn('Maximum log entries reached, ignoring new entries', {
+        currentCount: this.logCount,
+        maxEntries: SessionLogger.MAX_TOTAL_LOG_ENTRIES
+      });
+      return;
+    }
+    
+    // Validate entry size to prevent memory attacks
+    const entryJson = JSON.stringify(entry);
+    const entrySize = Buffer.byteLength(entryJson);
+    
+    if (entrySize > SessionLogger.MAX_LOG_ENTRY_SIZE) {
+      this.logger.warn('Log entry too large, truncating', {
+        entrySize,
+        maxSize: SessionLogger.MAX_LOG_ENTRY_SIZE,
+        entryType: entry.logType || entry.type
+      });
+      // Truncate the data field if it's too large
+      if (entry.data && entry.data.length > SessionLogger.MAX_LOG_ENTRY_SIZE / 2) {
+        entry.data = entry.data.substring(0, SessionLogger.MAX_LOG_ENTRY_SIZE / 2) + '... [TRUNCATED]';
+      }
+    }
+    
+    // Check buffer limits and flush if needed
+    if (this.logBuffer.length >= SessionLogger.MAX_BUFFER_SIZE ||
+        this.bufferSizeBytes + entrySize >= SessionLogger.MAX_BUFFER_BYTES) {
+      await this.flush();
+    }
+    
     this.logBuffer.push(entry);
+    this.logCount++;
+    this.bufferSizeBytes += entrySize;
   }
 
   private async detectAndLogCommands(output: string): Promise<void> {
@@ -239,7 +336,11 @@ export class SessionLogger {
   }
 
   async captureUpdate(update: string): Promise<void> {
-    console.log(`[SessionLogger] Capturing update for session ${this.sessionId}:`, update.substring(0, 200));
+    this.logger.debug('Capturing agent update', {
+      updateLength: update.length,
+      updatePreview: update.substring(0, 100) + (update.length > 100 ? '...' : ''),
+      operation: 'captureUpdate'
+    });
     
     // Store ONLY the raw update to preserve original format without any transformation
     await this.log('update', update);
@@ -267,29 +368,84 @@ export class SessionLogger {
   }
 
   private async flush(): Promise<void> {
+    // Prevent concurrent flush operations
+    if (this.isFlushInProgress) {
+      // If there's already a flush in progress, wait for it to complete
+      if (this.pendingFlushPromise) {
+        await this.pendingFlushPromise;
+      }
+      return;
+    }
+    
     if (this.logBuffer.length === 0 || this.isClosed) {
       return;
     }
 
+    // Mark flush as in progress and create promise for other callers to await
+    this.isFlushInProgress = true;
+    this.pendingFlushPromise = this.performFlush();
+    
+    try {
+      await this.pendingFlushPromise;
+    } finally {
+      this.isFlushInProgress = false;
+      this.pendingFlushPromise = null;
+    }
+  }
+  
+  private async performFlush(): Promise<void> {
     const entriesToFlush = [...this.logBuffer];
     this.logBuffer = [];
+    const previousBufferSize = this.bufferSizeBytes;
+    this.bufferSizeBytes = 0;
 
     try {
-      // Append to daily log file in JSONL format
+      // Use SafeFileWriter for atomic operations
       const logLines = entriesToFlush.map(entry => JSON.stringify(entry)).join('\n') + '\n';
-      await fs.appendFile(this.dailyLogFile, logLines, { flag: 'a' });
+      await SafeFileWriter.appendFile(this.dailyLogFile, logLines);
       
-      // Force file system sync for immediate visibility
-      const fileHandle = await fs.open(this.dailyLogFile, 'r+');
-      await fileHandle.sync();
-      await fileHandle.close();
+      // Update checkpoint for recovery
+      const checkpoint: SessionCheckpoint = {
+        sessionId: this.sessionId,
+        lastProcessedLine: this.logCount,
+        lastEventSent: Date.now(),
+        lastFlushTime: Date.now(),
+        bufferSize: 0,
+        clientConnections: [],
+        terminalPid: process.pid
+      };
+      await SessionManager.saveCheckpoint(checkpoint);
       
-      console.log(`[SessionLogger] Flushed ${entriesToFlush.length} logs for session ${this.sessionId}`, 
-        entriesToFlush.map(e => `${e.type}: ${e.data?.substring(0, 50) || JSON.stringify(e.metadata)?.substring(0, 50) || ''}`));
+      this.lastFlushTime = Date.now();
+      
+      this.logger.debug('Logs flushed successfully', {
+        entriesCount: entriesToFlush.length,
+        bufferSizeBytes: this.bufferSizeBytes,
+        operation: 'flush'
+      });
     } catch (error) {
-      console.error('Failed to write logs:', error);
-      // Put entries back if write failed
-      this.logBuffer.unshift(...entriesToFlush);
+      this.logger.logError('Failed to write logs to file', error as Error, {
+        entriesCount: entriesToFlush.length,
+        operation: 'flush'
+      });
+      
+      // Put entries back if write failed, but only if the buffer is not full
+      if (this.logBuffer.length + entriesToFlush.length <= SessionLogger.MAX_BUFFER_SIZE) {
+        this.logBuffer.unshift(...entriesToFlush);
+        this.bufferSizeBytes = previousBufferSize;
+        this.logger.info('Log entries restored to buffer after failed write', {
+          entriesRestored: entriesToFlush.length
+        });
+      } else {
+        this.logger.warn('Buffer full, dropping log entries', {
+          entriesDropped: entriesToFlush.length,
+          bufferSize: this.logBuffer.length,
+          maxBufferSize: SessionLogger.MAX_BUFFER_SIZE
+        });
+      }
+      
+      // Re-throw error to notify caller
+      throw error;
     }
   }
 
@@ -342,6 +498,12 @@ export class SessionLogger {
 
     // Final flush
     await this.flush();
+    
+    // Complete session in SessionManager
+    await SessionManager.completeSession(this.sessionId, exitCode);
+    
+    // Clean up checkpoint
+    await SessionManager.deleteCheckpoint(this.sessionId);
 
     this.isClosed = true;
   }
@@ -356,7 +518,12 @@ export class SessionLogger {
 
   // Static method to read session logs
   static async readSession(sessionId: string): Promise<{ metadata: SessionMetadata; logs: LogEntry[] }> {
-    const sessionsRoot = path.join(os.homedir(), '.vibekit', 'sessions');
+    // Validate session ID
+    validateSessionId(sessionId);
+    
+    const sessionsRoot = createSafeVibeKitPath('', 'sessions');
+    console.log(`[SessionLogger.readSession] Searching for session ${sessionId} in: ${sessionsRoot}`);
+    console.log(`[SessionLogger.readSession] Home directory: ${require('os').homedir()}`);
     
     // Read all daily log files to find the session
     const files = await fs.readdir(sessionsRoot);
@@ -367,7 +534,9 @@ export class SessionLogger {
     
     for (const file of jsonlFiles) {
       try {
-        const filePath = path.join(sessionsRoot, file);
+        // Validate filename before using it
+        validateDailyLogFilename(file);
+        const filePath = createSafeVibeKitPath(file, 'sessions');
         const content = await fs.readFile(filePath, 'utf8');
         const lines = content.split('\n').filter(line => line.trim());
         

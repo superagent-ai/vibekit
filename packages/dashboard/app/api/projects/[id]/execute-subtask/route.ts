@@ -1,3 +1,6 @@
+// Load environment variables from root .env file
+import '@/load-env';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { VibeKit } from '@vibe-kit/sdk';
 import { createLocalProvider } from '@vibe-kit/dagger';
@@ -87,6 +90,35 @@ export async function POST(
     const body: ExecuteSubtaskRequest = await request.json();
     const { parentTask, subtask, agent, sandbox, branch, projectRoot, sessionId: providedSessionId } = body;
     
+    // Use provided session ID or generate new one - do this immediately
+    const sessionId = providedSessionId || SessionIdGenerator.generate();
+    console.log('Using session ID for execution:', sessionId, providedSessionId ? '(provided)' : '(generated)');
+    
+    // Initialize session logger immediately to prevent race conditions with SSE connections
+    try {
+      sessionLogger = new SessionLogger(sessionId, agent, {
+        projectId: id,
+        projectRoot,
+        taskId: parentTask.id.toString(),
+        subtaskId: subtask.id.toString()
+      });
+      console.log('SessionLogger created, about to initialize...', sessionId);
+      console.log(`[Execute API] Current working directory: ${process.cwd()}`);
+      await sessionLogger.initialize();
+      console.log('✅ Session logger initialized early:', sessionId);
+      
+      // Verify session can be read immediately after initialization
+      try {
+        const testRead = await SessionLogger.readSession(sessionId);
+        console.log('✅ Session verified readable immediately after init:', sessionId, 'logs:', testRead.logs.length);
+      } catch (verifyError) {
+        console.error('❌ CRITICAL: Session not readable immediately after init:', sessionId, verifyError.message);
+      }
+    } catch (sessionError) {
+      console.error('❌ CRITICAL: Failed to initialize session logger:', sessionError);
+      throw new Error(`Failed to initialize session logger: ${sessionError.message}`);
+    }
+    
     // Check Docker status if using Dagger sandbox
     if (sandbox === 'dagger') {
       const dockerCheck = await checkDockerStatus();
@@ -116,19 +148,7 @@ export async function POST(
       projectRoot
     });
     
-    // Use provided session ID or generate new one
-    const sessionId = providedSessionId || SessionIdGenerator.generate();
-    console.log('Using session ID for execution:', sessionId, providedSessionId ? '(provided)' : '(generated)');
-    
-    // Initialize session logger for real-time logging
-    sessionLogger = new SessionLogger(sessionId, agent, {
-      projectId: id,
-      projectRoot,
-      taskId: parentTask.id.toString(),
-      subtaskId: subtask.id.toString()
-    });
-    await sessionLogger.initialize();
-    console.log('Session logger initialized:', sessionId);
+    // Session ID and logger already initialized at the start of the request
     
     
     // Log initial sandbox configuration
@@ -142,9 +162,9 @@ export async function POST(
     // Check if analytics are enabled and initialize if so
     const analyticsEnabled = await AgentAnalytics.isEnabled();
     if (analyticsEnabled) {
-      analytics = new AgentAnalytics(agent, projectRoot, id);
+      analytics = new AgentAnalytics(agent, projectRoot, id, sessionId);
       await analytics.initialize();
-      console.log('Analytics initialized for session');
+      console.log('Analytics initialized for session:', sessionId);
     }
     
     // Fetch settings to get Docker Hub username
@@ -193,6 +213,8 @@ export async function POST(
     switch (agent) {
       case 'claude':
         agentConfig.provider = 'anthropic';
+        // Prefer OAuth token for agent execution, but include API key for PR metadata generation
+        agentConfig.oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
         agentConfig.apiKey = process.env.ANTHROPIC_API_KEY;
         agentConfig.model = 'claude-sonnet-4-20250514';
         break;

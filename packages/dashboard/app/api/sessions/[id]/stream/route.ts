@@ -5,10 +5,122 @@ import os from 'os';
 import chokidar, { FSWatcher } from 'chokidar';
 import { promises as fs } from 'fs';
 
-// Keep-alive interval to prevent connection timeout
+// Optimized intervals for production
 const KEEP_ALIVE_INTERVAL = 30000; // 30 seconds
-// Polling interval for hybrid approach
-const LOG_POLL_INTERVAL = 100; // 100ms for faster real-time updates
+const LOG_POLL_INTERVAL = 250; // Reduced from 100ms to 250ms
+const CONNECTION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const MAX_CONCURRENT_CONNECTIONS = 100; // Connection limit
+
+// Global connection tracking with atomic operations
+const activeConnections = new Map<string, number>(); // sessionId -> count
+let totalConnections = 0;
+const connectionMutex = new Map<string, Promise<void>>(); // sessionId -> operation promise
+
+// Connection state tracking
+enum ConnectionState {
+  CONNECTING = 'connecting',
+  CONNECTED = 'connected', 
+  CLOSING = 'closing',
+  CLOSED = 'closed'
+}
+
+interface ConnectionInfo {
+  id: string;
+  sessionId: string;
+  state: ConnectionState;
+  createdAt: number;
+  lastActivity: number;
+}
+
+// Active connection instances
+const connectionInstances = new Map<string, ConnectionInfo>(); // connectionId -> ConnectionInfo
+
+/**
+ * Atomic connection operations to prevent race conditions
+ */
+async function withConnectionLock<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+  // Wait for any existing operation on this session
+  const existingOperation = connectionMutex.get(sessionId);
+  if (existingOperation) {
+    await existingOperation;
+  }
+  
+  // Create a new operation
+  let resolve: () => void;
+  const operationPromise = new Promise<void>((res) => { resolve = res; });
+  connectionMutex.set(sessionId, operationPromise);
+  
+  try {
+    const result = await operation();
+    return result;
+  } finally {
+    resolve!();
+    // Clean up if this was the last operation
+    if (connectionMutex.get(sessionId) === operationPromise) {
+      connectionMutex.delete(sessionId);
+    }
+  }
+}
+
+/**
+ * Safely increment connection count
+ */
+async function incrementConnection(sessionId: string, connectionId: string): Promise<void> {
+  return withConnectionLock(sessionId, async () => {
+    // Check limits before incrementing
+    if (totalConnections >= MAX_CONCURRENT_CONNECTIONS) {
+      throw new Error('Connection limit exceeded');
+    }
+    
+    totalConnections++;
+    const sessionConnections = activeConnections.get(sessionId) || 0;
+    activeConnections.set(sessionId, sessionConnections + 1);
+    
+    // Track connection instance
+    connectionInstances.set(connectionId, {
+      id: connectionId,
+      sessionId,
+      state: ConnectionState.CONNECTING,
+      createdAt: Date.now(),
+      lastActivity: Date.now()
+    });
+    
+    console.log(`[SSE] Connection ${connectionId} registered for session ${sessionId}. Total: ${totalConnections}, Session: ${sessionConnections + 1}`);
+  });
+}
+
+/**
+ * Safely decrement connection count with cleanup verification
+ */
+async function decrementConnection(connectionId: string): Promise<void> {
+  const connectionInfo = connectionInstances.get(connectionId);
+  if (!connectionInfo) {
+    console.warn(`[SSE] Attempted to decrement unknown connection: ${connectionId}`);
+    return;
+  }
+  
+  const sessionId = connectionInfo.sessionId;
+  
+  return withConnectionLock(sessionId, async () => {
+    // Update connection state
+    connectionInfo.state = ConnectionState.CLOSING;
+    
+    // Decrement counts
+    totalConnections = Math.max(0, totalConnections - 1);
+    const sessionConnections = activeConnections.get(sessionId) || 1;
+    
+    if (sessionConnections <= 1) {
+      activeConnections.delete(sessionId);
+    } else {
+      activeConnections.set(sessionId, sessionConnections - 1);
+    }
+    
+    // Remove connection instance
+    connectionInstances.delete(connectionId);
+    
+    console.log(`[SSE] Connection ${connectionId} cleaned up for session ${sessionId}. Remaining: ${totalConnections}`);
+  });
+}
 
 export async function GET(
   request: NextRequest,
@@ -19,7 +131,77 @@ export async function GET(
   let keepAliveTimer: NodeJS.Timeout | null = null;
   let watcher: FSWatcher | null = null;
   let pollTimer: NodeJS.Timeout | null = null;
+  let fileExistsInterval: NodeJS.Timeout | null = null;
   let lastLine = 0;
+  let connectionId = `${sessionId}-${Date.now()}`;
+  
+  // Track connection using atomic operations
+  try {
+    await incrementConnection(sessionId, connectionId);
+  } catch (error) {
+    return new Response('Connection limit exceeded', { status: 503 });
+  }
+  
+  // Cleanup tracking to prevent multiple cleanup calls
+  let cleanupCompleted = false;
+  const cleanup = async (reason = 'unknown') => {
+    if (cleanupCompleted) {
+      return;
+    }
+    cleanupCompleted = true;
+    
+    console.log(`[SSE] Starting cleanup for connection ${connectionId} (reason: ${reason})`);
+    
+    // Update connection state
+    const connectionInfo = connectionInstances.get(connectionId);
+    if (connectionInfo) {
+      connectionInfo.state = ConnectionState.CLOSING;
+    }
+    
+    // Clean up timers first to prevent new operations
+    if (keepAliveTimer) {
+      clearInterval(keepAliveTimer);
+      keepAliveTimer = null;
+    }
+    
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    
+    if (fileExistsInterval) {
+      clearInterval(fileExistsInterval);
+      fileExistsInterval = null;
+    }
+    
+    // Clean up file watcher
+    if (watcher) {
+      try {
+        await watcher.close();
+        watcher = null;
+      } catch (error) {
+        console.error(`[SSE] Error closing file watcher:`, error);
+      }
+    }
+    
+    // Clean up connection tracking - this must succeed to prevent memory leaks
+    try {
+      await decrementConnection(connectionId);
+    } catch (error) {
+      console.error(`[SSE] Critical error in connection cleanup:`, error);
+      // Force cleanup even if atomic operation fails
+      const sessionConnections = activeConnections.get(sessionId) || 1;
+      totalConnections = Math.max(0, totalConnections - 1);
+      if (sessionConnections <= 1) {
+        activeConnections.delete(sessionId);
+      } else {
+        activeConnections.set(sessionId, sessionConnections - 1);
+      }
+      connectionInstances.delete(connectionId);
+    }
+    
+    console.log(`[SSE] Cleanup completed for connection ${connectionId}`);
+  };
   
   const stream = new ReadableStream({
     async start(controller) {
@@ -46,9 +228,11 @@ export async function GET(
         
         lastLine = session.logs.length;
       } catch (error: any) {
-        // Session might not exist yet
-        if (error.code !== 'ENOENT') {
-          console.error('Failed to load initial session:', error);
+        // Session might not exist yet (could be ENOENT for file system errors or "Session not found" for our custom error)
+        if (error.code !== 'ENOENT' && !error.message?.includes('not found')) {
+          console.error('[SSE] Failed to load initial session:', error);
+        } else {
+          console.log(`[SSE] Session ${sessionId} not found yet, will wait for it to be created`);
         }
       }
       
@@ -164,16 +348,24 @@ export async function GET(
         }, LOG_POLL_INTERVAL);
         
         console.log(`[SSE] Set up chokidar watcher and polling for session ${sessionId}`);
+        
+        // Mark connection as connected
+        const connectionInfo = connectionInstances.get(connectionId);
+        if (connectionInfo) {
+          connectionInfo.state = ConnectionState.CONNECTED;
+          connectionInfo.lastActivity = Date.now();
+        }
       } catch (error: any) {
         // File might not exist yet - poll for it
         if (error.code === 'ENOENT') {
           console.log(`[SSE] Daily log file doesn't exist yet for session ${sessionId}, polling for creation...`);
           
           // Poll every 100ms until file exists
-          const fileExistsInterval = setInterval(async () => {
+          fileExistsInterval = setInterval(async () => {
             try {
               await fs.access(dailyLogFile);
               clearInterval(fileExistsInterval);
+              fileExistsInterval = null;
               
               console.log(`[SSE] Daily log file created for session ${sessionId}, setting up watcher`);
               
@@ -208,11 +400,6 @@ export async function GET(
               // Still doesn't exist, keep polling
             }
           }, 100);
-          
-          // Clean up interval on close
-          request.signal.addEventListener('abort', () => {
-            clearInterval(fileExistsInterval);
-          });
         } else {
           console.error('Failed to set up file watcher:', error);
         }
@@ -220,24 +407,32 @@ export async function GET(
     },
     
     cancel() {
-      // Clean up resources
-      if (keepAliveTimer) {
-        clearInterval(keepAliveTimer);
-        keepAliveTimer = null;
-      }
-      
-      if (watcher) {
-        watcher.close();
-        watcher = null;
-      }
-      
-      if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-      }
-      
-      console.log(`[SSE] Cleaned up resources for session ${sessionId}`);
+      // Use our comprehensive cleanup function
+      cleanup('stream_cancel').catch(error => {
+        console.error(`[SSE] Error during stream cleanup:`, error);
+      });
     }
+  });
+  
+  // Set connection timeout
+  const timeoutId = setTimeout(() => {
+    console.log(`[SSE] Connection timeout for session ${sessionId}`);
+    cleanup('timeout').catch(error => {
+      console.error(`[SSE] Error during timeout cleanup:`, error);
+    });
+    try {
+      stream.cancel();
+    } catch {
+      // Stream might already be closed
+    }
+  }, CONNECTION_TIMEOUT);
+  
+  // Clear timeout when connection ends
+  request.signal.addEventListener('abort', () => {
+    clearTimeout(timeoutId);
+    cleanup('abort').catch(error => {
+      console.error(`[SSE] Error during abort cleanup:`, error);
+    });
   });
   
   return new Response(stream, {

@@ -4,6 +4,7 @@ import os from 'os';
 import crypto from 'crypto';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { SessionIdGenerator } from './session-id-generator';
 
 const execAsync = promisify(exec);
 
@@ -61,12 +62,14 @@ export class AgentAnalytics {
   constructor(
     agentName: string,
     projectRoot?: string,
-    projectId?: string
+    projectId?: string,
+    sessionId?: string
   ) {
-    const sessionId = Date.now().toString();
+    // Use provided session ID or generate a new one with analytics prefix
+    const analyticsSessionId = sessionId || SessionIdGenerator.generateWithPrefix('analytics');
     
     this.metrics = {
-      sessionId,
+      sessionId: analyticsSessionId,
       agentName,
       projectId,
       startTime: Date.now(),
@@ -290,8 +293,8 @@ export class AgentAnalytics {
         existingData.push(this.metrics);
       }
       
-      // Write updated data
-      await fs.writeFile(analyticsFile, JSON.stringify(existingData, null, 2));
+      // Write updated data with secure permissions
+      await fs.writeFile(analyticsFile, JSON.stringify(existingData, null, 2), { mode: 0o600 });
       
       console.log('Analytics saved:', {
         sessionId: this.metrics.sessionId,

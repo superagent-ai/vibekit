@@ -607,13 +607,9 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                         setActiveTab("logs");
                         
                         try {
-                          // Generate session ID immediately to establish SSE connection
+                          // Generate session ID for the API call
                           const executionSessionId = SessionIdGenerator.generate();
-                          console.log("Generated session ID for real-time logging:", executionSessionId);
-                          setSessionId(executionSessionId);
-                          
-                          // Small delay to allow SSE connection to establish
-                          await new Promise(resolve => setTimeout(resolve, 100));
+                          console.log("Generated session ID for execution:", executionSessionId);
                           
                           console.log("Executing subtask:", {
                             projectId,
@@ -625,7 +621,8 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                             sessionId: executionSessionId
                           });
                           
-                          const response = await fetch(`/api/projects/${projectId}/execute-subtask`, {
+                          // Start API call to create the session (don't await yet)
+                          const responsePromise = fetch(`/api/projects/${projectId}/execute-subtask`, {
                             method: 'POST',
                             headers: {
                               'Content-Type': 'application/json',
@@ -650,6 +647,14 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                             }),
                           });
                           
+                          // Give the API call a moment to start session creation, then establish SSE connection
+                          setTimeout(() => {
+                            setSessionId(executionSessionId);
+                            console.log("Established SSE connection for session:", executionSessionId);
+                          }, 100);
+                          
+                          // Now await the full response
+                          const response = await responsePromise;
                           const result = await response.json();
                           
                           if (result.success) {

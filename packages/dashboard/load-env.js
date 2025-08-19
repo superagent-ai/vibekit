@@ -1,16 +1,30 @@
 // Load environment variables from root .env file for Next.js
 const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs');
 
-// Load from root .env file
-const result = dotenv.config({ 
-  path: path.resolve(__dirname, '../../.env') 
-});
+// Prevent multiple loads
+if (!global._vibekitEnvLoaded) {
+  global._vibekitEnvLoaded = true;
+  
+  // Explicitly load only from root .env file
+  const rootEnvPath = path.resolve(__dirname, '../../.env');
 
-if (result.error) {
-  console.warn('Warning: Could not load root .env file:', result.error.message);
-} else {
-  console.log('Loaded environment variables from root .env file');
+  // Check if the file exists first
+  if (fs.existsSync(rootEnvPath)) {
+    const result = dotenv.config({ 
+      path: rootEnvPath,
+      override: false  // Don't override existing env vars
+    });
+
+    if (result.error) {
+      console.warn('Warning: Could not load root .env file:', result.error.message);
+    } else {
+      console.log('✅ Loaded environment variables from root .env file');
+    }
+  } else {
+    console.warn('⚠️ Root .env file not found at:', rootEnvPath);
+  }
   
   // Log which GitHub token is available
   if (process.env.GITHUB_TOKEN) {

@@ -53,7 +53,22 @@ export function useSmartSessionLogs(
     try {
       const response = await fetch(`/api/sessions/${sessionId}/metadata`);
       if (!response.ok) {
-        throw new Error(`Failed to fetch metadata: ${response.statusText}`);
+        // If session not found (404), it might not be created yet - this is normal
+        if (response.status === 404) {
+          console.log(`[Metadata] Session ${sessionId} not found yet, will retry in 1 second`);
+          // Retry after a short delay
+          const currentSessionId = sessionId;
+          setTimeout(() => {
+            if (currentSessionId === sessionId) { // Check if sessionId hasn't changed
+              fetchMetadata();
+            }
+          }, 1000);
+          return; // Exit gracefully, don't set error
+        }
+        
+        // For other errors, still throw
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(`Failed to fetch metadata: ${response.statusText} - ${errorData.error || errorData.details || ''}`);
       }
       
       const metadata: SessionMetadata = await response.json();

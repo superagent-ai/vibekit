@@ -1,0 +1,325 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { SessionManager } from '@/lib/session-manager';
+import { SessionRecovery } from '@/lib/session-recovery';
+import { ExecutionHistoryManager } from '@/lib/execution-history-manager';
+import { getFileWatcherPool } from '@/lib/file-watcher-pool';
+import { SafeFileWriter } from '@/lib/safe-file-writer';
+import { AgentAnalytics } from '@/lib/agent-analytics';
+import { promises as fs } from 'fs';
+import path from 'path';
+import os from 'os';
+
+interface ComponentHealth {
+  name: string;
+  status: 'healthy' | 'warning' | 'error';
+  message: string;
+  details?: Record<string, any>;
+  lastCheck?: number;
+  errors?: string[];
+}
+
+interface SystemHealth {
+  overall: 'healthy' | 'warning' | 'error';
+  timestamp: number;
+  uptime: number;
+  components: ComponentHealth[];
+  metrics: {
+    totalSessions: number;
+    activeSessions: number;
+    totalExecutions: number;
+    activeExecutions: number;
+    fileWatchers: number;
+    activeLocks: number;
+    diskUsage: {
+      sessions: string;
+      executions: string;
+      analytics: string;
+    };
+    memory: {
+      heapUsed: string;
+      heapTotal: string;
+      external: string;
+    };
+  };
+  version: string;
+  environment: string;
+}
+
+export async function GET(request: NextRequest): Promise<Response> {
+  const startTime = Date.now();
+  const components: ComponentHealth[] = [];
+  
+  try {
+    // Check Session Manager
+    try {
+      await SessionManager.initialize();
+      const sessionStats = await SessionManager.getStats();
+      
+      components.push({
+        name: 'Session Manager',
+        status: 'healthy',
+        message: `Managing ${sessionStats.totalSessions} sessions`,
+        details: sessionStats,
+        lastCheck: Date.now()
+      });
+    } catch (error) {
+      components.push({
+        name: 'Session Manager',
+        status: 'error',
+        message: 'Failed to initialize',
+        errors: [error instanceof Error ? error.message : String(error)],
+        lastCheck: Date.now()
+      });
+    }
+    
+    // Check Session Recovery
+    try {
+      const recoveryStats = SessionRecovery.getStats();
+      const status = recoveryStats.activeRecoveries > 10 ? 'warning' : 'healthy';
+      
+      components.push({
+        name: 'Session Recovery',
+        status,
+        message: `${recoveryStats.activeRecoveries} active recoveries`,
+        details: recoveryStats,
+        lastCheck: Date.now()
+      });
+    } catch (error) {
+      components.push({
+        name: 'Session Recovery',
+        status: 'error',
+        message: 'Failed to get recovery stats',
+        errors: [error instanceof Error ? error.message : String(error)],
+        lastCheck: Date.now()
+      });
+    }
+    
+    // Check Execution History Manager
+    try {
+      await ExecutionHistoryManager.initialize();
+      const historyHealth = await ExecutionHistoryManager.getSystemHealth();
+      
+      components.push({
+        name: 'Execution History',
+        status: historyHealth.isHealthy ? 'healthy' : 'error',
+        message: `${historyHealth.totalExecutions} total executions, ${historyHealth.activeExecutions} active`,
+        details: historyHealth,
+        lastCheck: Date.now(),
+        errors: historyHealth.lastError ? [historyHealth.lastError] : undefined
+      });
+    } catch (error) {
+      components.push({
+        name: 'Execution History',
+        status: 'error',
+        message: 'Failed to check history manager',
+        errors: [error instanceof Error ? error.message : String(error)],
+        lastCheck: Date.now()
+      });
+    }
+    
+    // Check File Watcher Pool
+    try {
+      const fileWatcherPool = getFileWatcherPool();
+      const watcherStats = fileWatcherPool.getStats();
+      const status = watcherStats.totalWatchers > 50 ? 'warning' : 'healthy';
+      
+      components.push({
+        name: 'File Watcher Pool',
+        status,
+        message: `${watcherStats.totalWatchers} watchers, ${watcherStats.totalSessions} sessions`,
+        details: watcherStats,
+        lastCheck: Date.now()
+      });
+    } catch (error) {
+      components.push({
+        name: 'File Watcher Pool',
+        status: 'error',
+        message: 'Failed to get watcher stats',
+        errors: [error instanceof Error ? error.message : String(error)],
+        lastCheck: Date.now()
+      });
+    }
+    
+    // Check Safe File Writer
+    try {
+      const writerStats = SafeFileWriter.getStats();
+      const status = writerStats.activeLocks > 10 ? 'warning' : 'healthy';
+      
+      components.push({
+        name: 'Safe File Writer',
+        status,
+        message: `${writerStats.activeLocks} active locks`,
+        details: writerStats,
+        lastCheck: Date.now()
+      });
+    } catch (error) {
+      components.push({
+        name: 'Safe File Writer',
+        status: 'error',
+        message: 'Failed to get writer stats',
+        errors: [error instanceof Error ? error.message : String(error)],
+        lastCheck: Date.now()
+      });
+    }
+    
+    // Check Analytics
+    try {
+      const analyticsEnabled = await AgentAnalytics.isEnabled();
+      
+      components.push({
+        name: 'Analytics',
+        status: analyticsEnabled ? 'healthy' : 'warning',
+        message: analyticsEnabled ? 'Analytics enabled' : 'Analytics disabled',
+        details: { enabled: analyticsEnabled },
+        lastCheck: Date.now()
+      });
+    } catch (error) {
+      components.push({
+        name: 'Analytics',
+        status: 'error',
+        message: 'Failed to check analytics status',
+        errors: [error instanceof Error ? error.message : String(error)],
+        lastCheck: Date.now()
+      });
+    }
+    
+    // Calculate disk usage
+    const diskUsage = await calculateDiskUsage();
+    
+    // Get memory usage
+    const memoryUsage = process.memoryUsage();
+    
+    // Extract metrics from components
+    const sessionComponent = components.find(c => c.name === 'Session Manager');
+    const historyComponent = components.find(c => c.name === 'Execution History');
+    const watcherComponent = components.find(c => c.name === 'File Watcher Pool');
+    const writerComponent = components.find(c => c.name === 'Safe File Writer');
+    
+    // Determine overall health
+    const errorCount = components.filter(c => c.status === 'error').length;
+    const warningCount = components.filter(c => c.status === 'warning').length;
+    
+    let overallStatus: 'healthy' | 'warning' | 'error' = 'healthy';
+    if (errorCount > 0) {
+      overallStatus = 'error';
+    } else if (warningCount > 0) {
+      overallStatus = 'warning';
+    }
+    
+    const health: SystemHealth = {
+      overall: overallStatus,
+      timestamp: Date.now(),
+      uptime: process.uptime() * 1000, // Convert to milliseconds
+      components,
+      metrics: {
+        totalSessions: sessionComponent?.details?.totalSessions || 0,
+        activeSessions: sessionComponent?.details?.activeSessions || 0,
+        totalExecutions: historyComponent?.details?.totalExecutions || 0,
+        activeExecutions: historyComponent?.details?.activeExecutions || 0,
+        fileWatchers: watcherComponent?.details?.totalWatchers || 0,
+        activeLocks: writerComponent?.details?.activeLocks || 0,
+        diskUsage,
+        memory: {
+          heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`,
+          heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`,
+          external: `${Math.round(memoryUsage.external / 1024 / 1024)} MB`
+        }
+      },
+      version: process.env.npm_package_version || '0.0.0',
+      environment: process.env.NODE_ENV || 'development'
+    };
+    
+    const responseTime = Date.now() - startTime;
+    
+    return NextResponse.json(health, {
+      status: overallStatus === 'error' ? 503 : 200,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Response-Time': `${responseTime}ms`
+      }
+    });
+    
+  } catch (error) {
+    console.error('Health check failed:', error);
+    
+    const errorHealth: SystemHealth = {
+      overall: 'error',
+      timestamp: Date.now(),
+      uptime: process.uptime() * 1000,
+      components: [{
+        name: 'Health Check',
+        status: 'error',
+        message: 'Health check system failed',
+        errors: [error instanceof Error ? error.message : String(error)],
+        lastCheck: Date.now()
+      }],
+      metrics: {
+        totalSessions: 0,
+        activeSessions: 0,
+        totalExecutions: 0,
+        activeExecutions: 0,
+        fileWatchers: 0,
+        activeLocks: 0,
+        diskUsage: { sessions: '0 MB', executions: '0 MB', analytics: '0 MB' },
+        memory: { heapUsed: '0 MB', heapTotal: '0 MB', external: '0 MB' }
+      },
+      version: '0.0.0',
+      environment: 'unknown'
+    };
+    
+    return NextResponse.json(errorHealth, { status: 500 });
+  }
+}
+
+/**
+ * Calculate disk usage for different data directories
+ */
+async function calculateDiskUsage(): Promise<{ sessions: string; executions: string; analytics: string }> {
+  const vibekitDir = path.join(os.homedir(), '.vibekit');
+  
+  const directories = {
+    sessions: path.join(vibekitDir, 'sessions'),
+    executions: path.join(vibekitDir, 'execution-history'),
+    analytics: path.join(vibekitDir, 'analytics')
+  };
+  
+  const usage = { sessions: '0 MB', executions: '0 MB', analytics: '0 MB' };
+  
+  for (const [key, dir] of Object.entries(directories)) {
+    try {
+      const size = await getDirectorySize(dir);
+      usage[key as keyof typeof usage] = `${(size / 1024 / 1024).toFixed(2)} MB`;
+    } catch (error) {
+      // Directory might not exist, keep 0 MB
+    }
+  }
+  
+  return usage;
+}
+
+/**
+ * Recursively calculate directory size
+ */
+async function getDirectorySize(dirPath: string): Promise<number> {
+  let totalSize = 0;
+  
+  try {
+    const items = await fs.readdir(dirPath);
+    
+    for (const item of items) {
+      const itemPath = path.join(dirPath, item);
+      const stats = await fs.stat(itemPath);
+      
+      if (stats.isDirectory()) {
+        totalSize += await getDirectorySize(itemPath);
+      } else {
+        totalSize += stats.size;
+      }
+    }
+  } catch (error) {
+    // Handle permission errors or missing directories
+    return 0;
+  }
+  
+  return totalSize;
+}

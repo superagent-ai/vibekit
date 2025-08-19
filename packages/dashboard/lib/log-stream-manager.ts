@@ -57,7 +57,7 @@ async function appendLogToFile(filePath: string, logEntry: LogEntry): Promise<vo
     // Check if log already exists (avoid duplicates)
     if (!existingLogs.some(log => log.id === logEntry.id)) {
       existingLogs.push(logEntry)
-      await writeFile(filePath, JSON.stringify(existingLogs, null, 2))
+      await writeFile(filePath, JSON.stringify(existingLogs, null, 2), { mode: 0o600 })
     }
   } catch (error) {
     console.error('Failed to append log to file:', error)
