@@ -909,6 +909,27 @@ export function ExecutionLogsTable({ sessionId, className, onLogCountChange, onT
       // Not JSON, process as regular text
     }
     
+    // Check for PR links and render them as clickable links
+    const prMatch = data.match(/Pull request #(\d+) created successfully: (https:\/\/github\.com\/[^\s]+)/);
+    if (prMatch) {
+      const prNumber = prMatch[1];
+      const prUrl = prMatch[2];
+      return (
+        <span>
+          Pull request{' '}
+          <a 
+            href={prUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:text-blue-800 underline font-medium"
+          >
+            #{prNumber}
+          </a>
+          {' '}created successfully
+        </span>
+      );
+    }
+    
     // Remove all non-printable characters from the beginning including emojis, spaces, and control chars
     // This regex removes any character that's not a normal printable ASCII or common punctuation
     let processed = data.replace(/^[^\x21-\x7E\xA1-\xFF]+/, '');

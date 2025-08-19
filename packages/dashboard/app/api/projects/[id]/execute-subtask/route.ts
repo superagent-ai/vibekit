@@ -498,9 +498,12 @@ export async function POST(
         
         console.log('Pull request created:', pullRequestResult);
         if (sessionLogger) {
-          await sessionLogger.captureInfo('Pull request created successfully', {
+          await sessionLogger.captureInfo(`Pull request #${pullRequestResult?.number} created successfully: ${pullRequestResult?.html_url}`, {
             prUrl: pullRequestResult?.html_url,
-            prNumber: pullRequestResult?.number
+            prNumber: pullRequestResult?.number,
+            linkText: `View PR #${pullRequestResult?.number}`,
+            linkUrl: pullRequestResult?.html_url,
+            openInNewTab: true
           });
         }
         
