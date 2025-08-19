@@ -691,7 +691,7 @@ class ConfigurationManager {
       logger.warn('Required configuration missing', { category, key });
     }
 
-    return undefined as T;
+    return undefined as unknown as T;
   }
 
   /**

@@ -127,7 +127,7 @@ export async function POST(
       }
     } catch (sessionError) {
       logger.error('Failed to initialize session logger', sessionError, { sessionId });
-      throw new Error(`Failed to initialize session logger: ${sessionError.message}`);
+      throw new Error(`Failed to initialize session logger: ${sessionError instanceof Error ? sessionError.message : 'Unknown error'}`);
     }
     
     // Check Docker status if using Dagger sandbox
@@ -575,8 +575,8 @@ export async function POST(
       analyticsData = await analytics.finalize(result?.exitCode ?? 0, (Date.now() - startTime));
       logger.debug('Analytics finalized', {
         sessionId: analyticsData.sessionId,
-        duration: analyticsData.duration,
-        exitCode: analyticsData.exitCode
+        duration: analyticsData.duration ?? undefined,
+        exitCode: analyticsData.exitCode ?? undefined
       });
     }
     

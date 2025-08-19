@@ -324,7 +324,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {summary.successRate.toFixed(1)}%
+              {Math.round(summary.successRate * 100)}%
             </div>
             <p className="text-xs text-muted-foreground">
               Sessions completed successfully

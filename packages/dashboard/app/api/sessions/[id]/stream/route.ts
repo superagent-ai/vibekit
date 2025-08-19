@@ -364,7 +364,7 @@ export async function GET(
           fileExistsInterval = setInterval(async () => {
             try {
               await fs.access(dailyLogFile);
-              clearInterval(fileExistsInterval);
+              if (fileExistsInterval) clearInterval(fileExistsInterval);
               fileExistsInterval = null;
               
               console.log(`[SSE] Daily log file created for session ${sessionId}, setting up watcher`);

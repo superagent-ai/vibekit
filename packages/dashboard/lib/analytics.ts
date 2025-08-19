@@ -128,7 +128,7 @@ export function generateSummary(analytics: AnalyticsSession[]): AnalyticsSummary
   };
 
   const averageDuration = summary.totalDuration / summary.totalSessions;
-  const successRate = (summary.successfulSessions / summary.totalSessions) * 100;
+  const successRate = summary.successfulSessions / summary.totalSessions;
 
   // Top errors
   const errorCounts: Record<string, number> = {};
@@ -168,7 +168,7 @@ export function generateSummary(analytics: AnalyticsSession[]): AnalyticsSummary
 
   Object.keys(agentBreakdown).forEach(agentName => {
     const agent = agentBreakdown[agentName];
-    agent.successRate = (agent.successfulSessions / agent.sessions) * 100;
+    agent.successRate = agent.successfulSessions / agent.sessions;
     agent.averageDuration = agent.duration / agent.sessions;
   });
 

@@ -344,7 +344,7 @@ export class ExecutionHistoryManager {
         }
         
         // Track latest execution
-        if (execution.timestamp > stats.lastExecution) {
+        if (execution.timestamp > (stats.lastExecution || 0)) {
           stats.lastExecution = execution.timestamp;
         }
       }

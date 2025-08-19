@@ -23,7 +23,8 @@ import {
   Hash,
   Info,
   ListTodo,
-  Server
+  Server,
+  BarChart3
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ import { KanbanView } from "@/components/kanban-view";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { MCPServersSheet } from "@/components/mcp-servers-sheet";
 import { DockerStatusIndicator } from "@/components/docker-status-indicator";
+import { ProjectAnalytics } from "@/components/project-analytics";
 import type { Project } from "@/lib/projects";
 
 export default function ProjectDetailPage() {
@@ -353,7 +355,7 @@ export default function ProjectDetailPage() {
 
         {/* Tabbed Content */}
         <Tabs defaultValue={defaultTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Info className="h-4 w-4" />
               Overview
@@ -369,6 +371,10 @@ export default function ProjectDetailPage() {
             <TabsTrigger value="git" className="flex items-center gap-2">
               <GitBranch className="h-4 w-4" />
               Git
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Analytics
             </TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
@@ -670,6 +676,13 @@ export default function ProjectDetailPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-4">
+            <ProjectAnalytics 
+              projectId={project.id} 
+              projectName={project.name}
+            />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4">

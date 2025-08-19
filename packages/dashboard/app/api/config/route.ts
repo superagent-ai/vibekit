@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     logUtils.requestComplete(timer, 500, requestId);
-    return ErrorResponse.create(error, requestId);
+    return ErrorResponse.create(error as Error, requestId);
   }
 }
 
@@ -171,7 +171,7 @@ export async function PUT(request: NextRequest) {
 
   } catch (error) {
     logUtils.requestComplete(timer, 400, requestId);
-    return ErrorResponse.create(error, requestId);
+    return ErrorResponse.create(error as Error, requestId);
   }
 }
 
@@ -246,6 +246,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     logUtils.requestComplete(timer, 400, requestId);
-    return ErrorResponse.create(error, requestId);
+    return ErrorResponse.create(error as Error, requestId);
   }
 }

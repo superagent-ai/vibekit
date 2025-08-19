@@ -31,7 +31,7 @@ export interface LogContext {
 
 export interface LogEntry {
   timestamp: string;
-  level: LogLevel;
+  level: string;
   message: string;
   context: LogContext;
   error?: {
@@ -187,10 +187,10 @@ export class StructuredLogger {
       name: error.name,
       message: error.message,
       stack: error.stack,
-      ...(error.cause && { cause: error.cause })
+      ...(error.cause ? { cause: error.cause } : {})
     } : error;
     
-    this.log(LogLevel.WARN, message, { ...context, ...(errorData && { error: errorData }) });
+    this.log(LogLevel.WARN, message, { ...(context || {}), ...(errorData && { error: errorData }) });
   }
   
   error(message: string, error?: Error | any, context?: LogContext): void {
@@ -198,10 +198,10 @@ export class StructuredLogger {
       name: error.name,
       message: error.message,
       stack: error.stack,
-      ...(error.cause && { cause: error.cause })
+      ...(error.cause ? { cause: error.cause } : {})
     } : error;
     
-    this.log(LogLevel.ERROR, message, { ...context, error: errorData });
+    this.log(LogLevel.ERROR, message, { ...(context || {}), error: errorData });
   }
   
   /**
