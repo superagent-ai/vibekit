@@ -572,7 +572,7 @@ export class SessionLogger {
   }
 
   // Static method to list recent sessions
-  static async listSessions(limit = 10): Promise<SessionMetadata[]> {
+  static async listSessions(limit = 10, projectId?: string): Promise<SessionMetadata[]> {
     const logger = createLogger('SessionLogger');
     const sessionsRoot = path.join(os.homedir(), '.vibekit', 'sessions');
     
@@ -596,7 +596,14 @@ export class SessionLogger {
           const entry = JSON.parse(line) as SessionLogEntry;
           
           if (entry.type === 'metadata' && entry.metadata) {
-            sessions.push(entry.metadata as SessionMetadata);
+            const sessionMetadata = entry.metadata as SessionMetadata;
+            
+            // Filter by projectId if provided
+            if (projectId && sessionMetadata.projectId !== projectId) {
+              continue;
+            }
+            
+            sessions.push(sessionMetadata);
           }
         }
       } catch (error) {

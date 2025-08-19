@@ -57,6 +57,7 @@ import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { MCPServersSheet } from "@/components/mcp-servers-sheet";
 import { DockerStatusIndicator } from "@/components/docker-status-indicator";
 import { ProjectAnalytics } from "@/components/project-analytics";
+import { ProjectSessions } from "@/components/project-sessions";
 import type { Project } from "@/lib/projects";
 
 export default function ProjectDetailPage() {
@@ -657,25 +658,10 @@ export default function ProjectDetailPage() {
           </TabsContent>
 
           <TabsContent value="log" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Project Log</CardTitle>
-                <CardDescription>
-                  Complete log history for this project
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">
-                    No logs available yet
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Logs will appear here when activities are performed
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            <ProjectSessions 
+              projectId={project.id} 
+              projectName={project.name}
+            />
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-4">
