@@ -34,6 +34,21 @@ export interface EditorSettings {
 export const SUPPORTED_EDITORS: EditorConfig[] = [
   // Alphabetically sorted editors
   {
+    id: 'amp',
+    name: 'Amp',
+    icon: '',
+    commands: {
+      darwin: ['amp'],
+      win32: ['amp', 'amp.exe'],
+      linux: ['amp']
+    },
+    detectPaths: {
+      darwin: ['/Applications/Amp.app/Contents/MacOS/amp'],
+      win32: ['%LOCALAPPDATA%\\Programs\\Amp\\amp.exe'],
+      linux: ['/usr/bin/amp', '/usr/local/bin/amp']
+    }
+  },
+  {
     id: 'atom',
     name: 'Atom',
     icon: '',
@@ -323,6 +338,19 @@ export const SUPPORTED_EDITORS: EditorConfig[] = [
     platformRestricted: ['win32']
   },
   {
+    id: 'warp',
+    name: 'Warp',
+    icon: '',
+    commands: {
+      darwin: ['warp'],
+      linux: ['warp']
+    },
+    detectPaths: {
+      darwin: ['/Applications/Warp.app/Contents/MacOS/warp'],
+      linux: ['/usr/bin/warp', '/usr/local/bin/warp']
+    }
+  },
+  {
     id: 'webstorm',
     name: 'WebStorm',
     icon: '',
@@ -336,6 +364,22 @@ export const SUPPORTED_EDITORS: EditorConfig[] = [
       win32: ['%PROGRAMFILES%\\JetBrains\\WebStorm*\\bin\\webstorm64.exe'],
       linux: ['/usr/bin/webstorm', '/opt/jetbrains/webstorm/bin/webstorm.sh']
     }
+  },
+  {
+    id: 'windsurf',
+    name: 'Windsurf',
+    icon: '',
+    commands: {
+      darwin: ['windsurf'],
+      win32: ['windsurf', 'windsurf.exe'],
+      linux: ['windsurf']
+    },
+    detectPaths: {
+      darwin: ['/Applications/Windsurf.app/Contents/MacOS/windsurf'],
+      win32: ['%LOCALAPPDATA%\\Programs\\Windsurf\\windsurf.exe'],
+      linux: ['/usr/bin/windsurf', '/usr/local/bin/windsurf']
+    },
+    supportsWSL: true
   },
   {
     id: 'xcode',
