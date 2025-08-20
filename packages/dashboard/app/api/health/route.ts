@@ -5,6 +5,9 @@ import { executionHistoryManager } from '@/lib/execution-history-manager';
 import { getFileWatcherPool } from '@/lib/file-watcher-pool';
 import { SafeFileWriter } from '@/lib/safe-file-writer';
 import { AgentAnalytics } from '@/lib/agent-analytics';
+import { healthCheck } from '@/lib/health-check';
+import { memoryMonitor } from '@/lib/memory-monitor';
+import { shutdownCoordinator } from '@/lib/shutdown-coordinator';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
@@ -46,11 +49,67 @@ interface SystemHealth {
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
+  const { searchParams } = request.nextUrl;
+  const endpoint = searchParams.get('check') || 'health';
+  
+  // Use new comprehensive health check for specific endpoints
+  if (endpoint === 'ready' || endpoint === 'live') {
+    try {
+      const result = await healthCheck.handleHealthRequest(endpoint as 'ready' | 'live');
+      return NextResponse.json(result.body, { 
+        status: result.status,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Health-Check': endpoint
+        }
+      });
+    } catch (error) {
+      console.error('Health check error:', error);
+      return NextResponse.json(
+        { 
+          status: 'error', 
+          message: 'Health check failed',
+          timestamp: Date.now()
+        },
+        { status: 500 }
+      );
+    }
+  }
+  
+  // For full health check, combine both legacy and new systems
   const startTime = Date.now();
   const components: ComponentHealth[] = [];
   const timeout = 10000; // 10 second timeout
   
   try {
+    // Get comprehensive health report
+    const comprehensiveReport = await healthCheck.check();
+    
+    // Add memory monitor status
+    const memoryStatus = memoryMonitor.getStatus();
+    components.push({
+      name: 'Memory Monitor',
+      status: memoryStatus.stats?.pressureLevel === 'critical' ? 'error' :
+              memoryStatus.stats?.pressureLevel === 'high' ? 'warning' : 'healthy',
+      message: `Memory at ${(memoryStatus.stats?.usagePercent || 0) * 100}%`,
+      details: {
+        running: memoryStatus.running,
+        pressureLevel: memoryStatus.stats?.pressureLevel,
+        heapUsed: memoryStatus.stats?.heapUsed,
+        cleanupHistory: memoryStatus.cleanupHistory
+      },
+      lastCheck: Date.now()
+    });
+    
+    // Add shutdown coordinator status
+    const shutdownStatus = shutdownCoordinator.getStatus();
+    components.push({
+      name: 'Shutdown Coordinator',
+      status: shutdownStatus.isShuttingDown ? 'warning' : 'healthy',
+      message: shutdownStatus.isShuttingDown ? 'System shutting down' : 'Ready',
+      details: shutdownStatus,
+      lastCheck: Date.now()
+    });
     // Check Session Manager
     try {
       const sessionCheck = Promise.race([

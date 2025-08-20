@@ -4,6 +4,8 @@ import path from 'path';
 import os from 'os';
 import chokidar, { FSWatcher } from 'chokidar';
 import { promises as fs } from 'fs';
+import { shutdownCoordinator } from '@/lib/shutdown-coordinator';
+import { healthCheck } from '@/lib/health-check';
 
 // Optimized intervals for production
 const KEEP_ALIVE_INTERVAL = 30000; // 30 seconds
@@ -138,6 +140,10 @@ export async function GET(
   // Track connection using atomic operations
   try {
     await incrementConnection(sessionId, connectionId);
+    // Track in shutdown coordinator for draining
+    shutdownCoordinator.trackStream(connectionId);
+    // Update health metrics
+    healthCheck.updateConnectionMetrics(totalConnections, connectionInstances.size, 0);
   } catch (error) {
     return new Response('Connection limit exceeded', { status: 503 });
   }
@@ -187,6 +193,10 @@ export async function GET(
     // Clean up connection tracking - this must succeed to prevent memory leaks
     try {
       await decrementConnection(connectionId);
+      // Untrack in shutdown coordinator
+      shutdownCoordinator.untrackStream(connectionId);
+      // Update health metrics
+      healthCheck.updateConnectionMetrics(totalConnections, connectionInstances.size, 0);
     } catch (error) {
       console.error(`[SSE] Critical error in connection cleanup:`, error);
       // Force cleanup even if atomic operation fails
@@ -198,10 +208,15 @@ export async function GET(
         activeConnections.set(sessionId, sessionConnections - 1);
       }
       connectionInstances.delete(connectionId);
+      shutdownCoordinator.untrackStream(connectionId);
     }
     
     console.log(`[SSE] Cleanup completed for connection ${connectionId}`);
   };
+  
+  // Shutdown handlers need to be defined outside for cleanup access
+  let handleShutdown: (() => void) | null = null;
+  let handleStreamClose: ((streamId: string) => void) | null = null;
   
   const stream = new ReadableStream({
     async start(controller) {
@@ -235,6 +250,44 @@ export async function GET(
           console.log(`[SSE] Session ${sessionId} not found yet, will wait for it to be created`);
         }
       }
+      
+      // Set up shutdown listener for graceful draining
+      handleShutdown = () => {
+        console.log(`[SSE] Received shutdown signal, draining connection ${connectionId}`);
+        try {
+          // Send shutdown notification to client
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+            type: 'shutdown', 
+            message: 'Server is shutting down gracefully',
+            reconnectDelay: 5000 
+          })}\n\n`));
+          
+          // Schedule cleanup after giving client time to process
+          setTimeout(() => {
+            cleanup('shutdown').catch(err => 
+              console.error(`[SSE] Error during shutdown cleanup:`, err)
+            );
+            try {
+              controller.close();
+            } catch {
+              // Controller might already be closed
+            }
+          }, 1000);
+        } catch (error) {
+          console.error(`[SSE] Error sending shutdown notification:`, error);
+          cleanup('shutdown-error');
+        }
+      };
+      
+      // Listen for stream-specific close event
+      handleStreamClose = (streamId: string) => {
+        if (streamId === connectionId && handleShutdown) {
+          handleShutdown();
+        }
+      };
+      
+      shutdownCoordinator.on('drain-streams', handleShutdown);
+      shutdownCoordinator.on('close-stream', handleStreamClose);
       
       // Send keep-alive messages to prevent timeout
       keepAliveTimer = setInterval(() => {
@@ -407,6 +460,14 @@ export async function GET(
     },
     
     cancel() {
+      // Remove shutdown listeners
+      if (handleShutdown) {
+        shutdownCoordinator.removeListener('drain-streams', handleShutdown);
+      }
+      if (handleStreamClose) {
+        shutdownCoordinator.removeListener('close-stream', handleStreamClose);
+      }
+      
       // Use our comprehensive cleanup function
       cleanup('stream_cancel').catch(error => {
         console.error(`[SSE] Error during stream cleanup:`, error);

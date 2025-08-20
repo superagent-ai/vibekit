@@ -1,13 +1,47 @@
 /**
- * Next.js Middleware for VibeKit Dashboard Security
+ * Next.js Middleware for VibeKit Dashboard Security & Production Hardening
  * 
  * Provides:
  * - Localhost-only access enforcement
- * - Basic security headers
+ * - Request size limiting
+ * - Enhanced security headers
  * - Request validation
+ * - Rate limiting
+ * - Request ID tracking
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+
+// Production configuration
+const MAX_REQUEST_SIZE = 10 * 1024 * 1024; // 10MB max request size
+const MAX_URL_LENGTH = 2048; // Maximum URL length
+const MAX_HEADER_SIZE = 16384; // Maximum total header size (16KB)
+
+// Simple in-memory rate limiting (for localhost usage)
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 100; // 100 requests per minute per client
+
+/**
+ * Clean up expired rate limit entries
+ */
+function cleanupRateLimits(): void {
+  const now = Date.now();
+  for (const [key, data] of rateLimitStore.entries()) {
+    if (now > data.resetTime + RATE_LIMIT_WINDOW) {
+      rateLimitStore.delete(key);
+    }
+  }
+}
+
+// Cleanup every minute
+declare global {
+  var rateLimitCleanupInterval: NodeJS.Timeout | undefined;
+}
+
+if (typeof globalThis !== 'undefined' && !globalThis.rateLimitCleanupInterval) {
+  globalThis.rateLimitCleanupInterval = setInterval(cleanupRateLimits, RATE_LIMIT_WINDOW);
+}
 
 export function middleware(request: NextRequest) {
   // Only apply middleware to API routes and pages (not static assets)
@@ -60,15 +94,111 @@ export function middleware(request: NextRequest) {
       },
     });
   }
+  
+  // Generate request ID for tracking
+  const requestId = crypto.randomUUID();
+  
+  // 1. Check URL length
+  const fullUrl = pathname + request.nextUrl.search;
+  if (fullUrl.length > MAX_URL_LENGTH) {
+    console.warn(`[Security] URL too long: ${fullUrl.length} bytes`, { requestId });
+    return new NextResponse('URL too long', { 
+      status: 414,
+      headers: {
+        'X-Request-Id': requestId
+      }
+    });
+  }
+  
+  // 2. Check total headers size
+  let totalHeaderSize = 0;
+  request.headers.forEach((value, key) => {
+    totalHeaderSize += key.length + value.length + 4; // ": " and "\r\n"
+  });
+  
+  if (totalHeaderSize > MAX_HEADER_SIZE) {
+    console.warn(`[Security] Headers too large: ${totalHeaderSize} bytes`, { requestId });
+    return new NextResponse('Request headers too large', { 
+      status: 431,
+      headers: {
+        'X-Request-Id': requestId
+      }
+    });
+  }
+  
+  // 3. Check Content-Length for POST/PUT/PATCH requests
+  if (['POST', 'PUT', 'PATCH'].includes(request.method)) {
+    const contentLength = request.headers.get('content-length');
+    if (contentLength) {
+      const size = parseInt(contentLength, 10);
+      if (isNaN(size)) {
+        return new NextResponse('Invalid Content-Length', { 
+          status: 400,
+          headers: {
+            'X-Request-Id': requestId
+          }
+        });
+      }
+      if (size > MAX_REQUEST_SIZE) {
+        console.warn(`[Security] Request too large: ${size} bytes`, { requestId });
+        return new NextResponse('Request entity too large', { 
+          status: 413,
+          headers: {
+            'X-Request-Id': requestId,
+            'Retry-After': '60'
+          }
+        });
+      }
+    }
+  }
+  
+  // 4. Rate limiting (skip for health endpoints)
+  if (!pathname.startsWith('/api/health')) {
+    // Use a combination of IP and user agent for client identification
+    const clientIp = forwardedFor?.split(',')[0] || realIp || '127.0.0.1';
+    const userAgent = request.headers.get('user-agent') || 'unknown';
+    const clientKey = `${clientIp}:${userAgent.substring(0, 50)}`;
+    
+    const now = Date.now();
+    const clientData = rateLimitStore.get(clientKey);
+    
+    if (!clientData || now > clientData.resetTime) {
+      // New window or expired window
+      rateLimitStore.set(clientKey, {
+        count: 1,
+        resetTime: now + RATE_LIMIT_WINDOW
+      });
+    } else if (clientData.count >= RATE_LIMIT_MAX_REQUESTS) {
+      console.warn(`[Security] Rate limit exceeded for ${clientKey}`, { requestId });
+      return new NextResponse('Too many requests', { 
+        status: 429,
+        headers: {
+          'X-Request-Id': requestId,
+          'Retry-After': String(Math.ceil((clientData.resetTime - now) / 1000)),
+          'X-RateLimit-Limit': String(RATE_LIMIT_MAX_REQUESTS),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(clientData.resetTime)
+        }
+      });
+    } else {
+      clientData.count++;
+    }
+  }
 
   // Create response with security headers
   const response = NextResponse.next();
   
-  // Add security headers
+  // Add request ID to response
+  response.headers.set('X-Request-Id', requestId);
+  
+  // Add enhanced security headers
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('X-XSS-Protection', '1; mode=block');
+  response.headers.set('X-DNS-Prefetch-Control', 'off');
+  response.headers.set('X-Download-Options', 'noopen');
+  response.headers.set('X-Permitted-Cross-Domain-Policies', 'none');
   
   // Content Security Policy
   // Note: Next.js middleware CSP is supplementary to server.js CSP
