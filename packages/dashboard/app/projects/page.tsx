@@ -52,11 +52,10 @@ interface SortableRowProps {
   isSelected: boolean;
   onSelect: (id: string) => void;
   onEdit: (project: Project) => void;
-  onDelete: (id: string) => void;
   onSetCurrent: (id: string) => void;
 }
 
-function SortableTableRow({ project, isSelected, onSelect, onEdit, onDelete, onSetCurrent }: SortableRowProps) {
+function SortableTableRow({ project, isSelected, onSelect, onEdit, onSetCurrent }: SortableRowProps) {
   const router = useRouter();
   const {
     attributes,
@@ -480,23 +479,6 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleDeleteProject = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this project?')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/projects/${id}`, {
-        method: 'DELETE',
-      });
-      
-      if (response.ok) {
-        await fetchProjects();
-      }
-    } catch (error) {
-      console.error('Failed to delete project:', error);
-    }
-  };
 
   const handleSelectProject = async (projectId: string) => {
     try {
@@ -734,7 +716,6 @@ export default function ProjectsPage() {
                 project={project}
                 isSelected={currentProject?.id === project.id}
                 onEdit={(project) => setEditingProject(project)}
-                onDelete={(id) => handleDeleteProject(id)}
                 onSelect={(id) => handleSelectProject(id)}
               />
             ))}
@@ -770,7 +751,6 @@ export default function ProjectsPage() {
                         isSelected={currentProject?.id === project.id}
                         onSelect={handleSelectProject}
                         onEdit={setEditingProject}
-                        onDelete={handleDeleteProject}
                         onSetCurrent={handleSelectProject}
                       />
                     ))}
@@ -921,17 +901,6 @@ export default function ProjectsPage() {
                           }}
                         >
                           Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteProject(project.id);
-                          }}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          Delete
                         </Button>
                       </div>
                     </TableCell>

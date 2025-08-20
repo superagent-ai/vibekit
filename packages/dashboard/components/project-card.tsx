@@ -18,7 +18,6 @@ interface ProjectCardProps {
   project: Project;
   isSelected?: boolean;
   onEdit: (project: Project) => void;
-  onDelete: (id: string) => void;
   onSelect?: (id: string) => void;
 }
 
@@ -29,7 +28,7 @@ interface GitInfo {
   remoteUrl?: string;
 }
 
-export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onSelect }: ProjectCardProps) {
+export function ProjectCard({ project, isSelected = false, onEdit, onSelect }: ProjectCardProps) {
   const router = useRouter();
   const [gitInfo, setGitInfo] = useState<GitInfo | null>(null);
   const [isLoadingGit, setIsLoadingGit] = useState(false);
@@ -225,26 +224,6 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
               </TooltipTrigger>
               <TooltipContent>
                 <p>Edit Project</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(project.id);
-                  }}
-                  className="h-7 w-7 p-0 hover:text-destructive"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Delete Project</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

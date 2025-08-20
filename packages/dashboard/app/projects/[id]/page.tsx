@@ -24,7 +24,9 @@ import {
   Info,
   ListTodo,
   Server,
-  BarChart3
+  BarChart3,
+  AlertTriangle,
+  Trash2
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -888,13 +890,45 @@ export default function ProjectDetailPage() {
                     <Edit className="mr-2 h-4 w-4" />
                     Edit Project
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    className="text-destructive hover:text-destructive"
-                    onClick={handleDeleteProject}
-                  >
-                    Delete Project
-                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Danger Zone */}
+            <Card className="border-destructive/20">
+              <CardHeader>
+                <CardTitle className="text-destructive flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  Danger Zone
+                </CardTitle>
+                <CardDescription>
+                  Irreversible and destructive actions for this project
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-destructive/5 border border-destructive/20 rounded-md">
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-destructive">Delete Project</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Permanently delete this project and all of its data. This action cannot be undone and will remove:
+                    </p>
+                    <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 ml-4">
+                      <li>Project configuration and settings</li>
+                      <li>Associated task history and analytics</li>
+                      <li>Chat conversations and session logs</li>
+                      <li>All project metadata</li>
+                    </ul>
+                    <div className="pt-2">
+                      <Button 
+                        variant="destructive" 
+                        onClick={handleDeleteProject}
+                        className="w-full sm:w-auto"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Project Permanently
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
