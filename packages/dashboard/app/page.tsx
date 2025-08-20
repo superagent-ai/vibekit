@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { AnalyticsSession, AnalyticsSummary, Project } from "@/lib/types";
+import { useRouter } from "next/navigation";
 
 // Define proper types for Recharts tooltip
 interface TooltipPayload {
@@ -92,6 +93,7 @@ function formatDuration(ms: number): string {
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [recentSessions, setRecentSessions] = useState<AnalyticsSession[]>([]);
   const [allSessions, setAllSessions] = useState<AnalyticsSession[]>([]);
@@ -100,6 +102,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<string>("7d");
+  const [checkingRedirect, setCheckingRedirect] = useState(true);
   const sessionsPerPage = 10;
 
   const timeFilters = [
@@ -110,7 +113,44 @@ export default function Dashboard() {
     { label: "3 Months", value: "90d", days: 90 },
   ];
 
+  // Check for redirect on initial load
   useEffect(() => {
+    async function checkRedirect() {
+      try {
+        const response = await fetch("/api/settings");
+        if (response.ok) {
+          const settings = await response.json();
+          const defaultPage = settings.dashboard?.defaultPage || 'analytics';
+          
+          // If default page is not analytics, redirect
+          if (defaultPage !== 'analytics') {
+            const routeMap: Record<string, string> = {
+              'projects-cards': '/projects',
+              'projects-table': '/projects?view=table',
+              'chat': '/chat',
+              'monitoring': '/monitoring'
+            };
+            
+            const targetRoute = routeMap[defaultPage];
+            if (targetRoute) {
+              router.replace(targetRoute);
+              return; // Don't continue with loading
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to check default page setting:", error);
+      }
+      setCheckingRedirect(false);
+    }
+
+    checkRedirect();
+  }, [router]);
+
+  useEffect(() => {
+    // Only fetch data if we're not redirecting
+    if (checkingRedirect) return;
+
     async function fetchData() {
       try {
         setLoading(true);
@@ -155,9 +195,9 @@ export default function Dashboard() {
 
     // Cleanup interval on unmount
     return () => clearInterval(interval);
-  }, [selectedFilter]);
+  }, [selectedFilter, checkingRedirect]);
 
-  if (loading) {
+  if (checkingRedirect || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center flex items-center gap-2 justify-center">

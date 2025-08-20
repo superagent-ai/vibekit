@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical, ArrowUpDown, MessageSquare, Kanban, Info, CheckSquare, Github, GitBranch } from "lucide-react";
 import {
   DndContext,
@@ -203,8 +203,9 @@ function SortableTableRow({ project, gitInfo }: SortableRowProps) {
   );
 }
 
-export default function ProjectsPage() {
+function ProjectsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [gitInfoMap, setGitInfoMap] = useState<Record<string, GitInfo>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -215,6 +216,12 @@ export default function ProjectsPage() {
   const [isReordering, setIsReordering] = useState(false);
   const [sortBy, setSortBy] = useState<'rank' | 'priority' | 'alphabetical'>('rank');
   const [viewMode, setViewMode] = useState<'card' | 'list'>(() => {
+    // Check query parameter first
+    const viewParam = searchParams?.get('view');
+    if (viewParam === 'table') return 'list';
+    if (viewParam === 'cards') return 'card';
+    
+    // Then check localStorage
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('projectsViewMode') as 'card' | 'list') || 'card';
     }
@@ -877,5 +884,20 @@ export default function ProjectsPage() {
 
       </div>
     </div>
+  );
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">Loading projects...</p>
+        </div>
+      </div>
+    }>
+      <ProjectsPageContent />
+    </Suspense>
   );
 }

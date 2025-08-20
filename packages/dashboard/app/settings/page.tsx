@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Settings, Shield, BarChart3, Link, RefreshCw, Bot, Server, FileText, Cpu, Package, Code, ChevronsUpDown, Check, ExternalLink } from "lucide-react";
+import { Settings, Shield, BarChart3, Link, RefreshCw, Bot, Server, FileText, Cpu, Package, Code, ChevronsUpDown, Check, ExternalLink, Home, Monitor, Table2, MessageSquare, Activity } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,9 @@ interface VibeKitSettings {
     autoDetect: boolean;
     openInNewWindow: boolean;
   };
+  dashboard?: {
+    defaultPage: string;
+  };
 }
 
 export default function SettingsPage() {
@@ -120,6 +123,9 @@ export default function SettingsPage() {
       customCommand: '',
       autoDetect: true,
       openInNewWindow: false,
+    },
+    dashboard: {
+      defaultPage: 'analytics',
     },
   });
   const [loading, setLoading] = useState(true);
@@ -286,6 +292,18 @@ export default function SettingsPage() {
     saveSettings(newSettings);
   };
 
+  const handleDashboardChange = (field: string, value: string) => {
+    const newSettings = {
+      ...settings,
+      dashboard: {
+        defaultPage: settings.dashboard?.defaultPage || 'analytics',
+        ...settings.dashboard,
+        [field]: value,
+      },
+    };
+    saveSettings(newSettings);
+  };
+
   const handleTestEditor = async () => {
     setTestingEditor(true);
     try {
@@ -356,6 +374,68 @@ export default function SettingsPage() {
                 onCheckedChange={() => handleToggle("analytics", "enabled")}
                 disabled={saving}
               />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Dashboard Settings */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Home className="h-5 w-5" />
+              <CardTitle>Dashboard</CardTitle>
+            </div>
+            <CardDescription>
+              Configure dashboard default page and behavior
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="default-page">Default Page</Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Choose which page to display when the dashboard launches
+              </p>
+              <Select
+                value={settings.dashboard?.defaultPage || 'analytics'}
+                onValueChange={(value) => handleDashboardChange('defaultPage', value)}
+                disabled={saving}
+              >
+                <SelectTrigger id="default-page" className="w-full">
+                  <SelectValue placeholder="Select default page" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="analytics">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" />
+                      <span>Analytics (Overall Usage)</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="projects-cards">
+                    <div className="flex items-center gap-2">
+                      <Monitor className="h-4 w-4" />
+                      <span>Projects - Cards View</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="projects-table">
+                    <div className="flex items-center gap-2">
+                      <Table2 className="h-4 w-4" />
+                      <span>Projects - Table View</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="chat">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      <span>AI Chat</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="monitoring">
+                    <div className="flex items-center gap-2">
+                      <Activity className="h-4 w-4" />
+                      <span>Monitoring</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
