@@ -313,7 +313,7 @@ const Settings = ({ showWelcome = false }) => {
           console.log('\n📊 Starting analytics dashboard server...');
           
           try {
-            const dashboardServer = dashboardManager.getDashboardServer(3001);
+            const dashboardServer = await dashboardManager.getDashboardServer();
             await dashboardServer.start();
             const status = dashboardServer.getStatus();
             

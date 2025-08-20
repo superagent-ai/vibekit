@@ -16,12 +16,17 @@
     "bin/dashboard.js"
   ],
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm run build && node server.js",
+    "dev:next": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.js",
+    "start:next": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "dashboard": "npm run start",
+    "check-status": "node server.js --check-status",
+    "get-port": "node server.js --get-port"
   },
   "keywords": [
     "vibekit",
@@ -77,6 +82,7 @@
     "lucide-react": "^0.536.0",
     "next": "15.4.5",
     "next-themes": "^0.4.6",
+    "open": "^10.1.0",
     "radix-ui": "^1.4.3",
     "react": "19.1.1",
     "react-dom": "19.1.1",

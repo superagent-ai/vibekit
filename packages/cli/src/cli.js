@@ -888,7 +888,7 @@ dashboardCommand
   .action(async (options) => {
     const port = parseInt(options.port) || 3001;
     const { default: dashboardManager } = await import('./dashboard/manager.ts');
-    const dashboardServer = dashboardManager.getDashboardServer(port);
+    const dashboardServer = await dashboardManager.getDashboardServer();
     
     try {
       await dashboardServer.start();
@@ -911,7 +911,7 @@ dashboardCommand
     if (command.args.length === 0) {
       const port = parseInt(options.port) || 3001; // Use port option or default
       const { default: dashboardManager } = await import('./dashboard/manager.js');
-      const dashboardServer = dashboardManager.getDashboardServer(port);
+      const dashboardServer = await dashboardManager.getDashboardServer();
       
       try {
         await dashboardServer.start();
@@ -943,7 +943,7 @@ dashboardCommand
   .description('Update the dashboard to the latest version')
   .action(async () => {
     const { default: dashboardManager } = await import('./dashboard/manager.ts');
-    const dashboardServer = dashboardManager.getDashboardServer(3001);
+    const dashboardServer = await dashboardManager.getDashboardServer();
     
     try {
       await dashboardServer.update();

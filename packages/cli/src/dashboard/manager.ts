@@ -25,6 +25,19 @@ class DashboardServer {
     this.dashboardDir = join(os.homedir(), ".vibekit", "dashboard");
   }
 
+  private async getPortFromSettings(): Promise<number> {
+    try {
+      const settingsPath = join(os.homedir(), '.vibekit', 'settings.json');
+      if (await fs.pathExists(settingsPath)) {
+        const settings = await fs.readJson(settingsPath);
+        return settings.dashboard?.port || 3001;
+      }
+    } catch (error) {
+      // Fall back to default if settings can't be read
+    }
+    return 3001;
+  }
+
   private async ensureDashboardInstalled(): Promise<void> {
     if (!(await fs.pathExists(this.dashboardDir))) {
       console.log(chalk.blue("📦 Dashboard not found. Installing..."));
@@ -114,45 +127,31 @@ class DashboardServer {
     await this.ensureDashboardInstalled();
 
     return new Promise<void>(async (resolve, reject) => {
+      // Get the port that will be used from settings
+      const configuredPort = await this.getPortFromSettings();
+      this.port = configuredPort; // Update our internal port
+      
       console.log(
-        chalk.blue(`🚀 Starting analytics dashboard on port ${this.port}...`)
+        chalk.blue(`🚀 Starting VibeKit Dashboard on port ${configuredPort}...`)
       );
 
       const packagePath = join(this.dashboardDir, "node_modules", "@vibe-kit", "dashboard");
-      const standalonePath = join(packagePath, ".next", "standalone", "packages", "dashboard", "server.js");
+      const serverPath = join(packagePath, "server.js");
       
-      if (!(await fs.pathExists(standalonePath))) {
-        reject(new Error("Dashboard build not found. Package may be corrupted."));
+      if (!(await fs.pathExists(serverPath))) {
+        reject(new Error("Dashboard server not found. Package may be corrupted."));
         return;
       }
 
-      // Copy static assets to the correct location for standalone build
-      const staticSourcePath = join(packagePath, ".next", "static");
-      const staticTargetPath = join(packagePath, ".next", "standalone", "packages", "dashboard", ".next", "static");
-      const publicSourcePath = join(packagePath, "public");
-      const publicTargetPath = join(packagePath, ".next", "standalone", "packages", "dashboard", "public");
-      
-      try {
-        if (await fs.pathExists(staticSourcePath)) {
-          await fs.copy(staticSourcePath, staticTargetPath, { overwrite: true });
-        }
-        if (await fs.pathExists(publicSourcePath)) {
-          await fs.copy(publicSourcePath, publicTargetPath, { overwrite: true });
-        }
-      } catch (error) {
-        console.log(chalk.yellow("⚠️ Could not copy static assets:", error instanceof Error ? error.message : String(error)));
-      }
-
+      // Use our new server.js which handles settings and port management
       this.process = spawn(
         "node",
         ["server.js"],
         {
-          cwd: join(packagePath, ".next", "standalone", "packages", "dashboard"),
+          cwd: packagePath,
           stdio: ["pipe", "pipe", "pipe"],
           env: {
             ...process.env,
-            PORT: this.port.toString(),
-            HOSTNAME: "localhost",
             NODE_ENV: "production",
           },
         }
@@ -166,18 +165,30 @@ class DashboardServer {
 
         if (
           !hasStarted &&
-          (output.includes("Ready in") ||
+          (output.includes("VibeKit Dashboard ready!") ||
             output.includes("Local:") ||
-            output.includes(`localhost:${this.port}`) ||
+            output.includes(`localhost:`) ||
             output.includes("server started on") ||
             output.includes("ready on"))
         ) {
           hasStarted = true;
           this.isRunning = true;
+          
+          // Extract the actual port from URL in output to confirm
+          const urlMatch = output.match(/http:\/\/127\.0\.0\.1:(\d+)/);
+          if (urlMatch) {
+            const actualPort = parseInt(urlMatch[1]);
+            if (actualPort !== this.port) {
+              console.log(chalk.yellow(`⚠️  Port changed from ${this.port} to ${actualPort}`));
+              this.port = actualPort;
+            }
+          }
+          
           console.log(chalk.green(`✅ Dashboard started successfully!`));
           console.log(
-            chalk.cyan(`📊 Analytics Dashboard: http://localhost:${this.port}`)
+            chalk.cyan(`📊 VibeKit Dashboard: http://localhost:${this.port}`)
           );
+          console.log(chalk.gray(`   Process ID: ${this.process?.pid || 'unknown'}`));
           resolve();
         }
       });
@@ -310,32 +321,40 @@ class DashboardServer {
 }
 
 class DashboardManager {
-  private servers: Map<number, DashboardServer>;
+  private server: DashboardServer | null = null;
 
-  constructor() {
-    this.servers = new Map();
-  }
+  constructor() {}
 
-  getDashboardServer(port: number = 3001): DashboardServer {
-    if (!this.servers.has(port)) {
-      this.servers.set(port, new DashboardServer(port));
+  private async getPortFromSettings(): Promise<number> {
+    try {
+      const settingsPath = join(os.homedir(), '.vibekit', 'settings.json');
+      if (await fs.pathExists(settingsPath)) {
+        const settings = await fs.readJson(settingsPath);
+        return settings.dashboard?.port || 3001;
+      }
+    } catch (error) {
+      // Fall back to default if settings can't be read
     }
-    return this.servers.get(port)!;
+    return 3001;
   }
 
-  stop(port: number): void {
-    const server = this.servers.get(port);
-    if (server) {
-      server.stop();
-      this.servers.delete(port);
+  async getDashboardServer(): Promise<DashboardServer> {
+    if (!this.server) {
+      const port = await this.getPortFromSettings();
+      this.server = new DashboardServer(port);
+    }
+    return this.server;
+  }
+
+  stop(): void {
+    if (this.server) {
+      this.server.stop();
+      this.server = null;
     }
   }
 
   stopAll(): void {
-    for (const [, server] of this.servers) {
-      server.stop();
-    }
-    this.servers.clear();
+    this.stop();
   }
 }
 
