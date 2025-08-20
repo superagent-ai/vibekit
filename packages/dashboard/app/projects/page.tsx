@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical, ArrowUpDown, MessageSquare, Kanban, Info, CheckSquare } from "lucide-react";
+import { Plus, LayoutGrid, List, Search, X, CheckCircle, RefreshCw, GripVertical, ArrowUpDown, MessageSquare, Kanban, Info, CheckSquare, Github, GitBranch } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -47,11 +47,19 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
-interface SortableRowProps {
-  project: Project;
+interface GitInfo {
+  hasGitRepo: boolean;
+  account?: string;
+  repo?: string;
+  remoteUrl?: string;
 }
 
-function SortableTableRow({ project }: SortableRowProps) {
+interface SortableRowProps {
+  project: Project;
+  gitInfo: GitInfo | null;
+}
+
+function SortableTableRow({ project, gitInfo }: SortableRowProps) {
   const router = useRouter();
   const {
     attributes,
@@ -98,7 +106,22 @@ function SortableTableRow({ project }: SortableRowProps) {
         </div>
       </TableCell>
       <TableCell className="hidden md:table-cell">
-        <code className="text-xs truncate block max-w-[200px]">{project.projectRoot}</code>
+        {gitInfo?.hasGitRepo && gitInfo.account && gitInfo.repo ? (
+          <div className="flex items-center text-xs">
+            <Github className="mr-2 h-3 w-3" />
+            <span className="truncate max-w-[180px]">{gitInfo.account}/{gitInfo.repo}</span>
+          </div>
+        ) : gitInfo?.hasGitRepo === false ? (
+          <div className="flex items-center text-xs text-muted-foreground/60">
+            <GitBranch className="mr-2 h-3 w-3" />
+            <span className="truncate max-w-[180px]">No remote repository</span>
+          </div>
+        ) : (
+          <div className="flex items-center text-xs">
+            <GitBranch className="mr-2 h-3 w-3" />
+            <span className="truncate max-w-[180px]">{project.projectRoot.split('/').pop() || project.projectRoot}</span>
+          </div>
+        )}
       </TableCell>
       <TableCell>
         <div className="flex gap-1.5">
@@ -178,6 +201,7 @@ function SortableTableRow({ project }: SortableRowProps) {
 export default function ProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [gitInfoMap, setGitInfoMap] = useState<Record<string, GitInfo>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -191,6 +215,77 @@ export default function ProjectsPage() {
     }
     return 'card';
   });
+
+  const parseGitUrl = (url: string): { account: string; repo: string } | null => {
+    if (!url) return null;
+    
+    // Handle different Git URL formats
+    // SSH: git@github.com:user/repo.git
+    // HTTPS: https://github.com/user/repo.git
+    // HTTPS without .git: https://github.com/user/repo
+    
+    let match;
+    
+    // SSH format
+    match = url.match(/git@([^:]+):([^/]+)\/(.+?)(?:\.git)?$/);
+    if (match) {
+      return { account: match[2], repo: match[3] };
+    }
+    
+    // HTTPS format
+    match = url.match(/https?:\/\/([^/]+)\/([^/]+)\/(.+?)(?:\.git)?$/);
+    if (match) {
+      return { account: match[2], repo: match[3] };
+    }
+    
+    return null;
+  };
+
+  const fetchGitInfoForProjects = async (projectList: Project[]) => {
+    const gitInfoPromises = projectList.map(async (project) => {
+      try {
+        const response = await fetch('/api/projects/check-git', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectRoot: project.projectRoot }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.hasGitRepo && data.gitInfo?.remoteUrl) {
+            const parsed = parseGitUrl(data.gitInfo.remoteUrl);
+            return {
+              projectId: project.id,
+              gitInfo: {
+                hasGitRepo: true,
+                account: parsed?.account,
+                repo: parsed?.repo,
+                remoteUrl: data.gitInfo.remoteUrl,
+              } as GitInfo
+            };
+          }
+        }
+        return {
+          projectId: project.id,
+          gitInfo: { hasGitRepo: false } as GitInfo
+        };
+      } catch (error) {
+        console.error(`Failed to fetch git info for ${project.name}:`, error);
+        return {
+          projectId: project.id,
+          gitInfo: { hasGitRepo: false } as GitInfo
+        };
+      }
+    });
+    
+    const gitInfoResults = await Promise.all(gitInfoPromises);
+    const gitInfoRecord: Record<string, GitInfo> = {};
+    gitInfoResults.forEach(({ projectId, gitInfo }) => {
+      gitInfoRecord[projectId] = gitInfo;
+    });
+    
+    setGitInfoMap(gitInfoRecord);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -268,6 +363,9 @@ export default function ProjectsPage() {
         if (data.lastModified !== lastModified) {
           setProjects(data.data);
           setLastModified(data.lastModified);
+          
+          // Fetch git info for projects
+          fetchGitInfoForProjects(data.data);
           
           // Flash the refresh indicator when data updates
           if (skipLoadingState) {
@@ -610,7 +708,7 @@ export default function ProjectsPage() {
                   <TableRow>
                     <TableHead className="w-10"></TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead className="hidden md:table-cell">Path</TableHead>
+                    <TableHead className="hidden md:table-cell">Repository</TableHead>
                     <TableHead className="w-20">Status</TableHead>
                     <TableHead className="hidden lg:table-cell">Tags</TableHead>
                     <TableHead className="hidden sm:table-cell">Created</TableHead>
@@ -626,6 +724,7 @@ export default function ProjectsPage() {
                       <SortableTableRow
                         key={project.id}
                         project={project}
+                        gitInfo={gitInfoMap[project.id] || null}
                       />
                     ))}
                   </SortableContext>
@@ -639,7 +738,7 @@ export default function ProjectsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead className="hidden md:table-cell">Path</TableHead>
+                  <TableHead className="hidden md:table-cell">Repository</TableHead>
                   <TableHead className="w-20">Status</TableHead>
                   <TableHead className="hidden lg:table-cell">Tags</TableHead>
                   <TableHead className="hidden sm:table-cell">Created</TableHead>
@@ -666,7 +765,10 @@ export default function ProjectsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      <code className="text-xs truncate block max-w-[200px]">{project.projectRoot}</code>
+                      <div className="flex items-center text-xs">
+                        <GitBranch className="mr-2 h-3 w-3" />
+                        <span className="truncate max-w-[180px]">{project.projectRoot.split('/').pop() || project.projectRoot}</span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1.5">
