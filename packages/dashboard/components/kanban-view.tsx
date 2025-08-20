@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { RefreshCw, AlertCircle, CheckCircle, Clock, Circle, X, Settings, Eye, EyeOff, Tag, Plus } from "lucide-react";
+import { RefreshCw, AlertCircle, CheckCircle, Clock, Circle, X, Settings, Eye, EyeOff, Tag, Plus, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-media-query";
@@ -27,6 +27,7 @@ import { Card } from "@/components/ui/card";
 import { TaskDetailsSheet } from "@/components/task-details-sheet";
 import { SubtaskDetailsSheet } from "@/components/subtask-details-sheet";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
+import { DependenciesSheet } from "@/components/dependencies-sheet";
 import type { ManualTask } from "@/lib/projects";
 
 interface Subtask {
@@ -142,6 +143,7 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [subtaskDialogOpen, setSubtaskDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [dependenciesSheetOpen, setDependenciesSheetOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("pending");
   
   // Column visibility state with default values
@@ -512,6 +514,16 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
               {!isMobile && 'New Task'}
             </Button>
           )}
+          {taskSource === 'taskmaster' && tasks.length > 0 && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setDependenciesSheetOpen(true)}
+            >
+              <Network className={`${isMobile ? '' : 'mr-2'} h-4 w-4`} />
+              {!isMobile && 'Dependencies'}
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -709,6 +721,13 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
           }}
         />
       )}
+
+      <DependenciesSheet
+        open={dependenciesSheetOpen}
+        onOpenChange={setDependenciesSheetOpen}
+        tasks={tasks}
+        onTaskClick={(task) => handleTaskClick(task as any)}
+      />
     </div>
   );
 }
