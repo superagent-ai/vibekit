@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -22,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { AnalyticsSession, AnalyticsSummary } from "@/lib/types";
+import type { AnalyticsSession, AnalyticsSummary, Project } from "@/lib/types";
 
 // Define proper types for Recharts tooltip
 interface TooltipPayload {
@@ -94,6 +95,7 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [recentSessions, setRecentSessions] = useState<AnalyticsSession[]>([]);
   const [allSessions, setAllSessions] = useState<AnalyticsSession[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +119,13 @@ export default function Dashboard() {
           (f) => f.value === selectedFilter
         );
         const days = selectedFilterData?.days || 7;
+
+        // Fetch projects data
+        const projectsResponse = await fetch("/api/projects");
+        if (projectsResponse.ok) {
+          const projectsData = await projectsResponse.json();
+          setProjects(projectsData.data || []);
+        }
 
         // Fetch summary data
         const summaryResponse = await fetch(
@@ -261,6 +270,31 @@ export default function Dashboard() {
     });
   });
   const agentsToRender = Array.from(allAgentsInData);
+
+  // Helper function to get project name and id
+  const getProjectInfo = (session: AnalyticsSession) => {
+    // First try to find project by projectId
+    if (session.projectId) {
+      const project = projects.find(p => p.id === session.projectId);
+      if (project) {
+        return { id: project.id, name: project.name };
+      }
+    }
+    
+    // Fallback to session.projectName or systemInfo.projectName
+    const projectName = session.projectName || session.systemInfo?.projectName;
+    if (projectName) {
+      // Try to find project by name
+      const project = projects.find(p => p.name === projectName);
+      if (project) {
+        return { id: project.id, name: project.name };
+      }
+      // Return name without id if project not found in projects list
+      return { id: null, name: projectName };
+    }
+    
+    return { id: null, name: "Unknown" };
+  };
 
   return (
     <div className="px-6 space-y-6">
@@ -593,9 +627,24 @@ export default function Dashboard() {
                     </TableCell>
                     <TableCell>{session.filesChanged.length}</TableCell>
                     <TableCell>
-                      <span className="text-sm font-medium">
-                        {session.systemInfo?.projectName || "Unknown"}
-                      </span>
+                      {(() => {
+                        const projectInfo = getProjectInfo(session);
+                        if (projectInfo.id) {
+                          return (
+                            <Link 
+                              href={`/projects/${projectInfo.id}`}
+                              className="text-sm font-medium text-primary hover:underline"
+                            >
+                              {projectInfo.name}
+                            </Link>
+                          );
+                        }
+                        return (
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {projectInfo.name}
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <span className="text-sm font-mono">

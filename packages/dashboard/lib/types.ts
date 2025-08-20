@@ -66,6 +66,8 @@ export interface SystemInfo {
 export interface AnalyticsSession {
   sessionId: string;
   agentName: string;
+  projectId?: string;
+  projectName?: string;
   startTime: number;
   endTime: number | null;
   duration: number | null;
