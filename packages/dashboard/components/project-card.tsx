@@ -114,17 +114,39 @@ export function ProjectCard({ project, isSelected = false, onSelect }: ProjectCa
       }`}
       onClick={() => router.push(`/projects/${project.id}`)}
     >
-      <CardHeader className="space-y-3 pb-3">
-        <CardTitle className="text-sm font-medium flex items-center">
-          <FolderOpen className="mr-2 h-4 w-4" />
-          {project.name}
-          {isSelected && (
-            <CheckCircle className="ml-2 h-4 w-4 text-primary" />
-          )}
-        </CardTitle>
-        
-        <div className="flex items-center justify-center gap-1">
-          {!isSelected && onSelect && (
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium flex items-center">
+            <FolderOpen className="mr-2 h-4 w-4" />
+            {project.name}
+            {isSelected && (
+              <CheckCircle className="ml-2 h-4 w-4 text-primary" />
+            )}
+          </CardTitle>
+          
+          <div className="flex items-center gap-1">
+            {!isSelected && onSelect && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelect(project.id);
+                      }}
+                      className="h-7 w-7 p-0"
+                    >
+                      <CheckSquare className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Set as Current</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -133,80 +155,40 @@ export function ProjectCard({ project, isSelected = false, onSelect }: ProjectCa
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onSelect(project.id);
+                      router.push(`/projects/${project.id}`);
                     }}
                     className="h-7 w-7 p-0"
                   >
-                    <CheckSquare className="h-3 w-3" />
+                    <Info className="h-3 w-3" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Set as Current</p>
+                  <p>View Details</p>
                 </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push(`/projects/${project.id}`);
-                  }}
-                  className="h-7 w-7 p-0"
-                >
-                  <Info className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>View Details</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push(`/projects/${project.id}/kanban`);
-                  }}
-                  className="h-7 w-7 p-0"
-                >
-                  <Kanban className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>View Kanban</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push(`/projects/${project.id}/chat`);
-                  }}
-                  className="h-7 w-7 p-0"
-                >
-                  <MessageSquare className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Open chat for this project</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/projects/${project.id}/kanban`);
+                      }}
+                      className="h-7 w-7 p-0"
+                    >
+                      <Kanban className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>View Kanban</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">

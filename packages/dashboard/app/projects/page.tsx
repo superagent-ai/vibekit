@@ -190,17 +190,6 @@ function SortableTableRow({ project, isSelected, onSelect, onSetCurrent }: Sorta
           >
             <Kanban className="h-3 w-3" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              router.push(`/projects/${project.id}/chat`);
-            }}
-            title="Open chat for this project"
-          >
-            <MessageSquare className="h-3 w-3" />
-          </Button>
         </div>
       </TableCell>
     </TableRow>
