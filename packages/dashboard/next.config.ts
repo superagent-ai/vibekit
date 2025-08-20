@@ -12,16 +12,8 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Load environment variables from root .env file
-  env: {
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
-    GITHUB_TOKEN: process.env.GITHUB_TOKEN || process.env.GITHUB_API_KEY || '',
-    GITHUB_API_KEY: process.env.GITHUB_API_KEY || '',
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-    GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
-    GROK_API_KEY: process.env.GROK_API_KEY || process.env.XAI_API_KEY || '',
-    OPENCODE_API_KEY: process.env.OPENCODE_API_KEY || '',
-  },
+  // Note: API keys should only be accessed via process.env in server-side code
+  // Never expose sensitive keys to client-side code via env config
   // Configure webpack to resolve @vibe-kit/projects
   webpack: (config, { isServer }) => {
     if (!config.resolve) {
