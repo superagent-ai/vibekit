@@ -26,7 +26,8 @@ import {
   Server,
   BarChart3,
   AlertTriangle,
-  Trash2
+  Trash2,
+  Github
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,32 @@ export default function ProjectDetailPage() {
   const [kanbanRefreshKey, setKanbanRefreshKey] = useState(0);
   const [mcpServersSheetOpen, setMcpServersSheetOpen] = useState(false);
   const [gitInfo, setGitInfo] = useState<any>(null);
+
+  // Parse Git URL to extract account and repo
+  const parseGitUrl = (url: string): { account: string; repo: string } | null => {
+    if (!url) return null;
+    
+    // Handle different Git URL formats
+    // SSH: git@github.com:user/repo.git
+    // HTTPS: https://github.com/user/repo.git
+    // HTTPS without .git: https://github.com/user/repo
+    
+    let match;
+    
+    // SSH format
+    match = url.match(/git@([^:]+):([^/]+)\/(.+?)(?:\.git)?$/);
+    if (match) {
+      return { account: match[2], repo: match[3] };
+    }
+    
+    // HTTPS format
+    match = url.match(/https?:\/\/([^/]+)\/([^/]+)\/(.+?)(?:\.git)?$/);
+    if (match) {
+      return { account: match[2], repo: match[3] };
+    }
+    
+    return null;
+  };
 
   // Fetch project details
   const fetchProject = async () => {
@@ -327,6 +354,15 @@ export default function ProjectDetailPage() {
               <p className="text-muted-foreground">{project.description}</p>
             )}
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              {gitInfo?.gitInfo?.remoteUrl && (() => {
+                const parsed = parseGitUrl(gitInfo.gitInfo.remoteUrl);
+                return parsed ? (
+                  <div className="flex items-center gap-1">
+                    <Github className="h-4 w-4" />
+                    <span className="text-xs">{parsed.account}/{parsed.repo}</span>
+                  </div>
+                ) : null;
+              })()}
               <div className="flex items-center gap-1">
                 <Folder className="h-4 w-4" />
                 <code className="text-xs">{project.projectRoot}</code>
@@ -335,28 +371,29 @@ export default function ProjectDetailPage() {
                 <Calendar className="h-4 w-4" />
                 <span className="text-xs">Created {new Date(project.createdAt).toLocaleDateString()}</span>
               </div>
+              <DockerStatusIndicator />
             </div>
           </div>
           
           <div className="flex flex-wrap gap-2">
-            <DockerStatusIndicator />
             <OpenInEditorButton 
               projectId={project.id} 
               variant="outline" 
               showText={true}
+              text="Editor"
               onError={(error) => console.error('Failed to open in editor:', error)}
             />
-            <Button variant="outline" onClick={() => setShowEditForm(true)}>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
+            <Button variant="outline" onClick={() => setChatSheetOpen(true)}>
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Chat
             </Button>
             <Button variant="outline" onClick={() => setMcpServersSheetOpen(true)}>
               <Server className="mr-2 h-4 w-4" />
               MCP
             </Button>
-            <Button variant="outline" onClick={() => setChatSheetOpen(true)}>
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Chat
+            <Button variant="outline" onClick={() => setShowEditForm(true)}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
             </Button>
             <Button variant="outline" asChild>
               <Link href="/projects">

@@ -13,6 +13,7 @@ interface OpenInEditorButtonProps {
   size?: "default" | "sm" | "lg";
   className?: string;
   showText?: boolean;
+  text?: string;
   disabled?: boolean;
   onSuccess?: () => void;
   onError?: (error: string) => void;
@@ -25,6 +26,7 @@ export function OpenInEditorButton({
   size = "sm", 
   className,
   showText = false,
+  text = "Open in Editor",
   disabled = false,
   onSuccess,
   onError
@@ -93,7 +95,7 @@ export function OpenInEditorButton({
           )}
           {showText && (
             <span className="hidden sm:inline">
-              {isOpening ? "Opening..." : "Open in Editor"}
+              {isOpening ? "Opening..." : text}
             </span>
           )}
         </Button>
