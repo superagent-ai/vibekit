@@ -53,7 +53,7 @@ interface Task {
 
 interface DependencyTreeViewProps {
   tasks: Task[];
-  onTaskClick?: (task: Task) => void;
+  onTaskClick?: (task: Task, parentTaskId?: number) => void;
   className?: string;
 }
 

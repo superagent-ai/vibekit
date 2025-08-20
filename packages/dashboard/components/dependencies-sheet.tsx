@@ -40,7 +40,7 @@ interface DependenciesSheetProps {
   onOpenChange: (open: boolean) => void;
   tasks: Task[];
   projectName?: string;
-  onTaskClick?: (task: Task) => void;
+  onTaskClick?: (task: Task, parentTaskId?: number) => void;
 }
 
 export function DependenciesSheet({ 

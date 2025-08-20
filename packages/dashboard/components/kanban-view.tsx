@@ -139,6 +139,7 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedTaskParentId, setSelectedTaskParentId] = useState<number | undefined>(undefined);
   const [selectedSubtask, setSelectedSubtask] = useState<Subtask | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [subtaskDialogOpen, setSubtaskDialogOpen] = useState(false);
@@ -336,8 +337,9 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
     }
   };
 
-  const handleTaskClick = (task: Task) => {
+  const handleTaskClick = (task: Task, parentTaskId?: number) => {
     setSelectedTask(task);
+    setSelectedTaskParentId(parentTaskId);
     setDialogOpen(true);
   };
 
@@ -684,6 +686,7 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
       
       <TaskDetailsSheet 
         task={selectedTask}
+        parentTaskId={selectedTaskParentId}
         allTasks={tasks}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -728,7 +731,7 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
         open={dependenciesSheetOpen}
         onOpenChange={setDependenciesSheetOpen}
         tasks={tasks}
-        onTaskClick={(task) => handleTaskClick(task as any)}
+        onTaskClick={(task, parentTaskId) => handleTaskClick(task as any, parentTaskId)}
       />
     </div>
   );

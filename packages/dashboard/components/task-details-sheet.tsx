@@ -84,6 +84,7 @@ interface Task {
 
 interface TaskDetailsSheetProps {
   task: Task | null;
+  parentTaskId?: number;  // Parent task ID for subtasks
   allTasks?: Task[];  // Optional: pass all tasks to resolve dependency names
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -96,7 +97,7 @@ interface TaskDetailsSheetProps {
   onSubtaskClick?: (subtask: Subtask) => void;
 }
 
-export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualTask, onEditClick, projectId, projectRoot, projectTag, onTaskUpdate, onSubtaskClick }: TaskDetailsSheetProps) {
+export function TaskDetailsSheet({ task, parentTaskId, allTasks, open, onOpenChange, isManualTask, onEditClick, projectId, projectRoot, projectTag, onTaskUpdate, onSubtaskClick }: TaskDetailsSheetProps) {
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<number>>(new Set());
   const [subtaskCount, setSubtaskCount] = useState<number>(5);
   const [useResearch, setUseResearch] = useState(false);
@@ -532,7 +533,7 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
             <div className="space-y-1.5 flex-1 pr-2">
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs font-mono">
-                  Task {task.id}
+                  Task {parentTaskId ? `${parentTaskId}.${task.id}` : task.id}
                 </Badge>
                 <SheetTitle className="text-lg">
                   <span className="line-clamp-2">{task.title}</span>

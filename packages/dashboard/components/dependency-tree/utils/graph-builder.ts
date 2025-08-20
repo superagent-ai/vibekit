@@ -24,8 +24,9 @@ export interface TaskNode extends Node {
   data: {
     task: Task;
     label: string;
+    parentTaskId?: number; // Parent task ID for subtasks
     isOnCriticalPath?: boolean;
-    onClick?: (task: Task) => void;
+    onClick?: (task: Task, parentTaskId?: number) => void;
   };
 }
 
@@ -43,7 +44,7 @@ export interface TaskEdge extends Edge {
  */
 export function buildGraph(
   tasks: Task[],
-  onTaskClick?: (task: Task) => void
+  onTaskClick?: (task: Task, parentTaskId?: number) => void
 ): { nodes: TaskNode[], edges: TaskEdge[] } {
   const nodes: TaskNode[] = [];
   const edges: TaskEdge[] = [];
@@ -80,6 +81,7 @@ export function buildGraph(
             priority: 'medium' as const, // Default priority for subtasks
           },
           label: subtask.title,
+          parentTaskId: task.id, // Add parent task ID for display
           onClick: onTaskClick,
         },
       };

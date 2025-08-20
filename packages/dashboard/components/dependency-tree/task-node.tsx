@@ -17,8 +17,9 @@ interface TaskNodeData {
     subtasks: any[];
   };
   label: string;
+  parentTaskId?: number; // Parent task ID for subtasks
   isOnCriticalPath?: boolean;
-  onClick?: (task: any) => void;
+  onClick?: (task: any, parentTaskId?: number) => void;
 }
 
 const getStatusIcon = (status: string) => {
@@ -82,13 +83,13 @@ const getProgressPercentage = (task: any): number => {
 };
 
 export const TaskNode = memo(({ data, selected }: NodeProps) => {
-  const { task, isOnCriticalPath, onClick } = data as unknown as TaskNodeData;
+  const { task, parentTaskId, isOnCriticalPath, onClick } = data as unknown as TaskNodeData;
   const statusColor = getStatusColor(task.status);
   const progress = getProgressPercentage(task);
   
   const handleClick = () => {
     if (onClick) {
-      onClick(task);
+      onClick(task, parentTaskId);
     }
   };
 
@@ -169,7 +170,7 @@ export const TaskNode = memo(({ data, selected }: NodeProps) => {
                 </Badge>
               )}
             </div>
-            <span>#{task.id}</span>
+            <span>Task {parentTaskId ? `${parentTaskId}.${task.id}` : task.id}</span>
           </div>
         </div>
       </Card>
