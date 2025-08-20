@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { 
   BarChart3, 
   Clock, 
@@ -167,6 +168,21 @@ export function ProjectAnalytics({ projectId, projectName }: ProjectAnalyticsPro
   };
 
   const agentStats = getAgentStats();
+
+  // Helper function to format duration
+  const formatDuration = (ms: number): string => {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  };
 
   if (loading) {
     return (
@@ -366,38 +382,148 @@ export function ProjectAnalytics({ projectId, projectName }: ProjectAnalyticsPro
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Agent</TableHead>
-                  <TableHead>Start Time</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="text-sm font-medium uppercase">
+                    Agent
+                  </TableHead>
+                  <TableHead className="text-sm font-medium uppercase">
+                    Status
+                  </TableHead>
+                  <TableHead className="text-sm font-medium uppercase">
+                    Mode
+                  </TableHead>
+                  <TableHead className="text-sm font-medium uppercase">
+                    Duration
+                  </TableHead>
+                  <TableHead className="text-sm font-medium uppercase">
+                    Files Changed
+                  </TableHead>
+                  <TableHead className="text-sm font-medium uppercase">
+                    Git
+                  </TableHead>
+                  <TableHead className="text-sm font-medium uppercase">
+                    Hostname
+                  </TableHead>
+                  <TableHead className="text-sm font-medium uppercase">
+                    Start Time
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {recentSessions.slice(0, 10).map((session) => (
                   <TableRow key={session.sessionId}>
                     <TableCell>
-                      <Badge 
-                        variant="outline" 
-                        style={{ 
-                          borderColor: getAgentColor(session.agentName),
-                          color: getAgentColor(session.agentName)
-                        }}
+                      <Badge
+                        variant="outline"
+                        className="flex items-center gap-1.5"
                       >
-                        {session.agentName}
+                        {session.agentName.toLowerCase() === "claude" && (
+                          <Image
+                            src="/claude-color.png"
+                            alt="Claude"
+                            width={12}
+                            height={12}
+                            className="w-3 h-3"
+                          />
+                        )}
+                        {session.agentName.toLowerCase() === "gemini" && (
+                          <Image
+                            src="/gemini-color.png"
+                            alt="Gemini"
+                            width={12}
+                            height={12}
+                            className="w-3 h-3"
+                          />
+                        )}
+                        {session.agentName.toLowerCase() === "codex" && (
+                          <Image
+                            src="/codex.svg"
+                            alt="Codex"
+                            width={12}
+                            height={12}
+                            className="w-3 h-3 dark:invert"
+                          />
+                        )}
+                        {session.agentName.toLowerCase() === "cursor" && (
+                          <Image
+                            src="/cursor.svg"
+                            alt="Cursor"
+                            width={12}
+                            height={12}
+                            className="w-3 h-3"
+                          />
+                        )}
+                        {session.agentName.toLowerCase() === "opencode" && (
+                          <Image
+                            src="/opencode.webp"
+                            alt="OpenCode"
+                            width={12}
+                            height={12}
+                            className="w-3 h-3"
+                          />
+                        )}
+                        <span className="text-sm font-medium">
+                          {(() => {
+                            const displayNames: Record<string, string> = {
+                              claude: "claude-code",
+                              gemini: "gemini-cli",
+                              codex: "codex",
+                              cursor: "cursor",
+                              opencode: "opencode",
+                            };
+                            return (
+                              displayNames[session.agentName.toLowerCase()] ||
+                              session.agentName
+                            );
+                          })()}
+                        </span>
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(session.startTime).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {session.duration ? `${Math.round(session.duration / 60)}m` : "-"}
                     </TableCell>
                     <TableCell>
-                      <Badge 
-                        variant={session.exitCode === 0 ? "default" : "destructive"}
+                      <Badge
+                        variant={
+                          session.status === "active" ? "default" : "secondary"
+                        }
+                        className={`text-sm ${
+                          session.status === "active"
+                            ? "bg-green-100 text-green-800 border-green-200"
+                            : ""
+                        }`}
                       >
-                        {session.exitCode === 0 ? "Success" : "Failed"}
+                        {session.status || "terminated"}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          session.executionMode === "sandbox"
+                            ? "default"
+                            : "outline"
+                        }
+                        className={`text-sm ${
+                          session.executionMode === "sandbox"
+                            ? "bg-blue-100 text-blue-800 border-blue-200"
+                            : ""
+                        }`}
+                      >
+                        {session.executionMode || "local"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {formatDuration(session.duration || 0)}
+                    </TableCell>
+                    <TableCell>{session.filesChanged.length}</TableCell>
+                    <TableCell>
+                      <span className="text-sm font-mono">
+                        {session.systemInfo?.gitBranch || "No git"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-mono">
+                        {session.systemInfo?.hostname || "Unknown"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(session.startTime).toLocaleString()}
                     </TableCell>
                   </TableRow>
                 ))}
