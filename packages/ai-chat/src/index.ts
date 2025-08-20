@@ -2,6 +2,17 @@
 export { ChatInterface } from './components/ChatInterface';
 export type { ChatInterfaceProps } from './components/ChatInterface';
 
+// AI Elements exports
+export { 
+  Tool, 
+  ToolHeader, 
+  ToolContent, 
+  ToolInput, 
+  ToolOutput, 
+  ToolSection,
+  type ToolState 
+} from './components/ai-elements/tool';
+
 // Hooks
 export { useChat, useAuthStatus } from './hooks';
 export type { ChatOptions } from './hooks';

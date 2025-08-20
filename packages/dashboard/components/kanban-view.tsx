@@ -689,6 +689,8 @@ export function KanbanView({ projectId, projectRoot, taskSource = 'taskmaster', 
         onOpenChange={setDialogOpen}
         isManualTask={taskSource === 'manual'}
         projectId={projectId}
+        projectRoot={projectRoot}
+        projectTag={selectedTag}
         onTaskUpdate={() => fetchTasks(true)}
         onSubtaskClick={handleSubtaskClick}
         onEditClick={() => {

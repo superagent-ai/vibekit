@@ -856,6 +856,8 @@ export default function ProjectKanbanPage() {
           onOpenChange={setDialogOpen}
           onSubtaskClick={handleSubtaskClick}
           projectId={projectId}
+          projectRoot={project?.projectRoot}
+          projectTag={selectedTag}
           onTaskUpdate={() => fetchTasks(true)}
         />
         

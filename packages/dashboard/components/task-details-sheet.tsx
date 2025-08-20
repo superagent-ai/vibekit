@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Sheet,
   SheetContent,
@@ -48,6 +48,7 @@ import {
   Edit2,
   X
 } from "lucide-react";
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput, type ToolState } from "@/components/ui/tool";
 
 interface Subtask {
   id: number;
@@ -89,17 +90,58 @@ interface TaskDetailsSheetProps {
   isManualTask?: boolean;
   onEditClick?: () => void;
   projectId?: string;
+  projectRoot?: string;
+  projectTag?: string;
   onTaskUpdate?: () => void;
   onSubtaskClick?: (subtask: Subtask) => void;
 }
 
-export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualTask, onEditClick, projectId, onTaskUpdate, onSubtaskClick }: TaskDetailsSheetProps) {
+export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualTask, onEditClick, projectId, projectRoot, projectTag, onTaskUpdate, onSubtaskClick }: TaskDetailsSheetProps) {
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<number>>(new Set());
   const [subtaskCount, setSubtaskCount] = useState<number>(5);
+  const [useResearch, setUseResearch] = useState(false);
+  const [promptText, setPromptText] = useState("");
+  const [forceExpand, setForceExpand] = useState(false);
   const [isExpanding, setIsExpanding] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [editingSubtask, setEditingSubtask] = useState<SubtaskFormData | null>(null);
+  const [expansionResult, setExpansionResult] = useState<any>(null);
+  const [expansionError, setExpansionError] = useState<string | null>(null);
+  const [clearResult, setClearResult] = useState<any>(null);
+  const [clearError, setClearError] = useState<string | null>(null);
+  const [toolExpanded, setToolExpanded] = useState(true);
   const [showSubtaskForm, setShowSubtaskForm] = useState(false);
   const [isUpdatingTask, setIsUpdatingTask] = useState(false);
+  
+  // Reset expansion state when sheet opens/closes (page navigation)
+  useEffect(() => {
+    if (!open) {
+      setExpansionResult(null);
+      setExpansionError(null);
+      setClearResult(null);
+      setClearError(null);
+      setToolExpanded(true);
+      setUseResearch(false);
+      setPromptText("");
+      setForceExpand(false);
+    }
+  }, [open]);
+
+  // Clear tool results when switching between expand/clear based on subtasks presence
+  useEffect(() => {
+    if (!task) return;
+    
+    const hasSubtasks = task.subtasks && task.subtasks.length > 0;
+    if (hasSubtasks) {
+      // Switching to clear tool - clear expansion results
+      setExpansionResult(null);
+      setExpansionError(null);
+    } else {
+      // Switching to expand tool - clear clear results
+      setClearResult(null);
+      setClearError(null);
+    }
+  }, [task?.subtasks?.length]);
   
   if (!task) return null;
   
@@ -258,13 +300,27 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
     if (!projectId || !task) return;
     
     setIsExpanding(true);
+    setExpansionResult(null);
+    setExpansionError(null);
+    // Clear any previous clear results
+    setClearResult(null);
+    setClearError(null);
+    
     try {
       const response = await fetch(`/api/projects/${projectId}/tasks/expand`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          taskId: task.id,
-          numSubtasks: subtaskCount
+          taskId: task.id.toString(),
+          numSubtasks: subtaskCount,
+          id: task.id.toString(),
+          num: subtaskCount.toString(),
+          projectRoot: projectRoot || '',
+          research: useResearch,
+          prompt: promptText,
+          file: ".taskmaster/tasks/tasks.json",
+          tag: projectTag || "master",
+          force: forceExpand
         }),
       });
       
@@ -280,8 +336,15 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
             errorMessage = errorText;
           }
         }
+        setExpansionError(errorMessage);
         throw new Error(errorMessage);
       }
+      
+      const result = await response.json();
+      setExpansionResult(result);
+      
+      // Close the tool on successful expansion since subtasks will be shown below
+      setToolExpanded(false);
       
       // Refresh the task data
       if (onTaskUpdate) {
@@ -291,10 +354,89 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
       // Success! The useEffect in KanbanView will update the selected task automatically
     } catch (error) {
       console.error('Failed to expand task:', error);
-      alert(`Failed to expand task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (!expansionError) {
+        setExpansionError(error instanceof Error ? error.message : 'Unknown error');
+      }
     } finally {
       setIsExpanding(false);
     }
+  };
+
+  // Handle clearing all subtasks
+  const handleClearSubtasks = async () => {
+    if (!projectId || !task) return;
+    
+    setIsClearing(true);
+    setClearResult(null);
+    setClearError(null);
+    // Clear any previous expansion results
+    setExpansionResult(null);
+    setExpansionError(null);
+    
+    try {
+      const response = await fetch(`/api/projects/${projectId}/tasks/clear-subtasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: task.id.toString(),
+          all: true,
+          tag: projectTag || 'master'
+        }),
+      });
+      
+      if (!response.ok) {
+        let errorMessage = 'Failed to clear subtasks';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          const errorText = await response.text();
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+        setClearError(errorMessage);
+        throw new Error(errorMessage);
+      }
+      
+      const result = await response.json();
+      setClearResult({ message: 'All subtasks cleared successfully' });
+      
+      // Clear expansion results since we're switching back to expand tool
+      setExpansionResult(null);
+      setExpansionError(null);
+      
+      // Close the tool after clearing
+      setToolExpanded(false);
+      
+      // Refresh the task data
+      if (onTaskUpdate) {
+        onTaskUpdate();
+      }
+    } catch (error) {
+      console.error('Failed to clear subtasks:', error);
+      if (!clearError) {
+        setClearError(error instanceof Error ? error.message : 'Unknown error');
+      }
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  // Helper function to get tool state for expansion
+  const getExpansionToolState = (): ToolState => {
+    if (isExpanding) return 'executing';
+    if (expansionError) return 'output-error';
+    if (expansionResult) return 'output-available';
+    return 'input-available';
+  };
+
+  // Helper function to get tool state for clearing
+  const getClearToolState = (): ToolState => {
+    if (isClearing) return 'executing';
+    if (clearError) return 'output-error';
+    if (clearResult) return 'output-available';
+    return 'input-available';
   };
   
   // Helper function to get task title by ID
@@ -508,8 +650,356 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
               </div>
             )}
 
+            {/* Taskmaster - Always visible for non-manual tasks */}
+            {!isManualTask && projectId && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    Taskmaster
+                  </h3>
+                </div>
+                
+                <div className="pl-8">
+                  {/* Show different tool based on whether subtasks exist */}
+                  {task.subtasks && task.subtasks.length > 0 ? (
+                    // Clear Subtasks Tool
+                    <>
+                      <div className="text-sm text-muted-foreground mb-3">
+                        This task has {task.subtasks.length} subtask{task.subtasks.length !== 1 ? 's' : ''}. You can clear all subtasks to regenerate them.
+                      </div>
+                      
+                      <Tool defaultOpen={toolExpanded}>
+                        <ToolHeader 
+                          type="clear_subtasks"
+                          state={getClearToolState()}
+                          isOpen={toolExpanded}
+                          onToggle={() => setToolExpanded(!toolExpanded)}
+                        />
+                        <ToolContent isOpen={toolExpanded}>
+                          <ToolInput 
+                            input={{
+                              id: task.id.toString(),
+                              all: true,
+                              projectRoot: projectRoot || '',
+                              tag: projectTag || 'master'
+                            }}
+                          />
+                          
+                          <div className="space-y-3 pt-2">
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-destructive" />
+                                <span className="text-sm text-muted-foreground">
+                                  This will permanently delete all {task.subtasks.length} subtask{task.subtasks.length !== 1 ? 's' : ''}.
+                                </span>
+                              </div>
+                              <Button 
+                                onClick={handleClearSubtasks}
+                                disabled={isClearing}
+                                size="sm"
+                                variant="destructive"
+                              >
+                                {isClearing ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Clearing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Clear All Subtasks
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {(clearResult || clearError) && (
+                            <ToolOutput 
+                              output={clearResult}
+                              errorText={clearError || undefined}
+                            />
+                          )}
+                        </ToolContent>
+                      </Tool>
+                    </>
+                  ) : (
+                    // Expand Task Tool
+                    <>
+                      {(!expansionResult && !expansionError) && (
+                        <div className="text-sm text-muted-foreground mb-3">
+                          This task hasn't been broken down into subtasks yet. Use AI to automatically generate subtasks for better task management.
+                        </div>
+                      )}
+                      
+                      <Tool defaultOpen={toolExpanded}>
+                        <ToolHeader 
+                          type="expand_task"
+                          state={getExpansionToolState()}
+                          isOpen={toolExpanded}
+                          onToggle={() => setToolExpanded(!toolExpanded)}
+                        />
+                        <ToolContent isOpen={toolExpanded}>
+                          <ToolInput 
+                            input={{
+                              id: task.id.toString(),
+                              num: subtaskCount.toString(),
+                              research: useResearch,
+                              prompt: promptText,
+                              file: ".taskmaster/tasks/tasks.json",
+                              projectRoot: projectRoot || '',
+                              force: forceExpand,
+                              tag: projectTag || "master"
+                            }}
+                          />
+                          
+                          <div className="space-y-3 pt-2">
+                            {/* Number of subtasks and Research checkbox on same line */}
+                            <div className="flex items-end gap-4">
+                              <div className="w-20">
+                                <Label htmlFor="num-subtasks" className="text-xs">Number</Label>
+                                <Input
+                                  id="num-subtasks"
+                                  type="number"
+                                  min="1"
+                                  max="20"
+                                  value={subtaskCount}
+                                  onChange={(e) => {
+                                    const value = parseInt(e.target.value);
+                                    if (!isNaN(value) && value >= 1 && value <= 20) {
+                                      setSubtaskCount(value);
+                                    }
+                                  }}
+                                  className="h-8 mt-1"
+                                  disabled={isExpanding}
+                                />
+                              </div>
+                              <div className="flex items-center gap-2 pb-1 flex-1">
+                                <input
+                                  type="checkbox"
+                                  id="research"
+                                  checked={useResearch}
+                                  onChange={(e) => setUseResearch(e.target.checked)}
+                                  disabled={isExpanding}
+                                  className="h-4 w-4"
+                                />
+                                <Label htmlFor="research" className="text-xs cursor-pointer">Use research role</Label>
+                              </div>
+                            </div>
+
+                            {/* Prompt */}
+                            <div className="grid gap-2">
+                              <Label htmlFor="prompt" className="text-xs">Prompt (optional context)</Label>
+                              <Textarea
+                                id="prompt"
+                                value={promptText}
+                                onChange={(e) => setPromptText(e.target.value)}
+                                placeholder="Additional context for generating subtasks (optional)"
+                                rows={2}
+                                className="text-xs"
+                                disabled={isExpanding}
+                              />
+                            </div>
+
+                            {/* Force checkbox (only shown when subtasks exist) */}
+                            {task.subtasks && task.subtasks.length > 0 && (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id="force"
+                                  checked={forceExpand}
+                                  onChange={(e) => setForceExpand(e.target.checked)}
+                                  disabled={isExpanding}
+                                  className="h-4 w-4"
+                                />
+                                <Label htmlFor="force" className="text-xs cursor-pointer">Force (overwrite existing)</Label>
+                              </div>
+                            )}
+
+                            {/* Execute button */}
+                            <div className="flex justify-end">
+                              <Button 
+                                onClick={handleExpandTask}
+                                disabled={isExpanding}
+                                size="sm"
+                              >
+                                {isExpanding ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Executing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    Execute Tool
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {(expansionResult || expansionError) && (
+                            <ToolOutput 
+                              output={expansionResult}
+                              errorText={expansionError || undefined}
+                            />
+                          )}
+                        </ToolContent>
+                      </Tool>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Subtasks */}
-            {task.subtasks && task.subtasks.length > 0 ? (
+            {(!task.subtasks || task.subtasks.length === 0) && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <ListChecks className="h-4 w-4" />
+                    Subtasks
+                  </h3>
+                  {isManualTask && !showSubtaskForm && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddSubtask}
+                      disabled={isUpdatingTask}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Subtask
+                    </Button>
+                  )}
+                </div>
+                <div className="pl-8 space-y-4">
+                  {/* Show manual task option for empty manual tasks */}
+                  {isManualTask && !showSubtaskForm && (
+                    <div className="text-center py-6 border-2 border-dashed border-muted-foreground/30 rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-3">
+                        No subtasks yet
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleAddSubtask}
+                        disabled={isUpdatingTask}
+                        className="text-primary hover:text-primary hover:bg-primary/10"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add your first subtask
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Add Subtask Form for manual tasks */}
+                  {isManualTask && showSubtaskForm && editingSubtask && (
+                    <Card className="border-primary/20 bg-primary/5">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm">New Subtask</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-title-empty">Title</Label>
+                          <Input
+                            id="subtask-title-empty"
+                            value={editingSubtask.title}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, title: e.target.value })}
+                            placeholder="Subtask title"
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-description-empty">Description</Label>
+                          <Textarea
+                            id="subtask-description-empty"
+                            value={editingSubtask.description}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, description: e.target.value })}
+                            placeholder="Subtask description"
+                            rows={2}
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-details-empty">Details</Label>
+                          <Textarea
+                            id="subtask-details-empty"
+                            value={editingSubtask.details}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, details: e.target.value })}
+                            placeholder="Additional details"
+                            rows={2}
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-test-empty">Test Strategy</Label>
+                          <Input
+                            id="subtask-test-empty"
+                            value={editingSubtask.testStrategy}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, testStrategy: e.target.value })}
+                            placeholder="How to test this subtask"
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-status-empty">Status</Label>
+                          <Select
+                            value={editingSubtask.status}
+                            onValueChange={(value: typeof editingSubtask.status) => 
+                              setEditingSubtask({ ...editingSubtask, status: value })
+                            }
+                            disabled={isUpdatingTask}
+                          >
+                            <SelectTrigger id="subtask-status-empty">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="in-progress">In Progress</SelectItem>
+                              <SelectItem value="review">Review</SelectItem>
+                              <SelectItem value="done">Done</SelectItem>
+                              <SelectItem value="deferred">Deferred</SelectItem>
+                              <SelectItem value="cancelled">Cancelled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div className="flex justify-end gap-2 pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowSubtaskForm(false);
+                              setEditingSubtask(null);
+                            }}
+                            disabled={isUpdatingTask}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleSaveSubtask}
+                            disabled={isUpdatingTask || !editingSubtask.title.trim()}
+                          >
+                            {isUpdatingTask ? "Saving..." : "Save Subtask"}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {task.subtasks && task.subtasks.length > 0 && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -783,208 +1273,6 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
                   </div>
                 )}
               </div>
-            ) : isManualTask ? (
-              // Manual task with no subtasks - show Add Subtask option
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <ListChecks className="h-4 w-4" />
-                    Subtasks
-                  </h3>
-                  {!showSubtaskForm && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleAddSubtask}
-                      disabled={isUpdatingTask}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Subtask
-                    </Button>
-                  )}
-                </div>
-
-                {!showSubtaskForm && (
-                  <div className="pl-8">
-                    <div className="text-center py-6 border-2 border-dashed border-muted-foreground/30 rounded-lg">
-                      <p className="text-sm text-muted-foreground mb-3">
-                        No subtasks yet
-                      </p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleAddSubtask}
-                        disabled={isUpdatingTask}
-                        className="text-primary hover:text-primary hover:bg-primary/10"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add your first subtask
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Add Subtask Form for no existing subtasks */}
-                {showSubtaskForm && editingSubtask && (
-                  <div className="pl-8">
-                    <Card className="border-primary/20 bg-primary/5">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm">New Subtask</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="grid gap-2">
-                          <Label htmlFor="subtask-title-new">Title</Label>
-                          <Input
-                            id="subtask-title-new"
-                            value={editingSubtask.title}
-                            onChange={(e) => setEditingSubtask({ ...editingSubtask, title: e.target.value })}
-                            placeholder="Subtask title"
-                            disabled={isUpdatingTask}
-                          />
-                        </div>
-                        
-                        <div className="grid gap-2">
-                          <Label htmlFor="subtask-description-new">Description</Label>
-                          <Textarea
-                            id="subtask-description-new"
-                            value={editingSubtask.description}
-                            onChange={(e) => setEditingSubtask({ ...editingSubtask, description: e.target.value })}
-                            placeholder="Subtask description"
-                            rows={2}
-                            disabled={isUpdatingTask}
-                          />
-                        </div>
-                        
-                        <div className="grid gap-2">
-                          <Label htmlFor="subtask-details-new">Details</Label>
-                          <Textarea
-                            id="subtask-details-new"
-                            value={editingSubtask.details}
-                            onChange={(e) => setEditingSubtask({ ...editingSubtask, details: e.target.value })}
-                            placeholder="Additional details"
-                            rows={2}
-                            disabled={isUpdatingTask}
-                          />
-                        </div>
-                        
-                        <div className="grid gap-2">
-                          <Label htmlFor="subtask-test-new">Test Strategy</Label>
-                          <Input
-                            id="subtask-test-new"
-                            value={editingSubtask.testStrategy}
-                            onChange={(e) => setEditingSubtask({ ...editingSubtask, testStrategy: e.target.value })}
-                            placeholder="How to test this subtask"
-                            disabled={isUpdatingTask}
-                          />
-                        </div>
-                        
-                        <div className="grid gap-2">
-                          <Label htmlFor="subtask-status-new">Status</Label>
-                          <Select
-                            value={editingSubtask.status}
-                            onValueChange={(value: typeof editingSubtask.status) => 
-                              setEditingSubtask({ ...editingSubtask, status: value })
-                            }
-                            disabled={isUpdatingTask}
-                          >
-                            <SelectTrigger id="subtask-status-new">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="in-progress">In Progress</SelectItem>
-                              <SelectItem value="review">Review</SelectItem>
-                              <SelectItem value="done">Done</SelectItem>
-                              <SelectItem value="deferred">Deferred</SelectItem>
-                              <SelectItem value="cancelled">Cancelled</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        <div className="flex justify-end gap-2 pt-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setShowSubtaskForm(false);
-                              setEditingSubtask(null);
-                            }}
-                            disabled={isUpdatingTask}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={handleSaveSubtask}
-                            disabled={isUpdatingTask || !editingSubtask.title.trim()}
-                          >
-                            {isUpdatingTask ? "Saving..." : "Save Subtask"}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-              </div>
-            ) : (
-              // Show expand option when no subtasks exist and not a manual task
-              projectId && (
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <ListChecks className="h-4 w-4" />
-                    Subtasks
-                  </h3>
-                  <div className="pl-8 space-y-4">
-                    <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                      <p className="text-sm text-muted-foreground">
-                        This task hasn't been broken down into subtasks yet. 
-                        Use AI to automatically generate subtasks for better task management.
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min="1"
-                            max="20"
-                            value={subtaskCount}
-                            onChange={(e) => {
-                              const value = parseInt(e.target.value);
-                              if (!isNaN(value) && value >= 1 && value <= 20) {
-                                setSubtaskCount(value);
-                              }
-                            }}
-                            className="w-16 h-8"
-                            disabled={isExpanding}
-                            autoFocus={false}
-                            tabIndex={-1}
-                          />
-                          <span className="text-sm text-muted-foreground">subtasks</span>
-                        </div>
-                        <Button 
-                          onClick={handleExpandTask}
-                          disabled={isExpanding}
-                          size="sm"
-                        >
-                          {isExpanding ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Expanding...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="mr-2 h-4 w-4" />
-                              Expand Task
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
             )}
           </div>
         </ScrollArea>

@@ -9,7 +9,7 @@ export async function POST(
   try {
     const { id: projectId } = await params;
     const body = await request.json();
-    const { taskId, numSubtasks = 5 } = body;
+    const { taskId, numSubtasks = 5, research = false, prompt = '', file = '.taskmaster/tasks/tasks.json', tag = 'master', force = false } = body;
     
     console.log('[Task Expand] Request:', { projectId, taskId, numSubtasks });
     
@@ -67,20 +67,24 @@ export async function POST(
       
       console.log('[Task Expand] Available MCP servers:', servers.map(s => s.name));
       
-      // Find taskmaster server
-      const taskmasterServer = servers.find(s => s.name === 'taskmaster');
+      // Find task-master-ai server
+      const taskmasterServer = servers.find(s => s.name === 'task-master-ai');
       
       if (!taskmasterServer) {
         console.log('[Task Expand] Taskmaster server not found, falling back to CLI');
         throw new Error('Taskmaster MCP server not found');
       }
       
-      console.log('[Task Expand] Found taskmaster server:', taskmasterServer);
+      console.log('[Task Expand] Found taskmaster server:', taskmasterServer.name, 'with status:', taskmasterServer.status);
       
-      // Connect if not already connected
-      if (taskmasterServer.status !== 'active') {
-        console.log('[Task Expand] Connecting to taskmaster server...');
+      // Always try to connect to ensure server is active
+      try {
+        console.log('[Task Expand] Ensuring taskmaster server is connected...');
         await manager.connect(taskmasterServer.id);
+        console.log('[Task Expand] Successfully connected to taskmaster server');
+      } catch (connectError: any) {
+        console.error('[Task Expand] Failed to connect to taskmaster server:', connectError);
+        // Try to continue anyway in case it's already connected
       }
       
       // Get the expand_task tool
@@ -96,16 +100,25 @@ export async function POST(
       
       console.log('[Task Expand] Executing expand_task with params:', {
         id: taskId.toString(),
-        num: numSubtasks,
-        projectRoot: project.projectRoot
+        num: numSubtasks.toString(),
+        projectRoot: project.projectRoot,
+        research,
+        prompt,
+        file,
+        tag,
+        force
       });
       
       // Execute the expand_task tool
       const result = await manager.executeTool(taskmasterServer.id, 'expand_task', {
         id: taskId.toString(),
-        num: numSubtasks,
+        num: numSubtasks.toString(),
         projectRoot: project.projectRoot,
-        force: false // Append subtasks by default
+        research,
+        prompt,
+        file,
+        tag,
+        force
       });
       
       console.log('[Task Expand] Tool execution result:', result);
