@@ -12,7 +12,13 @@ const defaultSettings = {
   analytics: { enabled: true },
   aliases: { enabled: false },
   agents: { defaultAgent: 'claude', defaultSandbox: 'dagger' },
-  dashboard: { port: 3001, host: '127.0.0.1', autoOpen: true }
+  dashboard: { port: 3001, host: '127.0.0.1', autoOpen: true },
+  editor: { 
+    defaultEditor: 'vscode', 
+    customCommand: '', 
+    autoDetect: true, 
+    openInNewWindow: false 
+  }
 };
 
 export async function GET() {

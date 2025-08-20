@@ -60,6 +60,7 @@ import { MCPServersSheet } from "@/components/mcp-servers-sheet";
 import { DockerStatusIndicator } from "@/components/docker-status-indicator";
 import { ProjectAnalytics } from "@/components/project-analytics";
 import { ProjectSessions } from "@/components/project-sessions";
+import { OpenInEditorButton } from "@/components/ui/open-in-editor-button";
 import type { Project } from "@/lib/projects";
 
 export default function ProjectDetailPage() {
@@ -345,6 +346,12 @@ export default function ProjectDetailPage() {
           
           <div className="flex flex-wrap gap-2">
             <DockerStatusIndicator />
+            <OpenInEditorButton 
+              projectId={project.id} 
+              variant="outline" 
+              showText={true}
+              onError={(error) => console.error('Failed to open in editor:', error)}
+            />
             <Button variant="outline" onClick={() => setShowEditForm(true)}>
               <Edit className="mr-2 h-4 w-4" />
               Edit

@@ -12,6 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { OpenInEditorButton } from "@/components/ui/open-in-editor-button";
 import type { Project } from "@/lib/projects";
 
 interface ProjectCardProps {
@@ -118,6 +119,20 @@ export function ProjectCard({ project }: ProjectCardProps) {
           </CardTitle>
           
           <div className="flex items-center gap-1">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <OpenInEditorButton
+                    projectId={project.id}
+                    className="h-7 w-7 p-0"
+                    onError={(error) => console.error('Failed to open in editor:', error)}
+                  />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Open in Editor</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>

@@ -20,9 +20,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Settings, Shield, BarChart3, Link, RefreshCw, Bot, Server, FileText, Cpu, Package } from "lucide-react";
+import { Settings, Shield, BarChart3, Link, RefreshCw, Bot, Server, FileText, Cpu, Package, Code, ChevronsUpDown, Check, ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { SUPPORTED_EDITORS } from "@/lib/editor-utils";
 
 // Match the exact structure from cli.js readSettings()
 interface VibeKitSettings {
@@ -57,10 +72,18 @@ interface VibeKitSettings {
     maxConcurrentExecutions: number;
     monitoringRefreshInterval: number;
   };
+  editor?: {
+    defaultEditor: string;
+    customCommand: string;
+    autoDetect: boolean;
+    openInNewWindow: boolean;
+  };
 }
 
 export default function SettingsPage() {
   const router = useRouter();
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [testingEditor, setTestingEditor] = useState(false);
   const [settings, setSettings] = useState<VibeKitSettings>({
     sandbox: {
       enabled: false,
@@ -91,6 +114,12 @@ export default function SettingsPage() {
     resources: {
       maxConcurrentExecutions: 10,
       monitoringRefreshInterval: 30,
+    },
+    editor: {
+      defaultEditor: 'vscode',
+      customCommand: '',
+      autoDetect: true,
+      openInNewWindow: false,
     },
   });
   const [loading, setLoading] = useState(true);
@@ -215,6 +244,65 @@ export default function SettingsPage() {
       },
     };
     saveSettings(newSettings);
+  };
+
+  const handleEditorChange = (editorId: string) => {
+    const newSettings = {
+      ...settings,
+      editor: {
+        defaultEditor: editorId,
+        customCommand: settings.editor?.customCommand || '',
+        autoDetect: settings.editor?.autoDetect ?? true,
+        openInNewWindow: settings.editor?.openInNewWindow ?? false,
+      },
+    };
+    saveSettings(newSettings);
+  };
+
+  const handleCustomCommandChange = (command: string) => {
+    const newSettings = {
+      ...settings,
+      editor: {
+        defaultEditor: settings.editor?.defaultEditor || 'vscode',
+        customCommand: command,
+        autoDetect: settings.editor?.autoDetect ?? true,
+        openInNewWindow: settings.editor?.openInNewWindow ?? false,
+      },
+    };
+    saveSettings(newSettings);
+  };
+
+  const handleEditorToggle = (field: string) => {
+    const editorSettings = settings.editor;
+    if (!editorSettings) return;
+    
+    const newSettings = {
+      ...settings,
+      editor: {
+        ...editorSettings,
+        [field]: !editorSettings[field as keyof typeof editorSettings],
+      },
+    };
+    saveSettings(newSettings);
+  };
+
+  const handleTestEditor = async () => {
+    setTestingEditor(true);
+    try {
+      const response = await fetch('/api/projects/open-in-editor');
+      const result = await response.json();
+      
+      if (result.success) {
+        alert(`✅ ${result.message}\n\nDetected: ${result.detectedCommand || 'N/A'}`);
+      } else {
+        alert(`❌ ${result.message}`);
+      }
+    } catch (error) {
+      alert('❌ Failed to test editor configuration');
+      console.error('Test editor error:', error);
+    } finally {
+      setTestingEditor(false);
+    }
   };
 
   if (loading) {
@@ -683,6 +771,157 @@ export default function SettingsPage() {
               />
               <p className="text-xs text-muted-foreground">
                 If not provided, will attempt to use public images
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Editor Integration Settings */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Code className="h-5 w-5" />
+              <CardTitle>Editor Integration</CardTitle>
+            </div>
+            <CardDescription>
+              Configure your preferred code editor for opening projects
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="default-editor">Default Editor</Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                Search and select your preferred code editor
+              </p>
+              
+              {/* Combobox for editor selection */}
+              <Popover open={editorOpen} onOpenChange={setEditorOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={editorOpen}
+                    className="w-full justify-between"
+                    disabled={saving}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>{SUPPORTED_EDITORS.find(e => e.id === (settings.editor?.defaultEditor || 'vscode'))?.icon}</span>
+                      <span>{SUPPORTED_EDITORS.find(e => e.id === (settings.editor?.defaultEditor || 'vscode'))?.name || "Select editor..."}</span>
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search editors..." />
+                    <CommandEmpty>No editor found.</CommandEmpty>
+                    <CommandGroup className="max-h-[300px] overflow-y-auto">
+                      {SUPPORTED_EDITORS.map((editor) => (
+                        <CommandItem
+                          key={editor.id}
+                          value={editor.id}
+                          onSelect={(currentValue: string) => {
+                            handleEditorChange(currentValue);
+                            setEditorOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              (settings.editor?.defaultEditor || 'vscode') === editor.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <span className="mr-2">{editor.icon}</span>
+                          <span>{editor.name}</span>
+                          {/* Platform indicators */}
+                          {editor.platformRestricted?.includes('darwin') && editor.platformRestricted.length === 1 && (
+                            <Badge variant="secondary" className="ml-auto text-xs">macOS</Badge>
+                          )}
+                          {editor.platformRestricted?.includes('win32') && editor.platformRestricted.length === 1 && (
+                            <Badge variant="secondary" className="ml-auto text-xs">Windows</Badge>
+                          )}
+                          {editor.platformRestricted?.includes('linux') && editor.platformRestricted.length === 1 && (
+                            <Badge variant="secondary" className="ml-auto text-xs">Linux</Badge>
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Show custom command input when "custom" is selected */}
+            {settings.editor?.defaultEditor === 'custom' && (
+              <div className="space-y-2">
+                <Label htmlFor="custom-command">Custom Command</Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Enter the full path or command to launch your editor
+                </p>
+                <Input
+                  id="custom-command"
+                  type="text"
+                  placeholder="e.g., /usr/local/bin/myeditor"
+                  value={settings.editor?.customCommand || ''}
+                  onChange={(e) => handleCustomCommandChange(e.target.value)}
+                  disabled={saving}
+                />
+              </div>
+            )}
+
+            {/* Additional options */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="auto-detect">Auto-detect if unavailable</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Try to find an installed editor if selection isn't found
+                  </p>
+                </div>
+                <Switch
+                  id="auto-detect"
+                  checked={settings.editor?.autoDetect ?? true}
+                  onCheckedChange={() => handleEditorToggle('autoDetect')}
+                  disabled={saving}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="new-window">Open in new window</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Open projects in a new editor window
+                  </p>
+                </div>
+                <Switch
+                  id="new-window"
+                  checked={settings.editor?.openInNewWindow ?? false}
+                  onCheckedChange={() => handleEditorToggle('openInNewWindow')}
+                  disabled={saving}
+                />
+              </div>
+            </div>
+
+            {/* Test button */}
+            <Button 
+              variant="outline" 
+              onClick={handleTestEditor}
+              className="w-full"
+              disabled={!settings.editor?.defaultEditor || testingEditor || saving}
+            >
+              {testingEditor ? (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ExternalLink className="mr-2 h-4 w-4" />
+              )}
+              {testingEditor ? 'Testing...' : 'Test Editor Configuration'}
+            </Button>
+
+            {/* Help text */}
+            <div className="rounded-lg bg-muted p-3">
+              <p className="text-xs text-muted-foreground">
+                💡 Make sure your selected editor is installed and accessible from the command line. 
+                Some editors may require additional setup to work with command-line launching.
               </p>
             </div>
           </CardContent>

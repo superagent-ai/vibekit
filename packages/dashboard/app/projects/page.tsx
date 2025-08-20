@@ -46,6 +46,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { OpenInEditorButton } from "@/components/ui/open-in-editor-button";
 
 interface GitInfo {
   hasGitRepo: boolean;
@@ -170,6 +171,10 @@ function SortableTableRow({ project, gitInfo }: SortableRowProps) {
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-1">
+          <OpenInEditorButton
+            projectId={project.id}
+            onError={(error) => console.error('Failed to open in editor:', error)}
+          />
           <Button
             variant="ghost"
             size="sm"
@@ -817,6 +822,10 @@ export default function ProjectsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <OpenInEditorButton
+                          projectId={project.id}
+                          onError={(error) => console.error('Failed to open in editor:', error)}
+                        />
                         <Button
                           variant="ghost"
                           size="sm"
