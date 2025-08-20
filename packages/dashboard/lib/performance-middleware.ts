@@ -70,7 +70,7 @@ export function performanceMiddleware() {
       });
       
       // Call original end
-      return originalEnd.apply(res, args);
+      return originalEnd.apply(res, args as any);
     };
     
     next();
@@ -135,7 +135,7 @@ export function slowRequestLogger(thresholdMs: number = 1000) {
         });
       }
       
-      return originalEnd.apply(res, args);
+      return originalEnd.apply(res, args as any);
     };
     
     next();
@@ -171,7 +171,7 @@ export function memoryUsageTracker() {
         console.warn('  Request:', req.method, req.path);
       }
       
-      return originalEnd.apply(res, args);
+      return originalEnd.apply(res, args as any);
     };
     
     next();

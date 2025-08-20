@@ -3,13 +3,13 @@ import { executionHistoryManager } from '@/lib/execution-history-manager';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Initialize if needed
     await executionHistoryManager.initialize();
 
-    const { id } = params;
+    const { id } = await params;
     
     if (!id) {
       return NextResponse.json(

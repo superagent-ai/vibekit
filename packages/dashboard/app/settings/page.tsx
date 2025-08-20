@@ -43,6 +43,7 @@ interface VibeKitSettings {
   agents?: {
     defaultAgent: string;
     defaultSandbox: string;
+    dockerHubUser?: string;
   };
   registry?: {
     type: string;

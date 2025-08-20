@@ -7,7 +7,7 @@
 
 import { memoryMonitor } from './memory-monitor';
 import { diskMonitor } from './disk-monitor';
-import { healthCheck } from './health-check';
+import { healthCheck, HealthStatus } from './health-check';
 import { shutdownCoordinator } from './shutdown-coordinator';
 import { SessionManager } from './session-manager';
 import { createLogger } from './structured-logger';
@@ -196,7 +196,7 @@ export async function initializeProduction(config: ProductionConfig = {}): Promi
       healthCheck.registerChecker('production-init', async () => {
         return {
           name: 'production-init',
-          status: 'healthy' as const,
+          status: HealthStatus.HEALTHY,
           message: 'Production systems initialized',
           metrics: {
             memoryMonitor: activeConfig.enableMemoryMonitor,

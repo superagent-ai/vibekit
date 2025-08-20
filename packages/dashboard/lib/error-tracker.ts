@@ -245,8 +245,8 @@ export class ErrorTracker extends EventEmitter {
       if (filter.resolved !== undefined) {
         errors = errors.filter(e => e.resolved === filter.resolved);
       }
-      if (filter.since) {
-        errors = errors.filter(e => e.lastSeen >= filter.since);
+      if (filter.since !== undefined) {
+        errors = errors.filter(e => e.lastSeen >= filter.since!);
       }
     }
     

@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { BaseEdge, EdgeLabelRenderer, EdgeProps, getSmoothStepPath } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, EdgeProps, getSmoothStepPath, Position } from '@xyflow/react';
 
 interface DependencyEdgeProps extends EdgeProps {
   id: string;
@@ -23,10 +23,10 @@ export function DependencyEdge({
   const [edgePath] = getSmoothStepPath({
     sourceX,
     sourceY,
-    sourcePosition: 'bottom' as const,
+    sourcePosition: Position.Bottom,
     targetX,
     targetY,
-    targetPosition: 'top' as const,
+    targetPosition: Position.Top,
   });
 
   return (
@@ -53,10 +53,10 @@ export function SubtaskEdge({
   const [edgePath] = getSmoothStepPath({
     sourceX,
     sourceY,
-    sourcePosition: 'bottom' as const,
+    sourcePosition: Position.Bottom,
     targetX,
     targetY,
-    targetPosition: 'top' as const,
+    targetPosition: Position.Top,
   });
 
   return (
