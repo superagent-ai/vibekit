@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { cn } from "@/lib/utils";
 import { SessionIdGenerator } from "@/lib/session-id-generator";
+import { parseTodoWriteFromMessage } from "@/lib/todo-parser";
+import { useSmartSessionLogs } from "@/hooks/use-smart-session-logs";
 
 // Extend Day.js with plugins
 dayjs.extend(relativeTime);
@@ -123,6 +125,70 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
   const [currentTodos, setCurrentTodos] = useState<any[]>([]);
   const [hasTodos, setHasTodos] = useState(false);
   const [todosLastUpdated, setTodosLastUpdated] = useState<string | null>(null);
+
+  // Use smart session logs to fetch data immediately when sessionId changes
+  const { logs: sessionLogs, isLoading: logsLoading } = useSmartSessionLogs(sessionId, {
+    enabled: !!sessionId && open
+  });
+
+  // Track previous values to prevent unnecessary updates
+  const prevLogCountRef = useRef<number>(0);
+  const prevTodosRef = useRef<string>('');
+
+  // Process logs to extract todos, but only update state when values actually change
+  useEffect(() => {
+    if (!sessionLogs) return;
+
+    const logCount = sessionLogs.length;
+    
+    // Only update log count if it actually changed
+    if (logCount !== prevLogCountRef.current) {
+      setTotalLogCount(logCount);
+      prevLogCountRef.current = logCount;
+    }
+
+    if (logCount === 0) {
+      // Only clear todos if they're not already empty
+      if (prevTodosRef.current !== '') {
+        setCurrentTodos([]);
+        setHasTodos(false);
+        setTodosLastUpdated(null);
+        prevTodosRef.current = '';
+      }
+      return;
+    }
+
+    // Find the latest TodoWrite in the logs
+    let latestTodos: any[] = [];
+    let latestTimestamp: number | null = null;
+
+    for (const log of sessionLogs) {
+      if (log.data) {
+        const todos = parseTodoWriteFromMessage(log.data);
+        if (todos) {
+          latestTodos = todos;
+          latestTimestamp = log.timestamp || Date.now();
+        }
+      }
+    }
+
+    // Create a stable string representation to compare
+    const todosString = JSON.stringify(latestTodos);
+    
+    // Only update if todos actually changed
+    if (todosString !== prevTodosRef.current) {
+      if (latestTodos.length > 0 && latestTimestamp) {
+        setCurrentTodos(latestTodos);
+        setHasTodos(true);
+        setTodosLastUpdated(new Date(latestTimestamp).toISOString());
+      } else {
+        setCurrentTodos([]);
+        setHasTodos(false);
+        setTodosLastUpdated(null);
+      }
+      prevTodosRef.current = todosString;
+    }
+  }, [sessionLogs]);
   
   // Reset state when subtask changes or dialog closes
   useEffect(() => {
@@ -137,6 +203,9 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
       setCurrentTodos([]);
       setHasTodos(false);
       setTodosLastUpdated(null);
+      // Reset refs
+      prevLogCountRef.current = 0;
+      prevTodosRef.current = '';
       return;
     }
     
@@ -149,6 +218,9 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
       setCurrentTodos([]);
       setHasTodos(false);
       setTodosLastUpdated(null);
+      // Reset refs
+      prevLogCountRef.current = 0;
+      prevTodosRef.current = '';
       return;
     }
   }, [open, subtask?.id]);
@@ -162,6 +234,14 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
     setExecutionHistory([]);
     setSelectedExecution(null);
     setTotalLogCount(0);
+    
+    // Reset todos for new subtask
+    setCurrentTodos([]);
+    setHasTodos(false);
+    setTodosLastUpdated(null);
+    // Reset refs for new subtask
+    prevLogCountRef.current = 0;
+    prevTodosRef.current = '';
     
     // Fetch user settings for defaults
     fetch("/api/settings")
@@ -317,19 +397,6 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
     }
   }, [subtask?.details, subtask?.testStrategy]);
 
-  // Handle todo updates from logs
-  const handleTodoUpdate = useCallback((todos: any[], timestamp: number) => {
-    setCurrentTodos(prev => {
-      // Only update if the todos actually changed
-      if (JSON.stringify(prev) !== JSON.stringify(todos)) {
-        setHasTodos(true);
-        // Use the actual timestamp from the log entry instead of current time
-        setTodosLastUpdated(new Date(timestamp).toISOString());
-        return todos;
-      }
-      return prev;
-    });
-  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -842,8 +909,6 @@ const SubtaskDetailsSheetComponent = function SubtaskDetailsSheet({
                       key={`${sessionId}-${subtask?.id}`} // Force re-render when session or subtask changes
                       sessionId={sessionId} 
                       className="flex-1" 
-                      onLogCountChange={setTotalLogCount}
-                      onTodoUpdate={handleTodoUpdate}
                     />
                   ) : (
                     <div className="flex-1 flex items-center justify-center">
