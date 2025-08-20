@@ -18,6 +18,16 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   ChevronRight,
   ChevronDown, 
@@ -32,7 +42,11 @@ import {
   ListChecks,
   Edit,
   Sparkles,
-  Loader2
+  Loader2,
+  Plus,
+  Trash2,
+  Edit2,
+  X
 } from "lucide-react";
 
 interface Subtask {
@@ -43,6 +57,16 @@ interface Subtask {
   details: string;
   status: "pending" | "done" | "in-progress" | "review" | "deferred" | "cancelled";
   testStrategy: string;
+}
+
+interface SubtaskFormData {
+  id?: number;
+  title: string;
+  description: string;
+  details: string;
+  status: "pending" | "done" | "in-progress" | "review" | "deferred" | "cancelled";
+  testStrategy: string;
+  dependencies: number[];
 }
 
 interface Task {
@@ -73,6 +97,9 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<number>>(new Set());
   const [subtaskCount, setSubtaskCount] = useState<number>(5);
   const [isExpanding, setIsExpanding] = useState(false);
+  const [editingSubtask, setEditingSubtask] = useState<SubtaskFormData | null>(null);
+  const [showSubtaskForm, setShowSubtaskForm] = useState(false);
+  const [isUpdatingTask, setIsUpdatingTask] = useState(false);
   
   if (!task) return null;
   
@@ -89,6 +116,143 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
     });
   };
   
+  // Handle adding a new subtask
+  const handleAddSubtask = () => {
+    setEditingSubtask({
+      title: "",
+      description: "",
+      details: "",
+      status: "pending",
+      testStrategy: "",
+      dependencies: [],
+    });
+    setShowSubtaskForm(true);
+  };
+
+  // Handle editing an existing subtask
+  const handleEditSubtask = (subtask: Subtask) => {
+    setEditingSubtask({
+      id: subtask.id,
+      title: subtask.title,
+      description: subtask.description,
+      details: subtask.details || "",
+      status: subtask.status,
+      testStrategy: subtask.testStrategy || "",
+      dependencies: subtask.dependencies || [],
+    });
+    setShowSubtaskForm(true);
+  };
+
+  // Handle saving a subtask
+  const handleSaveSubtask = async () => {
+    if (!editingSubtask || !editingSubtask.title.trim() || !task || !projectId) {
+      return;
+    }
+
+    setIsUpdatingTask(true);
+    try {
+      // Create a copy of the current task's subtasks
+      let updatedSubtasks = [...(task.subtasks || [])];
+
+      if (editingSubtask.id !== undefined) {
+        // Update existing subtask
+        const subtaskIndex = updatedSubtasks.findIndex(s => s.id === editingSubtask.id);
+        if (subtaskIndex !== -1) {
+          updatedSubtasks[subtaskIndex] = {
+            ...updatedSubtasks[subtaskIndex],
+            ...editingSubtask,
+          };
+        }
+      } else {
+        // Add new subtask
+        const newSubtask: Subtask = {
+          ...editingSubtask,
+          id: updatedSubtasks.length > 0 
+            ? Math.max(...updatedSubtasks.map(s => s.id)) + 1 
+            : 1,
+        };
+        updatedSubtasks.push(newSubtask);
+      }
+
+      // Update the task via API
+      const response = await fetch(`/api/projects/${projectId}/tasks/manual`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          taskId: task.id,
+          title: task.title,
+          description: task.description,
+          details: task.details,
+          priority: task.priority,
+          status: task.status,
+          testStrategy: task.testStrategy,
+          dependencies: task.dependencies,
+          subtasks: updatedSubtasks,
+        }),
+      });
+
+      if (response.ok) {
+        setShowSubtaskForm(false);
+        setEditingSubtask(null);
+        if (onTaskUpdate) {
+          onTaskUpdate();
+        }
+      } else {
+        alert("Failed to save subtask");
+      }
+    } catch (error) {
+      console.error("Failed to save subtask:", error);
+      alert("Failed to save subtask");
+    } finally {
+      setIsUpdatingTask(false);
+    }
+  };
+
+  // Handle deleting a subtask
+  const handleDeleteSubtask = async (subtaskId: number) => {
+    if (!task || !projectId || !confirm("Are you sure you want to delete this subtask?")) {
+      return;
+    }
+
+    setIsUpdatingTask(true);
+    try {
+      const updatedSubtasks = (task.subtasks || []).filter(s => s.id !== subtaskId);
+
+      const response = await fetch(`/api/projects/${projectId}/tasks/manual`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          taskId: task.id,
+          title: task.title,
+          description: task.description,
+          details: task.details,
+          priority: task.priority,
+          status: task.status,
+          testStrategy: task.testStrategy,
+          dependencies: task.dependencies,
+          subtasks: updatedSubtasks,
+        }),
+      });
+
+      if (response.ok) {
+        if (onTaskUpdate) {
+          onTaskUpdate();
+        }
+      } else {
+        alert("Failed to delete subtask");
+      }
+    } catch (error) {
+      console.error("Failed to delete subtask:", error);
+      alert("Failed to delete subtask");
+    } finally {
+      setIsUpdatingTask(false);
+    }
+  };
+
   // Handle expanding task into subtasks
   const handleExpandTask = async () => {
     if (!projectId || !task) return;
@@ -347,10 +511,23 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
             {/* Subtasks */}
             {task.subtasks && task.subtasks.length > 0 ? (
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <ListChecks className="h-4 w-4" />
-                  Subtasks ({task.subtasks.length})
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <ListChecks className="h-4 w-4" />
+                    Subtasks ({task.subtasks.length})
+                  </h3>
+                  {isManualTask && !showSubtaskForm && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddSubtask}
+                      disabled={isUpdatingTask}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Subtask
+                    </Button>
+                  )}
+                </div>
                 <div className="space-y-3 pl-8">
                   {task.subtasks.map((subtask, index) => {
                     const isExpanded = expandedSubtasks.has(subtask.id);
@@ -396,9 +573,39 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
                                   )}
                                 </div>
                               </div>
-                              <Badge className={`text-xs ml-2 ${getStatusColor(subtask.status)}`}>
-                                {subtask.status.replace("-", " ")}
-                              </Badge>
+                              <div className="flex items-center gap-2 ml-2">
+                                <Badge className={`text-xs ${getStatusColor(subtask.status)}`}>
+                                  {subtask.status.replace("-", " ")}
+                                </Badge>
+                                {isManualTask && (
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditSubtask(subtask);
+                                      }}
+                                      disabled={isUpdatingTask}
+                                      className="h-6 w-6 p-0"
+                                    >
+                                      <Edit2 className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteSubtask(subtask.id);
+                                      }}
+                                      disabled={isUpdatingTask}
+                                      className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             
                             {/* Expandable Content - Only details and test strategy */}
@@ -469,10 +676,262 @@ export function TaskDetailsSheet({ task, allTasks, open, onOpenChange, isManualT
                     );
                   })}
                 </div>
+
+                {/* Add Subtask Form */}
+                {isManualTask && showSubtaskForm && editingSubtask && (
+                  <div className="pl-8">
+                    <Card className="border-primary/20 bg-primary/5">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm">
+                          {editingSubtask.id !== undefined ? "Edit Subtask" : "New Subtask"}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-title">Title</Label>
+                          <Input
+                            id="subtask-title"
+                            value={editingSubtask.title}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, title: e.target.value })}
+                            placeholder="Subtask title"
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-description">Description</Label>
+                          <Textarea
+                            id="subtask-description"
+                            value={editingSubtask.description}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, description: e.target.value })}
+                            placeholder="Subtask description"
+                            rows={2}
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-details">Details</Label>
+                          <Textarea
+                            id="subtask-details"
+                            value={editingSubtask.details}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, details: e.target.value })}
+                            placeholder="Additional details"
+                            rows={2}
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-test">Test Strategy</Label>
+                          <Input
+                            id="subtask-test"
+                            value={editingSubtask.testStrategy}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, testStrategy: e.target.value })}
+                            placeholder="How to test this subtask"
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-status">Status</Label>
+                          <Select
+                            value={editingSubtask.status}
+                            onValueChange={(value: typeof editingSubtask.status) => 
+                              setEditingSubtask({ ...editingSubtask, status: value })
+                            }
+                            disabled={isUpdatingTask}
+                          >
+                            <SelectTrigger id="subtask-status">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="in-progress">In Progress</SelectItem>
+                              <SelectItem value="review">Review</SelectItem>
+                              <SelectItem value="done">Done</SelectItem>
+                              <SelectItem value="deferred">Deferred</SelectItem>
+                              <SelectItem value="cancelled">Cancelled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div className="flex justify-end gap-2 pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowSubtaskForm(false);
+                              setEditingSubtask(null);
+                            }}
+                            disabled={isUpdatingTask}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleSaveSubtask}
+                            disabled={isUpdatingTask || !editingSubtask.title.trim()}
+                          >
+                            {isUpdatingTask ? "Saving..." : "Save Subtask"}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </div>
+            ) : isManualTask ? (
+              // Manual task with no subtasks - show Add Subtask option
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <ListChecks className="h-4 w-4" />
+                    Subtasks
+                  </h3>
+                  {!showSubtaskForm && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddSubtask}
+                      disabled={isUpdatingTask}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Subtask
+                    </Button>
+                  )}
+                </div>
+
+                {!showSubtaskForm && (
+                  <div className="pl-8">
+                    <div className="text-center py-6 border-2 border-dashed border-muted-foreground/30 rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-3">
+                        No subtasks yet
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleAddSubtask}
+                        disabled={isUpdatingTask}
+                        className="text-primary hover:text-primary hover:bg-primary/10"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add your first subtask
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Add Subtask Form for no existing subtasks */}
+                {showSubtaskForm && editingSubtask && (
+                  <div className="pl-8">
+                    <Card className="border-primary/20 bg-primary/5">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm">New Subtask</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-title-new">Title</Label>
+                          <Input
+                            id="subtask-title-new"
+                            value={editingSubtask.title}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, title: e.target.value })}
+                            placeholder="Subtask title"
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-description-new">Description</Label>
+                          <Textarea
+                            id="subtask-description-new"
+                            value={editingSubtask.description}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, description: e.target.value })}
+                            placeholder="Subtask description"
+                            rows={2}
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-details-new">Details</Label>
+                          <Textarea
+                            id="subtask-details-new"
+                            value={editingSubtask.details}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, details: e.target.value })}
+                            placeholder="Additional details"
+                            rows={2}
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-test-new">Test Strategy</Label>
+                          <Input
+                            id="subtask-test-new"
+                            value={editingSubtask.testStrategy}
+                            onChange={(e) => setEditingSubtask({ ...editingSubtask, testStrategy: e.target.value })}
+                            placeholder="How to test this subtask"
+                            disabled={isUpdatingTask}
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="subtask-status-new">Status</Label>
+                          <Select
+                            value={editingSubtask.status}
+                            onValueChange={(value: typeof editingSubtask.status) => 
+                              setEditingSubtask({ ...editingSubtask, status: value })
+                            }
+                            disabled={isUpdatingTask}
+                          >
+                            <SelectTrigger id="subtask-status-new">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="in-progress">In Progress</SelectItem>
+                              <SelectItem value="review">Review</SelectItem>
+                              <SelectItem value="done">Done</SelectItem>
+                              <SelectItem value="deferred">Deferred</SelectItem>
+                              <SelectItem value="cancelled">Cancelled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div className="flex justify-end gap-2 pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowSubtaskForm(false);
+                              setEditingSubtask(null);
+                            }}
+                            disabled={isUpdatingTask}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleSaveSubtask}
+                            disabled={isUpdatingTask || !editingSubtask.title.trim()}
+                          >
+                            {isUpdatingTask ? "Saving..." : "Save Subtask"}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </div>
             ) : (
               // Show expand option when no subtasks exist and not a manual task
-              !isManualTask && projectId && (
+              projectId && (
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold flex items-center gap-2">
                     <ListChecks className="h-4 w-4" />

@@ -32,6 +32,10 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
     return status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
   };
 
+  const getProjectFolderName = (fullPath: string) => {
+    return fullPath.split('/').pop() || fullPath;
+  };
+
   return (
     <Card 
       className={`group hover:shadow-md transition-all cursor-pointer ${
@@ -39,7 +43,7 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
       }`}
       onClick={() => router.push(`/projects/${project.id}`)}
     >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="space-y-3 pb-3">
         <CardTitle className="text-sm font-medium flex items-center">
           <FolderOpen className="mr-2 h-4 w-4" />
           {project.name}
@@ -47,7 +51,8 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
             <CheckCircle className="ml-2 h-4 w-4 text-primary" />
           )}
         </CardTitle>
-        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        
+        <div className="flex items-center justify-center gap-1">
           {!isSelected && onSelect && (
             <TooltipProvider>
               <Tooltip>
@@ -59,7 +64,7 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
                       e.stopPropagation();
                       onSelect(project.id);
                     }}
-                    className="h-8 w-8 p-0"
+                    className="h-7 w-7 p-0"
                   >
                     <CheckSquare className="h-3 w-3" />
                   </Button>
@@ -80,7 +85,7 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
                     e.stopPropagation();
                     router.push(`/projects/${project.id}`);
                   }}
-                  className="h-8 w-8 p-0"
+                  className="h-7 w-7 p-0"
                 >
                   <Info className="h-3 w-3" />
                 </Button>
@@ -100,13 +105,13 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
                     e.stopPropagation();
                     router.push(`/projects/${project.id}/kanban`);
                   }}
-                  className="h-8 w-8 p-0"
+                  className="h-7 w-7 p-0"
                 >
                   <Kanban className="h-3 w-3" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>View Taskmaster Kanban</p>
+                <p>View Kanban</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -120,7 +125,7 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
                     e.stopPropagation();
                     router.push(`/projects/${project.id}/chat`);
                   }}
-                  className="h-8 w-8 p-0"
+                  className="h-7 w-7 p-0"
                 >
                   <MessageSquare className="h-3 w-3" />
                 </Button>
@@ -140,7 +145,7 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
                     e.stopPropagation();
                     onEdit(project);
                   }}
-                  className="h-8 w-8 p-0"
+                  className="h-7 w-7 p-0"
                 >
                   <Edit className="h-3 w-3" />
                 </Button>
@@ -160,7 +165,7 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
                     e.stopPropagation();
                     onDelete(project.id);
                   }}
-                  className="h-8 w-8 p-0 hover:text-destructive"
+                  className="h-7 w-7 p-0 hover:text-destructive"
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -176,7 +181,7 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
         <div className="space-y-2">
           <div className="flex items-center text-sm text-muted-foreground">
             <GitBranch className="mr-2 h-3 w-3" />
-            <span className="truncate">{project.projectRoot}</span>
+            <span className="truncate">{getProjectFolderName(project.projectRoot)}</span>
           </div>
           
           {project.description && (

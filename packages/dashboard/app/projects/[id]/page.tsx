@@ -369,7 +369,7 @@ export default function ProjectDetailPage() {
             <DockerStatusIndicator />
             <Button variant="outline" onClick={() => setMcpServersSheetOpen(true)}>
               <Server className="mr-2 h-4 w-4" />
-              MCP Servers
+              MCP
             </Button>
             <Button variant="outline" onClick={() => setChatSheetOpen(true)}>
               <MessageSquare className="mr-2 h-4 w-4" />
