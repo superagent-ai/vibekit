@@ -19,7 +19,7 @@ export class CodexAgent extends BaseAgent {
     return prompt
       .replace(/\\/g, '\\\\')    // Escape backslashes FIRST
       .replace(/"/g, '\\"')      // Escape double quotes
-      .replace(/'/g, "'\\\'")    // Escape single quotes (close quote, escaped quote, reopen)
+      .replace(/'/g, "'\\''")    // Escape single quotes (close quote, escaped quote, reopen)
       .replace(/\$/g, '\\$')     // Escape dollar signs
       .replace(/`/g, '\\`')      // Escape backticks (command substitution)
       .replace(/!/g, '\\!')      // Escape exclamation (history expansion)

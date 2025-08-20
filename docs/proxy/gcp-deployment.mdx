@@ -1,0 +1,675 @@
+---
+title: GCP Deployment
+description: "Deploy VibeKit Proxy to Google Cloud Platform using Cloud Run, GKE, Compute Engine, and other GCP services"
+---
+
+## Overview
+
+This guide covers deploying VibeKit Proxy to Google Cloud Platform (GCP) using various services including Cloud Run, Google Kubernetes Engine (GKE), Compute Engine, and Cloud Functions.
+
+## Cloud Run Deployment
+
+Cloud Run is the easiest way to deploy VibeKit Proxy on GCP with automatic scaling and serverless pricing.
+
+### Using gcloud CLI
+
+```bash
+# Build and deploy in one command
+gcloud run deploy vibekit-proxy \
+  --source . \
+  --region us-central1 \
+  --platform managed \
+  --port 8080 \
+  --memory 512Mi \
+  --cpu 1 \
+  --min-instances 0 \
+  --max-instances 10 \
+  --allow-unauthenticated \
+  --set-env-vars NODE_ENV=production
+```
+
+### Using Cloud Build
+
+**cloudbuild.yaml:**
+```yaml
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/vibekit-proxy:$BUILD_ID', '.']
+  
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/vibekit-proxy:$BUILD_ID']
+  
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'vibekit-proxy'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/vibekit-proxy:$BUILD_ID'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--port'
+      - '8080'
+      - '--memory'
+      - '512Mi'
+      - '--cpu'
+      - '1'
+      - '--min-instances'
+      - '1'
+      - '--max-instances'
+      - '100'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'NODE_ENV=production'
+
+images:
+  - 'gcr.io/$PROJECT_ID/vibekit-proxy:$BUILD_ID'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+```
+
+### Terraform Configuration
+
+```hcl
+resource "google_cloud_run_service" "vibekit_proxy" {
+  name     = "vibekit-proxy"
+  location = "us-central1"
+
+  template {
+    spec {
+      containers {
+        image = "gcr.io/${var.project_id}/vibekit-proxy:latest"
+        
+        ports {
+          container_port = 8080
+        }
+
+        resources {
+          limits = {
+            cpu    = "1"
+            memory = "512Mi"
+          }
+        }
+
+        env {
+          name  = "NODE_ENV"
+          value = "production"
+        }
+
+        env {
+          name  = "PORT"
+          value = "8080"
+        }
+
+        liveness_probe {
+          http_get {
+            path = "/health"
+            port = 8080
+          }
+          initial_delay_seconds = 30
+          timeout_seconds       = 5
+          period_seconds        = 10
+          failure_threshold     = 3
+        }
+      }
+
+      container_concurrency = 80
+      timeout_seconds      = 300
+    }
+
+    metadata {
+      annotations = {
+        "autoscaling.knative.dev/minScale" = "1"
+        "autoscaling.knative.dev/maxScale" = "100"
+        "run.googleapis.com/cpu-throttling" = "false"
+      }
+    }
+  }
+
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+
+  autogenerate_revision_name = true
+}
+
+resource "google_cloud_run_service_iam_binding" "public" {
+  location = google_cloud_run_service.vibekit_proxy.location
+  service  = google_cloud_run_service.vibekit_proxy.name
+  role     = "roles/run.invoker"
+  members  = ["allUsers"]
+}
+
+output "service_url" {
+  value = google_cloud_run_service.vibekit_proxy.status[0].url
+}
+```
+
+## Google Kubernetes Engine (GKE)
+
+### Cluster Setup
+
+```bash
+# Create GKE cluster
+gcloud container clusters create vibekit-proxy-cluster \
+  --zone us-central1-a \
+  --machine-type e2-medium \
+  --num-nodes 3 \
+  --enable-autoscaling \
+  --min-nodes 1 \
+  --max-nodes 10 \
+  --enable-network-policy \
+  --enable-ip-alias
+
+# Get cluster credentials
+gcloud container clusters get-credentials vibekit-proxy-cluster --zone us-central1-a
+```
+
+### Kubernetes Manifests
+
+**namespace.yaml:**
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vibekit-proxy
+```
+
+**deployment.yaml:**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vibekit-proxy
+  namespace: vibekit-proxy
+  labels:
+    app: vibekit-proxy
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vibekit-proxy
+  template:
+    metadata:
+      labels:
+        app: vibekit-proxy
+        version: v1
+    spec:
+      containers:
+      - name: vibekit-proxy
+        image: gcr.io/PROJECT_ID/vibekit-proxy:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "8080"
+        - name: GOOGLE_CLOUD_PROJECT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: project-id
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+      securityContext:
+        fsGroup: 1000
+```
+
+**service.yaml:**
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: vibekit-proxy-service
+  namespace: vibekit-proxy
+  annotations:
+    cloud.google.com/backend-config: '{"default": "vibekit-proxy-backendconfig"}'
+spec:
+  type: ClusterIP
+  selector:
+    app: vibekit-proxy
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+```
+
+**ingress.yaml:**
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vibekit-proxy-ingress
+  namespace: vibekit-proxy
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "vibekit-proxy-ip"
+    networking.gke.io/managed-certificates: "vibekit-proxy-ssl-cert"
+spec:
+  rules:
+  - host: proxy.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vibekit-proxy-service
+            port:
+              number: 80
+```
+
+**hpa.yaml:**
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: vibekit-proxy-hpa
+  namespace: vibekit-proxy
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vibekit-proxy
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+```
+
+## Compute Engine Deployment
+
+### Instance Template
+
+```bash
+# Create instance template
+gcloud compute instance-templates create vibekit-proxy-template \
+  --machine-type=e2-medium \
+  --image-family=ubuntu-2004-lts \
+  --image-project=ubuntu-os-cloud \
+  --boot-disk-size=20GB \
+  --boot-disk-type=pd-standard \
+  --tags=http-server,https-server \
+  --metadata-from-file startup-script=startup-script.sh
+```
+
+**startup-script.sh:**
+```bash
+#!/bin/bash
+
+# Update system
+apt-get update
+apt-get install -y curl software-properties-common
+
+# Install Node.js 18
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+apt-get install -y nodejs
+
+# Install VibeKit Proxy
+npm install -g @vibe-kit/proxy
+
+# Create systemd service
+cat > /etc/systemd/system/vibekit-proxy.service << EOF
+[Unit]
+Description=VibeKit Proxy Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www
+ExecStart=/usr/bin/npx @vibe-kit/proxy start --port 8080
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=PORT=8080
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Create working directory
+mkdir -p /var/www
+chown www-data:www-data /var/www
+
+# Enable and start service
+systemctl daemon-reload
+systemctl enable vibekit-proxy
+systemctl start vibekit-proxy
+
+# Install monitoring agent
+curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh
+bash add-monitoring-agent-repo.sh
+apt-get update
+apt-get install -y stackdriver-agent
+systemctl enable stackdriver-agent
+systemctl start stackdriver-agent
+```
+
+### Managed Instance Group
+
+```bash
+# Create managed instance group
+gcloud compute instance-groups managed create vibekit-proxy-mig \
+  --template=vibekit-proxy-template \
+  --size=3 \
+  --zone=us-central1-a
+
+# Configure autoscaling
+gcloud compute instance-groups managed set-autoscaling vibekit-proxy-mig \
+  --zone=us-central1-a \
+  --max-num-replicas=10 \
+  --min-num-replicas=2 \
+  --target-cpu-utilization=0.7
+```
+
+### Load Balancer
+
+```bash
+# Create health check
+gcloud compute health-checks create http vibekit-proxy-health-check \
+  --port=8080 \
+  --request-path=/health \
+  --check-interval=30s \
+  --timeout=10s \
+  --healthy-threshold=2 \
+  --unhealthy-threshold=3
+
+# Create backend service
+gcloud compute backend-services create vibekit-proxy-backend \
+  --protocol=HTTP \
+  --port-name=http \
+  --health-checks=vibekit-proxy-health-check \
+  --global
+
+# Add instance group to backend service
+gcloud compute backend-services add-backend vibekit-proxy-backend \
+  --instance-group=vibekit-proxy-mig \
+  --instance-group-zone=us-central1-a \
+  --global
+
+# Create URL map
+gcloud compute url-maps create vibekit-proxy-map \
+  --default-service=vibekit-proxy-backend
+
+# Create HTTP(S) proxy
+gcloud compute target-http-proxies create vibekit-proxy-http-proxy \
+  --url-map=vibekit-proxy-map
+
+# Create forwarding rule
+gcloud compute forwarding-rules create vibekit-proxy-forwarding-rule \
+  --global \
+  --target-http-proxy=vibekit-proxy-http-proxy \
+  --ports=80
+```
+
+## Cloud Functions Deployment
+
+### Function Code
+
+**index.js:**
+```javascript
+const functions = require('@google-cloud/functions-framework');
+const ProxyServer = require('@vibe-kit/proxy/src/server.js').default;
+
+// Initialize proxy server
+const proxy = new ProxyServer(8080);
+
+functions.http('vibekit-proxy', async (req, res) => {
+  try {
+    await proxy.handleHttpRequest(req, res);
+  } catch (error) {
+    console.error('Proxy error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+```
+
+**package.json:**
+```json
+{
+  "name": "vibekit-proxy-function",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.0.0",
+    "@vibe-kit/proxy": "latest"
+  },
+  "engines": {
+    "node": "18"
+  }
+}
+```
+
+### Deploy Function
+
+```bash
+# Deploy function
+gcloud functions deploy vibekit-proxy \
+  --runtime=nodejs18 \
+  --trigger=http \
+  --allow-unauthenticated \
+  --memory=512MB \
+  --timeout=60s \
+  --max-instances=100 \
+  --region=us-central1 \
+  --set-env-vars=NODE_ENV=production
+```
+
+## Security Configuration
+
+### IAM and Service Accounts
+
+```bash
+# Create service account
+gcloud iam service-accounts create vibekit-proxy-sa \
+  --description="Service account for VibeKit Proxy" \
+  --display-name="VibeKit Proxy SA"
+
+# Grant necessary permissions
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:vibekit-proxy-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/logging.logWriter"
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:vibekit-proxy-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/monitoring.metricWriter"
+```
+
+### Firewall Rules
+
+```bash
+# Create firewall rules
+gcloud compute firewall-rules create vibekit-proxy-allow-http \
+  --allow tcp:8080 \
+  --source-ranges 0.0.0.0/0 \
+  --target-tags http-server \
+  --description "Allow HTTP traffic to VibeKit Proxy"
+
+# For internal traffic only
+gcloud compute firewall-rules create vibekit-proxy-allow-internal \
+  --allow tcp:8080 \
+  --source-ranges 10.0.0.0/8 \
+  --target-tags vibekit-proxy-internal \
+  --description "Allow internal HTTP traffic to VibeKit Proxy"
+```
+
+## Monitoring and Logging
+
+### Cloud Monitoring
+
+```yaml
+# monitoring.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monitoring-config
+  namespace: vibekit-proxy
+data:
+  config.yaml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+    - job_name: 'vibekit-proxy'
+      static_configs:
+      - targets: ['vibekit-proxy-service:80']
+      metrics_path: /metrics
+      scrape_interval: 30s
+```
+
+### Log-based Metrics
+
+```bash
+# Create log-based metric for request count
+gcloud logging metrics create vibekit_proxy_requests \
+  --description="Number of requests to VibeKit Proxy" \
+  --log-filter='resource.type="cloud_run_revision" AND resource.labels.service_name="vibekit-proxy"' \
+  --value-extractor='EXTRACT(httpRequest.requestUrl)'
+
+# Create alerting policy
+gcloud alpha monitoring policies create \
+  --policy-from-file=alerting-policy.yaml
+```
+
+**alerting-policy.yaml:**
+```yaml
+displayName: "VibeKit Proxy High Error Rate"
+conditions:
+  - displayName: "Error rate > 5%"
+    conditionThreshold:
+      filter: 'resource.type="cloud_run_revision" resource.label.service_name="vibekit-proxy"'
+      comparison: COMPARISON_GREATER_THAN
+      thresholdValue: 0.05
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_RATE
+          crossSeriesReducer: REDUCE_MEAN
+```
+
+## Cost Optimization
+
+### Recommendations
+
+1. **Use Cloud Run** for variable workloads (pay-per-request)
+2. **Preemptible instances** for Compute Engine (up to 80% savings)
+3. **Sustained use discounts** for consistent workloads
+4. **Committed use contracts** for predictable usage
+5. **Regional persistent disks** instead of zonal for better cost/performance
+
+### Budget Alerts
+
+```bash
+# Create budget
+gcloud billing budgets create \
+  --billing-account=BILLING_ACCOUNT_ID \
+  --display-name="VibeKit Proxy Budget" \
+  --budget-amount=100USD \
+  --threshold-rule=percent=0.8,basis=CURRENT_SPEND \
+  --threshold-rule=percent=1.0,basis=CURRENT_SPEND \
+  --filter-projects=PROJECT_ID
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Cold starts**: Use minimum instances in Cloud Run
+2. **Memory limits**: Monitor memory usage and adjust limits
+3. **Network connectivity**: Check VPC and firewall rules
+4. **Permission denied**: Verify IAM roles and service accounts
+
+### Debugging Commands
+
+```bash
+# Cloud Run logs
+gcloud logs read "resource.type=cloud_run_revision AND resource.labels.service_name=vibekit-proxy" --limit=50
+
+# GKE pod logs
+kubectl logs -f deployment/vibekit-proxy -n vibekit-proxy
+
+# Compute Engine logs
+gcloud compute instances get-serial-port-output INSTANCE_NAME --zone=ZONE
+
+# Health check status
+gcloud compute backend-services get-health vibekit-proxy-backend --global
+```
+
+## What's Next?
+
+- Configure [AWS deployment](/proxy/aws-deployment)
+- Set up [monitoring and observability](/proxy/observability)
+- Learn about [custom redaction rules](/proxy/redaction)
+- Explore [performance optimization](/proxy/performance)

@@ -1,0 +1,132 @@
+---
+title: Configuration
+description: "Complete guide to configuring VibeKit Proxy with vibekit.yaml"
+---
+
+VibeKit Proxy uses a YAML configuration file to define models, providers, and routing rules. This guide covers the complete configuration schema and usage examples.
+
+## Configuration File Location
+
+By default, both Node.js and Rust implementations look for `vibekit.yaml` in the current working directory. You can specify a custom config file path using the `--config` parameter:
+
+<CodeGroup>
+
+```bash Node.js
+npm start -- --config=/etc/vibekit/vibekit.yaml
+```
+
+```bash Rust
+./target/release/vibekit-proxy start --config=/etc/vibekit/vibekit.yaml
+```
+
+```bash Global Installation
+vibekit-proxy start --config=/path/to/custom/vibekit.yaml
+```
+
+</CodeGroup>
+
+## Basic Configuration Schema
+
+### Minimal Configuration
+
+The simplest configuration requires only a list of models:
+
+```yaml
+models:
+  - model_name: "gpt-5"
+    provider: "openai"
+    api_base: "https://api.openai.com"
+```
+
+### Complete Schema
+
+Here's the full configuration schema with all available options:
+
+```yaml
+# Model definitions - required
+models:
+  - model_name: "string"        # Model identifier (required)
+    provider: "string"          # Provider name (required)
+    api_base: "string"          # API endpoint URL (required)
+
+## Field Descriptions
+
+### Models Section
+
+#### Required Fields
+
+- **`model_name`**: The exact model identifier used in API requests. Must match the model name used by clients.
+- **`provider`**: The AI provider name. Supported values: `openai`, `anthropic`, `google`, `mistral`, `cohere`.
+- **`api_base`**: The base URL for the provider's API endpoint.
+
+## Configuration Examples
+
+### Multiple Providers
+
+Configure multiple AI providers for different models:
+
+```yaml
+models:
+  # OpenAI models
+  - model_name: "gpt-5"
+    provider: "openai"
+    api_base: "https://api.openai.com"
+
+  - model_name: "gpt-5-mini"
+    provider: "openai"
+    api_base: "https://api.openai.com"
+
+  # Anthropic models
+  - model_name: "claude-4-sonnet"
+    provider: "anthropic"
+    api_base: "https://api.anthropic.com/v1"
+
+  - model_name: "claude-4-haiku"
+    provider: "anthropic"
+    api_base: "https://api.anthropic.com/v1"
+
+  # Google models
+  - model_name: "gemini-2.0-flash-thinking-exp"
+    provider: "google"
+    api_base: "https://generativelanguage.googleapis.com"
+```
+
+### Custom API Endpoints
+
+Configure custom or self-hosted API endpoints:
+
+```yaml
+models:
+  # Azure OpenAI
+  - model_name: "gpt-5"
+    provider: "openai"
+    api_base: "https://your-resource.openai.azure.com"
+
+  # Self-hosted model
+  - model_name: "custom-llm"
+    provider: "openai"  # Use OpenAI-compatible API
+    api_base: "https://your-model.internal.com/v1"
+
+  # AWS Bedrock (via proxy)
+  - model_name: "claude-4-sonnet"
+    provider: "anthropic"
+    api_base: "https://bedrock-runtime.us-east-1.amazonaws.com"
+```
+
+## Validation and Testing
+
+Test your configuration with the health endpoint:
+
+```bash
+# Check if proxy is running with your config
+curl http://localhost:8080/health
+
+# Test a specific model
+curl -X POST http://localhost:8080/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "model": "gpt-5",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+```

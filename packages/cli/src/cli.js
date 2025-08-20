@@ -13,7 +13,6 @@ import CursorAgent from './agents/cursor.js';
 import OpenCodeAgent from './agents/opencode.js';
 import Logger from './logging/logger.js';
 import Analytics from './analytics/analytics.js';
-import { proxyManager } from './utils/proxy-manager.js';
 // Dashboard manager will be imported lazily when needed
 import React from 'react';
 import { render } from 'ink';
@@ -55,7 +54,6 @@ async function readSettings() {
   const settingsPath = path.join(os.homedir(), '.vibekit', 'settings.json');
   const defaultSettings = {
     sandbox: { enabled: false, type: 'docker' },
-    proxy: { enabled: true, redactionEnabled: true },
     analytics: { enabled: true },
     aliases: { enabled: false }
   };
@@ -94,29 +92,11 @@ program
     const logger = new Logger('claude');
     const settings = await readSettings();
     
-    // Setup proxy settings from Claude settings only if proxy is enabled
-    const originalBaseUrl = await setupProxySettings(settings.proxy.enabled);
-    
-    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    // Get proxy from global option or environment variable
     let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-    
-    // Ensure proxy is running if needed
-    if (!proxy && settings.proxy.enabled) {
-      const proxyPort = await proxyManager.ensureProxy(8080);
-      proxy = `http://localhost:${proxyPort}`;
-    }
-    
-    // Set proxy target for the proxy server if we have one
-    if (proxy) {
-      if (originalBaseUrl) {
-        process.env.VIBEKIT_PROXY_TARGET_URL = originalBaseUrl;
-      }
-      process.env.ANTHROPIC_BASE_URL = proxy;
-    }
     
     const agentOptions = {
       proxy: proxy,
-      proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
         sandbox: options.sandbox,
@@ -125,27 +105,9 @@ program
     };
     const agent = new ClaudeAgent(logger, agentOptions);
     
-    // Setup cleanup handlers for proxy server
-    const cleanup = () => {
-      if (proxyManager.isRunning()) {
-        proxyManager.stop();
-      }
-    };
-    
-    process.on('SIGINT', cleanup);
-    process.on('SIGTERM', cleanup);
-    process.on('SIGHUP', cleanup);
-    process.on('exit', cleanup);
     
     const args = command.args || [];
-    try {
-      await agent.run(args);
-    } finally {
-      // Clean up proxy server if running
-      if (proxyManager.isRunning()) {
-        proxyManager.stop();
-      }
-    }
+    await agent.run(args);
   });
 
 program
@@ -159,18 +121,11 @@ program
     const logger = new Logger('gemini');
     const settings = await readSettings();
     
-    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    // Get proxy from global option or environment variable
     let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-    
-    // Ensure proxy is running if needed
-    if (!proxy && settings.proxy.enabled) {
-      const proxyPort = await proxyManager.ensureProxy(8080);
-      proxy = `http://localhost:${proxyPort}`;
-    }
     
     const agentOptions = {
       proxy: proxy,
-      proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
         sandbox: options.sandbox,
@@ -179,27 +134,9 @@ program
     };
     const agent = new GeminiAgent(logger, agentOptions);
     
-    // Setup cleanup handlers for proxy server
-    const cleanup = () => {
-      if (proxyManager.isRunning()) {
-        proxyManager.stop();
-      }
-    };
-    
-    process.on('SIGINT', cleanup);
-    process.on('SIGTERM', cleanup);
-    process.on('SIGHUP', cleanup);
-    process.on('exit', cleanup);
     
     const args = command.args || [];
-    try {
-      await agent.run(args);
-    } finally {
-      // Clean up proxy server if running
-      if (proxyManager.isRunning()) {
-        proxyManager.stop();
-      }
-    }
+    await agent.run(args);
   });
 
 program
@@ -213,14 +150,8 @@ program
     const logger = new Logger('codex');
     const settings = await readSettings();
     
-    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    // Get proxy from global option or environment variable
     let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-    
-    // Ensure proxy is running if needed
-    if (!proxy && settings.proxy.enabled) {
-      const proxyPort = await proxyManager.ensureProxy(8080);
-      proxy = `http://localhost:${proxyPort}`;
-    }
     
     // Set OPENAI_BASE_URL for codex instead of ANTHROPIC_BASE_URL
     if (proxy) {
@@ -229,7 +160,6 @@ program
     
     const agentOptions = {
       proxy: proxy,
-      proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
         sandbox: options.sandbox,
@@ -238,27 +168,9 @@ program
     };
     const agent = new CodexAgent(logger, agentOptions);
     
-    // Setup cleanup handlers for proxy server
-    const cleanup = () => {
-      if (proxyManager.isRunning()) {
-        proxyManager.stop();
-      }
-    };
-    
-    process.on('SIGINT', cleanup);
-    process.on('SIGTERM', cleanup);
-    process.on('SIGHUP', cleanup);
-    process.on('exit', cleanup);
     
     const args = command.args || [];
-    try {
-      await agent.run(args);
-    } finally {
-      // Clean up proxy server if running
-      if (proxyManager.isRunning()) {
-        proxyManager.stop();
-      }
-    }
+    await agent.run(args);
   });
 
 program
@@ -272,18 +184,11 @@ program
     const logger = new Logger('cursor');
     const settings = await readSettings();
     
-    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    // Get proxy from global option or environment variable
     let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-    
-    // Ensure proxy is running if needed
-    if (!proxy && settings.proxy.enabled) {
-      const proxyPort = await proxyManager.ensureProxy(8080);
-      proxy = `http://localhost:${proxyPort}`;
-    }
     
     const agentOptions = {
       proxy: proxy,
-      proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
         sandbox: options.sandbox,
@@ -292,27 +197,9 @@ program
     };
     const agent = new CursorAgent(logger, agentOptions);
     
-    // Setup cleanup handlers for proxy server
-    const cleanup = () => {
-      if (proxyManager.isRunning()) {
-        proxyManager.stop();
-      }
-    };
-    
-    process.on('SIGINT', cleanup);
-    process.on('SIGTERM', cleanup);
-    process.on('SIGHUP', cleanup);
-    process.on('exit', cleanup);
     
     const args = command.args || [];
-    try {
-      await agent.run(args);
-    } finally {
-      // Clean up proxy server if running
-      if (proxyManager.isRunning()) {
-        proxyManager.stop();
-      }
-    }
+    await agent.run(args);
   });
 
 program
@@ -326,18 +213,11 @@ program
     const logger = new Logger('opencode');
     const settings = await readSettings();
     
-    // Get proxy from global option, environment variable, or default if proxy enabled in settings
+    // Get proxy from global option or environment variable
     let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-    
-    // Ensure proxy is running if needed
-    if (!proxy && settings.proxy.enabled) {
-      const proxyPort = await proxyManager.ensureProxy(8080);
-      proxy = `http://localhost:${proxyPort}`;
-    }
     
     const agentOptions = {
       proxy: proxy,
-      proxyManager: proxyManager,
       settings: settings,
       sandboxOptions: {
         sandbox: options.sandbox,
@@ -346,27 +226,9 @@ program
     };
     const agent = new OpenCodeAgent(logger, agentOptions);
     
-    // Setup cleanup handlers for proxy server
-    const cleanup = () => {
-      if (proxyManager.isRunning()) {
-        proxyManager.stop();
-      }
-    };
-    
-    process.on('SIGINT', cleanup);
-    process.on('SIGTERM', cleanup);
-    process.on('SIGHUP', cleanup);
-    process.on('exit', cleanup);
     
     const args = command.args || [];
-    try {
-      await agent.run(args);
-    } finally {
-      // Clean up proxy server if running
-      if (proxyManager.isRunning()) {
-        proxyManager.stop();
-      }
-    }
+    await agent.run(args);
   });
 
 // Sandbox management commands
@@ -693,186 +555,6 @@ program
 
 
 
-const proxyCommand = program
-  .command('proxy')
-  .description('Manage proxy server');
-
-proxyCommand
-  .command('start')
-  .description('Start proxy server with request/response logging')
-  .option('-p, --port <number>', 'Port to run proxy server on', '8080')
-  .action(async (options) => {
-    const port = parseInt(options.port) || 8080;
-    
-    try {
-      const { spawn } = await import('child_process');
-      
-      const proxyProcess = spawn('node', [path.join(__dirname, '../../proxy/src/index.js')], {
-        env: { ...process.env, PORT: port.toString() },
-        stdio: 'inherit'
-      });
-      
-      proxyProcess.on('exit', (code) => {
-        if (code !== 0) {
-          console.error(chalk.red(`❌ Proxy server exited with code ${code}`));
-        }
-      });
-      
-    } catch (error) {
-      console.error(chalk.red('Failed to start proxy server:'), error.message);
-      process.exit(1);
-    }
-  });
-
-// Default action for 'proxy' without subcommand - start the server
-proxyCommand
-  .option('-p, --port <number>', 'Port to run proxy server on', '8080')
-  .action(async (options, command) => {
-    // If no subcommand was provided, start the proxy
-    if (command.args.length === 0) {
-      const port = parseInt(options.port) || 8080;
-      
-      try {
-        const { spawn } = await import('child_process');
-        
-        const proxyProcess = spawn('npx', ['@vibe-kit/proxy'], {
-          env: { ...process.env, PORT: port.toString() },
-          stdio: 'inherit'
-        });
-        
-        proxyProcess.on('exit', (code) => {
-          if (code !== 0) {
-            console.error(chalk.red(`❌ Proxy server exited with code ${code}`));
-          }
-        });
-      } catch (error) {
-        console.error(chalk.red('Failed to start proxy server:'), error.message);
-        process.exit(1);
-      }
-    }
-  });
-
-proxyCommand
-  .command('stop')
-  .description('Stop the managed proxy server')
-  .action(async () => {
-    try {
-      await proxyManager.stop();
-    } catch (error) {
-      console.error(chalk.red('Failed to stop proxy server:'), error.message);
-      process.exit(1);
-    }
-  });
-
-proxyCommand
-  .command('status')
-  .description('Show proxy server status')
-  .option('-p, --port <number>', 'Check specific port', '8080')
-  .action(async (options) => {
-    const port = parseInt(options.port) || 8080;
-    const isRunning = proxyManager.isRunning();
-    const externalRunning = await proxyManager.detectExternalProxy(port);
-    
-    console.log(chalk.blue('🌐 Proxy Status'));
-    console.log(chalk.gray('─'.repeat(30)));
-    console.log(`Managed proxy: ${isRunning ? chalk.green('RUNNING') : chalk.red('STOPPED')}`);
-    if (isRunning) {
-      console.log(`Port: ${chalk.cyan(proxyManager.getPort())}`);
-    }
-    console.log(`External proxy (port ${port}): ${externalRunning ? chalk.green('DETECTED') : chalk.red('NOT DETECTED')}`);
-  });
-
-proxyCommand
-  .command('kill')
-  .description('Kill proxy server running on specified port')
-  .option('-p, --port <number>', 'Port to kill proxy server on', '8080')
-  .action(async (options) => {
-    const port = parseInt(options.port) || 8080;
-    
-    try {
-      const { spawn } = await import('child_process');
-      
-      console.log(chalk.blue(`🔍 Looking for processes on port ${port}...`));
-      
-      // Use lsof to find processes using the port
-      const lsof = spawn('lsof', ['-ti', `:${port}`]);
-      let pids = '';
-      
-      lsof.stdout.on('data', (data) => {
-        pids += data.toString();
-      });
-      
-      lsof.on('close', (code) => {
-        if (code === 0 && pids.trim()) {
-          const pidList = pids.trim().split('\n').filter(pid => pid.trim());
-          
-          console.log(chalk.yellow(`📋 Found ${pidList.length} process(es) on port ${port}`));
-          
-          pidList.forEach(pid => {
-            try {
-              process.kill(parseInt(pid), 'SIGTERM');
-              console.log(chalk.green(`✅ Killed process ${pid}`));
-            } catch (error) {
-              if (error.code === 'ESRCH') {
-                console.log(chalk.gray(`⚠️ Process ${pid} already dead`));
-              } else {
-                console.log(chalk.red(`❌ Failed to kill process ${pid}: ${error.message}`));
-              }
-            }
-          });
-          
-          // Wait a moment then check again
-          setTimeout(() => {
-            const checkLsof = spawn('lsof', ['-ti', `:${port}`]);
-            let stillRunning = '';
-            
-            checkLsof.stdout.on('data', (data) => {
-              stillRunning += data.toString();
-            });
-            
-            checkLsof.on('close', (checkCode) => {
-              if (checkCode === 0 && stillRunning.trim()) {
-                console.log(chalk.red(`⚠️ Some processes still running, trying SIGKILL...`));
-                stillRunning.trim().split('\n').forEach(pid => {
-                  try {
-                    process.kill(parseInt(pid), 'SIGKILL');
-                    console.log(chalk.green(`💀 Force killed process ${pid}`));
-                  } catch (error) {
-                    console.log(chalk.red(`❌ Failed to force kill ${pid}: ${error.message}`));
-                  }
-                });
-              } else {
-                console.log(chalk.green(`🎉 Port ${port} is now free`));
-              }
-            });
-          }, 1000);
-          
-        } else {
-          console.log(chalk.yellow(`🔍 No processes found running on port ${port}`));
-        }
-      });
-      
-      lsof.on('error', (error) => {
-        console.error(chalk.red(`❌ Error finding processes: ${error.message}`));
-        console.log(chalk.yellow(`💡 Trying alternative method...`));
-        
-        // Alternative: kill vibekit proxy processes
-        const pkill = spawn('pkill', ['-f', 'vibekit.*proxy']);
-        
-        pkill.on('close', (code) => {
-          if (code === 0) {
-            console.log(chalk.green(`✅ Killed vibekit proxy processes`));
-          } else {
-            console.log(chalk.yellow(`⚠️ No vibekit proxy processes found to kill`));
-          }
-        });
-      });
-      
-    } catch (error) {
-      console.error(chalk.red('Failed to kill proxy server:'), error.message);
-      process.exit(1);
-    }
-  });
 
 // Dashboard commands
 const dashboardCommand = program

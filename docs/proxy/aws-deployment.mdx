@@ -1,0 +1,643 @@
+---
+title: AWS Deployment
+description: "Deploy VibeKit Proxy to AWS using ECS, Lambda, EC2, and other AWS services"
+---
+
+## Overview
+
+This guide covers deploying VibeKit Proxy to Amazon Web Services (AWS) using various services including ECS with Fargate, Lambda, EC2, and EKS.
+
+## ECS with Fargate
+
+AWS Fargate provides serverless container hosting that's perfect for VibeKit Proxy.
+
+### Task Definition
+
+Create a task definition for your VibeKit Proxy container:
+
+```json
+{
+  "family": "vibekit-proxy",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "vibekit-proxy",
+      "image": "your-account.dkr.ecr.region.amazonaws.com/vibekit-proxy:latest",
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 10
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/vibekit-proxy",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "PORT",
+          "value": "8080"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### ECS Service
+
+Create a service to manage your containers:
+
+```json
+{
+  "serviceName": "vibekit-proxy-service",
+  "cluster": "vibekit-cluster",
+  "taskDefinition": "vibekit-proxy:1",
+  "desiredCount": 2,
+  "launchType": "FARGATE",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "subnet-12345678",
+        "subnet-87654321"
+      ],
+      "securityGroups": [
+        "sg-12345678"
+      ],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "loadBalancers": [
+    {
+      "targetGroupArn": "arn:aws:elasticloadbalancing:region:account:targetgroup/vibekit-proxy/12345",
+      "containerName": "vibekit-proxy",
+      "containerPort": 8080
+    }
+  ],
+  "deploymentConfiguration": {
+    "maximumPercent": 200,
+    "minimumHealthyPercent": 50
+  }
+}
+```
+
+### Application Load Balancer
+
+```yaml
+# CloudFormation template for ALB
+Resources:
+  VibeKitProxyALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: vibekit-proxy-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+
+  VibeKitProxyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: vibekit-proxy-tg
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  VibeKitProxyListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref VibeKitProxyTargetGroup
+      LoadBalancerArn: !Ref VibeKitProxyALB
+      Port: 80
+      Protocol: HTTP
+```
+
+## Lambda Deployment
+
+Deploy VibeKit Proxy as a serverless function using AWS Lambda.
+
+### Serverless Framework
+
+**serverless.yml:**
+```yaml
+service: vibekit-proxy-lambda
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  timeout: 30
+  memorySize: 1024
+  stage: ${opt:stage, 'dev'}
+  environment:
+    NODE_ENV: production
+    STAGE: ${self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - logs:CreateLogGroup
+        - logs:CreateLogStream
+        - logs:PutLogEvents
+      Resource: "*"
+
+functions:
+  proxy:
+    handler: src/lambda.handler
+    events:
+      - http:
+          path: /{proxy+}
+          method: ANY
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+    reservedConcurrency: 100
+
+plugins:
+  - serverless-offline
+  - serverless-webpack
+
+custom:
+  webpack:
+    webpackConfig: webpack.config.js
+    includeModules: true
+    packager: npm
+
+package:
+  individually: true
+  exclude:
+    - .git/**
+    - .github/**
+    - test/**
+    - docs/**
+```
+
+**src/lambda.js:**
+```javascript
+import serverless from 'serverless-http';
+import express from 'express';
+import ProxyServer from '@vibe-kit/proxy/src/server.js';
+
+const app = express();
+
+// Initialize proxy server
+const proxy = new ProxyServer(8080);
+
+// Handle all requests through the proxy
+app.use('*', async (req, res) => {
+  try {
+    await proxy.handleHttpRequest(req, res);
+  } catch (error) {
+    console.error('Proxy error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0'
+  });
+});
+
+export const handler = serverless(app, {
+  binary: ['*/*']
+});
+```
+
+### API Gateway Configuration
+
+```yaml
+# CloudFormation for API Gateway
+Resources:
+  VibeKitProxyApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: vibekit-proxy-api
+      Description: VibeKit Proxy API Gateway
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  VibeKitProxyResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref VibeKitProxyApiGateway
+      ParentId: !GetAtt VibeKitProxyApiGateway.RootResourceId
+      PathPart: '{proxy+}'
+
+  VibeKitProxyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref VibeKitProxyApiGateway
+      ResourceId: !Ref VibeKitProxyResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${VibeKitProxyLambda.Arn}/invocations'
+```
+
+## EC2 Deployment
+
+### User Data Script
+
+```bash
+#!/bin/bash
+yum update -y
+yum install -y docker
+
+# Start Docker
+systemctl start docker
+systemctl enable docker
+
+# Add ec2-user to docker group
+usermod -a -G docker ec2-user
+
+# Install Docker Compose
+curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+# Create app directory
+mkdir -p /opt/vibekit-proxy
+
+# Create docker-compose.yml
+cat > /opt/vibekit-proxy/docker-compose.yml << EOF
+version: '3.8'
+services:
+  vibekit-proxy:
+    image: vibekit/proxy:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+EOF
+
+# Start the application
+cd /opt/vibekit-proxy
+docker-compose up -d
+```
+
+### CloudFormation Template
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VibeKit Proxy EC2 Deployment'
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+    Description: EC2 instance type
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 Key Pair for SSH access
+
+Resources:
+  VibeKitProxySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for VibeKit Proxy
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+
+  VibeKitProxyInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0abcdef1234567890  # Amazon Linux 2 AMI
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SecurityGroupIds:
+        - !Ref VibeKitProxySecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y docker
+          systemctl start docker
+          systemctl enable docker
+          usermod -a -G docker ec2-user
+          
+          # Install Node.js
+          curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
+          yum install -y nodejs
+          
+          # Install VibeKit Proxy
+          npm install -g @vibe-kit/proxy
+          
+          # Create systemd service
+          cat > /etc/systemd/system/vibekit-proxy.service << EOF
+          [Unit]
+          Description=VibeKit Proxy Service
+          After=network.target
+          
+          [Service]
+          Type=simple
+          User=ec2-user
+          WorkingDirectory=/home/ec2-user
+          ExecStart=/usr/bin/npx @vibe-kit/proxy start --port 8080
+          Restart=always
+          RestartSec=10
+          Environment=NODE_ENV=production
+          
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+          
+          # Start the service
+          systemctl daemon-reload
+          systemctl enable vibekit-proxy
+          systemctl start vibekit-proxy
+
+Outputs:
+  InstancePublicIP:
+    Description: Public IP address of the EC2 instance
+    Value: !GetAtt VibeKitProxyInstance.PublicIp
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicIP"
+```
+
+## EKS Deployment
+
+### Kubernetes Manifests
+
+**deployment.yaml:**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vibekit-proxy
+  namespace: default
+  labels:
+    app: vibekit-proxy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vibekit-proxy
+  template:
+    metadata:
+      labels:
+        app: vibekit-proxy
+    spec:
+      containers:
+      - name: vibekit-proxy
+        image: your-account.dkr.ecr.region.amazonaws.com/vibekit-proxy:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "8080"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vibekit-proxy-service
+  namespace: default
+spec:
+  selector:
+    app: vibekit-proxy
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: LoadBalancer
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+```
+
+### Auto Scaling
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: vibekit-proxy-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vibekit-proxy
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+```
+
+## Security Configuration
+
+### IAM Roles and Policies
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+        "ecr:GetAuthorizationToken"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+### Security Groups
+
+```yaml
+# Security group for ECS/EC2
+VibeKitProxySecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: Security group for VibeKit Proxy
+    VpcId: !Ref VPC
+    SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 8080
+        ToPort: 8080
+        SourceSecurityGroupId: !Ref ALBSecurityGroup
+        Description: Allow traffic from ALB
+    SecurityGroupEgress:
+      - IpProtocol: -1
+        CidrIp: 0.0.0.0/0
+        Description: Allow all outbound traffic
+```
+
+## Monitoring and Logging
+
+### CloudWatch Configuration
+
+```yaml
+# CloudWatch Log Group
+VibeKitProxyLogGroup:
+  Type: AWS::Logs::LogGroup
+  Properties:
+    LogGroupName: /aws/ecs/vibekit-proxy
+    RetentionInDays: 7
+
+# CloudWatch Alarms
+VibeKitProxyHighCPUAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmName: VibeKit-Proxy-High-CPU
+    AlarmDescription: Alarm when CPU exceeds 80%
+    MetricName: CPUUtilization
+    Namespace: AWS/ECS
+    Statistic: Average
+    Period: 300
+    EvaluationPeriods: 2
+    Threshold: 80
+    ComparisonOperator: GreaterThanThreshold
+    Dimensions:
+      - Name: ServiceName
+        Value: vibekit-proxy-service
+      - Name: ClusterName
+        Value: vibekit-cluster
+```
+
+## Cost Optimization
+
+### Recommendations
+
+1. **Use Spot Instances** for non-critical workloads
+2. **Auto Scaling Groups** to handle variable load
+3. **Reserved Instances** for predictable workloads
+4. **Lambda** for low-traffic scenarios
+5. **CloudWatch** monitoring to optimize resource usage
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Task startup failures**: Check IAM permissions and image availability
+2. **Health check failures**: Verify `/health` endpoint accessibility
+3. **Network connectivity**: Check security groups and NACLs
+4. **Resource limits**: Monitor CloudWatch metrics
+
+### Debugging Commands
+
+```bash
+# ECS Service logs
+aws logs get-log-events --log-group-name /aws/ecs/vibekit-proxy --log-stream-name <stream-name>
+
+# Lambda logs
+aws logs tail /aws/lambda/vibekit-proxy-lambda --follow
+
+# ECS service status
+aws ecs describe-services --cluster vibekit-cluster --services vibekit-proxy-service
+```
+
+## What's Next?
+
+- Configure [GCP deployment](/proxy/gcp-deployment)
+- Set up [monitoring and observability](/proxy/observability)
+- Learn about [custom redaction rules](/proxy/redaction)
+- Explore [performance optimization](/proxy/performance)

@@ -28,12 +28,47 @@
   "navigation": {
     "tabs": [
       {
+        "tab": "Proxy",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "proxy/index",
+              "proxy/quickstart",
+              "proxy/configuration"
+            ]
+          },
+          {
+            "group": "Supported frameworks",
+            "pages": [
+              "proxy/anthropic-sdk",
+              "proxy/claude-code",
+              "proxy/cursor-cli",
+              "proxy/gemini-cli",
+              "proxy/litellm",
+              "proxy/openai-codex",
+              "proxy/openai-sdk",
+              "proxy/other-frameworks",
+              "proxy/vercel-ai-sdk"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "proxy/deployment",
+              "proxy/aws-deployment",
+              "proxy/gcp-deployment"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "CLI",
         "groups": [
           {
             "group": "Getting Started",
             "pages": [
-              "index",
+              "cli/index",
               "cli/installation",
               "cli/quick-reference"
             ]
@@ -42,6 +77,7 @@
             "group": "Core Features",
             "pages": [
               "cli/local-sandbox",
+              "cli/proxy-server",
               "cli/redaction",
               "cli/observability",
               "cli/agent-support"
@@ -62,7 +98,7 @@
           {
             "group": "Get Started",
             "pages": [
-              "sdk/index-sdk",
+              "sdk/index",
               "sdk/quickstart",
               "sdk/ask-mode",
               "sdk/github-integration",
@@ -176,6 +212,11 @@
           "anchor": "Community",
           "href": "https://discord.gg/spZ7MnqFT4",
           "icon": "discord"
+        },
+        {
+          "anchor": "Website",
+          "href": "https://vibekit.sh",
+          "icon": "globe"
         }
       ]
     }

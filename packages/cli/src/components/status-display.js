@@ -2,8 +2,6 @@ import React from 'react';
 import {Text, Box} from 'ink';
 
 const StatusDisplay = ({agentName, options = {}, settings = {}, sandboxConfig = {}}) => {
-  const proxyStatus = options.proxy ? 'ON' : 'OFF';
-  
   const getSandboxStatus = () => {
     if (!sandboxConfig.enabled) return { text: 'OFF', color: 'red' };
     return { text: `ON (${sandboxConfig.type})`, color: 'green' };
@@ -14,7 +12,7 @@ const StatusDisplay = ({agentName, options = {}, settings = {}, sandboxConfig = 
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text dimColor>
-        🖖 VibeKit | Sandbox: <Text color={sandboxStatus.color}>{sandboxStatus.text}</Text> | Proxy: <Text color={options.proxy ? 'green' : 'red'}>{proxyStatus}</Text>
+        🖖 VibeKit | Sandbox: <Text color={sandboxStatus.color}>{sandboxStatus.text}</Text>
       </Text>
     </Box>
   );

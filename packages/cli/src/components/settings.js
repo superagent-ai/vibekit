@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { render, Box, Text, useInput, useApp } from 'ink';
+import TextInput from 'ink-text-input';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { setupAliases } from '../utils/aliases.js';
-import { revertAnthropicBaseURL } from '../utils/claude-settings.js';
-import { proxyManager } from '../utils/proxy-manager.js';
 import dashboardManager from '../dashboard/manager.js';
 import CFonts from 'cfonts';
 
@@ -13,10 +12,6 @@ const Settings = ({ showWelcome = false }) => {
   const [settings, setSettings] = useState({
     sandbox: {
       type: 'none'
-    },
-    proxy: {
-      enabled: true,
-      redactionEnabled: true
     },
     analytics: {
       enabled: true
@@ -27,7 +22,7 @@ const Settings = ({ showWelcome = false }) => {
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [currentMenu, setCurrentMenu] = useState('main'); // 'main', 'analytics', 'proxy', 'sandbox', 'ide', 'auth', 'auth-status'
+  const [currentMenu, setCurrentMenu] = useState('main'); // 'main', 'analytics', 'sandbox', 'ide', 'auth', 'auth-status'
   const [logoRendered, setLogoRendered] = useState(false);
   const [authStatus, setAuthStatus] = useState(null);
   const { exit } = useApp();
@@ -42,11 +37,6 @@ const Settings = ({ showWelcome = false }) => {
             label: 'Analytics',
             description: 'Configure analytics and logging settings',
             action: 'open-analytics'
-          },
-          {
-            label: 'Proxy',
-            description: 'Configure proxy server settings',
-            action: 'open-proxy'
           },
           {
             label: 'Sandbox',
@@ -85,24 +75,6 @@ const Settings = ({ showWelcome = false }) => {
             label: 'View Dashboard',
             description: 'Open analytics dashboard and usage statistics',
             action: 'view-dashboard'
-          },
-          {
-            label: 'Back to Main Menu',
-            description: 'Return to main settings menu',
-            action: 'back-to-main'
-          }
-        ];
-      case 'proxy':
-        return [
-          {
-            label: `Proxy Server: ${settings.proxy.enabled ? '✓ ON' : '✗ OFF'}`,
-            description: 'Enable or disable the proxy server functionality',
-            action: 'toggle-proxy'
-          },
-          {
-            label: `Redaction: ${settings.proxy.redactionEnabled ? '✓ ON' : '✗ OFF'}`,
-            description: 'Toggle redaction of sensitive data in proxy logs',
-            action: 'toggle-redaction'
           },
           {
             label: 'Back to Main Menu',
@@ -255,12 +227,14 @@ const Settings = ({ showWelcome = false }) => {
     }
   };
 
+
   // Check if we're in a TTY environment
   const isRawModeSupported = process.stdin.isTTY;
 
   if (isRawModeSupported) {
     useInput(async (input, key) => {
       if (loading) return;
+      
 
       if (key.upArrow || input === 'k') {
         setSelectedIndex(prev => (prev > 0 ? prev - 1 : menuItems.length - 1));
@@ -277,10 +251,6 @@ const Settings = ({ showWelcome = false }) => {
       switch (selectedItem.action) {
         case 'open-analytics':
           setCurrentMenu('analytics');
-          setSelectedIndex(0);
-          break;
-        case 'open-proxy':
-          setCurrentMenu('proxy');
           setSelectedIndex(0);
           break;
         case 'open-sandbox':
@@ -330,47 +300,6 @@ const Settings = ({ showWelcome = false }) => {
           } catch (error) {
             console.error('❌ Failed to start dashboard server:', error.message);
           }
-          break;
-        case 'toggle-proxy':
-          const newProxySettings = {
-            ...settings,
-            proxy: {
-              ...settings.proxy,
-              enabled: !settings.proxy.enabled
-            }
-          };
-          saveSettings(newProxySettings);
-          
-          // Auto-start proxy server if enabled and not already running
-          if (newProxySettings.proxy.enabled && !proxyManager.isRunning()) {
-            try {
-              await proxyManager.start(8080);
-            } catch (error) {
-              console.error('\n❌ Failed to start proxy server:', error.message);
-            }
-          } else if (!newProxySettings.proxy.enabled) {
-            // Stop proxy server if disabled and running
-            if (proxyManager.isRunning()) {
-              proxyManager.stop();
-            }
-            
-            // Always revert ANTHROPIC_BASE_URL when proxy is disabled, regardless of server status
-            try {
-              await revertAnthropicBaseURL();
-            } catch (error) {
-              console.error('\n❌ Failed to revert ANTHROPIC_BASE_URL:', error.message);
-            }
-          }
-          break;
-        case 'toggle-redaction':
-          const newRedactionSettings = {
-            ...settings,
-            proxy: {
-              ...settings.proxy,
-              redactionEnabled: !settings.proxy.redactionEnabled
-            }
-          };
-          saveSettings(newRedactionSettings);
           break;
         case 'toggle-analytics':
           const newAnalyticsSettings = {
@@ -484,8 +413,6 @@ const Settings = ({ showWelcome = false }) => {
         return '🖖 VibeKit Settings';
       case 'analytics':
         return '📊 Analytics Settings';
-      case 'proxy':
-        return '🔌 Proxy Settings';
       case 'sandbox':
         return '📦 Sandbox Settings';
       case 'ide':
@@ -509,6 +436,7 @@ const Settings = ({ showWelcome = false }) => {
       return 'Use ↑/↓/←/→ to navigate, ← or q/Esc to go back, Enter/Space to select';
     }
   };
+
 
   return (
     <Box flexDirection="column" padding={1} alignItems={showWelcome ? "center" : undefined}>

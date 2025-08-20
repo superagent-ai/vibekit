@@ -18,9 +18,6 @@ class BaseAgent {
     
     // Proxy options
     this.proxy = options.proxy;
-    this.shouldStartProxy = options.shouldStartProxy || false;
-    this.proxyManager = options.proxyManager;
-    this.proxyStarted = false;
     
     // Settings for display
     this.settings = options.settings || {};
@@ -33,26 +30,11 @@ class BaseAgent {
   }
 
 
-  // Lazy proxy startup
-  async startProxyIfNeeded() {
-    if (this.shouldStartProxy && this.proxyManager && !this.proxyStarted) {
-      try {
-        const proxyServer = this.proxyManager.getProxyServer(8080);
-        await proxyServer.start();
-        this.proxyStarted = true;
-      } catch (error) {
-        console.log(chalk.yellow('⚠️  Failed to start proxy server, continuing without proxy'));
-      }
-    }
-  }
 
   async run(args) {
     await this.logger.log('info', `Starting ${this.agentName} agent`, { 
       args
     });
-
-    // Start proxy lazily if needed
-    await this.startProxyIfNeeded();
 
     // Show status display on host before execution
     await this.showStatusDisplay();
