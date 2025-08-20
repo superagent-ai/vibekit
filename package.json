@@ -39,5 +39,10 @@
     "dependencies": {
         "dotenv": "^17.2.0",
         "nanoid": "^5.1.5"
+    },
+    "overrides": {
+        "protobufjs": "^7.5.3",
+        "prismjs": "^1.30.0",
+        "esbuild": "^0.25.0"
     }
 }
