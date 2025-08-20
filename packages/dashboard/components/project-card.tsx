@@ -114,7 +114,7 @@ export function ProjectCard({ project, isSelected = false, onSelect }: ProjectCa
       }`}
       onClick={() => router.push(`/projects/${project.id}`)}
     >
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium flex items-center">
             <FolderOpen className="mr-2 h-4 w-4" />
@@ -190,8 +190,8 @@ export function ProjectCard({ project, isSelected = false, onSelect }: ProjectCa
             </div>
           </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
+      <CardContent className="pt-0">
+        <div className="space-y-1">
           <div className="flex items-center text-xs text-muted-foreground">
             {gitInfo?.hasGitRepo && gitInfo.account && gitInfo.repo ? (
               <>
