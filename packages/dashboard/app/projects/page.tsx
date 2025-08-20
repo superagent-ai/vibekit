@@ -49,12 +49,9 @@ import { Badge } from "@/components/ui/badge";
 
 interface SortableRowProps {
   project: Project;
-  isSelected: boolean;
-  onSelect: (id: string) => void;
-  onSetCurrent: (id: string) => void;
 }
 
-function SortableTableRow({ project, isSelected, onSelect, onSetCurrent }: SortableRowProps) {
+function SortableTableRow({ project }: SortableRowProps) {
   const router = useRouter();
   const {
     attributes,
@@ -75,9 +72,7 @@ function SortableTableRow({ project, isSelected, onSelect, onSetCurrent }: Sorta
     <TableRow 
       ref={setNodeRef}
       style={style}
-      className={`hover:bg-muted/50 transition-colors cursor-pointer ${
-        isSelected ? 'bg-primary/5' : ''
-      } ${isDragging ? 'shadow-lg' : ''}`}
+      className={`hover:bg-muted/50 transition-colors cursor-pointer ${isDragging ? 'shadow-lg' : ''}`}
       onClick={() => router.push(`/projects/${project.id}`)}
     >
       <TableCell className="w-10">
@@ -92,9 +87,6 @@ function SortableTableRow({ project, isSelected, onSelect, onSetCurrent }: Sorta
       </TableCell>
       <TableCell className="font-medium">
         <div className="flex items-center gap-2">
-          {isSelected && (
-            <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
-          )}
           <div>
             <div>{project.name}</div>
             {project.description && (
@@ -155,19 +147,6 @@ function SortableTableRow({ project, isSelected, onSelect, onSetCurrent }: Sorta
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-1">
-          {!isSelected && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSetCurrent(project.id);
-              }}
-              title="Set as current project"
-            >
-              <CheckSquare className="h-3 w-3" />
-            </Button>
-          )}
           <Button
             variant="ghost"
             size="sm"
@@ -199,12 +178,10 @@ function SortableTableRow({ project, isSelected, onSelect, onSetCurrent }: Sorta
 export default function ProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [lastModified, setLastModified] = useState<string | null>(null);
-  const [currentProjectLastModified, setCurrentProjectLastModified] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [sortBy, setSortBy] = useState<'rank' | 'priority' | 'alphabetical'>('rank');
@@ -311,25 +288,9 @@ export default function ProjectsPage() {
     }
   };
 
-  const fetchCurrentProject = async () => {
-    try {
-      const response = await fetch('/api/projects/current');
-      const data = await response.json();
-      if (data.success) {
-        // Only update if data has changed
-        if (data.lastModified !== currentProjectLastModified) {
-          setCurrentProject(data.data);
-          setCurrentProjectLastModified(data.lastModified);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch current project:', error);
-    }
-  };
 
   useEffect(() => {
     fetchProjects();
-    fetchCurrentProject();
   }, []);
   
   // Set up Server-Sent Events for real-time updates
@@ -366,9 +327,6 @@ export default function ProjectsPage() {
           } else if (data.type === 'projects-updated' || data.type === 'projects-cleared') {
             // Fetch updated projects
             fetchProjects(true);
-          } else if (data.type === 'current-project-updated' || data.type === 'current-project-cleared') {
-            // Fetch updated current project
-            fetchCurrentProject();
           }
         } catch (error) {
           console.error('Error parsing SSE message:', error);
@@ -428,24 +386,6 @@ export default function ProjectsPage() {
 
 
 
-  const handleSelectProject = async (projectId: string) => {
-    try {
-      const response = await fetch('/api/projects/current', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ projectId }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentProject(data.data);
-      }
-    } catch (error) {
-      console.error('Failed to select project:', error);
-    }
-  };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -621,17 +561,10 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        {/* Show current project and filter results */}
-        <div className="flex items-center justify-between">
-          {currentProject && (
-            <div className="flex items-center gap-2 text-sm">
-              <CheckCircle className="h-4 w-4 text-primary" />
-              <span className="text-muted-foreground">Current project:</span>
-              <span className="font-medium">{currentProject.name}</span>
-            </div>
-          )}
+        {/* Show filter results */}
+        <div className="flex items-center justify-end">
           {searchQuery && filteredProjects.length !== projects.length && (
-            <p className="text-sm text-muted-foreground ml-auto">
+            <p className="text-sm text-muted-foreground">
               Showing {filteredProjects.length} of {projects.length} projects
             </p>
           )}
@@ -662,8 +595,6 @@ export default function ProjectsPage() {
               <ProjectCard
                 key={project.id}
                 project={project}
-                isSelected={currentProject?.id === project.id}
-                onSelect={(id) => handleSelectProject(id)}
               />
             ))}
           </div>
@@ -695,9 +626,6 @@ export default function ProjectsPage() {
                       <SortableTableRow
                         key={project.id}
                         project={project}
-                        isSelected={currentProject?.id === project.id}
-                        onSelect={handleSelectProject}
-                        onSetCurrent={handleSelectProject}
                       />
                     ))}
                   </SortableContext>
@@ -722,16 +650,11 @@ export default function ProjectsPage() {
                 {filteredProjects.map((project) => (
                   <TableRow 
                     key={project.id} 
-                    className={`hover:bg-muted/50 transition-colors cursor-pointer ${
-                      currentProject?.id === project.id ? 'bg-primary/5' : ''
-                    }`}
+                    className="hover:bg-muted/50 transition-colors cursor-pointer"
                     onClick={() => router.push(`/projects/${project.id}`)}
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        {currentProject?.id === project.id && (
-                          <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
-                        )}
                         <div>
                           <div>{project.name}</div>
                           {project.description && (
@@ -792,19 +715,6 @@ export default function ProjectsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        {currentProject?.id !== project.id && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSelectProject(project.id);
-                            }}
-                            title="Set as current project"
-                          >
-                            <CheckSquare className="h-3 w-3" />
-                          </Button>
-                        )}
                         <Button
                           variant="ghost"
                           size="sm"

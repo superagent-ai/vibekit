@@ -193,24 +193,6 @@ export default function ProjectDetailPage() {
     }
   }, [project]);
 
-  const handleSetAsCurrentProject = async () => {
-    try {
-      const response = await fetch('/api/projects/current', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ projectId }),
-      });
-      
-      if (response.ok) {
-        // Refresh project data to show it's now current
-        fetchProject();
-      }
-    } catch (error) {
-      console.error('Failed to set current project:', error);
-    }
-  };
 
   const handleUpdateProject = async (id: string, projectData: any) => {
     try {
@@ -367,12 +349,6 @@ export default function ProjectDetailPage() {
               <Edit className="mr-2 h-4 w-4" />
               Edit
             </Button>
-            {project.id !== project.id && (
-              <Button variant="outline" onClick={handleSetAsCurrentProject}>
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Set as Current
-              </Button>
-            )}
             <Button variant="outline" onClick={() => setMcpServersSheetOpen(true)}>
               <Server className="mr-2 h-4 w-4" />
               MCP

@@ -16,8 +16,6 @@ import type { Project } from "@/lib/projects";
 
 interface ProjectCardProps {
   project: Project;
-  isSelected?: boolean;
-  onSelect?: (id: string) => void;
 }
 
 interface GitInfo {
@@ -27,7 +25,7 @@ interface GitInfo {
   remoteUrl?: string;
 }
 
-export function ProjectCard({ project, isSelected = false, onSelect }: ProjectCardProps) {
+export function ProjectCard({ project }: ProjectCardProps) {
   const router = useRouter();
   const [gitInfo, setGitInfo] = useState<GitInfo | null>(null);
   const [isLoadingGit, setIsLoadingGit] = useState(false);
@@ -109,9 +107,7 @@ export function ProjectCard({ project, isSelected = false, onSelect }: ProjectCa
 
   return (
     <Card 
-      className={`group hover:shadow-md transition-all cursor-pointer ${
-        isSelected ? 'ring-2 ring-primary shadow-md' : ''
-      }`}
+      className="group hover:shadow-md transition-all cursor-pointer"
       onClick={() => router.push(`/projects/${project.id}`)}
     >
       <CardHeader className="pb-0">
@@ -119,34 +115,9 @@ export function ProjectCard({ project, isSelected = false, onSelect }: ProjectCa
           <CardTitle className="text-sm font-medium flex items-center">
             <FolderOpen className="mr-2 h-4 w-4" />
             {project.name}
-            {isSelected && (
-              <CheckCircle className="ml-2 h-4 w-4 text-primary" />
-            )}
           </CardTitle>
           
           <div className="flex items-center gap-1">
-            {!isSelected && onSelect && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelect(project.id);
-                      }}
-                      className="h-7 w-7 p-0"
-                    >
-                      <CheckSquare className="h-3 w-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Set as Current</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>

@@ -14,10 +14,7 @@ export {
   getProject,
   createProject,
   updateProject,
-  deleteProject,
-  getCurrentProject,
-  setCurrentProject,
-  clearCurrentProject
+  deleteProject
 } from './projects';
 
 // Analytics
