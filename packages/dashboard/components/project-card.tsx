@@ -1,7 +1,8 @@
 "use client";
 
-import { Edit, Trash2, FolderOpen, GitBranch, Calendar, Tag, CheckCircle, MessageSquare, Kanban, Info, CheckSquare } from "lucide-react";
+import { Edit, Trash2, FolderOpen, GitBranch, Calendar, Tag, CheckCircle, MessageSquare, Kanban, Info, CheckSquare, Github } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +22,17 @@ interface ProjectCardProps {
   onSelect?: (id: string) => void;
 }
 
+interface GitInfo {
+  hasGitRepo: boolean;
+  account?: string;
+  repo?: string;
+  remoteUrl?: string;
+}
+
 export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onSelect }: ProjectCardProps) {
   const router = useRouter();
+  const [gitInfo, setGitInfo] = useState<GitInfo | null>(null);
+  const [isLoadingGit, setIsLoadingGit] = useState(false);
   
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -35,6 +45,69 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
   const getProjectFolderName = (fullPath: string) => {
     return fullPath.split('/').pop() || fullPath;
   };
+
+  const parseGitUrl = (url: string): { account: string; repo: string } | null => {
+    if (!url) return null;
+    
+    // Handle different Git URL formats
+    // SSH: git@github.com:user/repo.git
+    // HTTPS: https://github.com/user/repo.git
+    // HTTPS without .git: https://github.com/user/repo
+    
+    let match;
+    
+    // SSH format
+    match = url.match(/git@([^:]+):([^/]+)\/(.+?)(?:\.git)?$/);
+    if (match) {
+      return { account: match[2], repo: match[3] };
+    }
+    
+    // HTTPS format
+    match = url.match(/https?:\/\/([^/]+)\/([^/]+)\/(.+?)(?:\.git)?$/);
+    if (match) {
+      return { account: match[2], repo: match[3] };
+    }
+    
+    return null;
+  };
+
+  // Fetch Git info when component mounts
+  useEffect(() => {
+    const fetchGitInfo = async () => {
+      if (!project.projectRoot) return;
+      
+      setIsLoadingGit(true);
+      try {
+        const response = await fetch('/api/projects/check-git', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectRoot: project.projectRoot }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.hasGitRepo && data.gitInfo?.remoteUrl) {
+            const parsed = parseGitUrl(data.gitInfo.remoteUrl);
+            setGitInfo({
+              hasGitRepo: true,
+              account: parsed?.account,
+              repo: parsed?.repo,
+              remoteUrl: data.gitInfo.remoteUrl,
+            });
+          } else {
+            setGitInfo({ hasGitRepo: false });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch git info:', error);
+        setGitInfo({ hasGitRepo: false });
+      } finally {
+        setIsLoadingGit(false);
+      }
+    };
+
+    fetchGitInfo();
+  }, [project.projectRoot]);
 
   return (
     <Card 
@@ -179,9 +252,28 @@ export function ProjectCard({ project, isSelected = false, onEdit, onDelete, onS
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          <div className="flex items-center text-sm text-muted-foreground">
-            <GitBranch className="mr-2 h-3 w-3" />
-            <span className="truncate">{getProjectFolderName(project.projectRoot)}</span>
+          <div className="flex items-center text-xs text-muted-foreground">
+            {gitInfo?.hasGitRepo && gitInfo.account && gitInfo.repo ? (
+              <>
+                <Github className="mr-2 h-3 w-3" />
+                <span className="truncate">{gitInfo.account}/{gitInfo.repo}</span>
+              </>
+            ) : gitInfo?.hasGitRepo === false ? (
+              <>
+                <GitBranch className="mr-2 h-3 w-3" />
+                <span className="truncate text-muted-foreground/60">No remote repository</span>
+              </>
+            ) : isLoadingGit ? (
+              <>
+                <GitBranch className="mr-2 h-3 w-3 animate-pulse" />
+                <span className="truncate text-muted-foreground/60">Loading...</span>
+              </>
+            ) : (
+              <>
+                <GitBranch className="mr-2 h-3 w-3" />
+                <span className="truncate">{getProjectFolderName(project.projectRoot)}</span>
+              </>
+            )}
           </div>
           
           {project.description && (

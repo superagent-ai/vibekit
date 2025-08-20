@@ -354,7 +354,7 @@ export default function ProjectDetailPage() {
               </div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />
-                <span>Created {new Date(project.createdAt).toLocaleDateString()}</span>
+                <span className="text-xs">Created {new Date(project.createdAt).toLocaleDateString()}</span>
               </div>
             </div>
           </div>
