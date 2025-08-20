@@ -80,6 +80,7 @@ export default function ProjectDetailPage() {
   const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
   const [kanbanRefreshKey, setKanbanRefreshKey] = useState(0);
   const [mcpServersSheetOpen, setMcpServersSheetOpen] = useState(false);
+  const [gitInfo, setGitInfo] = useState<any>(null);
 
   // Fetch project details
   const fetchProject = async () => {
@@ -153,11 +154,42 @@ export default function ProjectDetailPage() {
     }
   };
 
+  // Fetch git repository info
+  const fetchGitInfo = async () => {
+    if (!project?.projectRoot) return;
+    
+    try {
+      const response = await fetch('/api/projects/check-git', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ projectRoot: project.projectRoot }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setGitInfo(data);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch git info:", error);
+    }
+  };
+
   useEffect(() => {
     fetchProject();
     fetchTaskStats();
     fetchGitCommits();
   }, [projectId]);
+
+  // Fetch git info when project is loaded
+  useEffect(() => {
+    if (project) {
+      fetchGitInfo();
+    }
+  }, [project]);
 
   const handleSetAsCurrentProject = async () => {
     try {
@@ -718,6 +750,92 @@ export default function ProjectDetailPage() {
                       </p>
                     </div>
                   </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Git Repository */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Git Repository</CardTitle>
+                <CardDescription>Source control integration and status</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {gitInfo ? (
+                  gitInfo.hasGitRepo ? (
+                    <>
+                      <div>
+                        <div className="text-sm text-muted-foreground mb-1">Repository Status</div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-green-600 border-green-200">
+                            <GitBranch className="mr-1 h-3 w-3" />
+                            Git Repository
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {gitInfo.gitInfo?.isDirty ? 'Working directory has changes' : 'Working directory clean'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {gitInfo.gitInfo?.currentBranch && (
+                        <div>
+                          <div className="text-sm text-muted-foreground mb-1">Current Branch</div>
+                          <code className="text-sm bg-muted px-2 py-1 rounded">{gitInfo.gitInfo.currentBranch}</code>
+                        </div>
+                      )}
+                      
+                      {gitInfo.gitInfo?.remoteUrl && (
+                        <div>
+                          <div className="text-sm text-muted-foreground mb-1">Remote URL</div>
+                          <code className="text-sm bg-muted px-2 py-1 rounded break-all">{gitInfo.gitInfo.remoteUrl}</code>
+                        </div>
+                      )}
+                      
+                      {gitInfo.gitInfo?.lastCommit && (
+                        <div>
+                          <div className="text-sm text-muted-foreground mb-1">Last Commit</div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <GitCommit className="h-3 w-3 text-muted-foreground" />
+                              <code className="text-xs bg-muted px-2 py-1 rounded">{gitInfo.gitInfo.lastCommit.hash?.substring(0, 7)}</code>
+                              <span className="text-sm">{gitInfo.gitInfo.lastCommit.message}</span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              By {gitInfo.gitInfo.lastCommit.author} on {new Date(gitInfo.gitInfo.lastCommit.date).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <div className="text-sm text-muted-foreground mb-1">Repository Status</div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-yellow-600 border-yellow-200">
+                            No Git Repository
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            No .git folder found
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 bg-muted rounded-md">
+                        <p className="text-xs text-muted-foreground">
+                          💡 Initialize a Git repository with <code className="text-xs">git init</code> to enable version control features.
+                        </p>
+                      </div>
+                    </>
+                  )
+                ) : (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="text-center">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-2" />
+                      <p className="text-xs text-muted-foreground">Checking Git repository...</p>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
