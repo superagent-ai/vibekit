@@ -8,6 +8,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CompactStatusTable } from "@/components/compact-status-table";
 import { HorizontalStatusBar } from "@/components/horizontal-status-bar";
 import { ResourceUsageCharts } from "@/components/resource-usage-charts";
@@ -56,10 +57,66 @@ interface SystemHealth {
   environment: string;
 }
 
+interface DashboardData {
+  overview: {
+    totalExecutions: number;
+    activeExecutions: number;
+    successRate: number;
+    avgDuration: number;
+    pullRequestsCreated: number;
+    activeSessions: number;
+    recoveredSessions: number;
+  };
+  recentExecutions: any[];
+  statistics: {
+    byAgent: Record<string, number>;
+    bySandbox: Record<string, number>;
+    byStatus: Record<string, number>;
+    hourlyVolume: Array<{ hour: string; count: number; success: number; failed: number }>;
+    dailyTrends: Array<{ date: string; executions: number; successRate: number; avgDuration: number }>;
+  };
+  performance?: {
+    performance?: {
+      requests: {
+        total: number;
+        avgDuration: string;
+        p50: string;
+        p90: string;
+        p95: string;
+        p99: string;
+        throughput: string;
+        errorRate: string;
+      };
+      resources: {
+        cpu: string;
+        memory: string;
+        heapUsed: string;
+        eventLoopLag: string;
+        activeHandles: number;
+      };
+      bottlenecks: string[];
+      slowestEndpoints: Array<{
+        path: string;
+        method: string;
+        duration: string;
+      }>;
+    };
+    uptime: number;
+  };
+  alerts: Array<{
+    type: 'warning' | 'error' | 'info';
+    message: string;
+    timestamp: number;
+    component?: string;
+  }>;
+  timestamp: number;
+}
+
 type TimeRange = '1h' | '24h' | '7d' | '30d';
 
 export default function MonitoringPage() {
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,21 +125,36 @@ export default function MonitoringPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  const fetchSystemHealth = async () => {
+  const fetchData = async () => {
     try {
       setError(null);
-      const response = await fetch('/api/health');
-      const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch system health');
+      // Fetch all data in parallel
+      const [healthRes, dashboardRes, performanceRes] = await Promise.all([
+        fetch('/api/health'),
+        fetch(`/api/monitoring/dashboard?timeRange=${timeRange}`),
+        fetch('/api/monitoring/performance').catch(() => null)
+      ]);
+      
+      const health = await healthRes.json();
+      const dashboard = dashboardRes ? await dashboardRes.json() : null;
+      const performance = performanceRes ? await performanceRes.json() : null;
+      
+      if (!healthRes.ok) {
+        throw new Error(health.error || 'Failed to fetch system health');
       }
       
-      setSystemHealth(data);
+      setSystemHealth(health);
+      if (dashboard) {
+        setDashboardData({
+          ...dashboard,
+          performance: performance?.metrics
+        });
+      }
       setLastUpdate(new Date());
     } catch (error) {
-      console.error('Failed to fetch system health:', error);
-      setError(error instanceof Error ? error.message : 'Failed to fetch system health');
+      console.error('Failed to fetch monitoring data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch monitoring data');
     } finally {
       setLoading(false);
     }
@@ -90,14 +162,13 @@ export default function MonitoringPage() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchSystemHealth();
+    await fetchData();
     setRefreshing(false);
   };
 
   const handleTimeRangeChange = (newRange: TimeRange) => {
     setTimeRange(newRange);
-    // Fetch new data for the selected time range
-    fetchSystemHealth();
+    fetchData();
   };
 
   const handleExport = async (format: 'json' | 'csv') => {
@@ -159,14 +230,14 @@ export default function MonitoringPage() {
   };
 
   useEffect(() => {
-    fetchSystemHealth();
+    fetchData();
   }, [timeRange]);
 
   useEffect(() => {
     if (!autoRefresh) return;
     
     // Auto-refresh every 30 seconds when enabled
-    const interval = setInterval(fetchSystemHealth, 30000);
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [autoRefresh]);
 
@@ -203,7 +274,8 @@ export default function MonitoringPage() {
   if (!systemHealth) return null;
 
   return (
-    <div className="flex flex-1 flex-col gap-2 p-3">
+    <TooltipProvider>
+      <div className="flex flex-1 flex-col gap-2 p-3">
       {/* Header */}
       <header className="flex h-12 shrink-0 items-center gap-2">
         <div className="flex items-center gap-2 px-4">
@@ -325,11 +397,25 @@ export default function MonitoringPage() {
                     <h4 className="text-xs font-medium">Sessions</h4>
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Total:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Total number of sessions created since system start</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span>{systemHealth.metrics.totalSessions}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Active:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Active:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Number of currently active sessions</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span>{systemHealth.metrics.activeSessions}</span>
                       </div>
                     </div>
@@ -339,11 +425,25 @@ export default function MonitoringPage() {
                     <h4 className="text-xs font-medium">Executions</h4>
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Total:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Total number of task executions completed</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span>{systemHealth.metrics.totalExecutions}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Active:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Active:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Number of executions currently running</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span>{systemHealth.metrics.activeExecutions}</span>
                       </div>
                     </div>
@@ -353,11 +453,25 @@ export default function MonitoringPage() {
                     <h4 className="text-xs font-medium">Resources</h4>
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">File Watchers:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">File Watchers:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Number of active file system watchers monitoring for changes</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span>{systemHealth.metrics.fileWatchers}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Active Locks:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Active Locks:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Number of active file locks preventing concurrent access</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span>{systemHealth.metrics.activeLocks}</span>
                       </div>
                     </div>
@@ -367,15 +481,36 @@ export default function MonitoringPage() {
                     <h4 className="text-xs font-medium">Memory</h4>
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Heap Used:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Heap Used:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Memory currently allocated on the JavaScript heap</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span className="font-mono">{systemHealth.metrics.memory.heapUsed}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Heap Total:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Heap Total:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Total size of the allocated heap</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span className="font-mono">{systemHealth.metrics.memory.heapTotal}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">External:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">External:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Memory usage of C++ objects bound to JavaScript objects</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span className="font-mono">{systemHealth.metrics.memory.external}</span>
                       </div>
                     </div>
@@ -385,15 +520,36 @@ export default function MonitoringPage() {
                     <h4 className="text-xs font-medium">Disk Usage</h4>
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Sessions:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Sessions:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Disk space used by session data and logs</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span className="font-mono">{systemHealth.metrics.diskUsage.sessions}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Executions:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Executions:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Disk space used by execution history and artifacts</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span className="font-mono">{systemHealth.metrics.diskUsage.executions}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Analytics:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Analytics:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Disk space used by analytics and telemetry data</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span className="font-mono">{systemHealth.metrics.diskUsage.analytics}</span>
                       </div>
                     </div>
@@ -403,15 +559,36 @@ export default function MonitoringPage() {
                     <h4 className="text-xs font-medium">System Info</h4>
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Version:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Version:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Current version of the VibeKit system</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span className="font-mono">{systemHealth.version}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Environment:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Environment:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Current deployment environment (development, production, etc.)</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span className="font-mono">{systemHealth.environment}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Components:</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-help">Components:</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Total number of system components being monitored</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <span>{systemHealth.components.length}</span>
                       </div>
                     </div>
@@ -420,11 +597,130 @@ export default function MonitoringPage() {
               </CardContent>
             </Card>
 
+            {/* Performance Metrics - New addition */}
+            {dashboardData?.performance?.performance && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Monitor className="h-4 w-4" />
+                    Performance Metrics
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Request performance and resource utilization
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-medium">Requests</h4>
+                      <div className="space-y-1 text-xs">
+                        <div className="flex justify-between">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-muted-foreground cursor-help">Total:</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Total number of HTTP requests processed</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <span>{dashboardData.performance.performance.requests.total}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-muted-foreground cursor-help">Avg Duration:</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Average response time across all requests</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <span className="font-mono">{dashboardData.performance.performance.requests.avgDuration}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-muted-foreground cursor-help">P95:</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>95th percentile response time (95% of requests are faster)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <span className="font-mono">{dashboardData.performance.performance.requests.p95}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-muted-foreground cursor-help">Error Rate:</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Percentage of requests that resulted in errors</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <span className="font-mono">{dashboardData.performance.performance.requests.errorRate}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-medium">Resources</h4>
+                      <div className="space-y-1 text-xs">
+                        <div className="flex justify-between">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-muted-foreground cursor-help">CPU:</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Current CPU usage percentage</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <span className="font-mono">{dashboardData.performance.performance.resources.cpu}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-muted-foreground cursor-help">Memory:</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Current memory usage percentage</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <span className="font-mono">{dashboardData.performance.performance.resources.memory}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-muted-foreground cursor-help">Event Loop:</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Event loop delay indicating Node.js performance</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <span className="font-mono">{dashboardData.performance.performance.resources.eventLoopLag}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-muted-foreground cursor-help">Handles:</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Number of active handles (file descriptors, sockets, etc.)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <span>{dashboardData.performance.performance.resources.activeHandles}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Activity Feed */}
             <ActivityFeed />
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

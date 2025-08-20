@@ -11,6 +11,7 @@ import { healthCheck } from './health-check';
 import { shutdownCoordinator } from './shutdown-coordinator';
 import { SessionManager } from './session-manager';
 import { createLogger } from './structured-logger';
+import { performanceMonitor } from './performance-monitor';
 
 const logger = createLogger('ProductionInit');
 
@@ -22,10 +23,12 @@ export interface ProductionConfig {
   enableDiskMonitor?: boolean;
   enableHealthCheck?: boolean;
   enableShutdownCoordinator?: boolean;
+  enablePerformanceMonitor?: boolean;
   environment?: 'development' | 'production' | 'staging';
   memoryCheckInterval?: number;
   diskCheckInterval?: number;
   healthCheckInterval?: number;
+  performanceCheckInterval?: number;
 }
 
 /**
@@ -36,10 +39,12 @@ const DEFAULT_CONFIG: ProductionConfig = {
   enableDiskMonitor: true,
   enableHealthCheck: true,
   enableShutdownCoordinator: true,
+  enablePerformanceMonitor: process.env.NODE_ENV === 'production',
   environment: process.env.NODE_ENV as any || 'development',
   memoryCheckInterval: process.env.NODE_ENV === 'production' ? 30000 : 60000, // 30s prod, 60s dev
   diskCheckInterval: process.env.NODE_ENV === 'production' ? 60000 : 300000,   // 1m prod, 5m dev
-  healthCheckInterval: process.env.NODE_ENV === 'production' ? 30000 : 120000  // 30s prod, 2m dev
+  healthCheckInterval: process.env.NODE_ENV === 'production' ? 30000 : 120000,  // 30s prod, 2m dev
+  performanceCheckInterval: process.env.NODE_ENV === 'production' ? 30000 : 60000  // 30s prod, 60s dev
 };
 
 /**
@@ -106,6 +111,18 @@ export async function initializeProduction(config: ProductionConfig = {}): Promi
         execute: async () => {
           logger.info('Stopping health check');
           healthCheck.stop();
+        }
+      });
+
+      // Register performance monitor cleanup
+      shutdownCoordinator.registerHandler({
+        name: 'stop-performance-monitor',
+        phase: 'closing_services' as any,
+        priority: 40,
+        timeout: 2000,
+        execute: async () => {
+          logger.info('Stopping performance monitor');
+          await performanceMonitor.stop();
         }
       });
 
@@ -185,7 +202,8 @@ export async function initializeProduction(config: ProductionConfig = {}): Promi
             memoryMonitor: activeConfig.enableMemoryMonitor,
             diskMonitor: activeConfig.enableDiskMonitor,
             healthCheck: activeConfig.enableHealthCheck,
-            shutdownCoordinator: activeConfig.enableShutdownCoordinator
+            shutdownCoordinator: activeConfig.enableShutdownCoordinator,
+            performanceMonitor: activeConfig.enablePerformanceMonitor
           },
           lastCheck: Date.now()
         };
@@ -195,12 +213,37 @@ export async function initializeProduction(config: ProductionConfig = {}): Promi
       logger.info('Health check started');
     }
 
+    // 6. Start Performance Monitor
+    if (activeConfig.enablePerformanceMonitor) {
+      logger.info('Starting performance monitor', {
+        checkInterval: activeConfig.performanceCheckInterval
+      });
+      
+      await performanceMonitor.start();
+      
+      // Listen for performance events
+      performanceMonitor.on('slowRequest', (metrics) => {
+        logger.warn('Slow request detected', {
+          path: metrics.path,
+          method: metrics.method,
+          duration: metrics.duration
+        });
+      });
+      
+      performanceMonitor.on('bottlenecks', (bottlenecks) => {
+        logger.warn('Performance bottlenecks detected', { bottlenecks });
+      });
+      
+      logger.info('Performance monitor started');
+    }
+
     isInitialized = true;
     logger.info('Production systems initialization complete', {
       memoryMonitor: activeConfig.enableMemoryMonitor,
       diskMonitor: activeConfig.enableDiskMonitor,
       healthCheck: activeConfig.enableHealthCheck,
-      shutdownCoordinator: activeConfig.enableShutdownCoordinator
+      shutdownCoordinator: activeConfig.enableShutdownCoordinator,
+      performanceMonitor: activeConfig.enablePerformanceMonitor
     });
 
   } catch (error) {
@@ -241,6 +284,9 @@ export async function shutdownProduction(options?: {
       if (activeConfig.enableHealthCheck) {
         healthCheck.stop();
       }
+      if (activeConfig.enablePerformanceMonitor) {
+        await performanceMonitor.stop();
+      }
     }
 
     isInitialized = false;
@@ -262,6 +308,7 @@ export function getProductionStatus(): {
     diskMonitor: any;
     healthCheck: any;
     shutdownCoordinator: any;
+    performanceMonitor: any;
   };
 } {
   return {
@@ -271,7 +318,8 @@ export function getProductionStatus(): {
       memoryMonitor: activeConfig.enableMemoryMonitor ? memoryMonitor.getStatus() : null,
       diskMonitor: activeConfig.enableDiskMonitor ? diskMonitor.getStatus() : null,
       healthCheck: activeConfig.enableHealthCheck ? healthCheck.getLastReport() : null,
-      shutdownCoordinator: activeConfig.enableShutdownCoordinator ? shutdownCoordinator.getStatus() : null
+      shutdownCoordinator: activeConfig.enableShutdownCoordinator ? shutdownCoordinator.getStatus() : null,
+      performanceMonitor: activeConfig.enablePerformanceMonitor ? performanceMonitor.getSnapshot() : null
     }
   };
 }
@@ -305,5 +353,6 @@ export {
   memoryMonitor,
   diskMonitor,
   healthCheck,
-  shutdownCoordinator
+  shutdownCoordinator,
+  performanceMonitor
 };

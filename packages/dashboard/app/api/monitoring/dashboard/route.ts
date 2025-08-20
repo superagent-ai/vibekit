@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { executionHistoryManager } from '@/lib/execution-history-manager';
 import { SessionManager } from '@/lib/session-manager';
 import { SessionRecovery } from '@/lib/session-recovery';
+import { getPerformanceDashboard } from '@/lib/performance-monitor';
 
 interface DashboardData {
   overview: {
@@ -21,6 +22,7 @@ interface DashboardData {
     hourlyVolume: Array<{ hour: string; count: number; success: number; failed: number }>;
     dailyTrends: Array<{ date: string; executions: number; successRate: number; avgDuration: number }>;
   };
+  performance?: any; // Performance metrics when available
   alerts: Array<{
     type: 'warning' | 'error' | 'info';
     message: string;
@@ -75,6 +77,14 @@ export async function GET(request: NextRequest): Promise<Response> {
     // Generate alerts
     const alerts = await generateAlerts(stats, sessionStats, recoveryStats);
     
+    // Get performance metrics if available
+    let performanceMetrics;
+    try {
+      performanceMetrics = getPerformanceDashboard();
+    } catch (error) {
+      console.warn('Performance metrics not available:', error);
+    }
+    
     const dashboardData: DashboardData = {
       overview: {
         totalExecutions: stats.total,
@@ -96,6 +106,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         hourlyVolume,
         dailyTrends
       },
+      performance: performanceMetrics,
       alerts,
       timestamp: Date.now()
     };

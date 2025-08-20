@@ -44,6 +44,11 @@ interface HorizontalStatusBarProps {
 }
 
 export function HorizontalStatusBar({ systemHealth }: HorizontalStatusBarProps) {
+  // Early return if systemHealth is not available
+  if (!systemHealth || !systemHealth.components) {
+    return null;
+  }
+
   const getOverallStatusIndicator = (status: string) => {
     switch (status) {
       case 'healthy':
