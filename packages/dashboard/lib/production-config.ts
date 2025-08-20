@@ -6,19 +6,15 @@
  */
 
 import { z } from 'zod';
-import * as dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-// Load environment variables
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+// Note: dotenv loading happens in server.js for Node.js runtime
+// This module is also used in Edge Runtime (middleware) where Node.js APIs aren't available
 
 /**
  * Environment types
  */
 export enum Environment {
+  LOCAL = 'local',
   DEVELOPMENT = 'development',
   STAGING = 'staging',
   PRODUCTION = 'production'
@@ -148,13 +144,17 @@ export type ProductionConfig = z.infer<typeof ProductionConfigSchema>;
  */
 function getCurrentEnvironment(): Environment {
   const env = process.env.NODE_ENV?.toLowerCase();
+  
   switch (env) {
     case 'production':
       return Environment.PRODUCTION;
     case 'staging':
       return Environment.STAGING;
-    default:
+    case 'development':
       return Environment.DEVELOPMENT;
+    default:
+      // Default to LOCAL for VibeKit (runs on developer machines)
+      return Environment.LOCAL;
   }
 }
 
@@ -162,6 +162,110 @@ function getCurrentEnvironment(): Environment {
  * Default configurations per environment
  */
 const ENVIRONMENT_DEFAULTS: Record<Environment, ProductionConfig> = {
+  // Local mode - Optimized for running on developer's machine
+  [Environment.LOCAL]: {
+    environment: Environment.LOCAL,
+    isProduction: false,
+    debug: false, // Keep false to reduce console noise
+    
+    server: {
+      port: parseInt(process.env.PORT || '3001', 10),
+      host: '127.0.0.1', // Localhost only
+      autoOpen: false, // Don't auto-open browser
+      trustProxy: false,
+      gracefulShutdownTimeout: 5000, // Quick shutdown for local
+      keepAliveTimeout: 120000,
+    },
+    
+    memory: {
+      enabled: true, // Keep enabled to prevent memory issues
+      checkInterval: 120000, // Check every 2 minutes
+      thresholds: {
+        warning: 75,
+        critical: 85,
+        emergency: 95,
+      },
+      maxHeapSize: undefined, // Let Node.js manage
+      gcInterval: 600000, // GC every 10 minutes
+    },
+    
+    disk: {
+      enabled: true, // Keep enabled to prevent disk full
+      checkInterval: 600000, // Check every 10 minutes
+      thresholds: {
+        warning: 85,
+        critical: 92,
+        emergency: 97,
+      },
+      cleanupPolicies: {
+        maxSessionAge: 3, // Keep sessions for 3 days
+        maxExecutionAge: 7, // Keep executions for a week
+        maxLogAge: 3,
+        maxCacheAge: 1,
+      },
+    },
+    
+    requests: {
+      maxSize: 50 * 1024 * 1024, // 50MB - larger for local development
+      maxUrlLength: 8192, // Longer URLs for development
+      maxHeaderSize: 32768, // Larger headers for development
+      timeout: 60000, // Longer timeout for debugging
+      maxConcurrent: 1000, // No real limit locally
+    },
+    
+    rateLimit: {
+      enabled: false, // Not needed for local use
+      windowMs: 60000,
+      maxRequests: 10000, // Effectively unlimited
+      skipHealthEndpoints: true,
+      trustProxy: false,
+    },
+    
+    sessions: {
+      maxActive: 1000, // Plenty for local use
+      timeout: 86400000, // 24 hours - long for development
+      heartbeatInterval: 60000, // Less frequent checks
+      cleanupInterval: 300000, // Every 5 minutes
+      persistToDisk: true,
+    },
+    
+    logging: {
+      level: 'info', // Balanced - not too noisy
+      format: 'pretty', // Human-readable
+      includeTimestamp: true,
+      includeStackTrace: true,
+      maxFileSize: 100 * 1024 * 1024, // 100MB
+      maxFiles: 3, // Keep a few for debugging
+      logToFile: false, // Console only for local
+    },
+    
+    security: {
+      csrfEnabled: false, // Not needed for localhost
+      corsEnabled: false, // Not needed for localhost
+      helmetEnabled: false, // Overkill for local
+      allowedOrigins: ['http://localhost:*', 'http://127.0.0.1:*'],
+      sessionSecret: undefined,
+      encryptSensitiveData: false, // Not needed locally
+    },
+    
+    monitoring: {
+      healthCheckInterval: 300000, // Every 5 minutes
+      metricsEnabled: false, // Don't need detailed metrics
+      tracingEnabled: false, // No tracing needed
+      errorReporting: true, // But only to console
+      performanceTracking: false, // Not needed locally
+    },
+    
+    features: {
+      sandbox: true,
+      proxy: true,
+      analytics: true,
+      mcp: true,
+      projects: true,
+      chat: true,
+    },
+  },
+  
   [Environment.DEVELOPMENT]: {
     environment: Environment.DEVELOPMENT,
     isProduction: false,

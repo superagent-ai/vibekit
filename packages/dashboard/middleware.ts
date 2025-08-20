@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateCSRFToken, createCSRFResponse } from './lib/csrf-protection';
 import { applyCacheHeaders } from './lib/cache-headers';
+import { getConfigSection } from './lib/production-config';
 
 // Production configuration
 const MAX_REQUEST_SIZE = 10 * 1024 * 1024; // 10MB max request size
@@ -49,6 +50,11 @@ if (typeof globalThis !== 'undefined' && !globalThis.rateLimitCleanupInterval) {
 }
 
 export function middleware(request: NextRequest) {
+  // Get configuration
+  const securityConfig = getConfigSection('security');
+  const rateLimitConfig = getConfigSection('rateLimit');
+  const requestConfig = getConfigSection('requests');
+  
   // Only apply middleware to API routes and pages (not static assets)
   const { pathname } = request.nextUrl;
   
@@ -157,8 +163,8 @@ export function middleware(request: NextRequest) {
     }
   }
   
-  // 4. Rate limiting (skip for health endpoints)
-  if (!pathname.startsWith('/api/health')) {
+  // 4. Rate limiting (skip for health endpoints and if disabled)
+  if (rateLimitConfig.enabled && !pathname.startsWith('/api/health')) {
     // Use a combination of IP and user agent for client identification
     const clientIp = forwardedFor?.split(',')[0] || realIp || '127.0.0.1';
     const userAgent = request.headers.get('user-agent') || 'unknown';
@@ -190,8 +196,8 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 5. CSRF Protection for mutations
-  if (!SAFE_METHODS.includes(request.method) && pathname.startsWith('/api/')) {
+  // 5. CSRF Protection for mutations (if enabled)
+  if (securityConfig.csrfEnabled && !SAFE_METHODS.includes(request.method) && pathname.startsWith('/api/')) {
     const csrfValidation = validateCSRFToken(request);
     
     if (!csrfValidation.valid) {

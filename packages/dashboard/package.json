@@ -20,11 +20,12 @@
     "dev:next": "next dev",
     "build": "next build",
     "start": "node server.js",
+    "start:production": "NODE_ENV=production node server.js",
     "start:next": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "prepublishOnly": "npm run build",
-    "dashboard": "npm run start",
+    "dashboard": "npm run dev",
     "check-status": "node server.js --check-status",
     "get-port": "node server.js --get-port"
   },
