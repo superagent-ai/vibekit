@@ -328,77 +328,80 @@ export default function ProjectDetailPage() {
         </div>
       </header>
 
-      <div className="flex-1 space-y-6 p-2 sm:p-4 pt-0">
+      <div className="flex-1 space-y-4 sm:space-y-6 p-2 sm:p-4 pt-0">
         {/* Project Header */}
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
-              <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
-                {project.status}
-              </Badge>
-              {project.priority && (
-                <Badge 
-                  variant={getPriorityColor(project.priority)}
-                  className={`${
-                    project.priority === 'high' ? 'bg-red-100 text-red-800' : 
-                    project.priority === 'low' ? '' : 
-                    'bg-yellow-100 text-yellow-800'
-                  }`}
-                >
-                  {project.priority}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight break-words">{project.name}</h1>
+              <div className="flex items-center gap-2">
+                <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
+                  {project.status}
                 </Badge>
-              )}
+                {project.priority && (
+                  <Badge 
+                    variant={getPriorityColor(project.priority)}
+                    className={`${
+                      project.priority === 'high' ? 'bg-red-100 text-red-800' : 
+                      project.priority === 'low' ? '' : 
+                      'bg-yellow-100 text-yellow-800'
+                    }`}
+                  >
+                    {project.priority}
+                  </Badge>
+                )}
+              </div>
             </div>
             {project.description && (
               <p className="text-muted-foreground">{project.description}</p>
             )}
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-muted-foreground">
               {gitInfo?.gitInfo?.remoteUrl && (() => {
                 const parsed = parseGitUrl(gitInfo.gitInfo.remoteUrl);
                 return parsed ? (
                   <div className="flex items-center gap-1">
-                    <Github className="h-4 w-4" />
-                    <span className="text-xs">{parsed.account}/{parsed.repo}</span>
+                    <Github className="h-4 w-4 shrink-0" />
+                    <span className="text-xs truncate">{parsed.account}/{parsed.repo}</span>
                   </div>
                 ) : null;
               })()}
-              <div className="flex items-center gap-1">
-                <Folder className="h-4 w-4" />
-                <code className="text-xs">{project.projectRoot}</code>
+              <div className="flex items-center gap-1 min-w-0">
+                <Folder className="h-4 w-4 shrink-0" />
+                <code className="text-xs truncate">{project.projectRoot}</code>
               </div>
               <div className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                <span className="text-xs">Created {new Date(project.createdAt).toLocaleDateString()}</span>
+                <Calendar className="h-4 w-4 shrink-0" />
+                <span className="text-xs whitespace-nowrap">Created {new Date(project.createdAt).toLocaleDateString()}</span>
               </div>
               <DockerStatusIndicator />
             </div>
           </div>
           
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 w-full sm:w-auto">
             <OpenInEditorButton 
               projectId={project.id} 
               variant="outline" 
               showText={true}
               text="Editor"
+              className="sm:w-auto w-full"
               onError={(error) => console.error('Failed to open in editor:', error)}
             />
-            <Button variant="outline" onClick={() => setChatSheetOpen(true)}>
+            <Button variant="outline" onClick={() => setChatSheetOpen(true)} className="sm:w-auto w-full">
               <MessageSquare className="mr-2 h-4 w-4" />
-              Chat
+              <span className="sm:inline">Chat</span>
             </Button>
-            <Button variant="outline" onClick={() => setMcpServersSheetOpen(true)}>
+            <Button variant="outline" onClick={() => setMcpServersSheetOpen(true)} className="sm:w-auto w-full">
               <Server className="mr-2 h-4 w-4" />
-              MCP
+              <span className="sm:inline">MCP</span>
             </Button>
-            <Button variant="outline" onClick={() => setShowEditForm(true)}>
+            <Button variant="outline" onClick={() => setShowEditForm(true)} className="sm:w-auto w-full">
               <Edit className="mr-2 h-4 w-4" />
-              Edit
+              <span className="sm:inline">Edit</span>
             </Button>
-            <Button variant="outline" asChild>
+            <Button variant="outline" asChild className="sm:w-auto w-full">
               <Link href="/projects">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
+                <span className="sm:inline">Back</span>
               </Link>
             </Button>
           </div>
@@ -408,32 +411,34 @@ export default function ProjectDetailPage() {
 
         {/* Tabbed Content */}
         <Tabs defaultValue={defaultTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <Info className="h-4 w-4" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="tasks" className="flex items-center gap-2">
-              <ListTodo className="h-4 w-4" />
-              Tasks
-            </TabsTrigger>
-            <TabsTrigger value="log" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Log
-            </TabsTrigger>
-            <TabsTrigger value="git" className="flex items-center gap-2">
-              <GitBranch className="h-4 w-4" />
-              Git
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Analytics
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Settings
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 min-w-max">
+              <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Info className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Overview</span>
+              </TabsTrigger>
+              <TabsTrigger value="tasks" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <ListTodo className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Tasks</span>
+              </TabsTrigger>
+              <TabsTrigger value="log" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Log</span>
+              </TabsTrigger>
+              <TabsTrigger value="git" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <GitBranch className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Git</span>
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Analytics</span>
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Settings</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="overview" className="space-y-4">
             {/* Project Stats */}
