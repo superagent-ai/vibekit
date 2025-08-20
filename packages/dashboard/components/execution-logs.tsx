@@ -29,16 +29,31 @@ export function ExecutionLogs({ sessionId, className }: ExecutionLogsProps) {
   const { logs, metadata, isLive, isLoading, error } = useSessionLogs(sessionId);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
+  const hasInitialized = useRef(false);
   
-  // Auto-scroll to bottom when new logs arrive
+  // Reset initialization when sessionId changes
   useEffect(() => {
-    if (shouldAutoScroll.current && scrollAreaRef.current) {
+    hasInitialized.current = false;
+    shouldAutoScroll.current = true;
+  }, [sessionId]);
+  
+  // Auto-scroll to bottom only when new logs arrive for live sessions
+  useEffect(() => {
+    if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
       if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        // On initial load, start at the top
+        if (!hasInitialized.current && logs.length > 0) {
+          scrollContainer.scrollTop = 0;
+          hasInitialized.current = true;
+        } 
+        // Only auto-scroll for live sessions when user isn't manually scrolling
+        else if (isLive && shouldAutoScroll.current && logs.length > 0) {
+          scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        }
       }
     }
-  }, [logs]);
+  }, [logs, isLive]);
   
   const getLogIcon = (type: string, data: string) => {
     // Check for git operations
@@ -152,7 +167,7 @@ export function ExecutionLogs({ sessionId, className }: ExecutionLogsProps) {
   }
   
   return (
-    <div className={cn("flex flex-col h-full", className)}>
+    <div className={cn("flex flex-col", className)}>
       {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b">
         <div className="flex items-center gap-2">
@@ -190,7 +205,7 @@ export function ExecutionLogs({ sessionId, className }: ExecutionLogsProps) {
       {/* Log content */}
       <ScrollArea 
         ref={scrollAreaRef}
-        className="flex-1 mt-3"
+        className="flex-1 mt-3 min-h-0"
         onMouseEnter={() => { shouldAutoScroll.current = false; }}
         onMouseLeave={() => { shouldAutoScroll.current = true; }}
       >

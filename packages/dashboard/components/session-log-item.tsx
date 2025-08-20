@@ -150,8 +150,8 @@ export function SessionLogItem({ session }: SessionLogItemProps) {
                 Session Logs
               </h4>
               
-              <div className="bg-muted/30 rounded-md border">
-                <ExecutionLogs sessionId={session.sessionId} className="max-h-96" />
+              <div className="bg-muted/30 rounded-md border p-4">
+                <ExecutionLogs sessionId={session.sessionId} className="h-[400px]" />
               </div>
             </div>
           </CardContent>
