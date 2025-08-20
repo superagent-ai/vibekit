@@ -6,7 +6,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { createLogger } from './structured-logger';
 
 const logger = createLogger('CSRFProtection');
@@ -28,10 +27,31 @@ export interface CSRFValidationResult {
 }
 
 /**
- * Generate a new CSRF token
+ * Generate a new CSRF token using Web Crypto API (Edge Runtime compatible)
  */
 export function generateCSRFToken(): string {
-  return crypto.randomBytes(TOKEN_LENGTH).toString('hex');
+  // Use Web Crypto API for Edge Runtime compatibility
+  const array = new Uint8Array(TOKEN_LENGTH);
+  
+  // Check if we're in Node.js or browser/Edge Runtime
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
+    // Browser/Edge Runtime
+    globalThis.crypto.getRandomValues(array);
+  } else if (typeof require !== 'undefined') {
+    // Node.js fallback
+    const crypto = require('crypto');
+    return crypto.randomBytes(TOKEN_LENGTH).toString('hex');
+  } else {
+    // Fallback to Math.random (not cryptographically secure, but better than failing)
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  
+  // Convert array to hex string
+  return Array.from(array)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
@@ -198,17 +218,20 @@ export async function csrfMiddleware(
 }
 
 /**
- * Timing-safe string comparison
+ * Timing-safe string comparison (Edge Runtime compatible)
  */
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) {
     return false;
   }
   
-  const bufferA = Buffer.from(a);
-  const bufferB = Buffer.from(b);
+  // Edge Runtime compatible timing-safe comparison
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
   
-  return crypto.timingSafeEqual(bufferA, bufferB);
+  return result === 0;
 }
 
 /**

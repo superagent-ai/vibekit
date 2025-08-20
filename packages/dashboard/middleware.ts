@@ -19,6 +19,9 @@ const MAX_REQUEST_SIZE = 10 * 1024 * 1024; // 10MB max request size
 const MAX_URL_LENGTH = 2048; // Maximum URL length
 const MAX_HEADER_SIZE = 16384; // Maximum total header size (16KB)
 
+// Safe HTTP methods that don't need CSRF protection
+const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS'];
+
 // Simple in-memory rate limiting (for localhost usage)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
@@ -213,7 +216,6 @@ export function middleware(request: NextRequest) {
   let response = NextResponse.next();
   
   // Add CSRF token to response
-  const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS'];
   if (pathname.startsWith('/api/') || !pathname.includes('.')) {
     response = createCSRFResponse(request, response);
   }

@@ -17,6 +17,14 @@ const { promises: fs } = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Import production systems (only in production builds)
+let productionInit;
+try {
+  productionInit = require('./lib/production-init');
+} catch (err) {
+  console.log('⚠️  Production monitoring not available (development mode)');
+}
+
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '127.0.0.1'; // Localhost only for security
 const app = next({ dev, hostname });
@@ -58,6 +66,27 @@ async function startServer() {
     const settings = await loadSettings();
     const port = settings.dashboard.port || 3001;
     console.log(`✓ Using port ${port} from settings`);
+    
+    // Initialize production monitoring systems
+    if (productionInit) {
+      console.log('🔧 Initializing production monitoring systems...');
+      try {
+        await productionInit.initializeProduction({
+          environment: dev ? 'development' : 'production',
+          enableMemoryMonitor: !dev || process.env.ENABLE_MONITORING === 'true',
+          enableDiskMonitor: !dev || process.env.ENABLE_MONITORING === 'true',
+          enableHealthCheck: true, // Always enable health checks
+          enableShutdownCoordinator: true,
+          memoryCheckInterval: dev ? 60000 : 30000,
+          diskCheckInterval: dev ? 300000 : 60000,
+          healthCheckInterval: dev ? 120000 : 30000
+        });
+        console.log('✓ Production monitoring initialized');
+      } catch (err) {
+        console.error('⚠️  Failed to initialize production monitoring:', err.message);
+        // Continue without monitoring rather than failing to start
+      }
+    }
     
     // Prepare Next.js app
     await app.prepare();
@@ -112,6 +141,16 @@ async function startServer() {
       console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
       
       try {
+        // Use production shutdown if available
+        if (productionInit && productionInit.shutdownCoordinator) {
+          console.log('📊 Shutting down production monitoring...');
+          await productionInit.shutdownProduction({
+            gracePeriod: 10000,
+            forceTimeout: 30000
+          });
+          console.log('✓ Production monitoring stopped');
+        }
+        
         // Close the server
         await new Promise((resolve) => {
           server.close(resolve);
@@ -161,10 +200,13 @@ async function startServer() {
       
       // Open browser automatically if settings allow
       if (settings.dashboard.autoOpen !== false && process.env.OPEN_BROWSER !== 'false') {
-        const open = require('open');
-        open(url).catch(err => {
-          console.log('⚠️  Could not open browser automatically:', err.message);
-          console.log(`   Please open ${url} manually`);
+        import('open').then(({ default: open }) => {
+          open(url).catch(err => {
+            console.log('⚠️  Could not open browser automatically:', err.message);
+            console.log(`   Please open ${url} manually`);
+          });
+        }).catch(err => {
+          console.log('⚠️  Could not load browser opener:', err.message);
         });
       }
     });
