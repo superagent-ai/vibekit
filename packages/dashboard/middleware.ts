@@ -11,6 +11,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { validateCSRFToken, createCSRFResponse } from './lib/csrf-protection';
+import { applyCacheHeaders } from './lib/cache-headers';
 
 // Production configuration
 const MAX_REQUEST_SIZE = 10 * 1024 * 1024; // 10MB max request size
@@ -185,8 +187,36 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // 5. CSRF Protection for mutations
+  if (!SAFE_METHODS.includes(request.method) && pathname.startsWith('/api/')) {
+    const csrfValidation = validateCSRFToken(request);
+    
+    if (!csrfValidation.valid) {
+      console.warn(`[Security] CSRF validation failed`, { 
+        requestId,
+        reason: csrfValidation.reason,
+        method: request.method,
+        path: pathname
+      });
+      
+      return new NextResponse('CSRF validation failed', { 
+        status: 403,
+        headers: {
+          'X-Request-Id': requestId,
+          'X-CSRF-Error': csrfValidation.reason || 'Invalid token'
+        }
+      });
+    }
+  }
+  
   // Create response with security headers
-  const response = NextResponse.next();
+  let response = NextResponse.next();
+  
+  // Add CSRF token to response
+  const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS'];
+  if (pathname.startsWith('/api/') || !pathname.includes('.')) {
+    response = createCSRFResponse(request, response);
+  }
   
   // Add request ID to response
   response.headers.set('X-Request-Id', requestId);
@@ -227,6 +257,15 @@ export function middleware(request: NextRequest) {
   response.headers.set('Access-Control-Allow-Origin', `http://localhost:*`);
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  
+  // Apply optimized cache headers
+  response = applyCacheHeaders(response, pathname);
+  
+  // Add compression headers if not already set
+  const acceptEncoding = request.headers.get('accept-encoding');
+  if (acceptEncoding?.includes('gzip') && !response.headers.get('content-encoding')) {
+    response.headers.set('Accept-Encoding', 'gzip, deflate, br');
+  }
   
   return response;
 }
