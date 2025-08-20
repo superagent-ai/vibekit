@@ -61,9 +61,9 @@
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.0.7",
-    "@ai-sdk/react": "^1.0.7",
-    "@anthropic-ai/claude-code": "^1.0.83",
+    "@ai-sdk/anthropic": "^2.0.5",
+    "@ai-sdk/react": "^2.0.19",
+    "@anthropic-ai/claude-code": "^1.0.85",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-collapsible": "^1.1.11",
     "@radix-ui/react-scroll-area": "^1.2.9",
@@ -71,7 +71,7 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
-    "ai": "^5.0.8",
+    "ai": "^5.0.19",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.1",

@@ -27,12 +27,12 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.2.12",
-    "@ai-sdk/openai": "^1.3.22",
-    "@ai-sdk/openai-compatible": "^0.2.14",
-    "@anthropic-ai/claude-code": "^1.0.83",
+    "@ai-sdk/anthropic": "^2.0.5",
+    "@ai-sdk/openai": "^2.0.17",
+    "@ai-sdk/openai-compatible": "^1.0.10",
+    "@anthropic-ai/claude-code": "^1.0.85",
     "@types/uuid": "^10.0.0",
-    "ai": "^4.3.16",
+    "ai": "^5.0.19",
     "uuid": "^11.1.0",
     "zod": "^3.25.76"
   },
