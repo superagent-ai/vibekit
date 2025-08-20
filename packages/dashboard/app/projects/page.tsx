@@ -51,11 +51,10 @@ interface SortableRowProps {
   project: Project;
   isSelected: boolean;
   onSelect: (id: string) => void;
-  onEdit: (project: Project) => void;
   onSetCurrent: (id: string) => void;
 }
 
-function SortableTableRow({ project, isSelected, onSelect, onEdit, onSetCurrent }: SortableRowProps) {
+function SortableTableRow({ project, isSelected, onSelect, onSetCurrent }: SortableRowProps) {
   const router = useRouter();
   const {
     attributes,
@@ -202,27 +201,6 @@ function SortableTableRow({ project, isSelected, onSelect, onEdit, onSetCurrent 
           >
             <MessageSquare className="h-3 w-3" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(project);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(project.id);
-            }}
-            className="text-destructive hover:text-destructive"
-          >
-            Delete
-          </Button>
         </div>
       </TableCell>
     </TableRow>
@@ -235,7 +213,6 @@ export default function ProjectsPage() {
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [lastModified, setLastModified] = useState<string | null>(null);
   const [currentProjectLastModified, setCurrentProjectLastModified] = useState<string | null>(null);
@@ -460,24 +437,6 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleUpdateProject = async (id: string, projectData: any) => {
-    try {
-      const response = await fetch(`/api/projects/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(projectData),
-      });
-      
-      if (response.ok) {
-        await fetchProjects();
-        setEditingProject(null);
-      }
-    } catch (error) {
-      console.error('Failed to update project:', error);
-    }
-  };
 
 
   const handleSelectProject = async (projectId: string) => {
@@ -715,7 +674,6 @@ export default function ProjectsPage() {
                 key={project.id}
                 project={project}
                 isSelected={currentProject?.id === project.id}
-                onEdit={(project) => setEditingProject(project)}
                 onSelect={(id) => handleSelectProject(id)}
               />
             ))}
@@ -750,7 +708,6 @@ export default function ProjectsPage() {
                         project={project}
                         isSelected={currentProject?.id === project.id}
                         onSelect={handleSelectProject}
-                        onEdit={setEditingProject}
                         onSetCurrent={handleSelectProject}
                       />
                     ))}
@@ -892,16 +849,6 @@ export default function ProjectsPage() {
                         >
                           <MessageSquare className="h-3 w-3" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingProject(project);
-                          }}
-                        >
-                          Edit
-                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -918,13 +865,6 @@ export default function ProjectsPage() {
           />
         )}
 
-        {editingProject && (
-          <ProjectForm
-            project={editingProject}
-            onSubmit={(data) => handleUpdateProject(editingProject.id, data)}
-            onCancel={() => setEditingProject(null)}
-          />
-        )}
       </div>
     </div>
   );

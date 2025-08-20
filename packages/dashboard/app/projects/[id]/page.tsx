@@ -362,13 +362,17 @@ export default function ProjectDetailPage() {
           </div>
           
           <div className="flex flex-wrap gap-2">
+            <DockerStatusIndicator />
+            <Button variant="outline" onClick={() => setShowEditForm(true)}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
             {project.id !== project.id && (
               <Button variant="outline" onClick={handleSetAsCurrentProject}>
                 <CheckCircle className="mr-2 h-4 w-4" />
                 Set as Current
               </Button>
             )}
-            <DockerStatusIndicator />
             <Button variant="outline" onClick={() => setMcpServersSheetOpen(true)}>
               <Server className="mr-2 h-4 w-4" />
               MCP
@@ -885,12 +889,6 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
                 <Separator />
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setShowEditForm(true)}>
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit Project
-                  </Button>
-                </div>
               </CardContent>
             </Card>
 
