@@ -246,19 +246,6 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const getPriorityIcon = (priority: string | undefined) => {
-    switch (priority) {
-      case "high":
-        return "🔴";
-      case "medium":
-        return "🟡";
-      case "low":
-        return "🔵";
-      default:
-        return "⚪";
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -324,8 +311,15 @@ export default function ProjectDetailPage() {
                 {project.status}
               </Badge>
               {project.priority && (
-                <Badge variant={getPriorityColor(project.priority)}>
-                  {getPriorityIcon(project.priority)} {project.priority} priority
+                <Badge 
+                  variant={getPriorityColor(project.priority)}
+                  className={`${
+                    project.priority === 'high' ? 'bg-red-100 text-red-800' : 
+                    project.priority === 'low' ? '' : 
+                    'bg-yellow-100 text-yellow-800'
+                  }`}
+                >
+                  {project.priority}
                 </Badge>
               )}
             </div>
@@ -443,8 +437,15 @@ export default function ProjectDetailPage() {
                 <CardContent>
                   <div className="flex items-center gap-2">
                     <span className="text-2xl font-bold capitalize">{project.priority || 'Medium'}</span>
-                    <Badge variant={getPriorityColor(project.priority)}>
-                      {getPriorityIcon(project.priority)}
+                    <Badge 
+                      variant={getPriorityColor(project.priority)}
+                      className={`${
+                        project.priority === 'high' ? 'bg-red-100 text-red-800' : 
+                        project.priority === 'low' ? '' : 
+                        'bg-yellow-100 text-yellow-800'
+                      }`}
+                    >
+                      {project.priority ? project.priority[0].toUpperCase() : 'M'}
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
