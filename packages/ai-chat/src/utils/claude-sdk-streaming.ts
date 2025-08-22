@@ -1,4 +1,8 @@
 import { AuthManager } from './auth';
+import { createLogger } from '@vibe-kit/logging';
+
+// Create logger for this module
+const log = createLogger('claude-sdk');
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -17,7 +21,7 @@ export function createClaudeCodeProvider(authManager?: AuthManager) {
     throw new Error('No OAuth token available for Claude Code SDK');
   }
 
-  console.log('[CLAUDE SDK] Creating Claude Code provider with OAuth token:', oauthToken.substring(0, 20) + '...');
+  log.debug('Creating Claude Code provider', { tokenPrefix: oauthToken.substring(0, 10) });
 
   // Create a provider that mimics Anthropic's interface but uses Claude Code SDK
   return {
@@ -30,20 +34,20 @@ export function createClaudeCodeProvider(authManager?: AuthManager) {
       
       async doGenerate(options: any) {
         try {
-          console.log('[CLAUDE SDK] doGenerate called with options:', options);
+          log.debug('doGenerate called', { messageCount: options.messages?.length, hasModel: !!options.model });
           return await generateWithClaudeCodeSDK(options, oauthToken);
         } catch (error) {
-          console.error('[CLAUDE SDK] doGenerate error:', error);
+          log.error('doGenerate error', error);
           throw error;
         }
       },
       
       async doStream(options: any) {
         try {
-          console.log('[CLAUDE SDK] doStream called with options:', options);
+          log.debug('doStream called', { messageCount: options.messages?.length, hasModel: !!options.model });
           return await streamWithClaudeCodeSDK(options, oauthToken);
         } catch (error) {
-          console.error('[CLAUDE SDK] doStream error:', error);
+          log.error('doStream error', error);
           throw error;
         }
       }
@@ -81,7 +85,7 @@ async function generateWithClaudeCodeSDK(options: any, oauthToken: string) {
  * Stream response using Claude Code SDK
  */
 async function streamWithClaudeCodeSDK(options: any, oauthToken: string) {
-  console.log('[CLAUDE SDK] Starting streaming with options:', options);
+  log.debug('Starting streaming', { messageCount: options.messages?.length });
   
   // Get the full response first
   const fullResponse = await queryClaudeCodeSDK(options, oauthToken);
@@ -172,8 +176,8 @@ async function queryClaudeCodeSDK(options: any, oauthToken: string): Promise<str
     maxTurns: 1
   };
   
-  console.log('[CLAUDE SDK] Query options:', queryOptions);
-  console.log('[CLAUDE SDK] Prompt:', prompt);
+  log.debug('Query options configured', { model: queryOptions.model, maxTurns: queryOptions.maxTurns });
+  log.debug('Prompt prepared', { prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '') });
   
   // Collect full response using the same pattern as generatePRMetadata
   let fullResponse = '';
@@ -184,7 +188,7 @@ async function queryClaudeCodeSDK(options: any, oauthToken: string): Promise<str
       prompt,
       ...queryOptions
     })) {
-      console.log('[CLAUDE SDK] Received message type:', typeof message, 'content:', message);
+      log.debug('Received message', { type: typeof message, contentLength: typeof message === 'string' ? message.length : 'N/A' });
       
       // Handle messages exactly like generatePRMetadata does
       if (typeof message === 'string') {
@@ -194,7 +198,7 @@ async function queryClaudeCodeSDK(options: any, oauthToken: string): Promise<str
         const msgStr = JSON.stringify(message);
         // Look for any meaningful content in the message
         if (msgStr.includes('content') || msgStr.includes('text') || msgStr.includes('result')) {
-          console.log('[CLAUDE SDK] Processing message:', message);
+          log.debug('Processing message object', { hasContent: 'content' in message, hasText: 'text' in message, hasResult: 'result' in message });
           
           // Try to extract text content directly (with proper type handling)
           const msg = message as any; // Type assertion for Claude Code SDK message format
@@ -212,11 +216,11 @@ async function queryClaudeCodeSDK(options: any, oauthToken: string): Promise<str
       }
     }
   } catch (error) {
-    console.error('[CLAUDE SDK] Error during query:', error);
+    log.error('Error during query', error);
     throw error;
   }
 
-  console.log('[CLAUDE SDK] Raw response:', fullResponse);
+  log.debug('Raw response received', { length: fullResponse.length, preview: fullResponse.substring(0, 100) + (fullResponse.length > 100 ? '...' : '') });
   
   // Parse the response using strategies similar to generatePRMetadata
   let cleanResponse = fullResponse;
@@ -277,16 +281,16 @@ async function queryClaudeCodeSDK(options: any, oauthToken: string): Promise<str
     try {
       const result = extractStrategies[i]();
       if (result && result.trim()) {
-        console.log(`[CLAUDE SDK] Successfully extracted with strategy ${i + 1}:`, result.substring(0, 100) + '...');
+        log.debug('Response extraction successful', { strategy: i + 1, resultLength: result.length, preview: result.substring(0, 100) + '...' });
         cleanResponse = result.trim();
         break;
       }
     } catch (e) {
-      console.log(`[CLAUDE SDK] Strategy ${i + 1} failed:`, e instanceof Error ? e.message : String(e));
+      log.debug('Response extraction strategy failed', { strategy: i + 1, error: e instanceof Error ? e.message : String(e) });
     }
   }
 
-  console.log('[CLAUDE SDK] Final clean response:', cleanResponse.substring(0, 200) + '...');
+  log.debug('Final clean response prepared', { length: cleanResponse.length, preview: cleanResponse.substring(0, 100) + '...' });
   return cleanResponse;
 }
 

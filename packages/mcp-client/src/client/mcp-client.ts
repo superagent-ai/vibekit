@@ -2,9 +2,13 @@ import { EventEmitter } from 'eventemitter3';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { createLogger } from '@vibe-kit/logging';
 import type { MCPServer, StdioConfig, HttpConfig } from '../types/server';
 import type { Tool, Resource, Prompt, ToolExecutionResult } from '../types/tools';
 import type { ClientEvents, MCPClient as MCPClientType } from './types';
+
+// Create logger for this module
+const log = createLogger('mcp-client');
 
 export class MCPClient extends EventEmitter<ClientEvents> {
   private client: MCPClientType | null = null;
@@ -56,7 +60,7 @@ export class MCPClient extends EventEmitter<ClientEvents> {
       // Discover capabilities after a small delay to ensure connection is stable
       setTimeout(() => {
         this.discoverCapabilities().catch(error => {
-          console.error('Failed to discover capabilities:', error);
+          log.error('Failed to discover capabilities', error);
         });
       }, 100);
     } catch (error) {
@@ -69,7 +73,7 @@ export class MCPClient extends EventEmitter<ClientEvents> {
   private async connectStdio(): Promise<void> {
     const config = this.server.config as StdioConfig;
     
-    console.log('Connecting to MCP server via stdio:', {
+    log.debug('Connecting to MCP server via stdio', {
       command: config.command,
       args: config.args,
       cwd: config.cwd,
@@ -104,24 +108,24 @@ export class MCPClient extends EventEmitter<ClientEvents> {
     });
 
     try {
-      console.log('Attempting to connect with transport...');
+      log.debug('Attempting to connect with transport');
       
       // Set up error handlers on the transport before connecting
       if (this.transport && typeof this.transport.on === 'function') {
         this.transport.on('error', (err: any) => {
-          console.error('Transport error:', err);
+          log.error('Transport error', err);
         });
       }
       
       await this.client!.connect(this.transport);
-      console.log('Transport connected, waiting for initialization...');
+      log.debug('Transport connected, waiting for initialization');
       
       // Give the server a moment to fully initialize
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      console.log('Successfully connected to MCP server');
+      log.info('Successfully connected to MCP server');
     } catch (error) {
-      console.error('Failed to connect to MCP server:', error);
+      log.error('Failed to connect to MCP server', error);
       // Log more details about the error
       if (error && typeof error === 'object') {
         const err = error as any;

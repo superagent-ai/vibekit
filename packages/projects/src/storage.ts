@@ -6,6 +6,10 @@ import {
   DEFAULT_PROJECTS_CONFIG 
 } from './constants';
 import type { Project, ProjectsConfig } from './types';
+import { createLogger } from '@vibe-kit/logging';
+
+// Create logger for this module
+const log = createLogger('projects-storage');
 
 /**
  * Ensures the .vibekit directory and projects.json file exist
@@ -34,10 +38,7 @@ export async function readProjectsConfig(): Promise<ProjectsConfig> {
     const data = await fs.readFile(PROJECTS_FILE, 'utf-8');
     return JSON.parse(data);
   } catch (error) {
-    // Only log errors in non-test environments
-    if (process.env.NODE_ENV !== 'test') {
-      console.error('Failed to read projects config:', error);
-    }
+    log.error('Failed to read projects config', error);
     return DEFAULT_PROJECTS_CONFIG;
   }
 }

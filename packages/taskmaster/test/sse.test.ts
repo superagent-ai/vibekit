@@ -127,7 +127,8 @@ describe('SSEManager', () => {
       // mockWriter1 should be removed due to error, mockWriter2 should still be there
       expect(sseManager.getClientCount()).toBe(1);
       expect(mockWriter2.write).toHaveBeenCalled();
-      expect(console.error).toHaveBeenCalledWith('Failed to send SSE event:', expect.any(Error));
+      // Note: Error is now logged via structured logging instead of console.error
+      // The important behavior is that the failing client is removed
     });
 
     it('should broadcast to no clients when none are connected', () => {

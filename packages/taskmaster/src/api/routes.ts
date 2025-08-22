@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createLogger } from '@vibe-kit/logging';
 import { TaskmasterProvider } from '../providers/taskmaster';
 import { SSEManager } from '../utils/sse';
 import type { TaskUpdate } from '../types';
+
+// Create logger for this module
+const log = createLogger('taskmaster-api');
 
 /**
  * Self-contained API route handlers for taskmaster
@@ -31,7 +35,7 @@ export async function handleGetTasks(project: TaskmasterProject): Promise<NextRe
       });
     } catch (error) {
       // File doesn't exist or can't be read
-      console.error('Error reading tasks file:', error);
+      log.error('Error reading tasks file', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to read tasks file';
       return NextResponse.json({
         success: false,
@@ -44,7 +48,7 @@ export async function handleGetTasks(project: TaskmasterProject): Promise<NextRe
       });
     }
   } catch (error) {
-    console.error('Error fetching tasks:', error);
+    log.error('Error fetching tasks', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch tasks' },
       { status: 500 }
@@ -71,7 +75,7 @@ export async function handleUpdateTask(
       message: 'Task updated successfully',
     });
   } catch (error) {
-    console.error('Error updating task:', error);
+    log.error('Error updating task', error);
     return NextResponse.json(
       { 
         success: false, 
@@ -102,7 +106,7 @@ export function handleWatchTasks(project: TaskmasterProject): Response {
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         } catch (error) {
-          console.error('Error sending SSE event:', error);
+          log.error('Error sending SSE event', error);
         }
       });
       

@@ -2,7 +2,11 @@ import { streamText } from 'ai';
 import { AuthManager } from '../utils/auth';
 import { createAnthropicProviderWithModel, getAuthInfo, shouldUseClaudeCodeSDK } from '../utils/provider-factory';
 import { createClaudeCodeProvider } from '../utils/claude-sdk-streaming';
+import { createLogger } from '@vibe-kit/logging';
 import type { NextRequest } from 'next/server';
+
+// Create logger for this module
+const log = createLogger('chat-handler');
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';

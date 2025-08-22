@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 import { FastMCP } from 'fastmcp';
 import { z } from 'zod';
+import { createLogger } from '@vibe-kit/logging';
 import { 
   projectsToolExecute, 
   projectManageToolExecute
 } from './tools.js';
+
+// Create logger for this module
+const log = createLogger('mcp-server');
 
 const server = new FastMCP({
   name: 'vibekit',
@@ -78,12 +82,12 @@ async function startServer() {
           endpoint: '/mcp' as const
         }
       });
-      console.error(`VibeKit MCP Server running on http://localhost:${port}/mcp`);
+      log.info('VibeKit MCP Server started', { port, url: `http://localhost:${port}/mcp` });
     } else {
       await server.start({ transportType: 'stdio' });
     }
   } catch (error) {
-    console.error('Failed to start MCP server:', error);
+    log.error('Failed to start MCP server', error);
     process.exit(1);
   }
 }
@@ -94,7 +98,7 @@ process.on('SIGINT', async () => {
     await server.stop();
     process.exit(0);
   } catch (error) {
-    console.error('Error during shutdown:', error);
+    log.error('Error during shutdown', error);
     process.exit(1);
   }
 });
@@ -104,7 +108,7 @@ process.on('SIGTERM', async () => {
     await server.stop();
     process.exit(0);
   } catch (error) {
-    console.error('Error during shutdown:', error);
+    log.error('Error during shutdown', error);
     process.exit(1);
   }
 });

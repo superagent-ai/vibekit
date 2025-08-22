@@ -23,7 +23,9 @@
     "test": "vitest",
     "test:coverage": "vitest --coverage"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@vibe-kit/logging": "file:../logging"
+  },
   "devDependencies": {
     "@types/node": "^20.11.5",
     "tsup": "^8.0.1",

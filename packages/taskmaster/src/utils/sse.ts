@@ -1,4 +1,8 @@
+import { createLogger } from '@vibe-kit/logging';
 import { TaskChangeEvent } from '../types';
+
+// Create logger for this module
+const log = createLogger('taskmaster-sse');
 
 export class SSEManager {
   private clients: Set<WritableStreamDefaultWriter> = new Set();
@@ -20,7 +24,7 @@ export class SSEManager {
       try {
         client.write(encoded);
       } catch (error) {
-        console.error('Failed to send SSE event:', error);
+        log.error('Failed to send SSE event', error);
         this.removeClient(client);
       }
     }

@@ -1,5 +1,6 @@
 import { EventEmitter } from 'eventemitter3';
 import PQueue from 'p-queue';
+import { createLogger } from '@vibe-kit/logging';
 import { MCPClient } from '../client/mcp-client';
 import { ConfigStore } from './config-store';
 import type { 
@@ -10,6 +11,9 @@ import type {
 } from '../types/server';
 import type { Tool, Resource, Prompt, ToolExecutionResult } from '../types/tools';
 import type { MCPClientConfig, ConnectionOptions } from '../types';
+
+// Create logger for this module
+const log = createLogger('mcp-server-manager');
 
 interface ManagerEvents {
   'server:connected': (serverId: string) => void;
@@ -51,7 +55,7 @@ export class MCPClientManager extends EventEmitter<ManagerEvents> {
       const servers = this.configStore.getAllServers();
       for (const server of servers) {
         if (server.status === 'active') {
-          this.queue.add(() => this.connect(server.id).catch(console.error));
+          this.queue.add(() => this.connect(server.id).catch(err => log.error('Auto-connect failed', err)));
         }
       }
     }
@@ -274,7 +278,7 @@ export class MCPClientManager extends EventEmitter<ManagerEvents> {
           }));
           allTools.push(...serverTools);
         } catch (error) {
-          console.error(`Failed to get tools from server ${id}:`, error);
+          log.error('Failed to get tools from server', error, { serverId: id });
         }
       }
     }
