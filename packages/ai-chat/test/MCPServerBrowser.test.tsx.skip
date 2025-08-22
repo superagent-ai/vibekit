@@ -1,0 +1,294 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MCPServerBrowser } from '../src/components/MCPServerBrowser';
+
+// Mock fetch globally
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+// Mock window.open
+Object.defineProperty(window, 'open', {
+  writable: true,
+  value: vi.fn(),
+});
+
+const mockRecommendedServers = {
+  description: 'Browse and install MCP servers',
+  servers: {
+    'github': {
+      name: 'GitHub',
+      description: 'Access GitHub repositories',
+      repository: 'https://github.com/example/github',
+      category: 'development',
+      requiresApiKeys: true,
+      envVars: ['GITHUB_TOKEN'],
+      config: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-github'],
+        enabled: true,
+      },
+    },
+    'search': {
+      name: 'Search',
+      description: 'Web search functionality',
+      repository: 'https://github.com/example/search',
+      category: 'search',
+      requiresApiKeys: true,
+      envVars: ['SEARCH_API_KEY'],
+      config: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-search'],
+        enabled: true,
+      },
+    },
+  },
+  installation: {
+    instructions: 'Install MCP servers',
+    example: 'npm install server',
+  },
+};
+
+const mockInstalledServers = {
+  mcpServers: {},
+};
+
+describe('MCPServerBrowser', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    
+    // Mock successful responses
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/recommended-mcp-servers.json') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRecommendedServers),
+        });
+      }
+      if (url === '/api/mcp-servers') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockInstalledServers),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+  });
+
+  describe('component rendering', () => {
+    it('should render loading state initially', () => {
+      render(<MCPServerBrowser />);
+      
+      expect(screen.getByText('Loading MCP servers...')).toBeInTheDocument();
+    });
+
+    it('should render server browser after loading', async () => {
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('MCP Server Browser')).toBeInTheDocument();
+      });
+      
+      expect(screen.getByText('Browse and install MCP servers')).toBeInTheDocument();
+    });
+
+    it('should display available servers', async () => {
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('GitHub')).toBeInTheDocument();
+      });
+      
+      expect(screen.getByText('Search')).toBeInTheDocument();
+      expect(screen.getByText('Access GitHub repositories')).toBeInTheDocument();
+      expect(screen.getByText('Web search functionality')).toBeInTheDocument();
+    });
+  });
+
+  describe('category filtering', () => {
+    it('should show category filter buttons', async () => {
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('All')).toBeInTheDocument();
+      });
+      
+      expect(screen.getByText('Development')).toBeInTheDocument();
+      expect(screen.getByText('Search')).toBeInTheDocument();
+    });
+
+    it('should filter servers by category', async () => {
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('GitHub')).toBeInTheDocument();
+      });
+      
+      expect(screen.getByText('Search')).toBeInTheDocument();
+      
+      // Click development category
+      fireEvent.click(screen.getByText('Development'));
+      
+      // Should still show GitHub (development category)
+      expect(screen.getByText('GitHub')).toBeInTheDocument();
+      // Should not show Search (search category)
+      expect(screen.queryByText('Search')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('server information display', () => {
+    it('should show server details', async () => {
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('GitHub')).toBeInTheDocument();
+      });
+      
+      // Check category badges
+      expect(screen.getByText('development')).toBeInTheDocument();
+      expect(screen.getByText('search')).toBeInTheDocument();
+      
+      // Check API key requirements
+      expect(screen.getAllByText('Requires API keys:')).toHaveLength(2);
+      expect(screen.getByText('GITHUB_TOKEN')).toBeInTheDocument();
+      expect(screen.getByText('SEARCH_API_KEY')).toBeInTheDocument();
+      
+      // Check command info
+      expect(screen.getAllByText(/Command: npx/)).toHaveLength(2);
+    });
+
+    it('should show install buttons', async () => {
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getAllByText('Install')).toHaveLength(2);
+      });
+    });
+
+    it('should show repository links', async () => {
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('GitHub')).toBeInTheDocument();
+      });
+      
+      // Should have external link buttons (2 servers)
+      const externalButtons = screen.getAllByRole('button').filter(button => 
+        button.querySelector('svg')?.getAttribute('class')?.includes('lucide-external-link')
+      );
+      expect(externalButtons).toHaveLength(2);
+    });
+  });
+
+  describe('installation', () => {
+    it('should call install API when install button clicked', async () => {
+      mockFetch.mockImplementation((url: string, options: any) => {
+        if (url === '/api/mcp-servers/install' && options?.method === 'POST') {
+          return Promise.resolve({ ok: true });
+        }
+        return mockFetch.getMockImplementation()?.(url, options);
+      });
+
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('GitHub')).toBeInTheDocument();
+      });
+      
+      const installButtons = screen.getAllByText('Install');
+      fireEvent.click(installButtons[0]);
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith('/api/mcp-servers/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            serverId: 'github',
+            config: mockRecommendedServers.servers.github.config,
+          }),
+        });
+      });
+    });
+
+    it('should show installing state during installation', async () => {
+      // Mock a slow response
+      mockFetch.mockImplementation((url: string, options: any) => {
+        if (url === '/api/mcp-servers/install' && options?.method === 'POST') {
+          return new Promise(resolve => {
+            setTimeout(() => resolve({ ok: true }), 100);
+          });
+        }
+        return mockFetch.getMockImplementation()?.(url, options);
+      });
+
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('GitHub')).toBeInTheDocument();
+      });
+      
+      const installButtons = screen.getAllByText('Install');
+      fireEvent.click(installButtons[0]);
+
+      // Should show installing state
+      expect(screen.getByText('Installing...')).toBeInTheDocument();
+    });
+  });
+
+  describe('external links', () => {
+    it('should open repository in new tab', async () => {
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('GitHub')).toBeInTheDocument();
+      });
+      
+      const externalButtons = screen.getAllByRole('button').filter(button => 
+        button.querySelector('svg')?.getAttribute('class')?.includes('lucide-external-link')
+      );
+      
+      fireEvent.click(externalButtons[0]);
+      
+      expect(window.open).toHaveBeenCalledWith(
+        'https://github.com/example/github',
+        '_blank'
+      );
+    });
+  });
+
+  describe('error handling', () => {
+    it('should show error when fetch fails', async () => {
+      mockFetch.mockRejectedValue(new Error('Network error'));
+      
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('Failed to load recommended servers')).toBeInTheDocument();
+      });
+    });
+
+    it('should show error when installation fails', async () => {
+      mockFetch.mockImplementation((url: string, options: any) => {
+        if (url === '/api/mcp-servers/install' && options?.method === 'POST') {
+          return Promise.resolve({
+            ok: false,
+            json: () => Promise.resolve({ message: 'Installation failed' }),
+          });
+        }
+        return mockFetch.getMockImplementation()?.(url, options);
+      });
+
+      render(<MCPServerBrowser />);
+      
+      await waitFor(() => {
+        expect(screen.getByText('GitHub')).toBeInTheDocument();
+      });
+      
+      const installButtons = screen.getAllByText('Install');
+      fireEvent.click(installButtons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Failed to install GitHub: Installation failed/)).toBeInTheDocument();
+      });
+    });
+  });
+});

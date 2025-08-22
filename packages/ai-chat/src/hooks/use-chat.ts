@@ -92,12 +92,10 @@ export function useChat(options: ChatOptions = {}) {
         mcpTools: showMCPTools 
       };
       
-      console.log('[USE-CHAT DEBUG] Intercepting sendMessage with state:', currentState);
       
       // Temporarily override fetch to inject our custom data
       const tempFetch = (url: string, options: any) => {
         if (url === apiEndpoint || url.includes('/api/chat')) {
-          console.log('[USE-CHAT DEBUG] Intercepting fetch to inject custom data');
           const body = JSON.parse(options.body || '{}');
           const modifiedBody = {
             ...body,
@@ -151,6 +149,11 @@ export function useChat(options: ChatOptions = {}) {
   const getMessageExtras = (message: any): MessageExtras => {
     const extras: MessageExtras = {};
     
+    // Handle null/undefined messages
+    if (!message || typeof message !== 'object') {
+      return extras;
+    }
+    
     // Check for reasoning in tool invocations or metadata
     if (message.toolInvocations?.some((t: any) => t.toolName === 'reasoning')) {
       extras.reasoning = message.toolInvocations.find((t: any) => t.toolName === 'reasoning')?.result;
@@ -172,49 +175,32 @@ export function useChat(options: ChatOptions = {}) {
 
   // Get message content as string
   const getMessageContent = (message: any): string => {
+    // Handle null/undefined messages
+    if (!message || typeof message !== 'object') {
+      return '';
+    }
+    
     const msg = message;
     
-    console.log('[GET-CONTENT DEBUG] Processing message:', { 
-      role: msg.role, 
-      hasParts: !!msg.parts, 
-      partsLength: msg.parts?.length 
-    });
     
     // Handle parts array (assistant messages from streaming)
     if (Array.isArray(msg.parts)) {
-      console.log('[GET-CONTENT DEBUG] Processing parts:', msg.parts.map((p: any, i: number) => ({
-        index: i,
-        type: p.type,
-        hasText: !!p.text,
-        textLength: p.text?.length,
-        state: p.state,
-        textPreview: p.text?.substring(0, 50) + (p.text?.length > 50 ? '...' : '')
-      })));
       
       const textContent = msg.parts
         .filter((part: any) => {
           // Accept text parts regardless of state, or string parts
           const isTextPart = part.type === 'text' || typeof part === 'string';
-          console.log('[GET-CONTENT DEBUG] Filtering part:', { 
-            type: part.type, 
-            isString: typeof part === 'string',
-            hasText: !!part.text,
-            state: part.state,
-            isTextPart 
-          });
           return isTextPart;
         })
         .map((part: any) => {
           if (typeof part === 'string') return part;
           if (part.type === 'text' && part.text) {
-            console.log('[GET-CONTENT DEBUG] Extracting text:', part.text.substring(0, 100));
             return part.text;
           }
           return '';
         })
         .join('');
       
-      console.log('[GET-CONTENT DEBUG] Final text content:', textContent.substring(0, 100));
       if (textContent) return textContent;
     }
     

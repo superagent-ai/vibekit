@@ -32,12 +32,22 @@ export interface ChatConfig {
  * Get configuration from environment with fallbacks
  */
 function getEnvConfig() {
+  const parseTemperature = (value: string): number => {
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? 0.7 : parsed;
+  };
+  
+  const parseMaxTokens = (value: string): number => {
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? 4096 : parsed;
+  };
+  
   return {
     temperature: process.env.CHAT_TEMPERATURE 
-      ? parseFloat(process.env.CHAT_TEMPERATURE) 
+      ? parseTemperature(process.env.CHAT_TEMPERATURE) 
       : 0.7,
     maxTokens: process.env.CHAT_MAX_TOKENS 
-      ? parseInt(process.env.CHAT_MAX_TOKENS, 10) 
+      ? parseMaxTokens(process.env.CHAT_MAX_TOKENS) 
       : 4096,
     defaultModel: process.env.CHAT_DEFAULT_MODEL || DEFAULT_MODELS[0].value,
   };
