@@ -200,6 +200,19 @@ export class MCPClientManager extends EventEmitter<ManagerEvents> {
     return client ? client.isConnected() : false;
   }
 
+  getServerStatus(serverId: string): ServerStatus {
+    const server = this.configStore.getServer(serverId);
+    if (!server) {
+      return 'inactive';
+    }
+    
+    if (this.isConnected(serverId)) {
+      return 'active';
+    }
+    
+    return server.status || 'disconnected';
+  }
+
   // Tool/Resource Discovery
   async getTools(serverId: string): Promise<Tool[]> {
     const client = this.clients.get(serverId);
@@ -240,6 +253,48 @@ export class MCPClientManager extends EventEmitter<ManagerEvents> {
     }
 
     return client.executeTool(toolName, params);
+  }
+
+  // Combined operations
+  async listTools(serverId?: string): Promise<Tool[]> {
+    if (serverId) {
+      return this.getTools(serverId);
+    }
+    
+    // Get tools from all connected servers
+    const allTools: Tool[] = [];
+    for (const [id, client] of this.clients.entries()) {
+      if (client.isConnected()) {
+        try {
+          const tools = await client.getTools();
+          // Add server ID to each tool for identification
+          const serverTools = tools.map(tool => ({
+            ...tool,
+            serverId: id,
+          }));
+          allTools.push(...serverTools);
+        } catch (error) {
+          console.error(`Failed to get tools from server ${id}:`, error);
+        }
+      }
+    }
+    return allTools;
+  }
+
+  async destroy(): Promise<void> {
+    // Clear all reconnection timers
+    for (const timer of this.reconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.reconnectTimers.clear();
+    
+    // Disconnect all clients
+    await this.disconnectAll();
+    
+    // Clear all data
+    this.clients.clear();
+    this.reconnectAttempts.clear();
+    this.queue.clear();
   }
 
   // Import/Export
