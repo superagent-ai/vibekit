@@ -48,7 +48,7 @@ export interface CloudflareConfig {
 // Cloudflare implementation
 export class CloudflareSandboxInstance implements SandboxInstance {
   constructor(
-    private sandbox: Sandbox,
+    public sandbox: Sandbox,
     public sandboxId: string,
     private hostname: string,
   ) { }
