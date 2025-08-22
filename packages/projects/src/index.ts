@@ -16,11 +16,7 @@ export {
   getProjectByPath,
   createProject,
   updateProject,
-  deleteProject,
-  getCurrentProject,
-  setCurrentProject,
-  setCurrentProjectById,
-  clearCurrentProject
+  deleteProject
 } from './manager';
 
 // Storage utilities
@@ -28,8 +24,6 @@ export {
   ensureProjectsFile,
   readProjectsConfig,
   writeProjectsConfig,
-  readCurrentProject,
-  writeCurrentProject,
   pathExists
 } from './storage';
 
@@ -50,7 +44,6 @@ export {
 export {
   VIBEKIT_DIR,
   PROJECTS_FILE,
-  CURRENT_PROJECT_FILE,
   PROJECTS_VERSION,
   DEFAULT_PROJECTS_CONFIG
 } from './constants';

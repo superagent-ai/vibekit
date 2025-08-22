@@ -6,12 +6,9 @@ import {
   ensureProjectsFile,
   readProjectsConfig,
   writeProjectsConfig,
-  readCurrentProject,
-  writeCurrentProject,
-  clearCurrentProject,
   pathExists
 } from '../storage';
-import { VIBEKIT_DIR, PROJECTS_FILE, CURRENT_PROJECT_FILE, DEFAULT_PROJECTS_CONFIG } from '../constants';
+import { VIBEKIT_DIR, PROJECTS_FILE, DEFAULT_PROJECTS_CONFIG } from '../constants';
 import type { Project, ProjectsConfig } from '../types';
 
 // Mock fs module
@@ -81,7 +78,8 @@ describe('storage', () => {
         }
       };
 
-      (fs.access as any).mockResolvedValue(undefined);
+      // Mock ensureProjectsFile calls
+      (fs.access as any).mockResolvedValue(undefined); // Both directory and file exist
       (fs.readFile as any).mockResolvedValue(JSON.stringify(mockConfig));
 
       const result = await readProjectsConfig();
@@ -91,7 +89,8 @@ describe('storage', () => {
     });
 
     it('should return default config on read error', async () => {
-      (fs.access as any).mockResolvedValue(undefined);
+      // Mock ensureProjectsFile calls
+      (fs.access as any).mockResolvedValue(undefined); // Directory and file exist
       (fs.readFile as any).mockRejectedValue(new Error('Read error'));
 
       const result = await readProjectsConfig();
@@ -107,7 +106,9 @@ describe('storage', () => {
         projects: {}
       };
 
-      (fs.access as any).mockResolvedValue(undefined);
+      // Mock ensureProjectsFile calls
+      (fs.access as any).mockResolvedValue(undefined); // Both directory and file exist
+      (fs.writeFile as any).mockResolvedValue(undefined);
 
       await writeProjectsConfig(mockConfig);
 
@@ -118,77 +119,6 @@ describe('storage', () => {
     });
   });
 
-  describe('readCurrentProject', () => {
-    it('should read current project when file exists', async () => {
-      const mockProject: Project = {
-        id: 'current-id',
-        name: 'Current Project',
-        projectRoot: '/current/path',
-        status: 'active',
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-01'
-      };
-
-      (fs.access as any).mockResolvedValue(undefined);
-      (fs.readFile as any).mockResolvedValue(JSON.stringify(mockProject));
-
-      const result = await readCurrentProject();
-
-      expect(result).toEqual(mockProject);
-    });
-
-    it('should return null when file does not exist', async () => {
-      (fs.access as any).mockRejectedValue(new Error('ENOENT'));
-
-      const result = await readCurrentProject();
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null on parse error', async () => {
-      (fs.access as any).mockResolvedValue(undefined);
-      (fs.readFile as any).mockResolvedValue('invalid json');
-
-      const result = await readCurrentProject();
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('writeCurrentProject', () => {
-    it('should write current project as JSON', async () => {
-      const mockProject: Project = {
-        id: 'test-id',
-        name: 'Test Project',
-        projectRoot: '/test/path',
-        status: 'active',
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-01'
-      };
-
-      await writeCurrentProject(mockProject);
-
-      expect(fs.writeFile).toHaveBeenCalledWith(
-        CURRENT_PROJECT_FILE,
-        JSON.stringify(mockProject, null, 2)
-      );
-    });
-  });
-
-  describe('clearCurrentProject', () => {
-    it('should delete current project file', async () => {
-      await clearCurrentProject();
-
-      expect(fs.unlink).toHaveBeenCalledWith(CURRENT_PROJECT_FILE);
-    });
-
-    it('should handle error when file does not exist', async () => {
-      (fs.unlink as any).mockRejectedValue(new Error('ENOENT'));
-
-      // Should not throw
-      await expect(clearCurrentProject()).resolves.toBeUndefined();
-    });
-  });
 
   describe('pathExists', () => {
     it('should return true when path exists', async () => {

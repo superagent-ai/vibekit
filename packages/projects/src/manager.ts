@@ -1,9 +1,6 @@
 import {
   readProjectsConfig,
-  writeProjectsConfig,
-  readCurrentProject,
-  writeCurrentProject,
-  clearCurrentProject as clearCurrent
+  writeProjectsConfig
 } from './storage';
 import { validateProjectData, generateProjectId } from './validator';
 import type { Project, ProjectCreateInput, ProjectUpdateInput } from './types';
@@ -110,12 +107,6 @@ export async function updateProject(
   config.projects[id] = updatedProject;
   await writeProjectsConfig(config);
   
-  // Update current project if it's the one being updated
-  const currentProject = await getCurrentProject();
-  if (currentProject && currentProject.id === id) {
-    await writeCurrentProject(updatedProject);
-  }
-  
   return updatedProject;
 }
 
@@ -132,44 +123,6 @@ export async function deleteProject(id: string): Promise<boolean> {
   delete config.projects[id];
   await writeProjectsConfig(config);
   
-  // Clear current project if it's the one being deleted
-  const currentProject = await getCurrentProject();
-  if (currentProject && currentProject.id === id) {
-    await clearCurrent();
-  }
-  
   return true;
 }
 
-/**
- * Gets the current project
- */
-export async function getCurrentProject(): Promise<Project | null> {
-  return await readCurrentProject();
-}
-
-/**
- * Sets the current project
- */
-export async function setCurrentProject(project: Project): Promise<void> {
-  await writeCurrentProject(project);
-}
-
-/**
- * Sets the current project by ID
- */
-export async function setCurrentProjectById(id: string): Promise<Project | null> {
-  const project = await getProject(id);
-  if (project) {
-    await setCurrentProject(project);
-    return project;
-  }
-  return null;
-}
-
-/**
- * Clears the current project
- */
-export async function clearCurrentProject(): Promise<void> {
-  await clearCurrent();
-}

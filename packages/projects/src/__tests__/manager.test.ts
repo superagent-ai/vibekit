@@ -6,11 +6,7 @@ import {
   getProjectByPath,
   createProject,
   updateProject,
-  deleteProject,
-  getCurrentProject,
-  setCurrentProject,
-  setCurrentProjectById,
-  clearCurrentProject
+  deleteProject
 } from '../manager';
 import * as storage from '../storage';
 import * as validator from '../validator';
@@ -197,15 +193,6 @@ describe('manager', () => {
         .rejects.toThrow('Validation failed: Invalid status');
     });
 
-    it('should update current project if it is being updated', async () => {
-      const currentProject = mockConfig.projects.project1;
-      (storage.readCurrentProject as any).mockResolvedValue(currentProject);
-
-      const updates: ProjectUpdateInput = { name: 'Updated Current' };
-      await updateProject('project1', updates);
-
-      expect(storage.writeCurrentProject).toHaveBeenCalled();
-    });
   });
 
   describe('deleteProject', () => {
@@ -223,67 +210,5 @@ describe('manager', () => {
       expect(storage.writeProjectsConfig).not.toHaveBeenCalled();
     });
 
-    it.skip('should clear current project if it is being deleted', async () => {
-      // Skipping this test as the mock aliasing makes it difficult to test
-      // The functionality is covered by integration tests
-      (storage.readCurrentProject as any).mockResolvedValue(mockConfig.projects.project1);
-
-      await deleteProject('project1');
-
-      // This functionality is tested in integration tests
-    });
-  });
-
-  describe('getCurrentProject', () => {
-    it('should return current project', async () => {
-      const mockProject = mockConfig.projects.project1;
-      (storage.readCurrentProject as any).mockResolvedValue(mockProject);
-
-      const result = await getCurrentProject();
-
-      expect(result).toEqual(mockProject);
-    });
-
-    it('should return null when no current project', async () => {
-      (storage.readCurrentProject as any).mockResolvedValue(null);
-
-      const result = await getCurrentProject();
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('setCurrentProject', () => {
-    it('should set current project', async () => {
-      const project = mockConfig.projects.project1;
-
-      await setCurrentProject(project);
-
-      expect(storage.writeCurrentProject).toHaveBeenCalledWith(project);
-    });
-  });
-
-  describe('setCurrentProjectById', () => {
-    it('should set current project by ID', async () => {
-      const result = await setCurrentProjectById('project2');
-
-      expect(result).toEqual(mockConfig.projects.project2);
-      expect(storage.writeCurrentProject).toHaveBeenCalledWith(mockConfig.projects.project2);
-    });
-
-    it('should return null for non-existent ID', async () => {
-      const result = await setCurrentProjectById('nonexistent');
-
-      expect(result).toBeNull();
-      expect(storage.writeCurrentProject).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('clearCurrentProject', () => {
-    it('should clear current project', async () => {
-      await clearCurrentProject();
-
-      expect(storage.clearCurrentProject).toHaveBeenCalled();
-    });
   });
 });
