@@ -91,6 +91,45 @@ describe('formatter', () => {
       expect(result).toContain('Minimal');
       expect(result).toContain('active');
     });
+
+    it('should indicate current project with arrow when provided', () => {
+      const currentProject = mockProjects[0]; // Project Alpha
+      const result = formatProjectsTable(mockProjects, currentProject);
+
+      // Check that the current project has the arrow indicator
+      expect(result).toContain('▸ abc123');
+      // Check that the other project has the regular spacing
+      expect(result).toContain('  def456');
+    });
+
+    it('should show no indicator when current project does not match any project', () => {
+      const nonMatchingCurrentProject: Project = {
+        id: 'xyz999',
+        name: 'Non-matching Project',
+        projectRoot: '/non/matching',
+        status: 'active',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01'
+      };
+
+      const result = formatProjectsTable(mockProjects, nonMatchingCurrentProject);
+
+      // Both projects should have regular spacing since neither matches current
+      expect(result).toContain('  abc123');
+      expect(result).toContain('  def456');
+      // Should not contain any arrow indicators
+      expect(result).not.toContain('▸');
+    });
+
+    it('should handle null current project correctly', () => {
+      const result = formatProjectsTable(mockProjects, null);
+
+      // Both projects should have regular spacing
+      expect(result).toContain('  abc123');
+      expect(result).toContain('  def456');
+      // Should not contain any arrow indicators
+      expect(result).not.toContain('▸');
+    });
   });
 
   describe('formatProjectDetails', () => {
@@ -162,6 +201,17 @@ describe('formatter', () => {
       const result = formatProjectDetails(mockProjects[1]);
 
       expect(result).toContain('Status: archived');
+    });
+
+    it('should display cleanup script when present', () => {
+      const projectWithCleanup: Project = {
+        ...mockProjects[0],
+        cleanupScript: 'npm run cleanup'
+      };
+      
+      const result = formatProjectDetails(projectWithCleanup);
+      
+      expect(result).toContain('Cleanup Script: npm run cleanup');
     });
   });
 });
