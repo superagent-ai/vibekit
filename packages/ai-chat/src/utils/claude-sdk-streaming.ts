@@ -187,8 +187,8 @@ async function queryClaudeCodeSDK(options: any, oauthToken: string): Promise<str
     for await (const message of query({
       prompt,
       ...queryOptions
-    })) {
-      log.debug('Received message', { type: typeof message, contentLength: typeof message === 'string' ? message.length : 'N/A' });
+    }) as AsyncIterable<unknown>) {
+      log.debug('Received message', { type: typeof message, contentLength: typeof message === 'string' ? (message as string).length : 0 });
       
       // Handle messages exactly like generatePRMetadata does
       if (typeof message === 'string') {
