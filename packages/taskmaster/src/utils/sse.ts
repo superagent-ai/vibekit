@@ -1,4 +1,4 @@
-import { createLogger } from '@vibe-kit/logging';
+import { createLogger } from '@vibe-kit/logger';
 import { TaskChangeEvent } from '../types';
 
 // Create logger for this module

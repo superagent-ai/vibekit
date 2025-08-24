@@ -1,5 +1,5 @@
 import { AuthManager } from './auth';
-import { createLogger } from '@vibe-kit/logging';
+import { createLogger } from '@vibe-kit/logger';
 
 // Create logger for this module
 const log = createLogger('claude-sdk');

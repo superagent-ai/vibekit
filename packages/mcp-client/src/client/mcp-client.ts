@@ -2,7 +2,7 @@ import { EventEmitter } from 'eventemitter3';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { createLogger } from '@vibe-kit/logging';
+import { createLogger } from '@vibe-kit/logger';
 import type { MCPServer, StdioConfig, HttpConfig } from '../types/server';
 import type { Tool, Resource, Prompt, ToolExecutionResult } from '../types/tools';
 import type { ClientEvents, MCPClient as MCPClientType } from './types';

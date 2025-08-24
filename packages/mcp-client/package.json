@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.1",
-    "@vibe-kit/logging": "file:../logging",
+    "@vibe-kit/logger": "file:../logger",
     "eventemitter3": "^5.0.1",
     "execa": "^8.0.1",
     "p-queue": "^8.0.1",

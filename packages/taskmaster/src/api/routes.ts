@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createLogger } from '@vibe-kit/logging';
+import { createLogger } from '@vibe-kit/logger';
 import { TaskmasterProvider } from '../providers/taskmaster';
 import { SSEManager } from '../utils/sse';
 import type { TaskUpdate } from '../types';

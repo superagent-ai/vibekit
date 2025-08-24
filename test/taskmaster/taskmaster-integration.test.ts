@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { skipIfNoVibeKitKeys, skipTest } from "../helpers/test-utils.js";
-import { createLogger } from "@vibe-kit/logging";
+import { createLogger } from "@vibe-kit/logger";
 
 // Import Taskmaster components
 import { TaskmasterProvider, SSEManager } from "@vibe-kit/taskmaster";

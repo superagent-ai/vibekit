@@ -6,7 +6,7 @@ import {
   DEFAULT_PROJECTS_CONFIG 
 } from './constants';
 import type { Project, ProjectsConfig } from './types';
-import { createLogger } from '@vibe-kit/logging';
+import { createLogger } from '@vibe-kit/logger';
 
 // Create logger for this module
 const log = createLogger('projects-storage');

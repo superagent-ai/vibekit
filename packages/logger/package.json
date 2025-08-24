@@ -1,5 +1,5 @@
 {
-  "name": "@vibe-kit/logging",
+  "name": "@vibe-kit/logger",
   "version": "0.0.1",
   "description": "Unified structured logging for VibeKit packages",
   "main": "dist/index.js",

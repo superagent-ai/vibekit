@@ -1,6 +1,6 @@
 import { EventEmitter } from 'eventemitter3';
 import PQueue from 'p-queue';
-import { createLogger } from '@vibe-kit/logging';
+import { createLogger } from '@vibe-kit/logger';
 import { MCPClient } from '../client/mcp-client';
 import { ConfigStore } from './config-store';
 import type { 

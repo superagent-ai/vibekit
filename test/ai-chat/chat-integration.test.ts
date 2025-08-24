@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { skipIfNoVibeKitKeys, skipTest } from "../helpers/test-utils.js";
-import { createLogger } from "@vibe-kit/logging";
+import { createLogger } from "@vibe-kit/logger";
 
 // Import AI Chat components that we'll test
 import { handleChatRequest } from "@vibe-kit/ai-chat/server";

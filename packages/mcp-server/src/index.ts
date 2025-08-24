@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { FastMCP } from 'fastmcp';
 import { z } from 'zod';
-import { createLogger } from '@vibe-kit/logging';
+import { createLogger } from '@vibe-kit/logger';
 import { 
   projectsToolExecute, 
   projectManageToolExecute

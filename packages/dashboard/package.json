@@ -64,6 +64,7 @@
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@tailwindcss/postcss": "^4",
     "@types/dagre": "^0.7.53",
+    "@vibe-kit/logger": "file:../logger",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^20",
     "@types/react": "^19",
