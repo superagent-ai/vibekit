@@ -169,7 +169,7 @@ export async function generatePRMetadata(
       const options: any = {
         authToken: modelConfig.apiKey,
         outputFormat: 'text', // Get plain text response for easier JSON parsing
-        model: modelConfig.model || 'claude-3-5-sonnet-20241022',
+        model: modelConfig.model || 'claude-sonnet-4-20250514',
         maxTurns: 1
       };
       
@@ -301,7 +301,7 @@ export async function generateCommitMessage(
       const options: any = {
         authToken: modelConfig.apiKey,
         outputFormat: 'text', // Get plain text response for easier JSON parsing
-        model: modelConfig.model || 'claude-3-5-sonnet-20241022',
+        model: modelConfig.model || 'claude-sonnet-4-20250514',
         maxTurns: 1
       };
       
