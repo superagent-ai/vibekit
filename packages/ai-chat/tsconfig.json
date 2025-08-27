@@ -21,7 +21,14 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": ["node", "react", "react-dom"]
+    "types": ["node", "react", "react-dom"],
+    "baseUrl": ".",
+    "paths": {
+      "@vibe-kit/logger": ["../logger/dist/index.d.ts", "../logger/src/index.ts"],
+      "@vibe-kit/logger/*": ["../logger/dist/*", "../logger/src/*"],
+      "@vibe-kit/mcp-client": ["../mcp-client/dist/index.d.ts", "../mcp-client/src/index.ts"],
+      "@vibe-kit/mcp-client/*": ["../mcp-client/dist/*", "../mcp-client/src/*"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]

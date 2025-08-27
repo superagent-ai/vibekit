@@ -12,7 +12,14 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@vibe-kit/logger": ["../logger/dist/index.d.ts", "../logger/src/index.ts"],
+      "@vibe-kit/logger/*": ["../logger/dist/*", "../logger/src/*"],
+      "@vibe-kit/projects": ["../projects/dist/index.d.ts", "../projects/src/index.ts"],
+      "@vibe-kit/projects/*": ["../projects/dist/*", "../projects/src/*"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

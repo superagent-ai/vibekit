@@ -262,7 +262,7 @@ export async function handleChatRequestWithMCP(req: NextRequest): Promise<Respon
               // Get tools from this server
               console.log(`[MCP DEBUG] Getting tools from server: ${server.name}`);
               const serverTools = await manager.getTools(server.id);
-              console.log(`[MCP DEBUG] Server ${server.name} has ${serverTools.length} tools:`, serverTools.map(t => t.name));
+              console.log(`[MCP DEBUG] Server ${server.name} has ${serverTools.length} tools:`, serverTools.map((t: { name: string }) => t.name));
               
               // Convert MCP tools to AI SDK format
               for (const mcpTool of serverTools) {

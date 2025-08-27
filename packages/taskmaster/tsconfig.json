@@ -12,6 +12,11 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "moduleResolution": "node",
+    "baseUrl": ".",
+    "paths": {
+      "@vibe-kit/logger": ["../logger/dist/index.d.ts", "../logger/src/index.ts"],
+      "@vibe-kit/logger/*": ["../logger/dist/*", "../logger/src/*"]
+    },
     "types": ["node"]
   },
   "include": ["src/**/*"],

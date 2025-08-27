@@ -18,7 +18,12 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@vibe-kit/logger": ["../logger/dist/index.d.ts", "../logger/src/index.ts"],
+      "@vibe-kit/logger/*": ["../logger/dist/*", "../logger/src/*"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
