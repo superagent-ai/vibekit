@@ -31,7 +31,11 @@
       "@vibe-kit/ai-chat": ["../ai-chat/dist/index.d.ts", "../ai-chat/src/index.ts"],
       "@vibe-kit/ai-chat/*": ["../ai-chat/dist/*", "../ai-chat/src/*"],
       "@vibe-kit/auth": ["../auth/dist/index.d.ts", "../auth/src/index.ts"],
-      "@vibe-kit/auth/*": ["../auth/dist/*", "../auth/src/*"]
+      "@vibe-kit/auth/*": ["../auth/dist/*", "../auth/src/*"],
+      "@vibe-kit/sdk": ["../sdk/dist/index.d.ts", "../sdk/src/index.ts"],
+      "@vibe-kit/sdk/*": ["../sdk/dist/*", "../sdk/src/*"],
+      "@vibe-kit/dagger": ["../dagger/dist/index.d.ts", "../dagger/src/index.ts"],
+      "@vibe-kit/dagger/*": ["../dagger/dist/*", "../dagger/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

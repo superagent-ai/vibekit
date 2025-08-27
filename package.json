@@ -9,16 +9,17 @@
     "engines": {
         "node": ">=18.0.0"
     },
+    "packageManager": "npm@10.9.2",
     "workspaces": [
         "packages/*"
     ],
     "scripts": {
         "build": "npm run build --workspaces",
         "build:packages": "npm run build --workspace=@vibe-kit/e2b && npm run build --workspace=@vibe-kit/daytona && npm run build --workspace=@vibe-kit/northflank && npm run build --workspace=@vibe-kit/cloudflare && npm run build --workspace=@vibe-kit/dagger && npm run build --workspace=@vibe-kit/auth && npm run build --workspace=@vibe-kit/logger && npm run build --workspace=@vibe-kit/projects && npm run build --workspace=@vibe-kit/taskmaster && npm run build --workspace=@vibe-kit/mcp-server && npm run build --workspace=@vibe-kit/mcp-client && npm run build --workspace=@vibe-kit/ai-chat && npm run build --workspace=@vibe-kit/sdk && npm run build --workspace=vibekit && npm run build --workspace=@vibe-kit/dashboard",
-        "build:deps": "npm run build --workspace=@vibe-kit/logger && npm run build --workspace=@vibe-kit/projects && npm run build --workspace=@vibe-kit/mcp-client && npm run build --workspace=@vibe-kit/taskmaster && npm run build --workspace=@vibe-kit/ai-chat && npm run build --workspace=@vibe-kit/auth",
+        "build:deps": "npm run build --workspace=@vibe-kit/logger && npm run build --workspace=@vibe-kit/projects && npm run build --workspace=@vibe-kit/mcp-client && npm run build --workspace=@vibe-kit/taskmaster && npm run build --workspace=@vibe-kit/ai-chat && npm run build --workspace=@vibe-kit/auth && npm run build --workspace=@vibe-kit/sdk && npm run build --workspace=@vibe-kit/dagger",
         "dev": "npm run dev --workspace=@vibe-kit/sdk",
         "dev:dashboard": "npm run dev --workspace=@vibe-kit/dashboard",
-        "type-check": "npm run build:deps && npm run type-check --workspaces",
+        "type-check": "npm run build:deps && npm run type-check --workspace=@vibe-kit/logger --workspace=@vibe-kit/projects --workspace=@vibe-kit/mcp-client --workspace=@vibe-kit/taskmaster --workspace=@vibe-kit/ai-chat --workspace=@vibe-kit/auth --workspace=@vibe-kit/mcp-server --workspace=@vibe-kit/dashboard --workspace=@vibe-kit/sdk --workspace=@vibe-kit/dagger --workspace=vibekit",
         "test": "vitest",
         "test:integration": "vitest run -c vitest.integration.config.ts"
     },
