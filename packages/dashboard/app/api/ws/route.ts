@@ -5,7 +5,6 @@ import os from 'os';
 
 const VIBEKIT_DIR = path.join(os.homedir(), '.vibekit');
 const PROJECTS_FILE = path.join(VIBEKIT_DIR, 'projects.json');
-const CURRENT_PROJECT_FILE = path.join(VIBEKIT_DIR, 'current-project.json');
 
 // Keep-alive interval to prevent connection timeout
 const KEEP_ALIVE_INTERVAL = 30000; // 30 seconds
@@ -36,7 +35,7 @@ export async function GET(request: NextRequest) {
       }, KEEP_ALIVE_INTERVAL);
       
       // Set up file watcher with production-ready configuration
-      watcher = chokidar.watch([PROJECTS_FILE, CURRENT_PROJECT_FILE], {
+      watcher = chokidar.watch([PROJECTS_FILE], {
         persistent: true,
         ignoreInitial: true,
         awaitWriteFinish: {
@@ -51,12 +50,9 @@ export async function GET(request: NextRequest) {
       
       // Handle file changes
       const handleChange = (filePath: string) => {
-        const fileName = path.basename(filePath);
-        const eventType = fileName === 'projects.json' ? 'projects-updated' : 'current-project-updated';
-        
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            type: eventType,
+            type: 'projects-updated',
             timestamp: new Date().toISOString()
           })}\n\n`));
         } catch (error) {
@@ -73,12 +69,9 @@ export async function GET(request: NextRequest) {
       watcher.on('change', handleChange);
       watcher.on('add', handleChange);
       watcher.on('unlink', (filePath: string) => {
-        const fileName = path.basename(filePath);
-        const eventType = fileName === 'current-project.json' ? 'current-project-cleared' : 'projects-cleared';
-        
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            type: eventType,
+            type: 'projects-cleared',
             timestamp: new Date().toISOString()
           })}\n\n`));
         } catch (error) {

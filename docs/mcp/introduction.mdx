@@ -13,7 +13,6 @@ The VibeKit MCP server (`@vibe-kit/mcp-server`) provides AI assistants with dire
 
 - **Browse and search** your projects
 - **Create and manage** project configurations
-- **Switch context** between different projects
 - **Access project metadata** like scripts, tags, and status
 
 ## Key Features
@@ -22,8 +21,8 @@ The VibeKit MCP server (`@vibe-kit/mcp-server`) provides AI assistants with dire
   <Card title="Project Management" icon="folder">
     Complete CRUD operations for managing development projects
   </Card>
-  <Card title="Context Switching" icon="arrows-rotate">
-    Seamlessly switch between different project contexts
+  <Card title="Smart Search" icon="magnifying-glass">
+    Powerful search and filtering across all your projects
   </Card>
   <Card title="AI Integration" icon="robot">
     Direct integration with Claude Desktop and other MCP clients
@@ -55,16 +54,13 @@ graph LR
 
 ## Available Tools
 
-The MCP server provides three streamlined tools:
+The MCP server provides two streamlined tools:
 
 ### `projects`
 List, get, or search for projects with filtering capabilities.
 
 ### `project_manage`
 Create, update, or delete projects with full metadata management.
-
-### `current_project`
-Manage the currently active project for context-aware operations.
 
 ## Transport Modes
 

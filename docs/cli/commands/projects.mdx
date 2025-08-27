@@ -22,8 +22,6 @@ vibekit projects <subcommand> [options]
 | `show` | `view` | Show project details |
 | `edit` | `update` | Edit project configuration |
 | `delete` | `remove` | Delete one or more projects |
-| `select` | `use` | Select a project and change to its directory |
-| `current` | - | Show currently selected project |
 
 ## Global Options
 
@@ -49,16 +47,12 @@ vibekit projects ls
 ```
 📂 VibeKit Projects
 ──────────────────────────────────────────────────
-Current Project: my-app (abc123)
-
   ID       | Name         | Project Root           | Status  
 ----------------------------------------------------------------
   abc123   | my-app       | /home/user/my-app      | active  
-▸ def456   | api-service  | /home/user/api         | active  
+  def456   | api-service  | /home/user/api         | active  
   ghi789   | old-project  | /home/user/old         | archived
 ```
-
-The `▸` indicator shows the currently selected project.
 
 ### add / create
 
@@ -101,7 +95,6 @@ vibekit projects add "frontend" ./frontend-app
 **Options:**
 - If the specified directory doesn't exist, you'll be prompted to create it
 - Automatically initializes a git repository if requested
-- Sets the new project as current after creation
 
 ### show / view
 
@@ -190,62 +183,7 @@ vibekit projects delete -n project1 project2 project3
 
 **Confirmation:**
 - You'll be prompted to confirm before deletion
-- If deleting the current project, it will be unselected
 
-### select / use
-
-Select a project as current and change to its directory.
-
-```bash
-vibekit projects select <id>
-vibekit projects select -n <name>
-```
-
-**Examples:**
-
-```bash
-# Select by ID
-vibekit projects select abc123
-
-# Select by name
-vibekit projects select -n my-app
-```
-
-**Actions performed:**
-1. Sets the project as current
-2. Changes working directory to the project root
-3. Shows confirmation message
-
-**Output Example:**
-```
-✅ Selected project: my-app
-📂 Project Root: /home/user/projects/my-app
-Working directory changed to: /home/user/projects/my-app
-```
-
-### current
-
-Display information about the currently selected project.
-
-```bash
-vibekit projects current
-```
-
-**Output Example:**
-```
-📂 Current Project
-──────────────────────────────────────────────────
-Name: my-app (abc123)
-Path: /home/user/projects/my-app
-Status: active
-Last Updated: 2 hours ago
-```
-
-If no project is selected:
-```
-No project currently selected
-Use "vibekit projects select <id>" to select a project
-```
 
 ## Project Configuration
 
@@ -272,7 +210,6 @@ Projects are stored in `~/.vibekit/projects.json` with the following structure:
 }
 ```
 
-The current project is stored separately in `~/.vibekit/current-project.json`.
 
 ## Use Cases
 
@@ -286,16 +223,6 @@ vibekit projects add "docs" ./documentation "Project docs"
 
 # List all projects
 vibekit projects list
-
-# Switch between projects
-vibekit projects select -n frontend
-# Now in frontend directory, run commands
-npm run dev
-
-# Switch to backend
-vibekit projects select -n backend
-# Now in backend directory
-npm start
 ```
 
 ### Project Templates

@@ -10,9 +10,6 @@ import {
   createProject,
   updateProject,
   deleteProject,
-  setCurrentProject,
-  getCurrentProject,
-  clearCurrentProject,
   validateProjectData,
   formatProjectsTableWithColor,
   formatProjectDetails,
@@ -22,7 +19,6 @@ import {
 export async function listProjects() {
   try {
     const projects = await getAllProjects();
-    const currentProject = await getCurrentProject();
     
     console.log(chalk.blue('📂 VibeKit Projects'));
     console.log(chalk.gray('─'.repeat(50)));
@@ -33,12 +29,7 @@ export async function listProjects() {
       return;
     }
     
-    if (currentProject) {
-      console.log(chalk.green(`Current Project: ${currentProject.name} (${currentProject.id})`));
-      console.log('');
-    }
-    
-    console.log(formatProjectsTableWithColor(projects, currentProject));
+    console.log(formatProjectsTableWithColor(projects));
   } catch (error) {
     console.error(chalk.red('Failed to list projects:'), error.message);
   }
@@ -268,27 +259,6 @@ export async function addProject(name, folder, description) {
     const project = await createProject(projectData);
     console.log(chalk.green(`✅ Project created successfully!`));
     console.log(chalk.gray(`Project ID: ${project.id}`));
-    
-    // Ask if they want to select this project
-    // In non-interactive mode (when name is provided), default to yes
-    let selectProject = false;
-    if (name) {
-      selectProject = true;
-    } else {
-      const answer = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'selectProject',
-          message: 'Set this as your current project?',
-          default: true
-        }
-      ]);
-      selectProject = answer.selectProject;
-    }
-    
-    if (selectProject) {
-      await selectProjectById(project.id);
-    }
     
   } catch (error) {
     console.error(chalk.red('Failed to add project:'), error.message);
@@ -536,63 +506,3 @@ export async function removeProject(idOrName, byName = false) {
   }
 }
 
-export async function selectProjectById(idOrName, byName = false) {
-  try {
-    if (!idOrName) {
-      console.error(chalk.red('Project ID or name is required'));
-      return;
-    }
-    
-    let project;
-    if (byName) {
-      // Search for project by name
-      project = await getProjectByName(idOrName);
-      if (!project) {
-        console.error(chalk.red(`Project not found with name: ${idOrName}`));
-        return;
-      }
-    } else {
-      // Search by ID
-      project = await getProject(idOrName);
-      if (!project) {
-        console.error(chalk.red(`Project not found with ID: ${idOrName}`));
-        return;
-      }
-    }
-    
-    await setCurrentProject(project);
-    
-    console.log(chalk.green(`✅ Selected project: ${project.name}`));
-    console.log(chalk.blue(`📂 Project Root: ${project.projectRoot}`));
-    
-    // Try to change to the project directory
-    try {
-      process.chdir(project.projectRoot);
-      console.log(chalk.gray(`Working directory changed to: ${project.projectRoot}`));
-    } catch (error) {
-      console.log(chalk.yellow(`⚠️ Could not change to project directory: ${error.message}`));
-    }
-    
-  } catch (error) {
-    console.error(chalk.red('Failed to select project:'), error.message);
-  }
-}
-
-export async function showCurrentProject() {
-  try {
-    const currentProject = await getCurrentProject();
-    
-    if (!currentProject) {
-      console.log(chalk.yellow('No project currently selected'));
-      console.log(chalk.gray('Use "vibekit projects select <id>" to select a project'));
-      return;
-    }
-    
-    console.log(chalk.green(`Current Project: ${currentProject.name}`));
-    console.log(chalk.blue(`Project Root: ${currentProject.projectRoot}`));
-    console.log(chalk.gray(`Project ID: ${currentProject.id}`));
-    
-  } catch (error) {
-    console.error(chalk.red('Failed to show current project:'), error.message);
-  }
-}

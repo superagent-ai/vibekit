@@ -282,7 +282,6 @@ Update development and cleanup scripts:
 1. **Check dependencies**: Ensure no other systems depend on the project
 2. **Consider archiving**: Archive projects instead of deleting for history
 3. **Verify ID**: Double-check the project ID before deletion
-4. **Handle current project**: System handles if deleted project was current
 
 ## Field Validation
 
@@ -316,9 +315,8 @@ Update development and cleanup scripts:
 ### Project Creation Workflow
 
 1. Create project with initial configuration
-2. Set as current project (using `current_project` tool)
-3. Execute setup script if defined
-4. Start development with dev script
+2. Execute setup script if defined
+3. Start development with dev script
 
 ### Project Migration
 
@@ -338,4 +336,3 @@ For multiple related projects:
 ## Related Tools
 
 - [`projects`](/mcp/tools/projects) - List, get, or search projects
-- [`current_project`](/mcp/tools/current-project) - Manage the current active project

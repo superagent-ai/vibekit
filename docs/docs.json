@@ -153,8 +153,7 @@
             "group": "Tools",
             "pages": [
               "mcp/tools/projects",
-              "mcp/tools/project-management",
-              "mcp/tools/current-project"
+              "mcp/tools/project-management"
             ]
           },
           {

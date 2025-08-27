@@ -70,8 +70,7 @@ describe("MCP Server Integration", () => {
     // This test would verify:
     // 1. All project tools work end-to-end
     // 2. Project CRUD operations persist correctly
-    // 3. Current project state is maintained
-    // 4. Search and filtering work correctly
+    // 3. Search and filtering work correctly
 
     expect(true).toBe(true); // Placeholder
   });

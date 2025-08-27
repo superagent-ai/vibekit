@@ -1,12 +1,11 @@
 # @vibe-kit/projects
 
-A lightweight, zero-dependency project management library for VibeKit that provides a simple and efficient way to manage development projects, track the current working project, and maintain project metadata.
+A lightweight, zero-dependency project management library for VibeKit that provides a simple and efficient way to manage development projects and maintain project metadata.
 
 ## Features
 
 - 🚀 **Zero Dependencies** - Uses only native Node.js APIs
 - 📁 **Project Management** - Create, read, update, and delete projects
-- 🎯 **Current Project Tracking** - Track and switch between active projects
 - 💾 **Persistent Storage** - JSON-based storage in `~/.vibekit` directory
 - 🔍 **Multiple Query Methods** - Find projects by ID, name, or path
 - ✅ **Built-in Validation** - Automatic validation of project data
@@ -26,9 +25,7 @@ npm install @vibe-kit/projects
 ```typescript
 import {
   createProject,
-  getAllProjects,
-  setCurrentProjectById,
-  getCurrentProject
+  getAllProjects
 } from '@vibe-kit/projects';
 
 // Create a new project
@@ -43,13 +40,6 @@ const project = await createProject({
 
 // Get all projects
 const projects = await getAllProjects();
-
-// Set current project
-await setCurrentProjectById(project.id);
-
-// Get current project
-const current = await getCurrentProject();
-console.log(`Working on: ${current?.name}`);
 ```
 
 ## API Reference
@@ -118,38 +108,6 @@ Deletes a project by ID. Returns `true` if successful.
 const success = await deleteProject('abc123');
 ```
 
-### Current Project Management
-
-#### `getCurrentProject(): Promise<Project | null>`
-Gets the currently selected project.
-
-```typescript
-const current = await getCurrentProject();
-if (current) {
-  console.log(`Working on: ${current.name}`);
-}
-```
-
-#### `setCurrentProject(project: Project): Promise<void>`
-Sets the current project.
-
-```typescript
-await setCurrentProject(project);
-```
-
-#### `setCurrentProjectById(id: string): Promise<Project | null>`
-Sets the current project by ID.
-
-```typescript
-const project = await setCurrentProjectById('abc123');
-```
-
-#### `clearCurrentProject(): Promise<void>`
-Clears the current project selection.
-
-```typescript
-await clearCurrentProject();
-```
 
 ### Formatting Utilities
 
@@ -293,7 +251,6 @@ interface ProjectsConfig {
 
 All project data is stored in the user's home directory:
 - **Projects Database**: `~/.vibekit/projects.json`
-- **Current Project**: `~/.vibekit/current-project.json`
 
 ## Testing
 
@@ -348,8 +305,7 @@ The package is organized into focused modules:
 1. **Always validate user input** - Use the validation utilities before creating/updating projects
 2. **Handle null returns** - Many functions return `null` when items aren't found
 3. **Use appropriate query methods** - Choose between ID, name, or path lookups based on your use case
-4. **Clean up resources** - Clear the current project when switching contexts
-5. **Check for existence** - Use `pathExists()` to verify paths before operations
+4. **Check for existence** - Use `pathExists()` to verify paths before operations
 
 ## Error Handling
 
@@ -390,6 +346,5 @@ MIT
 ### 0.0.1
 - Initial release
 - Core project management functionality
-- Current project tracking
 - JSON-based storage
 - Zero dependencies implementation

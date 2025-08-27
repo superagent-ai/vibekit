@@ -9,7 +9,6 @@ import fs from 'fs-extra';
 import crypto from 'crypto';
 import SandboxEngine from '../sandbox/sandbox-engine.js';
 import SandboxConfig from '../sandbox/sandbox-config.js';
-import { getCurrentProject } from '../utils/projects.js';
 
 class BaseAgent {
   constructor(agentName, logger, options = {}) {
@@ -104,15 +103,6 @@ class BaseAgent {
   async runWithAnalytics(command, args, executionFunction, executionMode = 'local') {
     const startTime = Date.now();
     
-    // Get current project context for analytics
-    let projectContext = null;
-    try {
-      projectContext = await getCurrentProject();
-    } catch (error) {
-      // No project context available, continue without it
-      console.debug('No current project available for analytics:', error.message);
-    }
-    
     // Always capture optimized file snapshot for full analytics
     let beforeSnapshot;
     let currentSnapshot;
@@ -132,7 +122,7 @@ class BaseAgent {
       }
     };
     
-    const analytics = new Analytics(this.agentName, this.logger, fileChangeCallback, executionMode, projectContext);
+    const analytics = new Analytics(this.agentName, this.logger, fileChangeCallback, executionMode);
     
     // Start periodic logging (every minute by default, configurable via options)
     const logInterval = 60000; // 60 seconds default
