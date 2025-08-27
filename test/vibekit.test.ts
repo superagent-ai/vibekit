@@ -27,11 +27,11 @@ describe("VibeKit SDK", () => {
     type TestAgentResponse = AgentResponse;
     type TestExecuteOptions = ExecuteCommandOptions;
     type TestPrResult = PullRequestResult;
-    
+
     // Example usage to verify types work correctly
     const agentMode: TestAgentMode = "code";
     const provider: TestProvider = "anthropic";
-    
+
     // If this test compiles and runs, all types are properly exported
     expect(agentMode).toBe("code");
     expect(provider).toBe("anthropic");
@@ -142,5 +142,44 @@ describe("VibeKit SDK", () => {
     const secret = output.stdout.trim();
 
     expect(secret).toBe("test");
+  }, 60000);
+
+  it("should stream executeCommand output", async () => {
+    if (skipIfNoVibeKitKeys()) {
+      return skipTest();
+    }
+
+    const e2bProvider = createE2BProvider({
+      apiKey: process.env.E2B_API_KEY!,
+      templateId: "vibekit-claude",
+    });
+
+    const vibeKit = new VibeKit()
+      .withAgent({
+        type: "claude",
+        provider: "anthropic",
+        apiKey: process.env.ANTHROPIC_API_KEY!,
+        model: "claude-sonnet-4-20250514",
+      })
+      .withSandbox(e2bProvider);
+
+    const streamedData: string[] = [];
+    let tokensReceived = 0;
+
+    vibeKit.on("stdout", (data) => {
+      console.log("Received streaming data:", data);
+      streamedData.push(data);
+      tokensReceived++;
+    });
+
+    const result = await vibeKit.executeCommand("echo 'streaming test'");
+
+    await vibeKit.kill();
+
+    console.log(`Total streaming events received: ${tokensReceived}`);
+    console.log(`Final result: ${result.stdout}`);
+
+    expect(streamedData.length).toBeGreaterThan(0);
+    expect(tokensReceived).toBeGreaterThan(0);
   }, 60000);
 });

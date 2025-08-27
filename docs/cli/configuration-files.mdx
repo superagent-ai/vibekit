@@ -5,7 +5,7 @@ description: "Understanding and managing VibeKit CLI configuration files"
 
 ## Overview
 
-VibeKit CLI stores configuration and data in the `~/.vibekit/` directory. These files control sandbox behavior, proxy settings, analytics, and logging preferences.
+VibeKit CLI stores configuration and data in the `~/.vibekit/` directory. These files control sandbox behavior, redaction settings, analytics, and logging preferences.
 
 ## File Locations
 
@@ -36,9 +36,8 @@ Controls VibeKit CLI behavior and features:
   "sandbox": {
     "enabled": false
   },
-  "proxy": {
-    "enabled": true,
-    "redactionEnabled": true
+  "redaction": {
+    "enabled": true
   },
   "analytics": {
     "enabled": true
@@ -59,14 +58,13 @@ Controls VibeKit CLI behavior and features:
 
 When enabled, agents run in Docker containers instead of directly on your system.
 
-#### Proxy Settings
+#### Redaction Settings
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `proxy.enabled` | `boolean` | `true` | Enable proxy server for request logging |
-| `proxy.redactionEnabled` | `boolean` | `true` | Redact PII from logged requests |
+| `redaction.enabled` | `boolean` | `true` | Enable automatic PII redaction from outputs |
 
-The proxy server logs all API requests/responses and can redact sensitive information.
+The redaction system automatically removes sensitive information from agent outputs.
 
 #### Analytics Settings
 
@@ -129,12 +127,12 @@ echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-### Proxy Configuration
+### Network Configuration
 
-Configure proxy settings:
+Configure network settings:
 
 ```bash
-# Use external proxy
+# Use external proxy if needed
 export HTTP_PROXY="http://proxy.example.com:8080"
 export HTTPS_PROXY="http://proxy.example.com:8080"
 

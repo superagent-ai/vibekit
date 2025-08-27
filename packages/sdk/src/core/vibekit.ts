@@ -6,6 +6,8 @@ import type {
   SandboxProvider,
   Conversation,
   LabelOptions,
+  MergePullRequestOptions,
+  MergePullRequestResult,
 } from "../types";
 import { AGENT_TYPES } from "../constants/agents";
 import { AgentResponse, ExecuteCommandOptions, PullRequestResult } from "../agents/base";
@@ -37,7 +39,7 @@ export interface VibeKitOptions {
 
 export class VibeKit extends EventEmitter {
   private options: Partial<VibeKitOptions> = {};
-  private agent?: any;
+  public agent?: any;
 
   constructor() {
     super();
@@ -136,7 +138,6 @@ export class VibeKit extends EventEmitter {
     };
 
     this.agent = new AgentClass(agentConfig);
-
   }
 
   async generateCode({
@@ -179,6 +180,72 @@ export class VibeKit extends EventEmitter {
     }
 
     return this.agent.pushToBranch(branch);
+  }
+
+  async mergePullRequest(
+    options: MergePullRequestOptions
+  ): Promise<MergePullRequestResult> {
+    const { github } = this.options;
+
+    if (!github?.token || !github?.repository) {
+      throw new Error(
+        "GitHub configuration is required for merging pull requests. Please use withGithub() to configure GitHub credentials."
+      );
+    }
+
+    const { pullNumber, commitTitle, commitMessage, mergeMethod = 'merge' } = options;
+
+    if (!pullNumber || typeof pullNumber !== 'number') {
+      throw new Error("Pull request number is required and must be a number");
+    }
+
+    const [owner, repo] = github.repository?.split("/") || [];
+    
+    if (!owner || !repo) {
+      throw new Error("Invalid repository URL format. Expected format: owner/repo");
+    }
+
+    // Merge the pull request using GitHub API directly
+    const mergeResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/merge`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `token ${github.token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          commit_title: commitTitle,
+          commit_message: commitMessage,
+          merge_method: mergeMethod,
+        }),
+      }
+    );
+
+    const responseData = await mergeResponse.json();
+
+    if (!mergeResponse.ok) {
+      // Handle specific error cases
+      if (mergeResponse.status === 404) {
+        throw new Error(`Pull request #${pullNumber} not found in ${github.repository}`);
+      } else if (mergeResponse.status === 405) {
+        throw new Error(`Pull request #${pullNumber} is not mergeable. It may have conflicts or failed status checks.`);
+      } else if (mergeResponse.status === 422) {
+        throw new Error(`Invalid merge parameters: ${responseData.message || 'Unknown validation error'}`);
+      } else {
+        throw new Error(
+          `Failed to merge pull request #${pullNumber}: ${mergeResponse.status} ${responseData.message || mergeResponse.statusText}`
+        );
+      }
+    }
+
+    return {
+      sha: responseData.sha,
+      merged: responseData.merged,
+      message: responseData.message,
+    };
   }
 
   async runTests(): Promise<any> {

@@ -89,6 +89,20 @@ export interface LabelOptions {
   description: string;
 }
 
+// MERGE PULL REQUEST OPTIONS
+export interface MergePullRequestOptions {
+  pullNumber: number;
+  commitTitle?: string;
+  commitMessage?: string;
+  mergeMethod?: 'merge' | 'squash' | 'rebase';
+}
+
+export interface MergePullRequestResult {
+  sha: string;
+  merged: boolean;
+  message: string;
+}
+
 // STREAMING CALLBACKS
 export interface CodexStreamCallbacks {
   onUpdate?: (message: string) => void;

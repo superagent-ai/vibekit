@@ -180,7 +180,7 @@ export abstract class BaseAgent {
   ): AgentCommandConfig;
   protected abstract getDefaultTemplate(): string;
 
-  private async getSandbox(): Promise<SandboxInstance> {
+  public async getSandbox(): Promise<SandboxInstance> {
     if (this.sandboxInstance) return this.sandboxInstance;
 
     if (!this.config.sandboxProvider) {

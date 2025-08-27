@@ -1,5 +1,6 @@
 "use server";
-import { VibeKit, VibeKitConfig } from "@vibe-kit/sdk";
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
 import { fetchMutation } from "convex/nextjs";
 
 import { api } from "@/convex/_generated/api";
@@ -61,26 +62,21 @@ export async function createSessionAction({
 }
 
 export async function deleteSessionAction(sessionId: string) {
-  const config: VibeKitConfig = {
-    agent: {
-      type: "claude",
-      model: {
-        apiKey: process.env.ANTHROPIC_API_KEY!,
-      },
-    },
-    environment: {
-      northflank: {
-        apiKey: process.env.NORTHFLANK_API_KEY!,
-        projectId: process.env.NORTHFLANK_PROJECT_ID!,
-      },
-    },
-    sessionId,
-  };
+  const e2bProvider = createE2BProvider({
+    apiKey: process.env.E2B_API_KEY!,
+    templateId: "vibekit-claude",
+  });
 
-  const vibekit = new VibeKit(config);
+  const vibekit = new VibeKit()
+    .withAgent({
+      type: "claude",
+      provider: "anthropic",
+      apiKey: process.env.ANTHROPIC_API_KEY!,
+      model: "claude-sonnet-4-20250514",
+    })
+    .withSandbox(e2bProvider);
 
   await vibekit.setSession(sessionId);
-
   await vibekit.kill();
 }
 
@@ -99,27 +95,25 @@ export const createPullRequestAction = async ({
     throw new Error("No GitHub token found. Please authenticate first.");
   }
 
-  const config: VibeKitConfig = {
-    agent: {
+  const e2bProvider = createE2BProvider({
+    apiKey: process.env.E2B_API_KEY!,
+    templateId: "vibekit-claude",
+  });
+
+  const vibekit = new VibeKit()
+    .withAgent({
       type: "claude",
-      model: {
-        apiKey: process.env.ANTHROPIC_API_KEY!,
-      },
-    },
-    environment: {
-      northflank: {
-        apiKey: process.env.NORTHFLANK_API_KEY!,
-        projectId: process.env.NORTHFLANK_PROJECT_ID!,
-      },
-    },
-    github: {
+      provider: "anthropic",
+      apiKey: process.env.ANTHROPIC_API_KEY!,
+      model: "claude-sonnet-4-20250514",
+    })
+    .withSandbox(e2bProvider)
+    .withGithub({
       token: session?.accessToken,
       repository,
-    },
-    sessionId,
-  };
+    });
 
-  const vibekit = new VibeKit(config);
+  await vibekit.setSession(sessionId);
 
   const pr = await vibekit.createPullRequest(
     {

@@ -19,6 +19,8 @@ export type {
   VibeKitConfig,
   Conversation,
   LabelOptions,
+  MergePullRequestOptions,
+  MergePullRequestResult,
   CodexStreamCallbacks,
   ClaudeStreamCallbacks,
   OpenCodeStreamCallbacks,

@@ -82,7 +82,40 @@ const result = await vibeKit.generateCode({
 });
 
 await vibeKit.pushToBranch();
-
 ```
 
-This comprehensive GitHub integration allows you to build powerful conversational UIs where users can iteratively request code changes, see them applied in real-time, and create pull requests when they're satisfied with the results.
+## Merging Pull Requests
+
+Once a pull request has been reviewed and approved, you can programmatically merge it using the `mergePullRequest` method. This method only requires GitHub configuration - no agent or sandbox needed:
+
+```typescript
+// Create a simple VibeKit instance with just GitHub config
+const vibekit = new VibeKit()
+  .withGithub({
+    token: process.env.GITHUB_TOKEN,
+    repository: "myorg/myrepo"
+  });
+
+// Merge a pull request with default settings (regular merge)
+const mergeResult = await vibekit.mergePullRequest({
+  pullNumber: 42
+});
+
+console.log(`PR merged! Commit SHA: ${mergeResult.sha}`);
+
+// Or use squash merge with custom commit message
+const squashResult = await vibekit.mergePullRequest({
+  pullNumber: 42,
+  mergeMethod: "squash",
+  commitTitle: "feat: Add user authentication",
+  commitMessage: "Implemented complete authentication flow with validation"
+});
+```
+
+### Merge Methods
+
+- **`merge`** (default): Creates a merge commit with all commits from the feature branch
+- **`squash`**: Squashes all commits into a single commit before merging
+- **`rebase`**: Rebases the commits onto the base branch
+
+This comprehensive GitHub integration allows you to build powerful conversational UIs where users can iteratively request code changes, see them applied in real-time, create pull requests, and merge them programmatically when they're satisfied with the results.

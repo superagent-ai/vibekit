@@ -82,17 +82,13 @@ Unlike other VibeKit providers, Cloudflare sandboxes run exclusively within Clou
 
 ```typescript
 import { VibeKit } from "@vibe-kit/sdk";
-import { createCloudflareProvider, proxyToSandbox } from "@vibe-kit/cloudflare";
+import { createCloudflareProvider } from "@vibe-kit/cloudflare";
 
 // Export the Sandbox class for Durable Objects
 export { Sandbox } from "@cloudflare/sandbox";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // Handle preview URL routing for exposed ports
-    const proxyResponse = await proxyToSandbox(request, env);
-    if (proxyResponse) return proxyResponse;
-
     // Handle VibeKit requests
     if (new URL(request.url).pathname === "/vibekit") {
       const provider = createCloudflareProvider({

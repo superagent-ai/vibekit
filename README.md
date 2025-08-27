@@ -43,17 +43,6 @@ vibekit claude
 
 Looking to integrate VibeKit into your application? Check out these packages:
 
-### [🌐 VibeKit Proxy](https://github.com/superagent-ai/vibekit-proxy)
-The runtime firewall for AI. Blocks OWASP LLM vulnerabilities in real time (prompt injection, data leaks, insecure outputs).
-
-```bash
-# Node
-npm i -g vibekit-proxy
-
-# Rust
-cargo install vibekit-proxy
-```
-
 
 ### [📚 VibeKit SDK](https://github.com/superagent-ai/vibekit/tree/main/packages/sdk)
 Run coding agents in secure sandboxes with full control and monitoring.

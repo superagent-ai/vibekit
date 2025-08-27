@@ -7,7 +7,7 @@
 
 import { connect } from "@dagger.io/dagger";
 import type { Client, Directory } from "@dagger.io/dagger";
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import { promisify } from "util";
 import { readFile } from "fs/promises";
 import { existsSync } from "fs";
@@ -436,6 +436,122 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     command: string,
     options?: SandboxCommandOptions
   ): Promise<SandboxExecutionResult> {
+    // If streaming callbacks are provided, use Docker directly for real-time output
+    if (options?.onStdout || options?.onStderr) {
+      return this.executeCommandWithStreaming(command, options);
+    }
+
+    // Fallback to Dagger for non-streaming execution
+    return this.executeCommandWithDagger(command, options);
+  }
+
+  private async executeCommandWithStreaming(
+    command: string,
+    options: SandboxCommandOptions
+  ): Promise<SandboxExecutionResult> {
+    // Get the image name
+    const image = await this.imageResolver.resolveImage(this.agentType);
+    const timeout = options.timeoutMs || 120000; // 2 minutes default
+
+    // Build Docker run command
+    const dockerArgs = [
+      'run',
+      '--rm',
+      '--workdir', this.workDir || '/vibe0',
+    ];
+
+    // Add environment variables
+    if (this.envs) {
+      for (const [key, value] of Object.entries(this.envs)) {
+        dockerArgs.push('--env', `${key}=${value}`);
+      }
+    }
+
+    // Add volume mount if we have a workspace directory
+    // For now, we'll run without persistent workspace for streaming
+    // This is a trade-off for real-time output
+    dockerArgs.push(image, 'sh', '-c', command);
+
+    return new Promise<SandboxExecutionResult>((resolve, reject) => {
+      this.logger.debug('Starting Docker streaming execution', { command, image });
+
+      const dockerProcess = spawn('docker', dockerArgs, {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let timeoutId: NodeJS.Timeout | null = null;
+
+      // Set up timeout
+      if (timeout > 0) {
+        timeoutId = setTimeout(() => {
+          dockerProcess.kill('SIGTERM');
+          reject(new ContainerExecutionError("Command execution timeout", -1));
+        }, timeout);
+      }
+
+      // Handle stdout streaming
+      dockerProcess.stdout?.on('data', (data: Buffer) => {
+        const chunk = data.toString();
+        stdout += chunk;
+        
+        // Call streaming callback immediately
+        if (options.onStdout) {
+          options.onStdout(chunk);
+        }
+      });
+
+      // Handle stderr streaming
+      dockerProcess.stderr?.on('data', (data: Buffer) => {
+        const chunk = data.toString();
+        stderr += chunk;
+        
+        // Call streaming callback immediately
+        if (options.onStderr) {
+          options.onStderr(chunk);
+        }
+      });
+
+      // Handle process completion
+      dockerProcess.on('close', (exitCode) => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+
+        this.logger.debug('Docker streaming execution completed', { 
+          exitCode, 
+          stdoutLength: stdout.length, 
+          stderrLength: stderr.length 
+        });
+
+        resolve({
+          exitCode: exitCode || 0,
+          stdout,
+          stderr
+        });
+      });
+
+      // Handle process errors
+      dockerProcess.on('error', (error) => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+
+        this.logger.error('Docker streaming execution failed', error);
+        reject(new ContainerExecutionError(
+          `Docker process failed: ${error.message}`,
+          -1,
+          error
+        ));
+      });
+    });
+  }
+
+  private async executeCommandWithDagger(
+    command: string,
+    options?: SandboxCommandOptions
+  ): Promise<SandboxExecutionResult> {
     // Use direct connect instead of connection pool to avoid GraphQL sync issues
     let result: SandboxExecutionResult | null = null;
     
@@ -497,14 +613,6 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
 
           // Save workspace state - await the directory call
           this.workspaceDirectory = await execContainer.directory(this.workDir || "/vibe0");
-
-          // Handle output callbacks
-          if (stdout && options?.onStdout) {
-            this.emitOutput("stdout", stdout, options.onStdout);
-          }
-          if (stderr && options?.onStderr) {
-            this.emitOutput("stderr", stderr, options.onStderr);
-          }
 
           result = { exitCode, stdout, stderr };
         } catch (error) {
