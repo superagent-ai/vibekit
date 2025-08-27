@@ -64,3 +64,26 @@ export interface TaskChangeEvent {
   timestamp: Date;
   data?: any;
 }
+
+// Manual task types for project integration
+export interface ManualSubtask {
+  id: number;
+  title: string;
+  description: string;
+  details?: string;
+  testStrategy?: string;
+  status: TaskStatus;
+  dependencies?: number[];
+}
+
+export interface ManualTask {
+  id: number;
+  title: string;
+  description: string;
+  details?: string;
+  testStrategy?: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  subtasks?: ManualSubtask[];
+  dependencies?: number[];
+}

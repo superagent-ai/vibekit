@@ -126,3 +126,36 @@ export async function deleteProject(id: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * ProjectsManager class for compatibility with existing code
+ */
+export class ProjectsManager {
+  async listProjects(): Promise<Project[]> {
+    return getAllProjects();
+  }
+
+  async getProject(id: string): Promise<Project | null> {
+    return getProject(id);
+  }
+
+  async getProjectByName(name: string): Promise<Project | null> {
+    return getProjectByName(name);
+  }
+
+  async getProjectByPath(projectRoot: string): Promise<Project | null> {
+    return getProjectByPath(projectRoot);
+  }
+
+  async createProject(data: ProjectCreateInput): Promise<Project> {
+    return createProject(data);
+  }
+
+  async updateProject(id: string, updates: ProjectUpdateInput): Promise<Project | null> {
+    return updateProject(id, updates);
+  }
+
+  async deleteProject(id: string): Promise<boolean> {
+    return deleteProject(id);
+  }
+}
+

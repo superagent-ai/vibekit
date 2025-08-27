@@ -16,7 +16,8 @@ export {
   getProjectByPath,
   createProject,
   updateProject,
-  deleteProject
+  deleteProject,
+  ProjectsManager
 } from './manager';
 
 // Storage utilities
