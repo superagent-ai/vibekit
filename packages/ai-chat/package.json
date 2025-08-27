@@ -67,7 +67,7 @@
     "@ai-sdk/anthropic": "^2.0.5",
     "@ai-sdk/react": "^2.0.19",
     "@anthropic-ai/claude-code": "^1.0.85",
-    "@vibe-kit/logger": "file:../logger",
+    "@vibe-kit/logger": "^0.0.1",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-collapsible": "^1.1.11",
     "@radix-ui/react-scroll-area": "^1.2.9",

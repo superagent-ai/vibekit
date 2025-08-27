@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@vibe-kit/projects": "^0.0.1",
-    "@vibe-kit/logger": "file:../logger",
+    "@vibe-kit/logger": "^0.0.1",
     "fastmcp": "^1.27.7",
     "zod": "^3.25.76"
   },
