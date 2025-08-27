@@ -15,9 +15,10 @@
     "scripts": {
         "build": "npm run build --workspaces",
         "build:packages": "npm run build --workspace=@vibe-kit/e2b && npm run build --workspace=@vibe-kit/daytona && npm run build --workspace=@vibe-kit/northflank && npm run build --workspace=@vibe-kit/cloudflare && npm run build --workspace=@vibe-kit/dagger && npm run build --workspace=@vibe-kit/auth && npm run build --workspace=@vibe-kit/logger && npm run build --workspace=@vibe-kit/projects && npm run build --workspace=@vibe-kit/taskmaster && npm run build --workspace=@vibe-kit/mcp-server && npm run build --workspace=@vibe-kit/mcp-client && npm run build --workspace=@vibe-kit/ai-chat && npm run build --workspace=@vibe-kit/sdk && npm run build --workspace=vibekit && npm run build --workspace=@vibe-kit/dashboard",
+        "build:deps": "npm run build --workspace=@vibe-kit/logger && npm run build --workspace=@vibe-kit/projects && npm run build --workspace=@vibe-kit/mcp-client && npm run build --workspace=@vibe-kit/taskmaster && npm run build --workspace=@vibe-kit/ai-chat && npm run build --workspace=@vibe-kit/auth",
         "dev": "npm run dev --workspace=@vibe-kit/sdk",
         "dev:dashboard": "npm run dev --workspace=@vibe-kit/dashboard",
-        "type-check": "npm run build --workspace=@vibe-kit/sdk && npm run build:types --workspace=@vibe-kit/dagger && npm run type-check --workspaces",
+        "type-check": "npm run build:deps && npm run type-check --workspaces",
         "test": "vitest",
         "test:integration": "vitest run -c vitest.integration.config.ts"
     },
