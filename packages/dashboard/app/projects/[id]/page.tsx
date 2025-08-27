@@ -27,7 +27,8 @@ import {
   BarChart3,
   AlertTriangle,
   Trash2,
-  Github
+  Github,
+  Monitor
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ import { DockerStatusIndicator } from "@/components/docker-status-indicator";
 import { ProjectAnalytics } from "@/components/project-analytics";
 import { ProjectSessions } from "@/components/project-sessions";
 import { OpenInEditorButton } from "@/components/ui/open-in-editor-button";
+import { SimplePreviewPanel } from "@/components/preview/simple-preview-panel";
 import type { Project } from "@/lib/projects";
 
 export default function ProjectDetailPage() {
@@ -412,7 +414,7 @@ export default function ProjectDetailPage() {
         {/* Tabbed Content */}
         <Tabs defaultValue={defaultTab} className="space-y-4">
           <div className="overflow-x-auto">
-            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 min-w-max">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-7 min-w-max">
               <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
                 <Info className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">Overview</span>
@@ -428,6 +430,10 @@ export default function ProjectDetailPage() {
               <TabsTrigger value="git" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
                 <GitBranch className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">Git</span>
+              </TabsTrigger>
+              <TabsTrigger value="preview" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Monitor className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Preview</span>
               </TabsTrigger>
               <TabsTrigger value="analytics" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
                 <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -725,6 +731,13 @@ export default function ProjectDetailPage() {
             <ProjectSessions 
               projectId={project.id} 
               projectName={project.name}
+            />
+          </TabsContent>
+
+          <TabsContent value="preview" className="space-y-4">
+            <SimplePreviewPanel 
+              projectId={project.id} 
+              projectRoot={project.projectRoot}
             />
           </TabsContent>
 

@@ -252,6 +252,12 @@ export function middleware(request: NextRequest) {
     "base-uri 'self'",
     "form-action 'self'"
   ];
+
+  // In development, allow preview iframes
+  if (process.env.NODE_ENV !== 'production') {
+    cspDirectives.push("frame-src 'self' http://localhost:* http://127.0.0.1:*");
+    cspDirectives.push("child-src 'self' http://localhost:* http://127.0.0.1:*");
+  }
   
   response.headers.set('Content-Security-Policy', cspDirectives.join('; '));
   

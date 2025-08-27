@@ -115,6 +115,12 @@ async function startServer() {
           "form-action 'self'",                           // Forms can only submit to same origin
           "upgrade-insecure-requests"                     // Upgrade HTTP to HTTPS (though we're localhost)
         ];
+
+        // In development, allow preview iframes
+        if (dev || process.env.NODE_ENV !== 'production') {
+          cspDirectives.push("frame-src 'self' http://localhost:* http://127.0.0.1:*");
+          cspDirectives.push("child-src 'self' http://localhost:* http://127.0.0.1:*");
+        }
         
         // In production, we can be more strict
         if (process.env.NODE_ENV === 'production') {
