@@ -4,10 +4,11 @@ import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { ChevronLeft, ChevronRight, Plus, Check, ExternalLink, Wrench, Users, Code, Search, Database, Zap, Twitter } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Check, ExternalLink, Wrench, Users, Code, Search, Database, Zap, Twitter, Key } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useRouter } from 'next/navigation';
 import { getXAvatarUrl, preloadAvatars } from '../../lib/avatar-utils';
+import { ApiKeyConfigModal } from './api-key-config-modal';
 
 interface MCPServer {
   name: string;
@@ -17,7 +18,13 @@ interface MCPServer {
   xHandle?: string;
   category: string;
   requiresApiKeys?: boolean;
-  envVars?: string[];
+  requiredForTaskmaster?: boolean;
+  envVars?: {
+    essential?: string[];
+    optional?: string[];
+    anyOne?: string[];
+  } | string[];
+  envVarDescriptions?: Record<string, string>;
   config: {
     command: string;
     args: string[];
@@ -65,6 +72,8 @@ export const RecommendedServersCarousel = forwardRef<RecommendedServersCarouselR
   const [installing, setInstalling] = useState<Set<string>>(new Set());
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [selectedServer, setSelectedServer] = useState<{ id: string; server: MCPServer } | null>(null);
 
   useEffect(() => {
     loadRecommendedServers();
@@ -128,10 +137,21 @@ export const RecommendedServersCarousel = forwardRef<RecommendedServersCarouselR
     }
   };
 
-  const installServer = async (serverId: string, server: MCPServer) => {
+  const installServer = async (serverId: string, server: MCPServer, apiKeys?: Record<string, string> | null) => {
     setInstalling(prev => new Set([...prev, serverId]));
     
     try {
+      // Build environment variables if API keys provided
+      const env: Record<string, string> = {};
+      if (apiKeys && apiKeys !== null) {
+        Object.entries(apiKeys).forEach(([key, value]) => {
+          if (value?.trim()) {
+            env[key] = value;
+          }
+        });
+      }
+      // If apiKeys is null, it means use existing environment variables (don't add env field)
+
       // Step 1: Install the server
       const response = await fetch('/api/mcp/servers', {
         method: 'POST',
@@ -143,7 +163,8 @@ export const RecommendedServersCarousel = forwardRef<RecommendedServersCarouselR
           transport: 'stdio',
           config: {
             command: server.config.command,
-            args: server.config.args
+            args: server.config.args,
+            ...(apiKeys !== null && Object.keys(env).length > 0 && { env })
           }
         })
       });
@@ -273,7 +294,12 @@ export const RecommendedServersCarousel = forwardRef<RecommendedServersCarouselR
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            installServer(serverId, server);
+                            if (server.requiresApiKeys) {
+                              setSelectedServer({ id: serverId, server });
+                              setApiKeyModalOpen(true);
+                            } else {
+                              installServer(serverId, server);
+                            }
                           }}
                           disabled={isInstalling}
                           className="h-6 px-3 text-[10px] rounded-full"
@@ -281,6 +307,11 @@ export const RecommendedServersCarousel = forwardRef<RecommendedServersCarouselR
                         >
                           {isInstalling ? (
                             <div className="animate-spin rounded-full h-3 w-3 border border-current border-t-transparent" />
+                          ) : server.requiresApiKeys ? (
+                            <>
+                              <Key className="h-3 w-3 mr-1" />
+                              Configure
+                            </>
                           ) : (
                             <>
                               <Plus className="h-3 w-3 mr-1" />
@@ -307,6 +338,16 @@ export const RecommendedServersCarousel = forwardRef<RecommendedServersCarouselR
           </Button>
         </div>
       </div>
+
+      {/* API Key Configuration Modal */}
+      {selectedServer && (
+        <ApiKeyConfigModal
+          open={apiKeyModalOpen}
+          onOpenChange={setApiKeyModalOpen}
+          server={selectedServer.server}
+          onInstall={(apiKeys) => installServer(selectedServer.id, selectedServer.server, apiKeys)}
+        />
+      )}
     </div>
   );
 });

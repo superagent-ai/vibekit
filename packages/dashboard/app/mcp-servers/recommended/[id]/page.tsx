@@ -29,7 +29,13 @@ interface MCPServer {
   xHandle?: string;
   category: string;
   requiresApiKeys?: boolean;
-  envVars?: string[];
+  requiredForTaskmaster?: boolean;
+  envVars?: {
+    essential?: string[];
+    optional?: string[];
+    anyOne?: string[];
+  } | string[];
+  envVarDescriptions?: Record<string, string>;
   config: {
     command: string;
     args: string[];
@@ -254,7 +260,14 @@ export default function RecommendedServerDetailPage() {
                       <div className="space-y-2">
                         <p className="font-medium">This server requires API keys:</p>
                         <ul className="list-disc list-inside space-y-1">
-                          {server.envVars.map((envVar) => (
+                          {(Array.isArray(server.envVars) 
+                            ? server.envVars 
+                            : [
+                                ...(server.envVars?.essential || []),
+                                ...(server.envVars?.optional || []),
+                                ...(server.envVars?.anyOne || [])
+                              ]
+                          ).map((envVar: string) => (
                             <li key={envVar} className="text-sm">
                               <code className="bg-muted px-1 py-0.5 rounded">{envVar}</code>
                             </li>
@@ -427,7 +440,14 @@ export default function RecommendedServerDetailPage() {
                     This server requires the following API keys to function:
                   </p>
                   <div className="space-y-2">
-                    {server.envVars?.map((envVar) => (
+                    {(Array.isArray(server.envVars) 
+                      ? server.envVars 
+                      : [
+                          ...(server.envVars?.essential || []),
+                          ...(server.envVars?.optional || []),
+                          ...(server.envVars?.anyOne || [])
+                        ]
+                    ).map((envVar: string) => (
                       <div key={envVar} className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-yellow-500" />
                         <code className="text-xs">{envVar}</code>

@@ -1,45 +1,6 @@
 {
-  "description": "Recommended MCP servers that users can easily add to their ~/.vibekit/mcp-servers.json configuration",
+  "description": "Essential MCP servers that users can easily add to their ~/.vibekit/mcp-servers.json configuration",
   "servers": {
-    "time-mcp": {
-      "name": "Time MCP",
-      "description": "Provides time-related functions and utilities for AI assistants",
-      "repository": "https://github.com/yokingma/time-mcp",
-      "url": "https://github.com/yokingma/time-mcp",
-      "xHandle": "@yokingma",
-      "category": "utility",
-      "config": {
-        "command": "npx",
-        "args": ["-y", "time-mcp"],
-        "enabled": true
-      }
-    },
-    "task-master-ai": {
-      "name": "Task Master AI",
-      "description": "Advanced task management and AI coordination system with multi-LLM support",
-      "repository": "https://github.com/eyaltoledano/claude-task-master",
-      "url": "https://github.com/eyaltoledano/claude-task-master",
-      "xHandle": "@taskmasterai",
-      "category": "productivity",
-      "requiresApiKeys": true,
-      "envVars": [
-        "ANTHROPIC_API_KEY",
-        "PERPLEXITY_API_KEY", 
-        "OPENAI_API_KEY",
-        "GOOGLE_API_KEY",
-        "MISTRAL_API_KEY",
-        "GROQ_API_KEY",
-        "OPENROUTER_API_KEY",
-        "XAI_API_KEY",
-        "AZURE_OPENAI_API_KEY",
-        "OLLAMA_API_KEY"
-      ],
-      "config": {
-        "command": "npx",
-        "args": ["-y", "--package=task-master-ai", "task-master-ai"],
-        "enabled": false
-      }
-    },
     "filesystem": {
       "name": "Filesystem Server",
       "description": "Official MCP server for filesystem operations - read, write, and manage files",
@@ -53,95 +14,50 @@
         "enabled": true
       }
     },
-    "git": {
-      "name": "Git Server", 
-      "description": "Official MCP server for Git operations - commit, branch, status, and repository management",
-      "repository": "https://github.com/modelcontextprotocol/servers",
-      "url": "https://modelcontextprotocol.io",
-      "xHandle": "@AnthropicAI",
-      "category": "development",
-      "config": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-git", "--repository", "/path/to/your/repo"],
-        "enabled": true
-      }
-    },
-    "github": {
-      "name": "GitHub Server",
-      "description": "Official MCP server for GitHub API operations - issues, PRs, repositories",
-      "repository": "https://github.com/modelcontextprotocol/servers",
-      "url": "https://modelcontextprotocol.io",
-      "xHandle": "@AnthropicAI", 
-      "category": "development",
+    "task-master-ai": {
+      "name": "Task Master AI",
+      "description": "⚠️ REQUIRED for Taskmaster projects: Task expansion, subtask management, and AI-powered task breakdown. Needs at least ONE API key from any AI provider.",
+      "repository": "https://github.com/eyaltoledano/claude-task-master",
+      "url": "https://github.com/eyaltoledano/claude-task-master",
+      "xHandle": "@taskmasterai",
+      "category": "productivity",
       "requiresApiKeys": true,
-      "envVars": ["GITHUB_PERSONAL_ACCESS_TOKEN"],
+      "requiredForTaskmaster": true,
+      "envVars": {
+        "anyOne": [
+          "ANTHROPIC_API_KEY",
+          "PERPLEXITY_API_KEY",
+          "OPENAI_API_KEY", 
+          "GOOGLE_API_KEY",
+          "MISTRAL_API_KEY",
+          "GROQ_API_KEY",
+          "OPENROUTER_API_KEY",
+          "XAI_API_KEY",
+          "AZURE_OPENAI_API_KEY",
+          "OLLAMA_API_KEY"
+        ]
+      },
+      "envVarDescriptions": {
+        "ANTHROPIC_API_KEY": "Claude AI API key (recommended, most reliable)",
+        "PERPLEXITY_API_KEY": "Perplexity search API key (includes research capabilities)",
+        "OPENAI_API_KEY": "OpenAI API key (for GPT-4, GPT-3.5 models)",
+        "GOOGLE_API_KEY": "Google AI API key (for Gemini models)",
+        "MISTRAL_API_KEY": "Mistral AI API key (for Mistral models)",
+        "GROQ_API_KEY": "Groq API key (fast inference, good for quick tasks)",
+        "OPENROUTER_API_KEY": "OpenRouter API key (access to multiple models)",
+        "XAI_API_KEY": "xAI API key (for Grok models)",
+        "AZURE_OPENAI_API_KEY": "Azure OpenAI API key (enterprise OpenAI)",
+        "OLLAMA_API_KEY": "Ollama API key (for local/self-hosted models)"
+      },
       "config": {
         "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-github"],
-        "enabled": false
-      }
-    },
-    "brave-search": {
-      "name": "Brave Search Server",
-      "description": "Official MCP server for Brave Search API - web search capabilities",
-      "repository": "https://github.com/modelcontextprotocol/servers",
-      "url": "https://modelcontextprotocol.io",
-      "xHandle": "@AnthropicAI",
-      "category": "search",
-      "requiresApiKeys": true,
-      "envVars": ["BRAVE_API_KEY"],
-      "config": {
-        "command": "npx", 
-        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
-        "enabled": false
-      }
-    },
-    "postgres": {
-      "name": "PostgreSQL Server",
-      "description": "Official MCP server for PostgreSQL database operations",
-      "repository": "https://github.com/modelcontextprotocol/servers",
-      "url": "https://modelcontextprotocol.io",
-      "xHandle": "@AnthropicAI",
-      "category": "database",
-      "requiresApiKeys": true,
-      "envVars": ["POSTGRES_CONNECTION_STRING"],
-      "config": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-postgres"],
-        "enabled": false
-      }
-    },
-    "puppeteer": {
-      "name": "Puppeteer Server", 
-      "description": "Official MCP server for web automation and scraping using Puppeteer",
-      "repository": "https://github.com/modelcontextprotocol/servers",
-      "url": "https://modelcontextprotocol.io",
-      "xHandle": "@AnthropicAI",
-      "category": "automation",
-      "config": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
-        "enabled": false
-      }
-    },
-    "slack": {
-      "name": "Slack Server",
-      "description": "Official MCP server for Slack integration - send messages, manage channels",
-      "repository": "https://github.com/modelcontextprotocol/servers",
-      "url": "https://modelcontextprotocol.io",
-      "xHandle": "@AnthropicAI",
-      "category": "productivity", 
-      "requiresApiKeys": true,
-      "envVars": ["SLACK_BOT_TOKEN"],
-      "config": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-slack"],
+        "args": ["-y", "--package=task-master-ai", "task-master-ai"],
         "enabled": false
       }
     }
   },
   "installation": {
-    "instructions": "Copy the desired server configurations from the 'config' field above into your ~/.vibekit/mcp-servers.json file under the 'mcpServers' key. Set 'enabled: true' to activate the server.",
-    "example": "To add time-mcp, copy the config object and add it to your mcp-servers.json like: { \"mcpServers\": { \"time-mcp\": { \"command\": \"npx\", \"args\": [\"-y\", \"time-mcp\"], \"enabled\": true } } }"
+    "instructions": "These are the essential MCP servers for VibeKit. Filesystem provides file operations, and Task Master AI enables advanced project management capabilities.",
+    "example": "Servers can be installed directly from the dashboard using the 'Add' button, or manually added to ~/.vibekit/mcp-servers.json"
   }
 }
