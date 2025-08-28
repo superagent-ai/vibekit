@@ -37,3 +37,14 @@ export class AnthropicProvider implements AIProvider {
     ];
   }
 }
+
+// Factory functions for backward compatibility and testing
+export function createAnthropicProviderWithModel(modelId: string = 'claude-sonnet-4-20250514'): { provider: AnthropicProvider, model: LanguageModel } {
+  const provider = new AnthropicProvider();
+  const model = provider.createModel(modelId);
+  return { provider, model };
+}
+
+export function createClaudeCodeProvider(modelId: string = 'claude-sonnet-4-20250514'): AnthropicProvider {
+  return new AnthropicProvider();
+}

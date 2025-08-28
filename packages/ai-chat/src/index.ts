@@ -30,4 +30,8 @@ export type {
 } from './types';
 
 // Providers (for advanced users)
-export { AnthropicProvider } from './providers';
+export { 
+  AnthropicProvider, 
+  createAnthropicProviderWithModel, 
+  createClaudeCodeProvider 
+} from './providers';
