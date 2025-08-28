@@ -1,0 +1,289 @@
+---
+title: 'updateIssue'
+description: 'Update or close an existing GitHub issue'
+---
+
+## Overview
+
+The `updateIssue` method allows you to programmatically update any aspect of an existing GitHub issue, including closing, reopening, modifying content, and managing labels and assignees. It's particularly useful for automated issue management workflows.
+
+## Method Signature
+
+```typescript
+async updateIssue(
+  issueNumber: number,
+  options: UpdateIssueOptions
+): Promise<IssueResult>
+```
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `issueNumber` | `number` | Yes | The number of the issue to update |
+| `options` | `UpdateIssueOptions` | Yes | Configuration options for the update |
+
+### UpdateIssueOptions
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `title` | `string` | No | Update the title of the issue |
+| `body` | `string` | No | Update the body content of the issue (supports Markdown) |
+| `state` | `'open' \| 'closed'` | No | Change the state of the issue |
+| `state_reason` | `'completed' \| 'not_planned' \| 'reopened'` | No | Reason for state change (when closing/reopening) |
+| `labels` | `string[]` | No | Replace all labels with this array |
+| `assignees` | `string[]` | No | Replace all assignees with this array |
+| `milestone` | `number \| null` | No | Set milestone by number, or null to remove |
+
+### State Reasons
+
+- **`completed`**: Issue was resolved/fixed
+- **`not_planned`**: Issue is valid but won't be addressed
+- **`reopened`**: Previously closed issue is being reopened
+
+## Return Value
+
+### IssueResult
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `number` | The unique identifier of the issue |
+| `number` | `number` | The issue number |
+| `title` | `string` | The updated title of the issue |
+| `body` | `string \| null` | The updated body content |
+| `state` | `'open' \| 'closed'` | The current state of the issue |
+| `state_reason` | `'completed' \| 'not_planned' \| 'reopened' \| null` | The reason for the current state |
+| `html_url` | `string` | The URL to view the issue on GitHub |
+| `user` | `object` | Information about the original issue creator |
+| `labels` | `array` | Array of labels currently applied to the issue |
+| `assignees` | `array` | Array of users currently assigned to the issue |
+| `created_at` | `string` | ISO timestamp when the issue was created |
+| `updated_at` | `string` | ISO timestamp when the issue was last updated |
+| `closed_at` | `string` | ISO timestamp when the issue was closed (if applicable) |
+| `comments` | `number` | Number of comments on the issue |
+| `milestone` | `object` | Current milestone information (if associated) |
+
+## Prerequisites
+
+Before using this method, ensure:
+
+1. **GitHub Configuration**: You only need to configure GitHub credentials:
+   ```typescript
+   vibekit.withGithub({
+     token: "your-github-token",
+     repository: "owner/repo"
+   })
+   ```
+   Note: Unlike code generation methods, `updateIssue` does NOT require agent or sandbox configuration.
+
+2. **Issue Existence**: The issue must exist in the specified repository
+
+3. **Permissions**: The GitHub token must have appropriate repository permissions
+
+## Usage Examples
+
+### Close an Issue
+
+```typescript
+import { VibeKit } from "vibekit";
+
+const vibekit = new VibeKit()
+  .withGithub({
+    token: process.env.GITHUB_TOKEN!,
+    repository: "myorg/myrepo"
+  });
+
+// Close issue as completed
+const updatedIssue = await vibekit.updateIssue(42, {
+  state: "closed",
+  state_reason: "completed"
+});
+
+console.log(`Issue #${updatedIssue.number} closed: ${updatedIssue.html_url}`);
+```
+
+### Update Issue Content
+
+```typescript
+// Update title and body
+const updatedIssue = await vibekit.updateIssue(42, {
+  title: "Updated: Login form validation improvements",
+  body: `## Problem
+The login form validation has been improved.
+
+## Solution
+- Added real-time validation
+- Improved error messages
+- Added accessibility features
+
+## Status
+Ready for testing in staging environment.`
+});
+
+console.log(`Issue updated: ${updatedIssue.title}`);
+```
+
+### Manage Labels and Assignees
+
+```typescript
+// Update labels and assignees
+const updatedIssue = await vibekit.updateIssue(42, {
+  labels: ["bug", "priority-high", "in-progress"],
+  assignees: ["developer1", "qa-tester"]
+});
+
+console.log(`Labels: ${updatedIssue.labels.map(l => l.name).join(', ')}`);
+console.log(`Assignees: ${updatedIssue.assignees.map(a => a.login).join(', ')}`);
+```
+
+### Complete Workflow Examples
+
+```typescript
+// Example 1: Close multiple issues after PR merge
+async function closePRIssues(prNumber: number, relatedIssues: number[]) {
+  for (const issueNumber of relatedIssues) {
+    try {
+      await vibekit.updateIssue(issueNumber, {
+        state: "closed",
+        state_reason: "completed",
+        body: await getCurrentIssueBody(issueNumber) + `\n\n---\nClosed by PR #${prNumber}`
+      });
+      console.log(`Closed issue #${issueNumber}`);
+    } catch (error) {
+      console.error(`Failed to close issue #${issueNumber}:`, error.message);
+    }
+  }
+}
+
+// Example 2: Reopen and reassign issue
+async function escalateIssue(issueNumber: number, assignee: string) {
+  const updatedIssue = await vibekit.updateIssue(issueNumber, {
+    state: "open",
+    state_reason: "reopened", 
+    assignees: [assignee],
+    labels: ["priority-urgent", "escalated"],
+    body: await getCurrentIssueBody(issueNumber) + `\n\n---\n**Issue escalated and reassigned to @${assignee}**`
+  });
+  
+  return updatedIssue;
+}
+
+// Example 3: Progressive issue management
+async function progressIssue(issueNumber: number, stage: 'triage' | 'in-progress' | 'review' | 'done') {
+  const stageConfig = {
+    'triage': {
+      labels: ["needs-triage"],
+      assignees: ["project-manager"]
+    },
+    'in-progress': {
+      labels: ["in-progress"],
+      assignees: ["developer"]
+    },
+    'review': {
+      labels: ["needs-review", "in-progress"],
+      assignees: ["reviewer", "developer"]
+    },
+    'done': {
+      state: "closed" as const,
+      state_reason: "completed" as const,
+      labels: ["completed"]
+    }
+  };
+
+  return await vibekit.updateIssue(issueNumber, stageConfig[stage]);
+}
+```
+
+### Bulk Operations
+
+```typescript
+// Update multiple issues with same labels
+async function bulkLabelIssues(issueNumbers: number[], labels: string[]) {
+  const results = await Promise.allSettled(
+    issueNumbers.map(num => 
+      vibekit.updateIssue(num, { labels })
+    )
+  );
+  
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      console.log(`Updated issue #${issueNumbers[index]}`);
+    } else {
+      console.error(`Failed to update issue #${issueNumbers[index]}:`, result.reason);
+    }
+  });
+}
+
+// Close stale issues
+async function closeStaleIssues(issueNumbers: number[]) {
+  for (const issueNumber of issueNumbers) {
+    try {
+      await vibekit.updateIssue(issueNumber, {
+        state: "closed",
+        state_reason: "not_planned",
+        labels: ["stale", "auto-closed"],
+        body: await getCurrentIssueBody(issueNumber) + `\n\n---\n**Auto-closed due to inactivity**`
+      });
+    } catch (error) {
+      console.error(`Failed to close stale issue #${issueNumber}:`, error.message);
+    }
+  }
+}
+```
+
+### Integration with Code Generation
+
+```typescript
+// Update issue after successful code generation
+async function updateIssueAfterCodegen(issueNumber: number, branchName: string) {
+  const updatedIssue = await vibekit.updateIssue(issueNumber, {
+    labels: ["in-progress", "code-generated"],
+    body: await getCurrentIssueBody(issueNumber) + `\n\n---\n## Progress Update
+Code has been generated and pushed to branch: \`${branchName}\`
+
+**Next Steps:**
+- [ ] Review generated code
+- [ ] Test functionality  
+- [ ] Create pull request
+- [ ] Close issue after merge`
+  });
+  
+  return updatedIssue;
+}
+```
+
+## Error Handling
+
+### Common Error Scenarios
+
+```typescript
+// Handle different error cases
+try {
+  const updatedIssue = await vibekit.updateIssue(999, {
+    state: "closed",
+    state_reason: "completed"
+  });
+} catch (error) {
+  if (error.message.includes('not found')) {
+    console.log('Issue does not exist');
+  } else if (error.message.includes('locked')) {
+    console.log('Issue is locked and cannot be updated');
+  } else if (error.message.includes('Invalid update parameters')) {
+    console.log('Check labels, assignees, and other parameters');
+  } else {
+    console.log('Unexpected error:', error.message);
+  }
+}
+```
+
+## Notes
+
+- The method requires only GitHub configuration - no agent or sandbox setup needed
+- All fields in `UpdateIssueOptions` are optional - only specify fields you want to change
+- Labels array replaces all existing labels - include existing labels if you want to keep them  
+- Assignees array replaces all existing assignees - include existing assignees if you want to keep them
+- Set `milestone` to `null` to remove the milestone from an issue
+- State changes to 'closed' should include an appropriate `state_reason`
+- The updated timestamp is automatically set by GitHub
+- Locked issues cannot be updated and will return a 410 error
+- The response includes the complete updated issue data from GitHub's API

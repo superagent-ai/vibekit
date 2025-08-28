@@ -103,6 +103,59 @@ export interface MergePullRequestResult {
   message: string;
 }
 
+// GITHUB ISSUES
+// Issue creation options
+export interface CreateIssueOptions {
+  title: string;
+  body?: string;
+  labels?: string[];
+  assignees?: string[];
+  milestone?: number;
+}
+
+// Issue update options
+export interface UpdateIssueOptions {
+  title?: string;
+  body?: string;
+  state?: 'open' | 'closed';
+  state_reason?: 'completed' | 'not_planned' | 'reopened';
+  labels?: string[];
+  assignees?: string[];
+  milestone?: number | null;
+}
+
+// Issue result type
+export interface IssueResult {
+  id: number;
+  number: number;
+  title: string;
+  body: string | null;
+  state: 'open' | 'closed';
+  state_reason: 'completed' | 'not_planned' | 'reopened' | null;
+  html_url: string;
+  user: {
+    login: string;
+    avatar_url: string;
+  };
+  labels: Array<{
+    name: string;
+    color: string;
+    description?: string;
+  }>;
+  assignees: Array<{
+    login: string;
+    avatar_url: string;
+  }>;
+  created_at: string;
+  updated_at: string;
+  closed_at?: string;
+  comments: number;
+  milestone?: {
+    number: number;
+    title: string;
+  };
+}
+
 // STREAMING CALLBACKS
 export interface CodexStreamCallbacks {
   onUpdate?: (message: string) => void;

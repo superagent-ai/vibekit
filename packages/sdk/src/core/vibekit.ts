@@ -8,6 +8,9 @@ import type {
   LabelOptions,
   MergePullRequestOptions,
   MergePullRequestResult,
+  CreateIssueOptions,
+  UpdateIssueOptions,
+  IssueResult,
 } from "../types";
 import { AGENT_TYPES } from "../constants/agents";
 import { AgentResponse, ExecuteCommandOptions, PullRequestResult } from "../agents/base";
@@ -246,6 +249,129 @@ export class VibeKit extends EventEmitter {
       merged: responseData.merged,
       message: responseData.message,
     };
+  }
+
+  async createIssue(options: CreateIssueOptions): Promise<IssueResult> {
+    const { github } = this.options;
+
+    if (!github?.token || !github?.repository) {
+      throw new Error(
+        "GitHub configuration is required for creating issues. Please use withGithub() to configure GitHub credentials."
+      );
+    }
+
+    if (!options.title) {
+      throw new Error("Issue title is required");
+    }
+
+    const [owner, repo] = github.repository?.split("/") || [];
+    
+    if (!owner || !repo) {
+      throw new Error("Invalid repository URL format. Expected format: owner/repo");
+    }
+
+    // Create the issue using GitHub API
+    const createResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `token ${github.token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: options.title,
+          body: options.body,
+          labels: options.labels,
+          assignees: options.assignees,
+          milestone: options.milestone,
+        }),
+      }
+    );
+
+    const responseData = await createResponse.json();
+
+    if (!createResponse.ok) {
+      // Handle specific error cases
+      if (createResponse.status === 404) {
+        throw new Error(`Repository ${github.repository} not found`);
+      } else if (createResponse.status === 422) {
+        throw new Error(`Invalid issue parameters: ${responseData.message || 'Unknown validation error'}`);
+      } else {
+        throw new Error(
+          `Failed to create issue: ${createResponse.status} ${responseData.message || createResponse.statusText}`
+        );
+      }
+    }
+
+    return responseData as IssueResult;
+  }
+
+  async updateIssue(
+    issueNumber: number,
+    options: UpdateIssueOptions
+  ): Promise<IssueResult> {
+    const { github } = this.options;
+
+    if (!github?.token || !github?.repository) {
+      throw new Error(
+        "GitHub configuration is required for updating issues. Please use withGithub() to configure GitHub credentials."
+      );
+    }
+
+    if (!issueNumber || typeof issueNumber !== 'number') {
+      throw new Error("Issue number is required and must be a number");
+    }
+
+    const [owner, repo] = github.repository?.split("/") || [];
+    
+    if (!owner || !repo) {
+      throw new Error("Invalid repository URL format. Expected format: owner/repo");
+    }
+
+    // Update the issue using GitHub API
+    const updateResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `token ${github.token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: options.title,
+          body: options.body,
+          state: options.state,
+          state_reason: options.state_reason,
+          labels: options.labels,
+          assignees: options.assignees,
+          milestone: options.milestone,
+        }),
+      }
+    );
+
+    const responseData = await updateResponse.json();
+
+    if (!updateResponse.ok) {
+      // Handle specific error cases
+      if (updateResponse.status === 404) {
+        throw new Error(`Issue #${issueNumber} not found in ${github.repository}`);
+      } else if (updateResponse.status === 422) {
+        throw new Error(`Invalid update parameters: ${responseData.message || 'Unknown validation error'}`);
+      } else if (updateResponse.status === 410) {
+        throw new Error(`Issue #${issueNumber} is locked and cannot be updated`);
+      } else {
+        throw new Error(
+          `Failed to update issue #${issueNumber}: ${updateResponse.status} ${responseData.message || updateResponse.statusText}`
+        );
+      }
+    }
+
+    return responseData as IssueResult;
   }
 
   async runTests(): Promise<any> {

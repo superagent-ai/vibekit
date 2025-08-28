@@ -73,6 +73,8 @@
               "api-reference/create-pull-request",
               "api-reference/merge-pull-request",
               "api-reference/push-to-branch",
+              "api-reference/create-issue",
+              "api-reference/update-issue",
               "api-reference/run-tests",
               "api-reference/kill-sandbox",
               "api-reference/get-host",
