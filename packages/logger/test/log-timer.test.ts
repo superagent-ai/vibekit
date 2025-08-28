@@ -6,17 +6,23 @@ describe('LogTimer', () => {
   let originalNodeEnv: string | undefined;
   let originalTestLogs: string | undefined;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     originalNodeEnv = process.env.NODE_ENV;
     originalTestLogs = process.env.VIBEKIT_TEST_LOGS;
-    setupTestLogging();
     
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    // Set environment variables before setting up mocks
     process.env.NODE_ENV = 'development';
     process.env.VIBEKIT_TEST_LOGS = 'true';
     process.env.LOG_LEVEL = 'DEBUG';
     process.env.LOG_MAX_SIZE = '5000'; // Increase size limit for tests
+    
+    setupTestLogging();
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -33,6 +39,8 @@ describe('LogTimer', () => {
     }
     
     consoleSpy?.mockRestore();
+    consoleWarnSpy?.mockRestore();
+    consoleErrorSpy?.mockRestore();
   });
 
   describe('timer creation', () => {
@@ -103,9 +111,9 @@ describe('LogTimer', () => {
       const duration = timer.stopWithError(error, { retries: 3 });
       
       expect(duration).toBeGreaterThanOrEqual(0);
-      expect(consoleSpy).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
       
-      const logCall = consoleSpy.mock.calls[0][0];
+      const logCall = consoleErrorSpy.mock.calls[0][0];
       expect(logCall).toContain('[ERROR]');
       expect(logCall).toContain('operation failed');
       expect(logCall).toContain('retries');
@@ -118,9 +126,9 @@ describe('LogTimer', () => {
       const duration = timer.stopWithWarning({ reason: 'slow operation' });
       
       expect(duration).toBeGreaterThanOrEqual(0);
-      expect(consoleSpy).toHaveBeenCalledTimes(1);
+      expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
       
-      const logCall = consoleSpy.mock.calls[0][0];
+      const logCall = consoleWarnSpy.mock.calls[0][0];
       expect(logCall).toContain('[WARN]');
       expect(logCall).toContain('reason');
     });
@@ -261,9 +269,9 @@ describe('LogTimer', () => {
       timer.stop(LogLevel.DEBUG);
       expect(consoleSpy).toHaveBeenCalledTimes(0);
       
-      // Error level timer stop should log
+      // Error level timer stop should log to console.error
       timer.stop(LogLevel.ERROR);
-      expect(consoleSpy).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should suppress timer logs in test environment by default', () => {

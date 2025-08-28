@@ -243,7 +243,7 @@ describe('Test Utils', () => {
       mockLogger.debug('test message');
       
       // Should be vitest mock functions
-      expect(mockLogger.debug).toHaveBeenCalledWith('test message', undefined);
+      expect(mockLogger.debug).toHaveBeenCalledWith('test message');
       expect(mockLogger.debug).toHaveBeenCalledTimes(1);
       
       mockLogger.info('info message', { data: 'test' });

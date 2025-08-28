@@ -57,7 +57,8 @@ export const getLoggerConfig = (): LoggerConfig => {
 export const shouldLog = (level: LogLevel, config?: LoggerConfig): boolean => {
   const logConfig = config || getLoggerConfig();
   
-  // Check log level
+  // Check log level - lower numeric values are MORE severe
+  // ERROR(0) should always log, DEBUG(3) only when level >= DEBUG
   if (level > logConfig.level) {
     return false;
   }

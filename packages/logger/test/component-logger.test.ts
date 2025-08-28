@@ -9,8 +9,13 @@ describe('ComponentLogger', () => {
   beforeEach(() => {
     originalNodeEnv = process.env.NODE_ENV;
     originalTestLogs = process.env.VIBEKIT_TEST_LOGS;
-    setupTestLogging();
+    
+    // Set common environment variables before setup
+    process.env.NODE_ENV = 'development';
+    process.env.VIBEKIT_TEST_LOGS = 'true';
     process.env.LOG_MAX_SIZE = '5000'; // Increase size limit for tests
+    
+    setupTestLogging();
   });
 
   afterEach(() => {
@@ -30,8 +35,6 @@ describe('ComponentLogger', () => {
   describe('component context', () => {
     it('should include component name in context', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
       
       const logger = createLogger('test-component');
       logger.info('test message');
@@ -45,8 +48,6 @@ describe('ComponentLogger', () => {
 
     it('should merge additional context', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
       
       const logger = createLogger('test-component');
       logger.info('test message', { requestId: '123', userId: 'user456' });
@@ -62,8 +63,6 @@ describe('ComponentLogger', () => {
 
     it('should create logger with base context', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
       
       const logger = createLogger('test-component', { sessionId: 'session123' });
       logger.info('test message');
@@ -79,8 +78,6 @@ describe('ComponentLogger', () => {
     it('should support debug logging', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       process.env.LOG_LEVEL = 'DEBUG';
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
       
       const logger = createLogger('test');
       logger.debug('debug message', { data: 'test' });
@@ -94,9 +91,6 @@ describe('ComponentLogger', () => {
     it('should support info logging', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       process.env.LOG_LEVEL = 'INFO';
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
-      process.env.LOG_MAX_SIZE = '5000';
       
       const logger = createLogger('test');
       logger.info('info message', { data: 'test' });
@@ -108,11 +102,8 @@ describe('ComponentLogger', () => {
     });
 
     it('should support warn logging', () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       process.env.LOG_LEVEL = 'WARN';
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
-      process.env.LOG_MAX_SIZE = '5000';
       
       const logger = createLogger('test');
       logger.warn('warn message', undefined, { data: 'test' });
@@ -124,11 +115,8 @@ describe('ComponentLogger', () => {
     });
 
     it('should support warn logging with error', () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       process.env.LOG_LEVEL = 'WARN';
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
-      process.env.LOG_MAX_SIZE = '5000';
       
       const logger = createLogger('test');
       const error = new Error('test error');
@@ -142,11 +130,8 @@ describe('ComponentLogger', () => {
     });
 
     it('should support error logging', () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       process.env.LOG_LEVEL = 'ERROR';
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
-      process.env.LOG_MAX_SIZE = '5000';
       
       const logger = createLogger('test');
       const error = new Error('test error');
@@ -172,8 +157,6 @@ describe('ComponentLogger', () => {
     it('should include additional context in timer', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       process.env.LOG_LEVEL = 'DEBUG';
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
       
       const logger = createLogger('test-component', { sessionId: 'session123' });
       const timer = logger.timer('test-operation', { requestId: 'req456' });
@@ -203,8 +186,6 @@ describe('ComponentLogger', () => {
 
     it('should merge contexts correctly', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
       
       const logger = createLogger('test-component', { sessionId: 'session123' });
       const childLogger = logger.withContext({ requestId: 'req456', userId: 'user789' });
@@ -222,8 +203,6 @@ describe('ComponentLogger', () => {
 
     it('should override base context when keys conflict', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
       
       const logger = createLogger('test-component', { sessionId: 'session123' });
       const childLogger = logger.withContext({ sessionId: 'session456' });
@@ -250,9 +229,8 @@ describe('ComponentLogger', () => {
     });
 
     it('should handle null error objects', () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      process.env.LOG_LEVEL = 'ERROR';
       
       const logger = createLogger('test');
       logger.error('error message', null);
@@ -263,9 +241,8 @@ describe('ComponentLogger', () => {
     });
 
     it('should handle non-Error objects as errors', () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      process.env.NODE_ENV = 'development';
-      process.env.VIBEKIT_TEST_LOGS = 'true';
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      process.env.LOG_LEVEL = 'ERROR';
       
       const logger = createLogger('test');
       logger.error('error message', { custom: 'error object' });

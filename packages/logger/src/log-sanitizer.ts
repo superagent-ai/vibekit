@@ -9,23 +9,25 @@
  * Patterns for detecting sensitive data
  */
 const SENSITIVE_PATTERNS = [
-  // API Keys and Tokens
-  { pattern: /sk-ant-[a-zA-Z0-9_-]+/gi, name: 'anthropic_api_key' },
-  { pattern: /sk-[a-zA-Z0-9_-]{20,}/gi, name: 'openai_api_key' },
-  { pattern: /gsk_[a-zA-Z0-9_-]+/gi, name: 'groq_api_key' },
-  { pattern: /AIza[a-zA-Z0-9_-]{35}/gi, name: 'google_api_key' },
+  // Specific API Keys and Tokens first - match just the key part
+  { pattern: /\bsk-ant-[a-zA-Z0-9_-]+/gi, name: 'anthropic_api_key' },
+  { pattern: /\bsk-[a-zA-Z0-9_-]{20,}/gi, name: 'openai_api_key' },
+  { pattern: /\bgsk_[a-zA-Z0-9_-]+/gi, name: 'groq_api_key' },
+  { pattern: /\bAIza[a-zA-Z0-9_-]{20,}/gi, name: 'google_api_key' },
+  { pattern: /\bghp_[a-zA-Z0-9]{20,}/gi, name: 'github_pat' },
+  { pattern: /\bgho_[a-zA-Z0-9]{20,}/gi, name: 'github_oauth' },
+  { pattern: /\bghu_[a-zA-Z0-9]{20,}/gi, name: 'github_user' },
   { pattern: /xoxb-[a-zA-Z0-9_-]+/gi, name: 'slack_bot_token' },
   { pattern: /xoxp-[a-zA-Z0-9_-]+/gi, name: 'slack_user_token' },
   
-  // OAuth and Bearer tokens
+  // Generic OAuth and Bearer tokens (after specific patterns)
   { pattern: /Bearer\s+[a-zA-Z0-9_.-]+/gi, name: 'bearer_token' },
   { pattern: /token["\s:=]+[a-zA-Z0-9_.-]+/gi, name: 'generic_token' },
   { pattern: /oauth["\s:=]+[a-zA-Z0-9_.-]+/gi, name: 'oauth_token' },
   
-  // Passwords and secrets
-  { pattern: /password["\s:=]+[^,}\s"']+/gi, name: 'password' },
+  // Passwords and secrets - match the value part only
+  { pattern: /password=["']?[^,}\s"']+["']?/gi, name: 'password' },
   { pattern: /secret["\s:=]+[^,}\s"']+/gi, name: 'secret' },
-  { pattern: /key["\s:=]+[^,}\s"']+/gi, name: 'key' },
   
   // Database connection strings
   { pattern: /mongodb:\/\/[^,}\s"']+/gi, name: 'mongodb_uri' },
@@ -35,11 +37,6 @@ const SENSITIVE_PATTERNS = [
   // AWS credentials
   { pattern: /AKIA[0-9A-Z]{16}/gi, name: 'aws_access_key' },
   { pattern: /aws_secret_access_key["\s:=]+[^,}\s"']+/gi, name: 'aws_secret' },
-  
-  // GitHub tokens
-  { pattern: /ghp_[a-zA-Z0-9]{36}/gi, name: 'github_pat' },
-  { pattern: /gho_[a-zA-Z0-9]{36}/gi, name: 'github_oauth' },
-  { pattern: /ghu_[a-zA-Z0-9]{36}/gi, name: 'github_user' },
   
   // Email addresses (optional, can be disabled)
   { pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, name: 'email', optional: true },

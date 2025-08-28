@@ -127,8 +127,8 @@ describe('Log Sanitizer', () => {
       
       const result = sanitizeObject(input);
       
-      expect(result.config.auth.token).toBe('[REDACTED]');
-      expect(result.config.auth.user).toBe('username');
+      // auth is a sensitive field name, so the entire auth object is redacted
+      expect(result.config.auth).toBe('[REDACTED]');
     });
 
     it('should handle arrays', () => {
@@ -222,9 +222,14 @@ describe('Log Sanitizer', () => {
     });
 
     it('should handle errors gracefully', () => {
-      // Create an object that might cause issues during sanitization
-      const problematic = Object.create(null);
-      problematic.toString = () => { throw new Error('toString failed'); };
+      // Create a function that throws when toString is called
+      const problematicFunc = () => {};
+      problematicFunc.toString = () => { throw new Error('toString failed'); };
+      
+      // Wrap it in an object so it goes through sanitizeObject
+      const problematic = {
+        badFunc: problematicFunc
+      };
       
       const result = sanitizeLogData(problematic);
       

@@ -44,7 +44,6 @@ export interface LogEntry {
 export class StructuredLogger {
   private static instance: StructuredLogger;
   private readonly config: LoggerConfig;
-  private readonly environment: 'development' | 'production' | 'test';
   
   // ANSI color codes for console output
   private static readonly COLORS: Record<string, string> = {
@@ -57,8 +56,14 @@ export class StructuredLogger {
   private static readonly RESET_COLOR = '\x1b[0m';
   
   private constructor(config?: LoggerConfig) {
-    this.environment = (process.env.NODE_ENV as 'development' | 'production' | 'test') || 'development';
     this.config = config || getLoggerConfig();
+  }
+  
+  /**
+   * Get current environment
+   */
+  private getEnvironment(): 'development' | 'production' | 'test' {
+    return (process.env.NODE_ENV as 'development' | 'production' | 'test') || 'development';
   }
   
   /**
@@ -69,6 +74,13 @@ export class StructuredLogger {
       StructuredLogger.instance = new StructuredLogger();
     }
     return StructuredLogger.instance;
+  }
+  
+  /**
+   * Clear singleton instance (for testing)
+   */
+  static clearInstance(): void {
+    StructuredLogger.instance = undefined as any;
   }
   
   /**
@@ -83,18 +95,23 @@ export class StructuredLogger {
    */
   log(level: LogLevel, message: string, context: LogContext = {}): void {
     // In test environment, suppress logs unless explicitly enabled
-    if (this.environment === 'test' && !process.env.VIBEKIT_TEST_LOGS) {
+    const environment = this.getEnvironment();
+    if (environment === 'test' && !process.env.VIBEKIT_TEST_LOGS) {
       return;
     }
     
     // Check if this log level should be output
-    if (!shouldLog(level, this.config)) {
+    // Use fresh config to support dynamic LOG_LEVEL changes in tests
+    if (!shouldLog(level)) {
       return;
     }
     
+    // Get fresh config for dynamic changes
+    const currentConfig = getLoggerConfig();
+    
     // Sanitize message and context
-    const sanitizedMessage = this.config.sanitize ? sanitizeMessage(message) : message;
-    const sanitizedContext = this.config.sanitize ? sanitizeLogData(context) : context;
+    const sanitizedMessage = currentConfig.sanitize ? sanitizeMessage(message) : message;
+    const sanitizedContext = currentConfig.sanitize ? sanitizeLogData(context) : context;
     
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
@@ -116,29 +133,29 @@ export class StructuredLogger {
     }
     
     // Output to console
-    this.outputToConsole(entry);
+    this.outputToConsole(entry, currentConfig);
   }
   
   /**
    * Output formatted log to console
    */
-  private outputToConsole(entry: LogEntry): void {
+  private outputToConsole(entry: LogEntry, config: LoggerConfig): void {
     const levelName = entry.level;
     const color = StructuredLogger.COLORS[levelName];
     const logString = JSON.stringify(entry);
     
     // Enforce size limits
-    if (logString.length > this.config.maxSize) {
+    if (logString.length > config.maxSize) {
       const truncated = {
         ...entry,
-        message: entry.message.substring(0, Math.floor(this.config.maxSize / 2)),
+        message: entry.message.substring(0, Math.floor(config.maxSize / 2)),
         context: { ...entry.context, _truncated: true, _originalSize: logString.length },
       };
       console.error(JSON.stringify(truncated));
       return;
     }
     
-    if (this.environment === 'development') {
+    if (this.getEnvironment() === 'development') {
       // Human-readable format for development
       const timestamp = entry.timestamp.substring(11, 23); // HH:mm:ss.SSS
       const componentTag = entry.context.component ? `[${entry.context.component}]` : '';
@@ -150,9 +167,19 @@ export class StructuredLogger {
         ? `\n${entry.error.stack || entry.error.message}`
         : '';
       
-      console.log(
-        `${color}${timestamp} [${levelName}]${StructuredLogger.RESET_COLOR} ${componentTag} ${entry.message}${contextStr}${errorStr}`
-      );
+      // Use appropriate console method based on level
+      const logMessage = `${color}${timestamp} [${levelName}]${StructuredLogger.RESET_COLOR} ${componentTag} ${entry.message}${contextStr}${errorStr}`;
+      switch (entry.level) {
+        case 'ERROR':
+          console.error(logMessage);
+          break;
+        case 'WARN':
+          console.warn(logMessage);
+          break;
+        default:
+          console.log(logMessage);
+          break;
+      }
     } else {
       // JSON format for production - emit to appropriate console method
       switch (entry.level) {
