@@ -3,8 +3,6 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     setupFiles: ["./test/setup.ts"],
-    // Default to node environment
-    environment: 'node',
     env: {
       // Ensure environment variables are loaded
       dotenv: '.env'
