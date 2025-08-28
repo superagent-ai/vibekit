@@ -33,7 +33,8 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@vibe-kit/logger": "^0.0.1",
-    "chokidar": "^3.5.3",
+    "anymatch": "^3.1.3",
+    "chokidar": "^4.0.3",
     "eventemitter3": "^5.0.1"
   },
   "devDependencies": {

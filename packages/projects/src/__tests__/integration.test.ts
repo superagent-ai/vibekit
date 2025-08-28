@@ -1,8 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import type { ProjectCreateInput } from '../types';
+
+// Mock fs module
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    promises: actual.promises
+  };
+});
 
 // Mock the constants module to use our test directory
 vi.mock('../constants', () => {
