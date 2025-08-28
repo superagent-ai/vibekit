@@ -71,6 +71,7 @@
     "@types/react-dom": "^19",
     "@vibe-kit/ai-chat": "^0.0.1",
     "@vibe-kit/mcp-client": "^0.0.1",
+    "@vibe-kit/preview": "workspace:*",
     "@vibe-kit/projects": "^0.0.1",
     "@vibe-kit/taskmaster": "^0.0.1",
     "@xyflow/react": "^12.8.3",

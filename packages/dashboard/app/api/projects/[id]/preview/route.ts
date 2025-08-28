@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createLogger } from '@vibe-kit/logger';
-import { DevServerManager } from '@/lib/preview/dev-server-manager';
+import { PreviewService } from '@vibe-kit/preview';
 
 const logger = createLogger('PreviewAPI');
 
@@ -14,10 +14,10 @@ export async function GET(
 ) {
   const { id: projectId } = await params;
   try {
-    const devServerManager = DevServerManager.getInstance();
+    const previewService = new PreviewService();
     
-    const instance = await devServerManager.getServerInstance(projectId);
-    const status = await devServerManager.getServerStatus(projectId);
+    const status = await previewService.getServerStatus(projectId);
+    const instance = status; // getServerStatus returns the full instance
     
     logger.debug('Retrieved dev server status', { projectId, status, hasInstance: !!instance });
     
@@ -49,9 +49,9 @@ export async function DELETE(
 ) {
   const { id: projectId } = await params;
   try {
-    const devServerManager = DevServerManager.getInstance();
+    const previewService = new PreviewService();
     
-    await devServerManager.stopDevServer(projectId);
+    await previewService.stopServer(projectId);
     
     logger.info('Dev server stopped', { projectId });
     

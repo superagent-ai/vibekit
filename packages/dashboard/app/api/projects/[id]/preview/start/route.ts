@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createLogger } from '@vibe-kit/logger';
-import { DevServerManager } from '@/lib/preview/dev-server-manager';
+import { PreviewService } from '@vibe-kit/preview';
 
 const logger = createLogger('PreviewStartAPI');
 
@@ -34,12 +34,12 @@ export async function POST(
       }
     }
     
-    const devServerManager = DevServerManager.getInstance();
+    const previewService = new PreviewService();
     
     logger.info('Starting dev server', { projectId, projectRoot, customPort });
     
     // Start the dev server with optional custom port
-    const instance = await devServerManager.startDevServer(projectId, projectRoot, customPort);
+    const instance = await previewService.startServer(projectId, projectRoot, customPort);
     
     logger.info('Dev server started successfully', { 
       projectId,

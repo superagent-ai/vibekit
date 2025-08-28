@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createLogger } from '@vibe-kit/logger';
-import { DevServerManager } from '@/lib/preview/dev-server-manager';
+import { PreviewService } from '@vibe-kit/preview';
 
 const logger = createLogger('PreviewActivityAPI');
 
@@ -14,10 +14,10 @@ export async function POST(
 ) {
   const { id: projectId } = await params;
   try {
-    const devServerManager = DevServerManager.getInstance();
+    const previewService = new PreviewService();
     
     // Update server activity
-    devServerManager.updateServerActivity(projectId);
+    await previewService.updateActivity(projectId);
     
     return NextResponse.json({
       success: true,

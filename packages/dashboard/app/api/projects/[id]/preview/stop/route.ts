@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createLogger } from '@vibe-kit/logger';
-import { DevServerManager } from '@/lib/preview/dev-server-manager';
+import { PreviewService } from '@vibe-kit/preview';
 
 const logger = createLogger('PreviewStopAPI');
 
@@ -14,11 +14,11 @@ export async function POST(
 ) {
   const { id: projectId } = await params;
   try {
-    const devServerManager = DevServerManager.getInstance();
+    const previewService = new PreviewService();
     
     logger.info('Stopping dev server', { projectId });
     
-    await devServerManager.stopDevServer(projectId);
+    await previewService.stopServer(projectId);
     
     logger.info('Dev server stopped successfully', { projectId });
     
