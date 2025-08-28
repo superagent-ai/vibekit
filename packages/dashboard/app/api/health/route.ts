@@ -8,6 +8,7 @@ import { AgentAnalytics } from '@/lib/agent-analytics';
 import { healthCheck } from '@/lib/health-check';
 import { memoryMonitor } from '@/lib/memory-monitor';
 import { shutdownCoordinator } from '@/lib/shutdown-coordinator';
+import { getMonitorService } from '@/lib/monitor-instance';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
@@ -264,6 +265,34 @@ export async function GET(request: NextRequest): Promise<Response> {
       console.warn('Analytics check failed:', error);
       components.push({
         name: 'Analytics',
+        status: 'warning',
+        message: 'Service not available',
+        errors: [error instanceof Error ? error.message : String(error)],
+        lastCheck: Date.now()
+      });
+    }
+    
+    // Check MonitorService
+    try {
+      const monitor = await getMonitorService();
+      const monitorHealth = await monitor.checkHealth();
+      
+      components.push({
+        name: 'Performance Monitor',
+        status: monitorHealth.status === 'healthy' ? 'healthy' : 
+                monitorHealth.status === 'degraded' ? 'warning' : 'error',
+        message: `MonitorService ${monitorHealth.status}`,
+        details: {
+          uptime: monitorHealth.uptime,
+          components: monitorHealth.components.length,
+          metrics: monitorHealth.metrics
+        },
+        lastCheck: Date.now()
+      });
+    } catch (error) {
+      console.warn('MonitorService check failed:', error);
+      components.push({
+        name: 'Performance Monitor',
         status: 'warning',
         message: 'Service not available',
         errors: [error instanceof Error ? error.message : String(error)],

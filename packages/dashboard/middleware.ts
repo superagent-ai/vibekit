@@ -50,6 +50,9 @@ if (typeof globalThis !== 'undefined' && !globalThis.rateLimitCleanupInterval) {
 }
 
 export function middleware(request: NextRequest) {
+  // Start monitoring timer
+  const startTime = Date.now();
+  
   // Get configuration
   const securityConfig = getConfigSection('security');
   const rateLimitConfig = getConfigSection('rateLimit');
@@ -279,6 +282,34 @@ export function middleware(request: NextRequest) {
   const acceptEncoding = request.headers.get('accept-encoding');
   if (acceptEncoding?.includes('gzip') && !response.headers.get('content-encoding')) {
     response.headers.set('Accept-Encoding', 'gzip, deflate, br');
+  }
+  
+  // Record request metrics asynchronously (don't block response)
+  const shouldMonitor = !pathname.startsWith('/_next') && 
+                       !pathname.includes('/api/monitoring/activity') &&
+                       !pathname.includes('favicon.ico');
+  
+  if (shouldMonitor) {
+    // Use Promise.resolve().then() instead of setImmediate for Edge Runtime compatibility
+    Promise.resolve().then(async () => {
+      try {
+        const { getMonitorService } = await import('@/lib/monitor-instance');
+        const monitor = await getMonitorService();
+        const duration = Date.now() - startTime;
+        
+        monitor.recordRequest({
+          timestamp: startTime,
+          method: request.method,
+          path: pathname,
+          statusCode: response.status,
+          duration,
+          size: 0, // Not easily available in Next.js middleware
+        });
+      } catch (error) {
+        // Silently ignore monitoring errors to avoid impacting requests
+        console.debug('Monitoring error:', error);
+      }
+    });
   }
   
   return response;

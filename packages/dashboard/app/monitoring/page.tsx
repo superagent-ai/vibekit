@@ -598,7 +598,7 @@ export default function MonitoringPage() {
             </Card>
 
             {/* Performance Metrics - New addition */}
-            {dashboardData?.performance?.performance && (
+            {dashboardData?.performance?.performance?.requests && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -623,7 +623,7 @@ export default function MonitoringPage() {
                               <p>Total number of HTTP requests processed</p>
                             </TooltipContent>
                           </Tooltip>
-                          <span>{dashboardData.performance.performance.requests.total}</span>
+                          <span>{dashboardData.performance?.performance?.requests?.total || 0}</span>
                         </div>
                         <div className="flex justify-between">
                           <Tooltip>
@@ -634,7 +634,7 @@ export default function MonitoringPage() {
                               <p>Average response time across all requests</p>
                             </TooltipContent>
                           </Tooltip>
-                          <span className="font-mono">{dashboardData.performance.performance.requests.avgDuration}</span>
+                          <span className="font-mono">{dashboardData.performance?.performance?.requests?.avgDuration || '0ms'}</span>
                         </div>
                         <div className="flex justify-between">
                           <Tooltip>
@@ -645,7 +645,7 @@ export default function MonitoringPage() {
                               <p>95th percentile response time (95% of requests are faster)</p>
                             </TooltipContent>
                           </Tooltip>
-                          <span className="font-mono">{dashboardData.performance.performance.requests.p95}</span>
+                          <span className="font-mono">{dashboardData.performance?.performance?.requests?.p95 || '0ms'}</span>
                         </div>
                         <div className="flex justify-between">
                           <Tooltip>
@@ -656,7 +656,7 @@ export default function MonitoringPage() {
                               <p>Percentage of requests that resulted in errors</p>
                             </TooltipContent>
                           </Tooltip>
-                          <span className="font-mono">{dashboardData.performance.performance.requests.errorRate}</span>
+                          <span className="font-mono">{dashboardData.performance?.performance?.requests?.errorRate || '0%'}</span>
                         </div>
                       </div>
                     </div>
@@ -673,7 +673,7 @@ export default function MonitoringPage() {
                               <p>Current CPU usage percentage</p>
                             </TooltipContent>
                           </Tooltip>
-                          <span className="font-mono">{dashboardData.performance.performance.resources.cpu}</span>
+                          <span className="font-mono">{dashboardData.performance?.performance?.resources?.cpu || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <Tooltip>
@@ -684,7 +684,7 @@ export default function MonitoringPage() {
                               <p>Current memory usage percentage</p>
                             </TooltipContent>
                           </Tooltip>
-                          <span className="font-mono">{dashboardData.performance.performance.resources.memory}</span>
+                          <span className="font-mono">{dashboardData.performance?.performance?.resources?.memory || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <Tooltip>
@@ -695,7 +695,7 @@ export default function MonitoringPage() {
                               <p>Event loop delay indicating Node.js performance</p>
                             </TooltipContent>
                           </Tooltip>
-                          <span className="font-mono">{dashboardData.performance.performance.resources.eventLoopLag}</span>
+                          <span className="font-mono">{dashboardData.performance?.performance?.resources?.eventLoopLag || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <Tooltip>
@@ -706,7 +706,7 @@ export default function MonitoringPage() {
                               <p>Number of active handles (file descriptors, sockets, etc.)</p>
                             </TooltipContent>
                           </Tooltip>
-                          <span>{dashboardData.performance.performance.resources.activeHandles}</span>
+                          <span>{dashboardData.performance?.performance?.resources?.activeHandles || 0}</span>
                         </div>
                       </div>
                     </div>

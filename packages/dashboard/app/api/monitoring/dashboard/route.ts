@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { executionHistoryManager } from '@/lib/execution-history-manager';
 import { SessionManager } from '@/lib/session-manager';
 import { SessionRecovery } from '@/lib/session-recovery';
-import { getPerformanceDashboard } from '@/lib/performance-monitor';
+import { getMonitorService } from '@/lib/monitor-instance';
 
 interface DashboardData {
   overview: {
@@ -77,12 +77,68 @@ export async function GET(request: NextRequest): Promise<Response> {
     // Generate alerts
     const alerts = await generateAlerts(stats, sessionStats, recoveryStats);
     
-    // Get performance metrics if available
-    let performanceMetrics;
+    // Get performance metrics from MonitorService with fallback
+    let performanceMetrics = {
+      performance: {
+        requests: {
+          total: 0,
+          avgDuration: '0.00ms',
+          p50: '0.00ms',
+          p90: '0.00ms',
+          p95: '0.00ms',
+          p99: '0.00ms',
+          throughput: '0.00 req/s',
+          errorRate: '0.00%',
+        },
+        resources: {
+          cpu: 'N/A',
+          memory: 'N/A',
+          heapUsed: '0.00MB',
+          eventLoopLag: 'N/A',
+          activeHandles: 0,
+        },
+        bottlenecks: [],
+        slowestEndpoints: [],
+      },
+      uptime: Date.now() - process.uptime() * 1000,
+    };
+    
     try {
-      performanceMetrics = getPerformanceDashboard();
+      const monitor = await getMonitorService();
+      const perfMetrics = monitor.getPerformanceMetrics();
+      const memoryMetrics = monitor.getMemoryUsage();
+      
+      performanceMetrics = {
+        performance: {
+          requests: {
+            total: perfMetrics.requestsPerSecond > 0 ? Math.round(perfMetrics.requestsPerSecond * 60) : 0, // Estimate total based on RPS
+            avgDuration: `${perfMetrics.averageResponseTime.toFixed(2)}ms`,
+            p50: `${perfMetrics.p95ResponseTime.toFixed(2)}ms`, // Use p95 as approximation
+            p90: `${perfMetrics.p95ResponseTime.toFixed(2)}ms`,
+            p95: `${perfMetrics.p95ResponseTime.toFixed(2)}ms`,
+            p99: `${perfMetrics.p99ResponseTime.toFixed(2)}ms`,
+            throughput: `${perfMetrics.throughput.toFixed(2)} req/s`,
+            errorRate: `${perfMetrics.errorRate.toFixed(2)}%`,
+          },
+          resources: {
+            cpu: 'N/A', // MonitorService doesn't track CPU directly
+            memory: `${(memoryMetrics.heapUsedMB / memoryMetrics.heapTotalMB * 100).toFixed(1)}%`,
+            heapUsed: `${memoryMetrics.heapUsedMB.toFixed(2)}MB`,
+            eventLoopLag: 'N/A', // MonitorService doesn't track event loop lag directly
+            activeHandles: 0, // MonitorService doesn't track handles directly
+          },
+          bottlenecks: [], // Could be populated with slowest endpoints
+          slowestEndpoints: monitor.getSlowestEndpoints(10).map(endpoint => ({
+            path: endpoint.path,
+            method: endpoint.method,
+            duration: `${endpoint.avgDuration.toFixed(2)}ms`,
+          })),
+        },
+        uptime: Date.now() - process.uptime() * 1000,
+      };
     } catch (error) {
       console.warn('Performance metrics not available:', error);
+      // Use the default fallback values defined above
     }
     
     const dashboardData: DashboardData = {
