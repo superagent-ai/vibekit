@@ -98,7 +98,7 @@ export async function GET(request: NextRequest): Promise<Response> {
           activeHandles: 0,
         },
         bottlenecks: [],
-        slowestEndpoints: [],
+        slowestEndpoints: [] as Array<{ path: string; method: string; duration: string }>,
       },
       uptime: Date.now() - process.uptime() * 1000,
     };
@@ -122,8 +122,8 @@ export async function GET(request: NextRequest): Promise<Response> {
           },
           resources: {
             cpu: 'N/A', // MonitorService doesn't track CPU directly
-            memory: `${(memoryMetrics.heapUsedMB / memoryMetrics.heapTotalMB * 100).toFixed(1)}%`,
-            heapUsed: `${memoryMetrics.heapUsedMB.toFixed(2)}MB`,
+            memory: `${((memoryMetrics.heapUsed / memoryMetrics.heapTotal) * 100).toFixed(1)}%`,
+            heapUsed: memoryMetrics.heapUsedMB,
             eventLoopLag: 'N/A', // MonitorService doesn't track event loop lag directly
             activeHandles: 0, // MonitorService doesn't track handles directly
           },
