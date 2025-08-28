@@ -1,0 +1,265 @@
+---
+title: "createIssue"
+description: "Create a new GitHub issue in your repository."
+---
+
+## Method signature
+
+```typescript
+async createIssue(
+  options: CreateIssueOptions
+): Promise<IssueResult>
+```
+
+## Description
+
+The `createIssue` method allows you to create a new GitHub issue in your configured repository. This method is useful for automated issue creation from code generation workflows, error reporting, or programmatic project management.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `options` | `CreateIssueOptions` | Yes | Configuration options for the new issue |
+
+### CreateIssueOptions Interface
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `title` | `string` | Yes | The title of the issue |
+| `body` | `string` | No | The body content of the issue (supports Markdown) |
+| `labels` | `string[]` | No | Array of label names to apply to the issue |
+| `assignees` | `string[]` | No | Array of GitHub usernames to assign to the issue |
+| `milestone` | `number` | No | The number of the milestone to associate with this issue |
+
+## Return type
+
+| Type | Description |
+|------|-------------|
+| `Promise<IssueResult>` | Promise that resolves to an issue result object |
+
+### IssueResult Interface
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `number` | The unique identifier of the issue |
+| `number` | `number` | The issue number |
+| `title` | `string` | The title of the issue |
+| `body` | `string \| null` | The body content of the issue |
+| `state` | `'open' \| 'closed'` | The current state of the issue |
+| `state_reason` | `'completed' \| 'not_planned' \| 'reopened' \| null` | The reason for the current state |
+| `html_url` | `string` | The URL to view the issue on GitHub |
+| `user` | `object` | Information about the user who created the issue |
+| `labels` | `array` | Array of labels applied to the issue |
+| `assignees` | `array` | Array of users assigned to the issue |
+| `created_at` | `string` | ISO timestamp when the issue was created |
+| `updated_at` | `string` | ISO timestamp when the issue was last updated |
+| `closed_at` | `string` | ISO timestamp when the issue was closed (if applicable) |
+| `comments` | `number` | Number of comments on the issue |
+| `milestone` | `object` | Milestone information (if associated) |
+
+## Requirements
+
+- **GitHub Configuration**: A valid GitHub token and repository URL must be configured using `withGithub()`
+- **Permissions**: The GitHub token must have `repo` scope for private repositories, or `public_repo` scope for public repositories
+
+## Error handling
+
+The method throws errors in the following scenarios:
+
+### Configuration Error
+```typescript
+throw new Error("GitHub configuration is required for creating issues. Please use withGithub() to configure GitHub credentials.")
+```
+- **When**: GitHub configuration is missing
+- **Resolution**: Configure GitHub credentials using `withGithub({ token, repository })`
+
+### Validation Error
+```typescript
+throw new Error("Issue title is required")
+```
+- **When**: The title parameter is empty or undefined
+- **Resolution**: Provide a valid title in the options
+
+### Repository Error
+```typescript
+throw new Error("Repository owner/repo not found")
+```
+- **When**: The repository doesn't exist or the token lacks access
+- **Resolution**: Verify repository name and token permissions
+
+### API Error
+```typescript
+throw new Error("Invalid issue parameters: ...")
+```
+- **When**: GitHub API validation fails (invalid labels, assignees, etc.)
+- **Resolution**: Check that labels exist, assignees are valid users, and milestone exists
+
+## Usage examples
+
+### Basic Usage
+
+```typescript
+import { VibeKit } from 'vibekit';
+
+const vibekit = new VibeKit()
+  .withGithub({
+    token: process.env.GITHUB_TOKEN!,
+    repository: "your-org/your-repo"
+  });
+
+// Create a simple issue
+try {
+  const issue = await vibekit.createIssue({
+    title: "Bug: Login form validation error",
+    body: "The login form shows incorrect validation messages when email is empty."
+  });
+  
+  console.log(`Issue created: ${issue.html_url}`);
+  console.log(`Issue #${issue.number}: ${issue.title}`);
+  console.log(`State: ${issue.state}`);
+  console.log(`Created: ${issue.created_at}`);
+} catch (error) {
+  console.error("Failed to create issue:", error.message);
+}
+```
+
+### Advanced Usage with Labels and Assignees
+
+```typescript
+import { VibeKit, CreateIssueOptions } from 'vibekit';
+
+const vibekit = new VibeKit()
+  .withGithub({
+    token: process.env.GITHUB_TOKEN!,
+    repository: "your-org/your-repo"
+  });
+
+// Create issue with full options
+const issueOptions: CreateIssueOptions = {
+  title: "Feature Request: Add dark mode support",
+  body: `## Description
+Add dark mode toggle to the application.
+
+## Requirements
+- [ ] Toggle button in settings
+- [ ] Dark theme CSS variables
+- [ ] Persistent user preference
+- [ ] System preference detection
+
+## Acceptance Criteria
+- User can switch between light and dark modes
+- Theme preference persists across sessions
+- Respects system dark mode setting by default`,
+  labels: ["enhancement", "ui", "good first issue"],
+  assignees: ["frontend-dev", "ux-designer"],
+  milestone: 5
+};
+
+try {
+  const issue = await vibekit.createIssue(issueOptions);
+  
+  console.log(`Feature request created: ${issue.html_url}`);
+  console.log(`Issue #${issue.number}: ${issue.title}`);
+  console.log(`Labels: ${issue.labels.map(l => l.name).join(', ')}`);
+  console.log(`Assignees: ${issue.assignees.map(a => a.login).join(', ')}`);
+  console.log(`Milestone: ${issue.milestone?.title || 'None'}`);
+} catch (error) {
+  console.error("Failed to create feature request:", error.message);
+}
+```
+
+### Creating Issues from Code Generation
+
+```typescript
+import { VibeKit } from 'vibekit';
+
+const vibekit = new VibeKit()
+  .withGithub({
+    token: process.env.GITHUB_TOKEN!,
+    repository: "your-org/your-repo"
+  });
+
+// Example: Create issue when code generation identifies a problem
+async function reportCodeIssue(errorDetails: string) {
+  try {
+    const issue = await vibekit.createIssue({
+      title: "AI Code Generation Error",
+      body: `## Error Details
+${errorDetails}
+
+## Context
+This issue was automatically created during AI code generation.
+
+## Next Steps
+- [ ] Review the error details
+- [ ] Implement fix
+- [ ] Update code generation rules`,
+      labels: ["bug", "ai-generated", "priority-high"],
+      assignees: ["tech-lead"]
+    });
+    
+    return issue;
+  } catch (error) {
+    console.error("Failed to create issue:", error.message);
+    throw error;
+  }
+}
+```
+
+### Bulk Issue Creation
+
+```typescript
+import { VibeKit } from 'vibekit';
+
+const vibekit = new VibeKit()
+  .withGithub({
+    token: process.env.GITHUB_TOKEN!,
+    repository: "your-org/your-repo"
+  });
+
+// Create multiple issues from a list
+const issueTemplates = [
+  {
+    title: "Setup CI/CD pipeline",
+    body: "Configure automated testing and deployment",
+    labels: ["devops", "enhancement"]
+  },
+  {
+    title: "Add unit tests for auth module", 
+    body: "Increase test coverage for authentication functionality",
+    labels: ["testing", "auth"]
+  },
+  {
+    title: "Update API documentation",
+    body: "Sync docs with recent API changes",
+    labels: ["documentation"]
+  }
+];
+
+async function createProjectIssues() {
+  const createdIssues = [];
+  
+  for (const template of issueTemplates) {
+    try {
+      const issue = await vibekit.createIssue(template);
+      createdIssues.push(issue);
+      console.log(`Created issue #${issue.number}: ${issue.title}`);
+    } catch (error) {
+      console.error(`Failed to create issue "${template.title}":`, error.message);
+    }
+  }
+  
+  return createdIssues;
+}
+```
+
+## Notes
+
+- The method requires only GitHub configuration - no agent or sandbox setup needed
+- Labels will be created if they don't exist in the repository
+- Assignees must be valid GitHub usernames with repository access
+- Milestone must exist in the repository before referencing by number
+- The issue body supports full GitHub Flavored Markdown syntax
+- Issue numbers are auto-generated by GitHub and cannot be specified
+- Created issues are immediately visible in the GitHub repository
+- The response includes the complete GitHub API issue data

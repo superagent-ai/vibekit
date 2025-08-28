@@ -118,4 +118,154 @@ const squashResult = await vibekit.mergePullRequest({
 - **`squash`**: Squashes all commits into a single commit before merging
 - **`rebase`**: Rebases the commits onto the base branch
 
-This comprehensive GitHub integration allows you to build powerful conversational UIs where users can iteratively request code changes, see them applied in real-time, create pull requests, and merge them programmatically when they're satisfied with the results.
+## Issue Management
+
+VibeKit provides comprehensive GitHub Issues integration for automated project management. You can create issues, update them, close them, and manage labels and assignees - all programmatically.
+
+### Creating Issues
+
+Create issues programmatically for bug reports, feature requests, or automated project management:
+
+```typescript
+// Create a simple issue
+const issue = await vibekit.createIssue({
+  title: "Bug: Login form validation error",
+  body: "The login form shows incorrect validation messages when email is empty."
+});
+
+console.log(`Issue created: ${issue.html_url}`);
+console.log(`Issue #${issue.number}: ${issue.title}`);
+```
+
+### Creating Issues with Labels and Assignees
+
+```typescript
+// Create issue with full options
+const featureRequest = await vibekit.createIssue({
+  title: "Feature Request: Add dark mode support",
+  body: `## Description
+Add dark mode toggle to the application.
+
+## Requirements
+- [ ] Toggle button in settings
+- [ ] Dark theme CSS variables
+- [ ] Persistent user preference
+
+## Acceptance Criteria
+- User can switch between light and dark modes
+- Theme preference persists across sessions`,
+  labels: ["enhancement", "ui", "good first issue"],
+  assignees: ["frontend-dev", "ux-designer"],
+  milestone: 5
+});
+```
+
+### Updating Issues
+
+Update any aspect of existing issues, including closing, reopening, or modifying content:
+
+```typescript
+// Close an issue as completed
+const updatedIssue = await vibekit.updateIssue(42, {
+  state: "closed",
+  state_reason: "completed"
+});
+
+// Update issue content and labels
+await vibekit.updateIssue(42, {
+  title: "Updated: Login form validation improvements", 
+  labels: ["bug", "priority-high", "in-progress"],
+  assignees: ["developer1", "qa-tester"]
+});
+
+// Reopen and escalate an issue
+await vibekit.updateIssue(42, {
+  state: "open",
+  state_reason: "reopened",
+  labels: ["priority-urgent", "escalated"]
+});
+```
+
+### Issue Workflow Integration
+
+Combine issues with code generation and PR workflows:
+
+```typescript
+// 1. Create issue for new feature
+const issue = await vibekit.createIssue({
+  title: "Add user profile page",
+  body: "Create a user profile page with editable fields",
+  labels: ["enhancement"],
+  assignees: ["developer1"]
+});
+
+// 2. Generate code for the feature
+const codeResult = await vibeKit.generateCode({
+  prompt: "Create a user profile page component with editable name, email, and bio fields",
+  mode: "code"
+});
+
+// 3. Create PR for the generated code
+const pr = await vibeKit.createPullRequest({
+  name: "feature", 
+  color: "0366d6",
+  description: "New feature implementation"
+}, "feature");
+
+// 4. Update issue with progress
+await vibekit.updateIssue(issue.number, {
+  labels: ["enhancement", "in-progress", "code-generated"],
+  body: issue.body + `\n\n---\n## Progress Update
+Code has been generated and PR created: ${pr.html_url}
+
+**Next Steps:**
+- [ ] Review generated code
+- [ ] Test functionality
+- [ ] Merge PR
+- [ ] Close issue`
+});
+
+// 5. After PR is merged, close the issue
+await vibekit.updateIssue(issue.number, {
+  state: "closed",
+  state_reason: "completed",
+  body: issue.body + `\n\n---\nCompleted in PR #${pr.number}`
+});
+```
+
+### Automated Issue Management
+
+Use issues for automated project management workflows:
+
+```typescript
+// Bulk close stale issues
+async function closeStaleIssues(staleIssueNumbers: number[]) {
+  for (const issueNumber of staleIssueNumbers) {
+    await vibekit.updateIssue(issueNumber, {
+      state: "closed",
+      state_reason: "not_planned",
+      labels: ["stale", "auto-closed"]
+    });
+  }
+}
+
+// Create issues from code generation errors
+async function reportGenerationError(errorDetails: string) {
+  return await vibekit.createIssue({
+    title: "AI Code Generation Error",
+    body: `## Error Details\n${errorDetails}\n\n## Context\nThis issue was automatically created during AI code generation.`,
+    labels: ["bug", "ai-generated", "priority-high"],
+    assignees: ["tech-lead"]
+  });
+}
+
+// Progressive issue management
+async function moveIssueToReview(issueNumber: number) {
+  return await vibekit.updateIssue(issueNumber, {
+    labels: ["needs-review", "in-progress"],
+    assignees: ["reviewer", "developer"]
+  });
+}
+```
+
+This comprehensive GitHub integration allows you to build powerful conversational UIs where users can iteratively request code changes, see them applied in real-time, create pull requests and issues, and manage the entire development workflow programmatically.
