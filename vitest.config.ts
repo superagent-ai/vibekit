@@ -3,12 +3,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     setupFiles: ["./test/setup.ts"],
-    // Use jsdom for React/TSX files, node for everything else
-    environmentMatchGlobs: [
-      ['**/*.test.tsx', 'jsdom'],
-      ['**/*.test.ts', 'node'],
-      ['**/*.test.js', 'node']
-    ],
+    // Default to node environment
+    environment: 'node',
     env: {
       // Ensure environment variables are loaded
       dotenv: '.env'
