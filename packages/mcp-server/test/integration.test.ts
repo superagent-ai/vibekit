@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { spawn, ChildProcess } from 'child_process';
 import { promises as fs } from 'fs';
+import path from 'path';
 
 describe('MCP Server Integration', () => {
   describe('server startup and argument parsing', () => {
@@ -156,7 +157,7 @@ Current capabilities:
   describe('binary and package configuration', () => {
     it('should have correct binary configuration', async () => {
       const packageJson = JSON.parse(
-        await fs.readFile('/Users/danziger/code/vibekit/packages/mcp-server/package.json', 'utf-8')
+        await fs.readFile(path.join(__dirname, '..', 'package.json'), 'utf-8')
       );
 
       expect(packageJson.bin).toEqual({
@@ -168,7 +169,7 @@ Current capabilities:
 
     it('should have correct dependencies', async () => {
       const packageJson = JSON.parse(
-        await fs.readFile('/Users/danziger/code/vibekit/packages/mcp-server/package.json', 'utf-8')
+        await fs.readFile(path.join(__dirname, '..', 'package.json'), 'utf-8')
       );
 
       expect(packageJson.dependencies).toHaveProperty('fastmcp');
@@ -178,7 +179,7 @@ Current capabilities:
 
     it('should have correct build configuration', async () => {
       const packageJson = JSON.parse(
-        await fs.readFile('/Users/danziger/code/vibekit/packages/mcp-server/package.json', 'utf-8')
+        await fs.readFile(path.join(__dirname, '..', 'package.json'), 'utf-8')
       );
 
       expect(packageJson.scripts).toHaveProperty('build');
