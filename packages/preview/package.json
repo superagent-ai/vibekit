@@ -46,7 +46,7 @@
   },
   "homepage": "https://github.com/superagent-ai/vibekit#readme",
   "dependencies": {
-    "@vibe-kit/logger": "workspace:*"
+    "@vibe-kit/logger": "^0.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
