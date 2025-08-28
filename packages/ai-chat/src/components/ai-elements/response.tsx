@@ -4,11 +4,8 @@ import { CodeBlock, CodeBlockCopyButton } from './code-block';
 import type { HTMLAttributes } from 'react';
 import { memo } from 'react';
 import ReactMarkdown, { type Options } from 'react-markdown';
-import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
 import { cn } from '../../lib/utils';
-import 'katex/dist/katex.min.css';
 
 /**
  * Parses markdown text and removes incomplete tokens to prevent partial rendering
@@ -295,8 +292,7 @@ export const Response = memo(
       >
         <ReactMarkdown
           components={components}
-          rehypePlugins={[rehypeKatex]}
-          remarkPlugins={[remarkGfm, remarkMath]}
+          remarkPlugins={[remarkGfm]}
           {...options}
         >
           {parsedChildren}

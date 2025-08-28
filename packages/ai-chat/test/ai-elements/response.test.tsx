@@ -420,13 +420,6 @@ describe('Response Component', () => {
       expect(codeBlockElement).toHaveTextContent('name: string;');
     });
 
-    it('should handle mathematical expressions with KaTeX', () => {
-      const mathExpression = 'Here is some math: $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$';
-      render(<Response>{mathExpression}</Response>);
-      
-      // The math should be processed by KaTeX (though we can't easily test the rendering)
-      expect(screen.getByText(/Here is some math/)).toBeInTheDocument();
-    });
 
     it('should handle GitHub Flavored Markdown features', () => {
       const gfmContent = '- [x] Completed task\n- [ ] Incomplete task\n\n| Column 1 | Column 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |';

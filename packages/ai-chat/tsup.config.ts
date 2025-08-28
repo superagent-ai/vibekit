@@ -7,6 +7,7 @@ export default defineConfig({
     'server/index': 'src/server/index.ts',
     'components/index': 'src/components/index.ts',
     'hooks/index': 'src/hooks/index.ts',
+    'code-highlighting/index': 'src/code-highlighting/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: {
@@ -21,5 +22,5 @@ export default defineConfig({
   treeshake: true,
   outDir: 'dist',
   target: 'node18',
-  external: ['react', 'react-dom', 'next'],
+  external: ['react', 'react-dom', 'next', '@anthropic-ai/claude-code', 'react-syntax-highlighter'],
 });

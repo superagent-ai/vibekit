@@ -30,6 +30,11 @@
       "types": "./dist/hooks/index.d.ts",
       "import": "./dist/hooks/index.mjs",
       "require": "./dist/hooks/index.js"
+    },
+    "./code-highlighting": {
+      "types": "./dist/code-highlighting/index.d.ts",
+      "import": "./dist/code-highlighting/index.mjs",
+      "require": "./dist/code-highlighting/index.js"
     }
   },
   "files": [
@@ -66,7 +71,6 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.5",
     "@ai-sdk/react": "^2.0.19",
-    "@anthropic-ai/claude-code": "^1.0.85",
     "@vibe-kit/logger": "^0.0.1",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-collapsible": "^1.1.11",
@@ -79,20 +83,18 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.1",
-    "katex": "^0.16.22",
     "lucide-react": "^0.536.0",
     "react-markdown": "^10.1.0",
-    "react-syntax-highlighter": "^15.6.1",
-    "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
-    "remark-math": "^6.0.0",
     "tailwind-merge": "^3.3.1",
     "use-stick-to-bottom": "^1.1.1"
   },
   "peerDependencies": {
+    "@anthropic-ai/claude-code": ">=1.0.0",
     "next": ">=14.0.0",
     "react": ">=18.0.0",
-    "react-dom": ">=18.0.0"
+    "react-dom": ">=18.0.0",
+    "react-syntax-highlighter": ">=15.0.0"
   },
   "optionalDependencies": {
     "@vibe-kit/mcp-client": "*"
