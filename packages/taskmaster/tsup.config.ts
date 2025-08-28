@@ -8,5 +8,12 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   treeshake: true,
-  external: ['@vibe-kit/projects', 'chokidar'],
+  external: [
+    '@vibe-kit/projects', 
+    'chokidar', 
+    'anymatch',
+    '@dnd-kit/core',
+    '@dnd-kit/sortable',
+    '@dnd-kit/utilities'
+  ],
 });

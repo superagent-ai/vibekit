@@ -29,12 +29,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
     "@vibe-kit/logger": "^0.0.1",
-    "anymatch": "^3.1.3",
-    "chokidar": "^4.0.3",
     "eventemitter3": "^5.0.1"
   },
   "devDependencies": {
@@ -46,5 +41,12 @@
   },
   "peerDependencies": {
     "@vibe-kit/projects": "^0.0.1"
+  },
+  "optionalDependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "anymatch": "^3.1.3",
+    "chokidar": "^4.0.3"
   }
 }
