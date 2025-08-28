@@ -506,3 +506,36 @@ export async function removeProject(idOrName, byName = false) {
   }
 }
 
+export async function selectProjectById(id) {
+  try {
+    if (!id) {
+      console.error(chalk.red('Project ID is required'));
+      return null;
+    }
+    
+    const project = await getProject(id);
+    if (!project) {
+      console.error(chalk.red(`Project not found with ID: ${id}`));
+      return null;
+    }
+    
+    return project;
+  } catch (error) {
+    console.error(chalk.red('Failed to select project:'), error.message);
+    return null;
+  }
+}
+
+export async function showCurrentProject() {
+  try {
+    // Implementation to show current project - could get from context/config
+    // For now, just return a message
+    console.log(chalk.blue('📂 Current Project'));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log(chalk.gray('No current project selected'));
+    console.log(chalk.gray('Use "vibekit projects list" to see all projects'));
+  } catch (error) {
+    console.error(chalk.red('Failed to show current project:'), error.message);
+  }
+}
+

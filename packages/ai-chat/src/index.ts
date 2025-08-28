@@ -18,7 +18,6 @@ export { useChat, useAuthStatus } from './hooks';
 export type { ChatOptions } from './hooks';
 
 // Utilities
-export { AuthManager } from './utils/auth';
 export { DEFAULT_MODELS, DEFAULT_CHAT_CONFIG } from './utils/config';
 
 // Types
@@ -28,10 +27,3 @@ export type {
   ChatConfig,
   AIProvider,
 } from './types';
-
-// Providers (for advanced users)
-export { 
-  AnthropicProvider, 
-  createAnthropicProviderWithModel, 
-  createClaudeCodeProvider 
-} from './providers';

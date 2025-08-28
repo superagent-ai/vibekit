@@ -3,8 +3,7 @@ import { skipIfNoVibeKitKeys, skipTest } from "../helpers/test-utils.js";
 import { createLogger } from "@vibe-kit/logger";
 
 // Import AI Chat components that we'll test
-import { handleChatRequest } from "@vibe-kit/ai-chat/server";
-import { createAnthropicProviderWithModel, createClaudeCodeProvider } from "@vibe-kit/ai-chat";
+import { handleChatRequest, createAnthropicProviderWithModel, createClaudeCodeProvider } from "@vibe-kit/ai-chat/server";
 
 const log = createLogger('ai-chat-integration-test');
 

@@ -65,6 +65,13 @@ export { handleChatRequest, handleStatusRequest };
 export { handleChatRequestWithMCP } from './chat-handler-with-mcp';
 export { AuthManager } from '../utils/auth';
 
+// Providers (server-side only due to Node.js dependencies)
+export { 
+  AnthropicProvider, 
+  createAnthropicProviderWithModel, 
+  createClaudeCodeProvider 
+} from '../providers';
+
 // Export middleware utilities
 export {
   corsMiddleware,
