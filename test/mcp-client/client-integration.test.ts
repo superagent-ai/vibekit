@@ -37,13 +37,13 @@ describe("MCP Client Integration", () => {
     // Test basic client manager instantiation
     const manager = new MCPClientManager();
     expect(manager).toBeDefined();
-    expect(typeof manager.listServers).toBe('function');
+    expect(typeof manager.getAllServers).toBe('function');
     expect(typeof manager.addServer).toBe('function');
     
     log.info("MCP Client manager instantiated successfully");
     
     // Test basic operations that don't require external connections
-    const servers = await manager.listServers();
+    const servers = manager.getAllServers();
     expect(Array.isArray(servers)).toBe(true);
     log.debug("MCP server listing works", { serverCount: servers.length });
   });

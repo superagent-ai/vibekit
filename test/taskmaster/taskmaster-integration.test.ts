@@ -45,7 +45,7 @@ describe("Taskmaster Integration", () => {
     
     // Test taskmaster provider with a temporary directory
     try {
-      const provider = new TaskmasterProvider("/tmp/test-taskmaster");
+      const provider = new TaskmasterProvider({ projectRoot: "/tmp/test-taskmaster" });
       expect(provider).toBeDefined();
       expect(typeof provider.getTasks).toBe('function');
       expect(typeof provider.updateTask).toBe('function');

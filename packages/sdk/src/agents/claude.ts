@@ -150,6 +150,11 @@ export class ClaudeAgent extends BaseAgent {
     return this.useOAuth ? this.oauthToken! : this.anthropicApiKey!;
   }
 
+  // Public method for testing purposes
+  public getCurrentAuthToken(): string {
+    return this.getApiKey();
+  }
+
   protected getAgentType(): AgentType {
     return "claude";
   }

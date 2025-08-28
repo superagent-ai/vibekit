@@ -4,7 +4,7 @@ import { createLogger } from "@vibe-kit/logger";
 
 // Import AI Chat components that we'll test
 import { handleChatRequest } from "@vibe-kit/ai-chat/server";
-import { createAnthropicProviderWithModel } from "@vibe-kit/ai-chat";
+import { createAnthropicProviderWithModel, createClaudeCodeProvider } from "@vibe-kit/ai-chat";
 
 const log = createLogger('ai-chat-integration-test');
 
@@ -65,7 +65,7 @@ describe("AI Chat Integration", () => {
       const result = await handleChatRequest(mockRequest as any);
       log.info("Chat handler executed", { status: result?.status });
     } catch (error) {
-      log.debug("Chat handler error (expected without proper auth)", error);
+      log.debug("Chat handler error (expected without proper auth)", { error });
       // Expected to fail without proper authentication setup
     }
   });
@@ -97,14 +97,9 @@ describe("AI Chat Integration", () => {
     }
 
     // Test that streaming utilities exist and have proper structure
-    try {
-      const { createClaudeCodeProvider } = await import("@vibe-kit/ai-chat");
-      expect(createClaudeCodeProvider).toBeDefined();
-      expect(typeof createClaudeCodeProvider).toBe('function');
-      log.info("Streaming provider factory available");
-    } catch (error) {
-      log.warn("Streaming provider not available", error);
-    }
+    expect(createClaudeCodeProvider).toBeDefined();
+    expect(typeof createClaudeCodeProvider).toBe('function');
+    log.info("Streaming provider factory available");
   });
 
   it("should handle authentication with both API keys and OAuth", async () => {

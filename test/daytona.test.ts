@@ -15,9 +15,8 @@ describe("Daytona Sandbox", () => {
     const prompt = "Hi there";
 
     const daytonaProvider = createDaytonaProvider({
-      apiUrl: process.env.DAYTONA_SERVER_URL!,
+      serverUrl: process.env.DAYTONA_SERVER_URL!,
       apiKey: process.env.DAYTONA_SERVER_API_KEY!,
-      targetId: process.env.DAYTONA_TARGET_ID!,
     });
 
     const vibeKit = new VibeKit()
