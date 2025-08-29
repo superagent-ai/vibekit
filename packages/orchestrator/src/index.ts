@@ -10,9 +10,14 @@ export { SessionManager } from './core/session-manager';
 // export { WorktreeManager } from './core/worktree-manager';
 // export { WorkflowEngine } from './core/workflow-engine';
 
-// Export provider classes (these will be implemented in later phases)
-// export { ProjectProvider, ProviderRegistry } from './providers/base';
-// export { TaskmasterProvider } from './providers/taskmaster/provider';
+// Export provider classes
+export { 
+  ProjectProvider, 
+  ProviderRegistry, 
+  EnhancedProjectProvider,
+  DEFAULT_PROVIDER_CONFIGS
+} from './providers/base';
+export { TaskmasterProvider } from './providers/taskmaster/provider';
 
 // Export sandbox classes (these will be implemented in later phases)
 // export { OrchestratorSandbox } from './sandbox/orchestrator-sandbox';

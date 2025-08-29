@@ -6,3 +6,6 @@ export * from './events';
 
 // Task types
 export * from './task';
+
+// Provider types
+export * from './provider';
