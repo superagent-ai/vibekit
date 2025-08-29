@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { VibeKit } from "../packages/sdk/src/index.js";
-import { createE2BProvider } from "../packages/e2b/dist/index.js";
+import { createE2BProvider } from "@vibe-kit/e2b";
 import { skipIfNoOpenCodeKeys, skipTest } from "./helpers/test-utils.js";
 import dotenv from "dotenv";
 

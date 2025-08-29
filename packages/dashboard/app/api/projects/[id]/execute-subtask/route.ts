@@ -1,0 +1,715 @@
+// Load environment variables from root .env file
+import '@/load-env';
+import { createLogger } from '@/lib/structured-logger';
+
+import { NextRequest, NextResponse } from 'next/server';
+import { VibeKit } from '@vibe-kit/sdk';
+import { createLocalProvider } from '@vibe-kit/dagger';
+import { homedir } from 'os';
+import { join } from 'path';
+import { AgentAnalytics } from '@/lib/agent-analytics';
+import { SessionLogger } from '@/lib/session-logger';
+import { SessionIdGenerator } from '@/lib/session-id-generator';
+import { executionHistoryManager } from '@/lib/execution-history-manager';
+// Import other providers as needed
+// import { createE2BProvider } from '@vibe-kit/e2b';
+// import { createDaytonaProvider } from '@vibe-kit/daytona';
+// import { createCloudflareProvider } from '@vibe-kit/cloudflare';
+// import { createNorthflankProvider } from '@vibe-kit/northflank';
+
+interface ExecuteSubtaskRequest {
+  parentTask: {
+    id: number;
+    title: string;
+  };
+  subtask: {
+    id: number;
+    title: string;
+    description: string;
+    details?: string;
+    testStrategy?: string;
+  };
+  agent: string;
+  sandbox: string;
+  branch: string;
+  projectRoot: string;
+  sessionId?: string;
+}
+
+async function checkDockerStatus() {
+  const { exec } = require('child_process');
+  const { promisify } = require('util');
+  const execAsync = promisify(exec);
+  
+  try {
+    // Quick Docker check
+    await execAsync('docker ps -q', { timeout: 5000 });
+    return { success: true };
+  } catch (error: any) {
+    if (error.message?.includes('Cannot connect to the Docker daemon')) {
+      return { 
+        success: false, 
+        error: 'Docker is not running',
+        userMessage: 'Docker Desktop is not running. Please start Docker Desktop and try again.',
+        details: 'The Dagger sandbox requires Docker to be running on your system.'
+      };
+    } else if (error.message?.includes('command not found')) {
+      return { 
+        success: false, 
+        error: 'Docker not installed',
+        userMessage: 'Docker is not installed. Please install Docker Desktop from docker.com',
+        details: 'Visit https://www.docker.com/products/docker-desktop to download and install Docker.'
+      };
+    } else if (error.message?.includes('permission denied')) {
+      return { 
+        success: false, 
+        error: 'Docker permission denied',
+        userMessage: 'Docker requires elevated permissions. Please ensure your user has access to Docker.',
+        details: 'You may need to add your user to the docker group or restart Docker Desktop.'
+      };
+    }
+    return { 
+      success: false, 
+      error: 'Docker check failed',
+      userMessage: 'Unable to connect to Docker. Please ensure Docker Desktop is installed and running.',
+      details: error.message
+    };
+  }
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  let vibeKit: VibeKit | null = null;
+  let analytics: AgentAnalytics | null = null;
+  let sessionLogger: SessionLogger | null = null;
+  let executionId: string | null = null;
+  
+  // Initialize logger with request context
+  const logger = createLogger('ExecuteSubtask');
+  
+  try {
+    const { id } = await params;
+    const body: ExecuteSubtaskRequest = await request.json();
+    const { parentTask, subtask, agent, sandbox, branch, projectRoot, sessionId: providedSessionId } = body;
+    
+    // Use provided session ID or generate new one - do this immediately
+    const sessionId = providedSessionId || SessionIdGenerator.generate();
+    logger.info('Starting subtask execution', { 
+      sessionId, 
+      projectId: id,
+      parentTaskId: parentTask.id,
+      subtaskId: subtask.id,
+      agent,
+      sandbox,
+      provided: !!providedSessionId
+    });
+    
+    // Initialize session logger immediately to prevent race conditions with SSE connections
+    try {
+      sessionLogger = new SessionLogger(sessionId, agent, {
+        projectId: id,
+        projectRoot,
+        taskId: parentTask.id.toString(),
+        subtaskId: subtask.id.toString()
+      });
+      logger.debug('SessionLogger created, initializing', { sessionId, cwd: process.cwd() });
+      await sessionLogger.initialize();
+      logger.info('Session logger initialized', { sessionId });
+      
+      // Verify session can be read immediately after initialization
+      try {
+        const testRead = await SessionLogger.readSession(sessionId);
+        logger.debug('Session verified readable after init', { sessionId, logCount: testRead.logs.length });
+      } catch (verifyError) {
+        logger.error('Session not readable immediately after init', verifyError, { sessionId });
+      }
+    } catch (sessionError) {
+      logger.error('Failed to initialize session logger', sessionError, { sessionId });
+      throw new Error(`Failed to initialize session logger: ${sessionError instanceof Error ? sessionError.message : 'Unknown error'}`);
+    }
+    
+    // Check Docker status if using Dagger sandbox
+    if (sandbox === 'dagger') {
+      const dockerCheck = await checkDockerStatus();
+      if (!dockerCheck.success) {
+        logger.warn('Docker not available for Dagger sandbox', { 
+          sessionId,
+          error: dockerCheck.error,
+          userMessage: dockerCheck.userMessage 
+        });
+        return NextResponse.json(
+          { 
+            success: false,
+            error: dockerCheck.userMessage,
+            details: dockerCheck.details,
+            errorType: 'docker_not_running'
+          },
+          { status: 503 }
+        );
+      }
+    }
+    
+    logger.info('Executing subtask', {
+      projectId: id,
+      taskId: parentTask.id,
+      taskTitle: parentTask.title,
+      subtaskId: subtask.id,
+      subtaskTitle: subtask.title,
+      agent,
+      sandbox,
+      branch,
+      projectRoot,
+      sessionId
+    });
+    
+    // Session ID and logger already initialized at the start of the request
+    
+    
+    // Log initial sandbox configuration
+    await sessionLogger.captureInfo(`Initializing ${agent} agent with ${sandbox} sandbox`, { 
+      agent, 
+      sandbox,
+      branch,
+      projectRoot 
+    });
+    
+    // Check if analytics are enabled and initialize if so
+    const analyticsEnabled = await AgentAnalytics.isEnabled();
+    if (analyticsEnabled) {
+      analytics = new AgentAnalytics(agent, projectRoot, id, sessionId);
+      await analytics.initialize();
+      logger.debug('Analytics initialized', { sessionId });
+    }
+    
+    // Fetch settings to get Docker Hub username
+    let dockerHubUser = process.env.DOCKER_HUB_USER;
+    try {
+      const settingsPath = join(homedir(), '.vibekit', 'settings.json');
+      const fs = require('fs').promises;
+      const settingsContent = await fs.readFile(settingsPath, 'utf-8');
+      const settings = JSON.parse(settingsContent);
+      if (settings?.agents?.dockerHubUser) {
+        dockerHubUser = settings.agents.dockerHubUser;
+      }
+    } catch (error) {
+      logger.debug('Could not read settings, using environment variable or default', { sessionId });
+    }
+    
+    // Create sandbox provider based on selection
+    let sandboxProvider;
+    switch (sandbox) {
+      case 'dagger':
+        sandboxProvider = createLocalProvider({
+          preferRegistryImages: true,
+          dockerHubUser: dockerHubUser || undefined,
+          pushImages: false,
+        });
+        break;
+      
+      // Add other providers as they're implemented
+      // case 'e2b':
+      //   sandboxProvider = createE2BProvider({
+      //     apiKey: process.env.E2B_API_KEY,
+      //     template: agent,
+      //   });
+      //   break;
+      
+      default:
+        throw new Error(`Unsupported sandbox provider: ${sandbox}`);
+    }
+    
+    // Configure agent settings
+    const agentConfig: any = {
+      type: agent,
+    };
+    
+    // Set provider and API key based on agent type
+    switch (agent) {
+      case 'claude':
+        agentConfig.provider = 'anthropic';
+        // Prefer OAuth token for agent execution, but include API key for PR metadata generation
+        agentConfig.oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+        agentConfig.apiKey = process.env.ANTHROPIC_API_KEY;
+        agentConfig.model = 'claude-sonnet-4-20250514';
+        break;
+      case 'gemini':
+        agentConfig.provider = 'google';
+        agentConfig.apiKey = process.env.GEMINI_API_KEY;
+        break;
+      case 'grok':
+        agentConfig.provider = 'xai';
+        agentConfig.apiKey = process.env.GROK_API_KEY;
+        break;
+      case 'codex':
+        agentConfig.provider = 'openai';
+        agentConfig.apiKey = process.env.OPENAI_API_KEY;
+        break;
+      case 'opencode':
+        agentConfig.provider = 'opencode';
+        agentConfig.apiKey = process.env.OPENCODE_API_KEY;
+        break;
+      default:
+        throw new Error(`Unsupported agent: ${agent}`);
+    }
+    
+    // Configure VibeKit
+    vibeKit = new VibeKit()
+      .withAgent(agentConfig)
+      .withSandbox(sandboxProvider)
+      .withWorkingDirectory(projectRoot);
+    
+    // Add secrets/environment variables if needed
+    const secrets: Record<string, string> = {};
+    // Check for GitHub token (support both GITHUB_TOKEN and GITHUB_API_KEY)
+    const githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_API_KEY;
+    if (githubToken) {
+      secrets.GITHUB_TOKEN = githubToken;
+    }
+    // Add any other environment variables that might be needed in the sandbox
+    if (Object.keys(secrets).length > 0) {
+      vibeKit.withSecrets(secrets);
+    }
+    
+    // Configure GitHub integration if token is available
+    if (githubToken) {
+      // Try to detect the Git repository from the project
+      let repoUrl: string | undefined;
+      let isGitRepo = false;
+      
+      try {
+        // Try to get the Git remote URL
+        const { execSync } = await import('child_process');
+        
+        // First check if it's a git repository
+        try {
+          execSync(`cd ${projectRoot} && git rev-parse --git-dir`, { encoding: 'utf8' });
+          isGitRepo = true;
+        } catch {
+          isGitRepo = false;
+        }
+        
+        if (isGitRepo) {
+          const remoteUrl = execSync(`cd ${projectRoot} && git config --get remote.origin.url`, { encoding: 'utf8' }).trim();
+          
+          // Extract owner/repo from various Git URL formats
+          // Supports: https://github.com/owner/repo.git, git@github.com:owner/repo.git, etc.
+          const patterns = [
+            /github\.com[:/]([^/]+\/[^/.]+?)(?:\.git)?$/,  // Standard formats
+            /github\.com[:/]([^/]+\/[^/]+?)$/,              // Without .git
+            /git@github\.com:([^/]+\/[^/.]+?)(?:\.git)?$/   // SSH format
+          ];
+          
+          for (const pattern of patterns) {
+            const match = remoteUrl.match(pattern);
+            if (match) {
+              repoUrl = match[1];
+              break;
+            }
+          }
+          
+          if (repoUrl) {
+            logger.info('GitHub repository detected', { repoUrl, sessionId });
+            
+            // Configure GitHub integration
+            vibeKit.withGithub({
+              token: githubToken,
+              repository: repoUrl
+            });
+            
+            // Log the repository detection and configuration
+            if (sessionLogger) {
+              await sessionLogger.captureInfo(`GitHub integration configured`, { 
+                repository: repoUrl,
+                branch: branch,
+                hasToken: true
+              });
+            }
+          } else {
+            logger.debug('Git repository detected but not a GitHub repository', { sessionId });
+            if (sessionLogger) {
+              await sessionLogger.captureInfo(`Non-GitHub repository detected`, { 
+                remoteUrl: remoteUrl.substring(0, 50)
+              });
+            }
+          }
+        } else {
+          logger.debug('Project is not a Git repository', { sessionId });
+          if (sessionLogger) {
+            await sessionLogger.captureInfo(`Project is not a Git repository`, { 
+              projectRoot 
+            });
+          }
+        }
+      } catch (error) {
+        logger.warn('Error detecting Git repository', error, { sessionId });
+        if (sessionLogger) {
+          await sessionLogger.captureInfo(`Could not detect Git repository configuration`, { 
+            error: String(error).substring(0, 100)
+          });
+        }
+      }
+    } else {
+      logger.debug('GitHub token not configured', { sessionId });
+      if (sessionLogger) {
+        await sessionLogger.captureInfo(`GitHub token not configured - GitHub features disabled`, {});
+      }
+    }
+    
+    // Build the prompt from subtask information
+    const promptParts: string[] = [];
+    
+    promptParts.push(`Task: ${subtask.title}`);
+    
+    if (subtask.description) {
+      promptParts.push(`\nDescription: ${subtask.description}`);
+    }
+    
+    if (subtask.details) {
+      promptParts.push(`\nDetails:\n${subtask.details}`);
+    }
+    
+    if (subtask.testStrategy) {
+      promptParts.push(`\nTest Strategy:\n${subtask.testStrategy}`);
+    }
+    
+    promptParts.push(`\nBase Branch: ${branch}`);
+    promptParts.push(`\nPlease implement this task following the description, details, and test strategy provided.`);
+    
+    const prompt = promptParts.join('\n');
+    
+    logger.info('Executing with prompt', { prompt: prompt.substring(0, 200) + '...', sessionId });
+    
+    // Initialize ExecutionHistoryManager and record execution start
+    await executionHistoryManager.initialize();
+    executionId = await executionHistoryManager.startExecution({
+      sessionId,
+      projectId: id,
+      projectRoot,
+      task: parentTask,
+      subtask: subtask,
+      agent,
+      sandbox,
+      branch,
+      prompt
+    });
+    logger.info('Execution recorded', { executionId, sessionId });
+    
+    // Capture prompt in analytics if enabled
+    if (analytics) {
+      analytics.capturePrompt(prompt);
+    }
+    
+    // Set up event listeners for real-time updates
+    const updates: string[] = [];
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    
+    vibeKit.on('update', async (update) => {
+      updates.push(update);
+      logger.debug('VibeKit update received', { update: update.substring(0, 200), sessionId });
+      
+      // Try to parse for specific events
+      try {
+        const parsed = JSON.parse(update);
+        if (parsed.type === 'start' && parsed.sandbox_id) {
+          logger.info('Sandbox launch started', { sandboxId: parsed.sandbox_id, sessionId });
+        } else if (parsed.type === 'container_created') {
+          logger.info('Container created', { containerId: parsed.container_id || 'unknown', sessionId });
+        } else if (parsed.type === 'image_pull') {
+          logger.info('Image pull detected', { image: parsed.image || 'unknown', sessionId });
+        } else if (parsed.type === 'repository_clone') {
+          logger.info('Repository clone detected', { repository: parsed.repository || 'unknown', sessionId });
+        }
+      } catch (parseError) {
+        // Not JSON, check for Git operations in plain text
+        if (update.includes('Cloning into') || update.includes('git clone')) {
+          logger.debug('Git operation detected', { operation: update.substring(0, 100), sessionId });
+        }
+      }
+      
+      if (analytics) {
+        analytics.captureUpdate(update);
+      }
+      if (sessionLogger) {
+        await sessionLogger.captureUpdate(update);
+      }
+    });
+    
+    vibeKit.on('stdout', async (data) => {
+      stdout.push(data);
+      logger.debug('Sandbox stdout', { data: data.substring(0, 200), sessionId });
+      
+      // Detect Git operations in stdout
+      if (data.includes('Cloning into') || data.includes('Initialized empty Git repository')) {
+        logger.debug('Git repository operation detected', { sessionId });
+      } else if (data.includes('Switched to') || data.includes('Your branch is')) {
+        logger.debug('Git branch operation detected', { sessionId });
+      } else if (data.includes('[') && data.includes(']') && data.includes('commit')) {
+        logger.debug('Git commit detected', { sessionId });
+      }
+      
+      if (analytics) {
+        analytics.captureOutput(data);
+      }
+      if (sessionLogger) {
+        await sessionLogger.captureStdout(data);
+      }
+    });
+    
+    vibeKit.on('stderr', async (data) => {
+      stderr.push(data);
+      logger.debug('Sandbox stderr', { data: data.substring(0, 200), sessionId });
+      if (analytics) {
+        analytics.captureOutput(data);
+      }
+      if (sessionLogger) {
+        await sessionLogger.captureStderr(data);
+      }
+    });
+    
+    vibeKit.on('error', async (error) => {
+      logger.error('VibeKit execution error', error, { sessionId });
+      if (analytics) {
+        analytics.captureOutput(`Error: ${error}`);
+      }
+      if (sessionLogger) {
+        await sessionLogger.captureError(`${error}`);
+      }
+    });
+    
+    // Execute code generation
+    logger.info('Starting code generation with SDK', { sessionId });
+    await sessionLogger.captureInfo(`Launching sandbox and cloning repository...`, { 
+      mode: 'code',
+      promptLength: prompt.length 
+    });
+    
+    const startTime = Date.now();
+    const result = await vibeKit.generateCode({
+      prompt,
+      mode: 'code',
+      branch: branch  // Pass the branch parameter for GitHub operations
+    });
+    const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+    
+    logger.info('Execution completed', { elapsedTime, sessionId });
+    logger.info('Execution result', {
+      sandboxId: result?.sandboxId,
+      exitCode: result?.exitCode,
+      success: result?.exitCode === 0,
+      sessionId
+    });
+    
+    // Update execution record with completion
+    if (executionId) {
+      await executionHistoryManager.updateExecution(executionId, {
+        status: result?.exitCode === 0 ? 'completed' : 'failed',
+        endTime: Date.now(),
+        exitCode: result?.exitCode,
+        success: result?.exitCode === 0,
+        stdout: result?.stdout || stdout.join('\n'),
+        stderr: result?.stderr || stderr.join('\n'),
+        updates: updates
+      });
+      logger.debug('Execution record updated', { executionId, sessionId });
+    }
+    
+    // Create pull request if code generation was successful and GitHub is configured
+    let pullRequestResult = null;
+    if (result?.exitCode === 0 && githubToken && vibeKit) {
+      try {
+        logger.info('Creating pull request', { sessionId });
+        if (sessionLogger) {
+          await sessionLogger.captureInfo('Creating GitHub pull request...', {});
+        }
+        
+        // Configure label options for the PR
+        const labelOptions = {
+          name: `vibekit-${agent}`,
+          color: '0e8a16',
+          description: `Code generated by ${agent} agent via VibeKit`
+        };
+        
+        // Create pull request with task/subtask context in the branch name
+        const branchPrefix = `vibekit-task-${parentTask.id}-subtask-${subtask.id}`;
+        pullRequestResult = await vibeKit.createPullRequest(labelOptions, branchPrefix);
+        
+        logger.info('Pull request created', { pullRequestResult, sessionId });
+        if (sessionLogger) {
+          await sessionLogger.captureInfo(`Pull request #${pullRequestResult?.number} created successfully: ${pullRequestResult?.html_url}`, {
+            prUrl: pullRequestResult?.html_url,
+            prNumber: pullRequestResult?.number,
+            linkText: `View PR #${pullRequestResult?.number}`,
+            linkUrl: pullRequestResult?.html_url,
+            openInNewTab: true
+          });
+        }
+        
+        // Update execution record with PR information
+        if (executionId && pullRequestResult) {
+          await executionHistoryManager.updateExecution(executionId, {
+            pullRequest: {
+              url: pullRequestResult.html_url,
+              number: pullRequestResult.number,
+              created: true
+            }
+          });
+        }
+      } catch (prError: any) {
+        logger.error('Failed to create pull request', prError, { sessionId });
+        if (sessionLogger) {
+          await sessionLogger.captureError(`Failed to create pull request: ${prError.message}`);
+        }
+        // Don't fail the entire execution if PR creation fails
+        // The code changes are still made successfully
+      }
+    }
+    
+    // Finalize session logger
+    if (sessionLogger) {
+      await sessionLogger.finalize(result?.exitCode ?? 0);
+      logger.debug('Session logger finalized', { sessionId });
+    }
+    
+    // Finalize analytics if enabled
+    let analyticsData = null;
+    if (analytics) {
+      analyticsData = await analytics.finalize(result?.exitCode ?? 0, (Date.now() - startTime));
+      logger.debug('Analytics finalized', {
+        sessionId: analyticsData.sessionId,
+        duration: analyticsData.duration ?? undefined,
+        exitCode: analyticsData.exitCode ?? undefined
+      });
+    }
+    
+    // Clean up
+    try {
+      await vibeKit.kill();
+      logger.debug('Sandbox terminated successfully', { sessionId });
+    } catch (cleanupError) {
+      logger.warn('Cleanup warning', cleanupError, { sessionId });
+    }
+    
+    return NextResponse.json({
+      success: result?.exitCode === 0,
+      sandboxId: result?.sandboxId,
+      exitCode: result?.exitCode,
+      executionTime: elapsedTime,
+      stdout: result?.stdout || stdout.join('\n'),
+      stderr: result?.stderr || stderr.join('\n'),
+      updates: updates,
+      sessionId: sessionId,  // Return the session ID for log retrieval
+      analyticsSessionId: analyticsData?.sessionId,
+      pullRequest: pullRequestResult ? {
+        url: pullRequestResult.html_url,
+        number: pullRequestResult.number,
+        created: true
+      } : null,
+      message: result?.exitCode === 0 
+        ? pullRequestResult 
+          ? `Subtask executed successfully and pull request #${pullRequestResult.number} created`
+          : 'Subtask executed successfully' 
+        : 'Subtask execution failed'
+    });
+    
+  } catch (error: any) {
+    logger.error('Failed to execute subtask', error, { sessionId: 'unknown' });
+    
+    // Update execution record with error
+    if (executionId) {
+      try {
+        await executionHistoryManager.updateExecution(executionId, {
+          status: 'failed',
+          endTime: Date.now(),
+          exitCode: -1,
+          success: false,
+          error: error.message
+        });
+      } catch (updateError) {
+        logger.warn('Failed to update execution record with error', updateError, { executionId });
+      }
+    }
+    
+    // Finalize session logger with error
+    if (sessionLogger) {
+      try {
+        await sessionLogger.captureError(`Execution failed: ${error.message}`);
+        await sessionLogger.finalize(-1);
+      } catch (logError) {
+        logger.warn('Failed to finalize session logger', logError);
+      }
+    }
+    
+    // Finalize analytics with error if enabled
+    if (analytics) {
+      try {
+        await analytics.finalize(-1, Date.now() - analytics.getStartTime());
+      } catch (analyticsError) {
+        logger.warn('Failed to finalize analytics', analyticsError);
+      }
+    }
+    
+    // Clean up on error
+    if (vibeKit) {
+      try {
+        await vibeKit.kill();
+      } catch (cleanupError) {
+        logger.warn('Cleanup error', cleanupError);
+      }
+    }
+    
+    // Parse error message for specific issues
+    let errorType = 'unknown';
+    let userMessage = error.message || 'Failed to execute subtask';
+    let details = error.stack;
+    
+    if (error.message?.includes('Cannot read properties of undefined (reading \'port\')') ||
+        error.message?.includes('Docker daemon') ||
+        error.message?.includes('docker.sock')) {
+      errorType = 'docker_not_running';
+      userMessage = 'Docker is not running. Please start Docker Desktop and try again.';
+      details = 'The sandbox environment requires Docker to be running. Make sure Docker Desktop is installed and running.';
+    } else if (error.message?.includes('API key') || 
+               error.message?.includes('authentication') ||
+               error.message?.includes('unauthorized')) {
+      errorType = 'auth_error';
+      userMessage = 'Authentication failed. Please check your API keys in settings.';
+      details = `Make sure your ${error.message.includes('ANTHROPIC') ? 'Anthropic' : 
+                 error.message.includes('OPENAI') ? 'OpenAI' : 
+                 error.message.includes('GEMINI') ? 'Google' : 
+                 error.message.includes('GROK') ? 'Grok' : 'AI provider'} API key is configured correctly.`;
+    } else if (error.message?.includes('rate limit') || 
+               error.message?.includes('too many requests')) {
+      errorType = 'rate_limit';
+      userMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+      details = 'You have made too many requests. Please wait a few minutes before trying again.';
+    } else if (error.message?.includes('network') || 
+               error.message?.includes('ECONNREFUSED') ||
+               error.message?.includes('ETIMEDOUT')) {
+      errorType = 'network_error';
+      userMessage = 'Network error. Please check your internet connection.';
+      details = 'Unable to connect to the required services. Check your internet connection and firewall settings.';
+    } else if (error.message?.includes('sandbox') || 
+               error.message?.includes('container')) {
+      errorType = 'sandbox_error';
+      userMessage = 'Sandbox environment error. Please try again or use a different sandbox provider.';
+      details = error.message;
+    }
+    
+    return NextResponse.json(
+      { 
+        success: false,
+        error: userMessage,
+        details: details,
+        errorType: errorType,
+        originalError: error.message
+      },
+      { status: errorType === 'docker_not_running' ? 503 : 
+                errorType === 'auth_error' ? 401 :
+                errorType === 'rate_limit' ? 429 :
+                errorType === 'network_error' ? 502 : 500 }
+    );
+  }
+}

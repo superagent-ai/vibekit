@@ -7,6 +7,11 @@ import {
   BookOpen,
   Palette,
   Info,
+  Settings, 
+  FolderOpen,
+  Server,
+  MessageSquare,
+  Monitor,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -39,6 +44,36 @@ const getNavData = (pathname: string) => ({
       icon: ChartSpline,
       isActive: pathname === "/",
     },
+    {
+      title: "Projects",
+      url: "/projects",
+      icon: FolderOpen,
+      isActive: pathname === "/projects" || pathname.startsWith("/projects/"),
+    },
+    {
+      title: "AI Chat",
+      url: "/chat",
+      icon: MessageSquare,
+      isActive: pathname === "/chat" || pathname.startsWith("/chat/"),
+    },
+    {
+      title: "MCP Servers",
+      url: "/mcp-servers",
+      icon: Server,
+      isActive: pathname === "/mcp-servers" || pathname.startsWith("/mcp-servers/"),
+    },
+    {
+      title: "Monitoring",
+      url: "/monitoring",
+      icon: Monitor,
+      isActive: pathname === "/monitoring",
+    },
+    {
+      title: "Settings",
+      url: "/settings",
+      icon: Settings,
+      isActive: pathname === "/settings",
+    },
   ],
   footerLinks: [
     {
@@ -68,7 +103,7 @@ const getNavData = (pathname: string) => ({
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
-  const data = getNavData(pathname);
+  const data = getNavData(pathname || '/');
   return (
     <TooltipProvider>
       <Sidebar collapsible="icon" {...props}>

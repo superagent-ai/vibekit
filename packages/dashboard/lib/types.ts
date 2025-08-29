@@ -1,3 +1,43 @@
+export interface Project {
+  id: string;
+  name: string;
+  projectRoot: string;
+  agentName?: string;
+  sandboxId?: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastAccessed?: string;
+  tags?: string[];
+  metadata?: Record<string, any>;
+}
+
+export interface ProjectsConfig {
+  version: string;
+  projects: Project[];
+  currentProjectId?: string;
+}
+
+export interface ProjectCreateInput {
+  name: string;
+  projectRoot: string;
+  agentName?: string;
+  sandboxId?: string;
+  description?: string;
+  tags?: string[];
+  metadata?: Record<string, any>;
+}
+
+export interface ProjectUpdateInput {
+  name?: string;
+  projectRoot?: string;
+  agentName?: string;
+  sandboxId?: string;
+  description?: string;
+  tags?: string[];
+  metadata?: Record<string, any>;
+}
+
 export interface SystemInfo {
   // Essential System Info
   machineId: string;         // unique machine identifier
@@ -26,6 +66,8 @@ export interface SystemInfo {
 export interface AnalyticsSession {
   sessionId: string;
   agentName: string;
+  projectId?: string;
+  projectName?: string;
   startTime: number;
   endTime: number | null;
   duration: number | null;

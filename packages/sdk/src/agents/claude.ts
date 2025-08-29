@@ -150,14 +150,22 @@ export class ClaudeAgent extends BaseAgent {
     return this.useOAuth ? this.oauthToken! : this.anthropicApiKey!;
   }
 
+  // Public method for testing purposes
+  public getCurrentAuthToken(): string {
+    return this.getApiKey();
+  }
+
   protected getAgentType(): AgentType {
     return "claude";
   }
 
   protected getModelConfig(): ModelConfig {
+    // Prioritize OAuth token over API key
+    // OAuth tokens will be handled specially in generatePRMetadata via Claude Code SDK
+    const apiKey = this.oauthToken || this.anthropicApiKey!;
     return {
       provider: "anthropic",
-      apiKey: this.useOAuth ? this.oauthToken! : this.anthropicApiKey!,
+      apiKey,
       model: this.model,
     };
   }

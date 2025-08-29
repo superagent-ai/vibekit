@@ -13,11 +13,14 @@
         "packages/*"
     ],
     "scripts": {
-        "build": "npm run build --workspaces",
-        "build:packages": "npm run build --workspace=packages/e2b && npm run build --workspace=packages/daytona && npm run build --workspace=packages/northflank && npm run build --workspace=packages/cloudflare && npm run build --workspace=packages/dagger && npm run build --workspace=packages/auth && npm run build --workspace=packages/sdk && npm run build --workspace=packages/cli",
-        "dev": "npm run dev --workspace=packages/sdk",
-        "type-check": "npm run build --workspace=packages/sdk && npm run build:types --workspace=packages/dagger && npm run type-check --workspaces",
-        "test": "vitest"
+        "build": "npm run build:packages",
+        "build:packages": "npm run build --workspace=@vibe-kit/e2b && npm run build --workspace=@vibe-kit/daytona && npm run build --workspace=@vibe-kit/northflank && npm run build --workspace=@vibe-kit/cloudflare && npm run build --workspace=@vibe-kit/dagger && npm run build --workspace=@vibe-kit/auth && npm run build --workspace=@vibe-kit/logger && npm run build --workspace=@vibe-kit/projects && npm run build --workspace=@vibe-kit/preview && npm run build --workspace=@vibe-kit/monitor && npm run build --workspace=@vibe-kit/taskmaster && npm run build --workspace=@vibe-kit/mcp-server && npm run build --workspace=@vibe-kit/mcp-client && npm run build --workspace=@vibe-kit/ai-chat && npm run build --workspace=@vibe-kit/sdk && npm run build --workspace=vibekit && npm run build --workspace=@vibe-kit/orchestrator && npm run build --workspace=@vibe-kit/dashboard",
+        "build:deps": "npm run build --workspace=@vibe-kit/logger && npm run build --workspace=@vibe-kit/projects && npm run build --workspace=@vibe-kit/preview && npm run build --workspace=@vibe-kit/monitor && npm run build --workspace=@vibe-kit/mcp-client && npm run build --workspace=@vibe-kit/taskmaster && npm run build --workspace=@vibe-kit/ai-chat && npm run build --workspace=@vibe-kit/auth && npm run build --workspace=@vibe-kit/sdk && npm run build --workspace=@vibe-kit/dagger",
+        "dev": "npm run dev --workspace=@vibe-kit/sdk",
+        "dev:dashboard": "npm run dev --workspace=@vibe-kit/dashboard",
+        "type-check": "npm run build:deps && npm run type-check --workspace=@vibe-kit/logger --workspace=@vibe-kit/projects --workspace=@vibe-kit/mcp-client --workspace=@vibe-kit/taskmaster --workspace=@vibe-kit/ai-chat --workspace=@vibe-kit/auth --workspace=@vibe-kit/mcp-server --workspace=@vibe-kit/dashboard --workspace=@vibe-kit/sdk --workspace=@vibe-kit/dagger --workspace=vibekit",
+        "test": "vitest",
+        "test:integration": "vitest run -c vitest.integration.config.ts"
     },
     "devDependencies": {
         "@types/node": "^22.15.18",
@@ -28,6 +31,8 @@
         "vitest": "^3.1.3"
     },
     "dependencies": {
-        "dotenv": "^17.2.0"
+        "dotenv": "^17.2.0",
+        "eventsource-parser": "^3.0.5",
+        "nanoid": "^5.1.5"
     }
 }

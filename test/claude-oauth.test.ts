@@ -26,7 +26,7 @@ describe("Claude OAuth Authentication", () => {
 
       const agent = new ClaudeAgent(config);
       expect(agent).toBeDefined();
-      expect(agent.getApiKey()).toBe("test-oauth-token");
+      expect(agent.getCurrentAuthToken()).toBe("test-oauth-token");
     });
 
     it("should prioritize OAuth token from config over environment variable", () => {
@@ -39,7 +39,7 @@ describe("Claude OAuth Authentication", () => {
       };
 
       const agent = new ClaudeAgent(config);
-      expect(agent.getApiKey()).toBe("config-oauth-token");
+      expect(agent.getCurrentAuthToken()).toBe("config-oauth-token");
 
       // Restore
       if (originalToken) {
@@ -58,7 +58,7 @@ describe("Claude OAuth Authentication", () => {
       };
 
       const agent = new ClaudeAgent(config);
-      expect(agent.getApiKey()).toBe("env-oauth-token");
+      expect(agent.getCurrentAuthToken()).toBe("env-oauth-token");
 
       // Restore
       if (originalToken) {

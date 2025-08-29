@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs-extra';
+import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 
@@ -10,17 +10,32 @@ const defaultSettings = {
   sandbox: { enabled: false, type: 'docker' },
   proxy: { enabled: true, redactionEnabled: true },
   analytics: { enabled: true },
-  aliases: { enabled: false }
+  aliases: { enabled: false },
+  agents: { defaultAgent: 'claude', defaultSandbox: 'dagger' },
+  dashboard: { 
+    port: 3001, 
+    host: '127.0.0.1', 
+    autoOpen: true,
+    defaultPage: 'analytics' 
+  },
+  editor: { 
+    defaultEditor: 'vscode', 
+    customCommand: '', 
+    autoDetect: true, 
+    openInNewWindow: false 
+  }
 };
 
 export async function GET() {
   try {
-    await fs.ensureDir(path.dirname(settingsPath));
+    await fs.mkdir(path.dirname(settingsPath), { recursive: true });
     
-    if (await fs.pathExists(settingsPath)) {
-      const settings = await fs.readJson(settingsPath);
+    try {
+      await fs.access(settingsPath);
+      const content = await fs.readFile(settingsPath, 'utf8');
+      const settings = JSON.parse(content);
       return NextResponse.json({ ...defaultSettings, ...settings });
-    } else {
+    } catch {
       return NextResponse.json(defaultSettings);
     }
   } catch (error) {
@@ -33,8 +48,8 @@ export async function POST(request: NextRequest) {
   try {
     const settings = await request.json();
     
-    await fs.ensureDir(path.dirname(settingsPath));
-    await fs.writeJson(settingsPath, settings, { spaces: 2 });
+    await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+    await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
     
     return NextResponse.json({ success: true });
   } catch (error) {

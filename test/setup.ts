@@ -4,6 +4,12 @@ import { vi } from "vitest";
 
 dotenv.config({ path: resolve(process.cwd(), ".env") });
 
+// Only import jest-dom if we're in a jsdom environment
+// This needs to happen after other imports
+if (typeof window !== 'undefined') {
+  import("@testing-library/jest-dom/vitest");
+}
+
 // Create mock factory functions to be used by vi.mock
 const createDaggerMock = () => {
   // Mock container interface with realistic behavior

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "time": {
+      "command": "npx",
+      "args": ["-y", "@mcp/server-time"],
+      "enabled": false
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/private/tmp"],
+      "enabled": true
+    }
+  }
+}

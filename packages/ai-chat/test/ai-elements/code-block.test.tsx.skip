@@ -1,0 +1,73 @@
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { CodeBlock } from '../../src/components/ai-elements/code-block';
+
+// Mock react-syntax-highlighter to avoid complex highlighting logic in tests
+vi.mock('react-syntax-highlighter', () => ({
+  Prism: ({ children, language }: { children: string; language: string }) => (
+    <pre data-language={language}><code>{children}</code></pre>
+  ),
+}));
+
+// Mock clipboard API
+Object.assign(navigator, {
+  clipboard: {
+    writeText: vi.fn(),
+  },
+});
+
+describe('CodeBlock', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should render code with syntax highlighter', () => {
+    const code = 'console.log("Hello World");';
+    render(<CodeBlock code={code} language="javascript" />);
+    
+    expect(screen.getByText(code)).toBeInTheDocument();
+    
+    const pre = screen.getByRole('generic', { hidden: true });
+    expect(pre).toHaveAttribute('data-language', 'javascript');
+  });
+
+  it('should render with custom className', () => {
+    render(
+      <CodeBlock 
+        code="test" 
+        language="javascript" 
+        className="custom-class" 
+        data-testid="codeblock"
+      />
+    );
+    
+    const codeblock = screen.getByTestId('codeblock');
+    expect(codeblock).toHaveClass('custom-class');
+  });
+
+  it('should handle line numbers prop', () => {
+    render(<CodeBlock code="test" language="javascript" showLineNumbers={true} />);
+    
+    // The component should render regardless of line numbers setting
+    expect(screen.getByText('test')).toBeInTheDocument();
+  });
+
+  it('should support different languages', () => {
+    const { rerender } = render(<CodeBlock code="test" language="python" />);
+    expect(screen.getByText('test')).toBeInTheDocument();
+    
+    rerender(<CodeBlock code="test" language="typescript" />);
+    expect(screen.getByText('test')).toBeInTheDocument();
+  });
+
+  it('should render children when provided', () => {
+    render(
+      <CodeBlock code="test" language="javascript">
+        <div>Custom child content</div>
+      </CodeBlock>
+    );
+    
+    expect(screen.getByText('test')).toBeInTheDocument();
+    expect(screen.getByText('Custom child content')).toBeInTheDocument();
+  });
+});

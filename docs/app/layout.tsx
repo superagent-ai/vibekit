@@ -22,6 +22,11 @@ export const metadata: Metadata = {
   title: "VibeKit | Turn complex integrations into one-click experiences",
   description:
     "VibeKit Onboard turns complex integrations into one-click experiences — using a coding agent embedded directly in your docs.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
   openGraph: {
     images: ["/og-onboard.png"],
   },
@@ -34,7 +39,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <link rel="icon" href="/favicon.svg" />
+      <head>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="alternate icon" href="/favicon.ico" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Preview</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        h1 {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 2.5rem;
+        }
+        .status {
+            background: rgba(0, 255, 0, 0.2);
+            border: 1px solid rgba(0, 255, 0, 0.5);
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 1rem 0;
+            text-align: center;
+        }
+        .info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        .timestamp {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Preview Server Test</h1>
+        
+        <div class="status">
+            <h2>✅ Server is Running!</h2>
+            <p>The VibeKit preview server is working correctly.</p>
+        </div>
+        
+        <div class="info">
+            <h3>📊 Server Information</h3>
+            <p><strong>Type:</strong> Static HTML Server</p>
+            <p><strong>Framework:</strong> Custom iframe-static-server.js</p>
+            <p><strong>Status:</strong> Active and responsive</p>
+            <p class="timestamp"><strong>Loaded at:</strong> <span id="timestamp"></span></p>
+        </div>
+        
+        <div class="info">
+            <h3>🔧 Technical Details</h3>
+            <p>This preview demonstrates that:</p>
+            <ul>
+                <li>Port conflict detection is working</li>
+                <li>Static file serving is functional</li>
+                <li>Iframe embedding is allowed</li>
+                <li>CORS headers are properly set</li>
+                <li>Command parsing has been fixed</li>
+            </ul>
+        </div>
+        
+        <div class="info">
+            <h3>🎨 Viewport Testing</h3>
+            <p>Try switching between Desktop, Tablet, and Mobile views to test responsive preview functionality.</p>
+        </div>
+    </div>
+    
+    <script>
+        // Add current timestamp
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        
+        // Add some interactivity to verify JavaScript execution
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'H1') {
+                e.target.style.transform = 'scale(1.1)';
+                setTimeout(() => {
+                    e.target.style.transform = 'scale(1)';
+                }, 200);
+            }
+        });
+    </script>
+</body>
+</html>

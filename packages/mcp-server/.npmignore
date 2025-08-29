@@ -1,0 +1,28 @@
+# Source files
+src/
+*.ts
+!dist/**/*.d.ts
+
+# Configuration files
+tsconfig.json
+tsup.config.ts
+.gitignore
+
+# Development files
+node_modules/
+*.log
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+coverage/
+.nyc_output/
+
+# Build files (keep dist)
+*.tsbuildinfo

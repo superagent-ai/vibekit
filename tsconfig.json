@@ -1,14 +1,21 @@
 {
-    "compilerOptions": {
-      "target": "ES2022",
-      "module": "ESNext",
-      "moduleResolution": "Bundler",
-      "declaration": true,
-      "outDir": "dist",
-      "strict": true,
-      "esModuleInterop": true,
-      "skipLibCheck": true
-    },
-    "include": ["packages/sdk", "test/codex.test.ts"]
-  }
-  
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "declaration": true,
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@vibe-kit/e2b": ["packages/e2b/dist/index.d.ts", "packages/e2b/src/index.ts"],
+      "@vibe-kit/cloudflare": ["packages/cloudflare/dist/index.d.ts", "packages/cloudflare/src/index.ts"],
+      "@vibe-kit/daytona": ["packages/daytona/dist/index.d.ts", "packages/daytona/src/index.ts"],
+      "@vibe-kit/northflank": ["packages/northflank/dist/index.d.ts", "packages/northflank/src/index.ts"]
+    }
+  },
+  "include": ["test/**/*"],
+  "exclude": ["node_modules", "**/dist/**", "**/node_modules/**", "packages/**"]
+}

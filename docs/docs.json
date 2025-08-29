@@ -138,6 +138,32 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "MCP",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "mcp/introduction",
+              "mcp/quickstart"
+            ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "mcp/tools/projects",
+              "mcp/tools/project-management"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "mcp/claude-desktop",
+              "mcp/deployment"
+            ]
+          }
+        ]
       }
     ],
     "global": {

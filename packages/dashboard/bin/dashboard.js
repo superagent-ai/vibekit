@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 
-const DashboardServer = require('../server.js');
+/**
+ * VibeKit Dashboard CLI Entry Point
+ * 
+ * This script is the main entry point for the dashboard when run as a standalone package.
+ * It uses our custom server with port management for secure local development.
+ */
 
-const args = process.argv.slice(2);
-const port = args.find(arg => arg.startsWith('--port='))?.split('=')[1] || 
-             args[args.indexOf('--port') + 1] || 3001;
+// Forward all arguments to the server
+process.argv = ['node', require.resolve('../server.js'), ...process.argv.slice(2)];
 
-const server = new DashboardServer({ 
-  port: parseInt(port) 
-});
-
-server.start().catch(error => {
-  console.error('Failed to start dashboard:', error.message);
-  process.exit(1);
-});
+// Run the server
+require('../server.js');

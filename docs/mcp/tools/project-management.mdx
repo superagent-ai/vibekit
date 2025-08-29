@@ -1,0 +1,338 @@
+---
+title: project_manage
+description: "Create, update, or delete VibeKit projects"
+---
+
+## Overview
+
+The `project_manage` tool provides full CRUD (Create, Read, Update, Delete) operations for VibeKit projects. It enables AI assistants to create new projects, modify existing project configurations, and remove projects from the registry.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | enum | Yes | Operation to perform: `create`, `update`, or `delete` |
+| `id` | string | Conditional | Project ID (required for `update` and `delete`) |
+| `name` | string | Conditional | Project name (required for `create`) |
+| `projectRoot` | string | Conditional | Absolute path to project (required for `create`) |
+| `description` | string | No | Project description |
+| `setupScript` | string | No | Setup command to run |
+| `devScript` | string | No | Development command to run |
+| `cleanupScript` | string | No | Cleanup command to run |
+| `tags` | string[] | No | Tags for project categorization |
+| `status` | enum | No | Project status: `active` or `archived` |
+| `priority` | enum | No | Priority level: `high`, `medium`, or `low` |
+
+## Actions
+
+### create
+
+Creates a new project in the VibeKit registry.
+
+**Required Parameters:**
+- `name`: Unique project name
+- `projectRoot`: Absolute path to the project directory
+
+**Example Request:**
+```json
+{
+  "action": "create",
+  "name": "my-new-app",
+  "projectRoot": "/home/user/projects/my-new-app",
+  "description": "A React application with TypeScript",
+  "setupScript": "npm install",
+  "devScript": "npm run dev",
+  "cleanupScript": "npm run clean",
+  "tags": ["react", "typescript", "frontend"],
+  "status": "active",
+  "priority": "high"
+}
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "project": {
+    "id": "gen-xyz789",
+    "name": "my-new-app",
+    "projectRoot": "/home/user/projects/my-new-app",
+    "description": "A React application with TypeScript",
+    "setupScript": "npm install",
+    "devScript": "npm run dev",
+    "cleanupScript": "npm run clean",
+    "tags": ["react", "typescript", "frontend"],
+    "status": "active",
+    "priority": "high",
+    "createdAt": "2024-01-25T10:00:00Z",
+    "updatedAt": "2024-01-25T10:00:00Z"
+  }
+}
+```
+
+### update
+
+Updates an existing project's configuration.
+
+**Required Parameters:**
+- `id`: The project ID to update
+
+**Example Request:**
+```json
+{
+  "action": "update",
+  "id": "abc123",
+  "description": "Updated description for the project",
+  "tags": ["react", "typescript", "pwa"],
+  "priority": "medium",
+  "devScript": "npm run dev:local"
+}
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "project": {
+    "id": "abc123",
+    "name": "my-app",
+    "projectRoot": "/home/user/projects/my-app",
+    "description": "Updated description for the project",
+    "tags": ["react", "typescript", "pwa"],
+    "priority": "medium",
+    "devScript": "npm run dev:local",
+    "updatedAt": "2024-01-25T11:30:00Z"
+  }
+}
+```
+
+### delete
+
+Removes a project from the registry.
+
+**Required Parameters:**
+- `id`: The project ID to delete
+
+**Example Request:**
+```json
+{
+  "action": "delete",
+  "id": "old-project-123"
+}
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "message": "Project deleted successfully"
+}
+```
+
+## Script Fields
+
+### setupScript
+
+Command to run when initializing the project environment.
+
+**Common Examples:**
+- `npm install` - Install Node.js dependencies
+- `pip install -r requirements.txt` - Install Python dependencies
+- `docker-compose up -d` - Start Docker containers
+- `./scripts/setup.sh` - Run custom setup script
+
+### devScript
+
+Command to start the development environment.
+
+**Common Examples:**
+- `npm run dev` - Start development server
+- `npm start` - Start application
+- `python manage.py runserver` - Django development server
+- `cargo watch -x run` - Rust with auto-reload
+
+### cleanupScript
+
+Command to clean up project resources.
+
+**Common Examples:**
+- `npm run clean` - Clean build artifacts
+- `docker-compose down` - Stop and remove containers
+- `rm -rf dist build` - Remove build directories
+- `./scripts/cleanup.sh` - Run custom cleanup
+
+## Error Responses
+
+### Missing Required Fields
+
+```json
+{
+  "success": false,
+  "error": "Name and projectRoot are required for creating a project"
+}
+```
+
+### Project Not Found
+
+```json
+{
+  "success": false,
+  "error": "Project not found"
+}
+```
+
+### Invalid Action
+
+```json
+{
+  "error": "Invalid action"
+}
+```
+
+### General Error
+
+```json
+{
+  "success": false,
+  "error": "Error message describing the issue"
+}
+```
+
+## Use Cases
+
+### Create a Full-Stack Project
+
+```json
+{
+  "action": "create",
+  "name": "fullstack-app",
+  "projectRoot": "/workspace/fullstack-app",
+  "description": "Full-stack application with React frontend and Node.js backend",
+  "setupScript": "npm install && cd backend && npm install",
+  "devScript": "npm run dev:all",
+  "tags": ["fullstack", "react", "nodejs", "mongodb"],
+  "priority": "high"
+}
+```
+
+### Archive an Old Project
+
+Instead of deleting, mark a project as archived:
+
+```json
+{
+  "action": "update",
+  "id": "old-project-id",
+  "status": "archived"
+}
+```
+
+### Update Project Scripts
+
+Update development and cleanup scripts:
+
+```json
+{
+  "action": "update",
+  "id": "project-id",
+  "devScript": "npm run dev -- --port 3001",
+  "cleanupScript": "npm run clean && rm -rf .cache"
+}
+```
+
+### Add Tags to Existing Project
+
+```json
+{
+  "action": "update",
+  "id": "project-id",
+  "tags": ["react", "typescript", "tested", "production"]
+}
+```
+
+### Change Project Priority
+
+```json
+{
+  "action": "update",
+  "id": "project-id",
+  "priority": "high"
+}
+```
+
+## Best Practices
+
+### Creating Projects
+
+1. **Use absolute paths**: Always provide absolute paths for `projectRoot`
+2. **Add descriptions**: Include meaningful descriptions for future reference
+3. **Define scripts**: Set up useful scripts for common operations
+4. **Tag appropriately**: Use consistent tags across projects
+5. **Set initial status**: Start with `active` unless importing old projects
+
+### Updating Projects
+
+1. **Partial updates**: Only include fields you want to change
+2. **Preserve data**: Unspecified fields remain unchanged
+3. **Archive vs delete**: Consider archiving instead of deleting
+4. **Update timestamps**: The system automatically updates `updatedAt`
+
+### Deleting Projects
+
+1. **Check dependencies**: Ensure no other systems depend on the project
+2. **Consider archiving**: Archive projects instead of deleting for history
+3. **Verify ID**: Double-check the project ID before deletion
+
+## Field Validation
+
+### Name
+- Must be unique across all projects
+- Should be descriptive and memorable
+- Typically lowercase with hyphens
+
+### Project Root
+- Must be an absolute path
+- Directory doesn't need to exist (can be created)
+- Should be accessible by the user
+
+### Tags
+- Array of strings
+- Use consistent naming conventions
+- Common tags: language, framework, status, team
+
+### Priority
+- Enum: `high`, `medium`, `low`
+- Defaults to `medium` if not specified
+- Helps with project organization
+
+### Status
+- Enum: `active`, `archived`
+- Defaults to `active` for new projects
+- Archived projects remain in registry but are filtered by default
+
+## Integration Patterns
+
+### Project Creation Workflow
+
+1. Create project with initial configuration
+2. Execute setup script if defined
+3. Start development with dev script
+
+### Project Migration
+
+1. Create new project entry
+2. Copy configuration from old project
+3. Update paths and scripts
+4. Archive or delete old project
+
+### Batch Operations
+
+For multiple related projects:
+1. Create projects with consistent tags
+2. Use similar script patterns
+3. Set appropriate priorities
+4. Group by status
+
+## Related Tools
+
+- [`projects`](/mcp/tools/projects) - List, get, or search projects

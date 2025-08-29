@@ -1,0 +1,63 @@
+{
+  "description": "Essential MCP servers that users can easily add to their ~/.vibekit/mcp-servers.json configuration",
+  "servers": {
+    "filesystem": {
+      "name": "Filesystem Server",
+      "description": "Official MCP server for filesystem operations - read, write, and manage files",
+      "repository": "https://github.com/modelcontextprotocol/servers",
+      "url": "https://modelcontextprotocol.io",
+      "xHandle": "@AnthropicAI",
+      "category": "development",
+      "config": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/$USER/code"],
+        "enabled": true
+      }
+    },
+    "task-master-ai": {
+      "name": "Task Master AI",
+      "description": "⚠️ REQUIRED for Taskmaster projects: Task expansion, subtask management, and AI-powered task breakdown. Needs at least ONE API key from any AI provider.",
+      "repository": "https://github.com/eyaltoledano/claude-task-master",
+      "url": "https://github.com/eyaltoledano/claude-task-master",
+      "xHandle": "@taskmasterai",
+      "category": "productivity",
+      "requiresApiKeys": true,
+      "requiredForTaskmaster": true,
+      "envVars": {
+        "anyOne": [
+          "ANTHROPIC_API_KEY",
+          "PERPLEXITY_API_KEY",
+          "OPENAI_API_KEY", 
+          "GOOGLE_API_KEY",
+          "MISTRAL_API_KEY",
+          "GROQ_API_KEY",
+          "OPENROUTER_API_KEY",
+          "XAI_API_KEY",
+          "AZURE_OPENAI_API_KEY",
+          "OLLAMA_API_KEY"
+        ]
+      },
+      "envVarDescriptions": {
+        "ANTHROPIC_API_KEY": "Claude AI API key (recommended, most reliable)",
+        "PERPLEXITY_API_KEY": "Perplexity search API key (includes research capabilities)",
+        "OPENAI_API_KEY": "OpenAI API key (for GPT-4, GPT-3.5 models)",
+        "GOOGLE_API_KEY": "Google AI API key (for Gemini models)",
+        "MISTRAL_API_KEY": "Mistral AI API key (for Mistral models)",
+        "GROQ_API_KEY": "Groq API key (fast inference, good for quick tasks)",
+        "OPENROUTER_API_KEY": "OpenRouter API key (access to multiple models)",
+        "XAI_API_KEY": "xAI API key (for Grok models)",
+        "AZURE_OPENAI_API_KEY": "Azure OpenAI API key (enterprise OpenAI)",
+        "OLLAMA_API_KEY": "Ollama API key (for local/self-hosted models)"
+      },
+      "config": {
+        "command": "npx",
+        "args": ["-y", "--package=task-master-ai", "task-master-ai"],
+        "enabled": false
+      }
+    }
+  },
+  "installation": {
+    "instructions": "These are the essential MCP servers for VibeKit. Filesystem provides file operations, and Task Master AI enables advanced project management capabilities.",
+    "example": "Servers can be installed directly from the dashboard using the 'Add' button, or manually added to ~/.vibekit/mcp-servers.json"
+  }
+}
