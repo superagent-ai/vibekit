@@ -4,7 +4,6 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -35,6 +34,14 @@
     "ai": "^4.3.16",
     "uuid": "^11.1.0",
     "zod": "^3.25.76"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/claude-code": "^1.0.96"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/claude-code": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^22.15.18",

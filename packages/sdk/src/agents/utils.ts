@@ -153,6 +153,17 @@ export async function generatePRMetadata(
   prompt: string
 ) {
   const _prompt = `You are tasked to create title and body for a pull request based on the following task:\n${prompt}\n\npatch:\n\n${patch}`;
+  
+  // Check if we have OAuth token (Claude Code OAuth flow)
+  const { isOAuthToken } = await import('./oauth-utils');
+  
+  if (isOAuthToken(modelConfig)) {
+    // Use optimized OAuth implementation
+    const { generatePRMetadataWithOAuth } = await import('./oauth-utils');
+    return await generatePRMetadataWithOAuth(patch, modelConfig, _prompt);
+  }
+  
+  // Standard API flow for regular API keys
   const provider = await createProvider(modelConfig);
   const model = getDefaultModel(modelConfig.provider);
 
@@ -181,6 +192,17 @@ export async function generateCommitMessage(
   prompt: string
 ) {
   const _prompt = `You are tasked to create a commit message based on the following task:\n${prompt}\n\npatch:\n\n${patch}`;
+  
+  // Check if we have OAuth token (Claude Code OAuth flow)
+  const { isOAuthToken } = await import('./oauth-utils');
+  
+  if (isOAuthToken(modelConfig)) {
+    // Use optimized OAuth implementation
+    const { generateCommitMessageWithOAuth } = await import('./oauth-utils');
+    return await generateCommitMessageWithOAuth(patch, modelConfig, _prompt);
+  }
+  
+  // Standard API flow for regular API keys
   const provider = await createProvider(modelConfig);
   const model = modelConfig.model || getDefaultModel(modelConfig.provider);
 
