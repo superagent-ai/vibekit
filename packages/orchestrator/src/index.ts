@@ -5,8 +5,8 @@ export * from './types';
 export { JSONLEventStore } from './storage/jsonl-event-store';
 export { JSONStateStore } from './storage/json-state-store';
 
-// Export core classes (these will be implemented in later phases)
-// export { SessionManager } from './core/session-manager';
+// Export core classes
+export { SessionManager } from './core/session-manager';
 // export { WorktreeManager } from './core/worktree-manager';
 // export { WorkflowEngine } from './core/workflow-engine';
 

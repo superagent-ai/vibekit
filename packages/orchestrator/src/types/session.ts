@@ -101,10 +101,11 @@ export interface ContainerState {
 }
 
 export interface TestResult {
+  id: string;
   name: string;
-  status: 'pass' | 'fail' | 'skip';
+  status: 'passed' | 'failed' | 'skipped';
   duration?: number;
-  error?: string;
+  message?: string;
 }
 
 export interface SessionSummary {
@@ -127,4 +128,24 @@ export interface SessionSummary {
 
 export interface SessionIndex {
   sessions: SessionSummary[];
+  lastUpdated: Date;
+}
+
+export interface CreateSessionOptions {
+  epicId: string;
+  epicName?: string;
+  provider: {
+    type: string;
+    config: any;
+  };
+  parallel?: boolean;
+  repoUrl?: string;
+}
+
+export interface SessionFilters {
+  status?: 'active' | 'paused' | 'completed' | 'failed';
+  provider?: string;
+  epicId?: string;
+  since?: Date;
+  until?: Date;
 }
