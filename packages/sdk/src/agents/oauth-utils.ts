@@ -48,22 +48,32 @@ function parseJsonResponse(content: string, requiredFields: string[]): any {
  * Execute Claude Code SDK query with optimized options
  */
 async function executeClaudeQuery(prompt: string, modelConfig: ModelConfig): Promise<string> {
-  const { query } = await import("@anthropic-ai/claude-code");
-  
-  const options = {
-    authToken: modelConfig.apiKey,
-    outputFormat: 'text' as const,
-    model: modelConfig.model || 'claude-sonnet-4-20250514',
-    maxTurns: 1
-  };
+  try {
+    const { query } = await import("@anthropic-ai/claude-code");
+    
+    const options = {
+      authToken: modelConfig.apiKey,
+      outputFormat: 'text' as const,
+      model: modelConfig.model || 'claude-sonnet-4-20250514',
+      maxTurns: 1
+    };
 
-  for await (const message of query({ prompt, ...options })) {
-    if (message?.type === 'result' && 'result' in message && typeof message.result === 'string') {
-      return message.result;
+    for await (const message of query({ prompt, ...options })) {
+      if (message?.type === 'result' && 'result' in message && typeof message.result === 'string') {
+        return message.result;
+      }
     }
+    
+    return '';
+  } catch (error: any) {
+    if (error?.code === 'MODULE_NOT_FOUND' || error?.message?.includes('@anthropic-ai/claude-code')) {
+      throw new Error(
+        'OAuth functionality requires @anthropic-ai/claude-code to be installed. ' +
+        'Install it with: npm install @anthropic-ai/claude-code@^1.0.96'
+      );
+    }
+    throw error;
   }
-  
-  return '';
 }
 
 /**
