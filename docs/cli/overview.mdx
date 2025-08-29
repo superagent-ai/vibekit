@@ -12,7 +12,7 @@ The VibeKit CLI (`vibekit`) is a security and analytics middleware for existing 
 - 🛡️ **Safe Sandboxing**: Complete isolation with resource limits and network restrictions
 - 🔄 **Unified Interface**: Single CLI for multiple coding agents
 - 📈 **Real-time Dashboard**: Monitor agent activity and performance
-- 🌐 **Proxy Support**: Request/response logging and PII redaction
+- 🔒 **Built-in Redaction**: Automatic PII and sensitive data removal
 
 ## Architecture
 
@@ -21,7 +21,7 @@ VibeKit CLI acts as a wrapper around existing coding agents:
 1. **Agent Middleware** - Wraps Claude Code CLI, Gemini CLI, and others
 2. **Sandbox Security** - Optional Docker containerization for complete isolation
 3. **Analytics Engine** - Tracks usage, performance, and error patterns
-4. **Proxy Server** - Logs and redacts sensitive data in API requests
+4. **Redaction System** - Automatic sensitive data removal from outputs
 5. **Dashboard Interface** - Web UI for monitoring and insights
 
 ## Quick Example
@@ -85,7 +85,6 @@ The VibeKit CLI provides these main commands:
 ### Utility Commands
 - **`vibekit sync`** - Sync changes from sandbox back to project
 - **`vibekit docker`** - Manage Docker containers
-- **`vibekit proxy`** - Manage proxy server
 - **`vibekit clean`** - Clean logs, analytics, and Docker resources
 
 ## Next Steps

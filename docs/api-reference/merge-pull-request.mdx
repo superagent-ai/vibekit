@@ -1,0 +1,199 @@
+---
+title: 'mergePullRequest'
+description: 'Merge an existing pull request on GitHub'
+---
+
+## Overview
+
+The `mergePullRequest` method allows you to programmatically merge an existing pull request on GitHub. It supports different merge methods (merge, squash, rebase) and allows customization of the commit message.
+
+## Method Signature
+
+```typescript
+async mergePullRequest(
+  options: MergePullRequestOptions
+): Promise<MergePullRequestResult>
+```
+
+## Parameters
+
+### MergePullRequestOptions
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `pullNumber` | `number` | Yes | The number of the pull request to merge |
+| `commitTitle` | `string` | No | Custom title for the merge commit |
+| `commitMessage` | `string` | No | Custom message for the merge commit |
+| `mergeMethod` | `'merge' \| 'squash' \| 'rebase'` | No | The merge method to use (defaults to 'merge') |
+
+### Merge Methods
+
+- **`merge`**: Creates a merge commit with all commits from the feature branch
+- **`squash`**: Squashes all commits into a single commit before merging
+- **`rebase`**: Rebases the commits onto the base branch
+
+## Return Value
+
+### MergePullRequestResult
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `sha` | `string` | The SHA of the merge commit |
+| `merged` | `boolean` | Whether the pull request was successfully merged |
+| `message` | `string` | A message describing the merge result |
+
+## Prerequisites
+
+Before using this method, ensure:
+
+1. **GitHub Configuration**: You only need to configure GitHub credentials:
+   ```typescript
+   vibekit.withGithub({
+     token: "your-github-token",
+     repository: "owner/repo"
+   })
+   ```
+   Note: Unlike other methods, `mergePullRequest` does NOT require agent or sandbox configuration.
+
+2. **Pull Request State**: The pull request must be:
+   - Open and not already merged
+   - Free of merge conflicts
+   - Passing all required status checks
+   - Approved if required by branch protection rules
+
+## Usage Examples
+
+### Basic Merge
+
+```typescript
+import { VibeKit } from "vibekit";
+
+const vibekit = new VibeKit()
+  .withGithub({
+    token: process.env.GITHUB_TOKEN,
+    repository: "myorg/myrepo"
+  });
+
+// Merge a pull request with default settings
+const mergeResult = await vibekit.mergePullRequest({
+  pullNumber: 42
+});
+
+console.log(`PR merged with commit SHA: ${mergeResult.sha}`);
+```
+
+### Squash and Merge
+
+```typescript
+// Squash all commits and merge with a custom message
+const mergeResult = await vibekit.mergePullRequest({
+  pullNumber: 42,
+  mergeMethod: "squash",
+  commitTitle: "feat: Add new feature",
+  commitMessage: "This PR adds the new feature with the following changes:\n- Added X\n- Updated Y\n- Fixed Z"
+});
+```
+
+### Complete Workflow Example
+
+```typescript
+// For operations that require code generation, you'll need agent and sandbox
+const vibkitWithAgent = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    model: "claude-3-opus-20240229"
+  })
+  .withSandbox("docker")
+  .withGithub({
+    token: process.env.GITHUB_TOKEN,
+    repository: "myorg/myrepo"
+  });
+
+// Generate code and create PR (requires agent/sandbox)
+await vibkitWithAgent.generateCode({
+  prompt: "Add a new user authentication feature",
+  mode: "code",
+  branch: "feature/auth"
+});
+
+await vibkitWithAgent.pushToBranch();
+const prResponse = await vibkitWithAgent.createPullRequest(
+  {
+    name: "feature",
+    color: "0366d6",
+    description: "New feature"
+  },
+  "feature"
+);
+
+console.log(`Created PR #${prResponse.number}`);
+
+// After review and approval, merge the PR (only needs GitHub config)
+const vibkitSimple = new VibeKit()
+  .withGithub({
+    token: process.env.GITHUB_TOKEN,
+    repository: "myorg/myrepo"
+  });
+
+const mergeResult = await vibkitSimple.mergePullRequest({
+  pullNumber: prResponse.number,
+  mergeMethod: "squash"
+});
+
+if (mergeResult.merged) {
+  console.log(`Successfully merged PR #${prResponse.number}`);
+}
+```
+
+## Error Handling
+
+The method will throw an error in the following cases:
+
+### Configuration Errors
+- Missing GitHub token or repository configuration
+- Invalid repository URL format
+
+### Pull Request Errors
+- **404**: Pull request not found
+- **405**: Pull request is not mergeable (conflicts or failed checks)
+- **422**: Invalid merge parameters or validation failed
+
+### Example Error Handling
+
+```typescript
+try {
+  const result = await vibekit.mergePullRequest({
+    pullNumber: 42,
+    mergeMethod: "squash"
+  });
+  
+  if (result.merged) {
+    console.log("Pull request successfully merged!");
+  }
+} catch (error) {
+  if (error.message.includes("not mergeable")) {
+    console.error("PR has conflicts or failed status checks");
+  } else if (error.message.includes("not found")) {
+    console.error("PR does not exist");
+  } else {
+    console.error("Failed to merge PR:", error.message);
+  }
+}
+```
+
+## Notes
+
+- **No agent or sandbox required**: This method only needs GitHub configuration
+- The method requires appropriate GitHub permissions (write access to the repository)
+- Branch protection rules will be enforced
+- The merge will respect all repository settings and requirements
+- After a successful merge, the source branch may be automatically deleted depending on repository settings
+- This is a direct GitHub API call - no code execution or AI processing is involved
+
+## Related Methods
+
+- [`createPullRequest`](/api-reference/create-pull-request) - Create a new pull request
+- [`pushToBranch`](/api-reference/push-to-branch) - Push changes to a branch
+- [`generateCode`](/api-reference/generate-code) - Generate code using AI agents

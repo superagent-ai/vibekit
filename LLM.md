@@ -340,7 +340,7 @@ my-vibekit-worker/
 #### 3. Complete Worker Implementation
 ```typescript
 import { VibeKit } from '@vibe-kit/vibekit';
-import { createCloudflareProvider, proxyToSandbox } from '@vibe-kit/cloudflare';
+import { createCloudflareProvider } from '@vibe-kit/cloudflare';
 
 // REQUIRED: Export Sandbox class for Durable Objects
 export { Sandbox } from "@cloudflare/sandbox";
@@ -356,10 +356,6 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     
-    // REQUIRED: Handle preview URL routing for sandbox services
-    const proxyResponse = await proxyToSandbox(request, env);
-    if (proxyResponse) return proxyResponse;
-
     // Handle VibeKit requests
     if (url.pathname === '/vibekit' || url.pathname.startsWith('/api/')) {
       try {
@@ -438,7 +434,7 @@ const result = await vibekit.generateCode({
 const previewUrl = await vibekit.getHost(3000);
 // Returns: https://3000-sandbox-id.your-worker.domain.workers.dev
 
-// This URL is automatically routed by proxyToSandbox()
+// This URL provides direct access to your sandbox service
 ```
 
 #### 5. Local Development Port Configuration
@@ -503,14 +499,14 @@ Set these in wrangler.json `vars` section or via Cloudflare dashboard:
 - **Automatic Preview URLs**: Services are automatically exposed with public URLs
 - **Edge Distribution**: Sandboxes run on Cloudflare's global edge network
 - **Container Platform**: Built on Cloudflare's container technology
-- **Routing Required**: Must implement proxyToSandbox for preview URLs
+- **Direct Access**: Preview URLs provide direct access to sandbox services
 - **Export Required**: Must export the Sandbox class from your Worker
 
 #### 9. Troubleshooting
 
 **"Sandbox binding not found"**: Ensure your wrangler.json has proper Durable Object configuration and you're passing the correct `env` object.
 
-**Preview URLs not working**: Make sure you're calling `proxyToSandbox()` at the beginning of your fetch handler.
+**Preview URLs not working**: Ensure your Worker's hostname is correctly configured in the provider setup.
 
 **Container errors**: The Dockerfile is provided by @cloudflare/sandbox package - don't create your own unless customizing.
 

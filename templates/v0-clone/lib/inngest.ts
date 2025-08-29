@@ -1,6 +1,7 @@
 import { Inngest } from "inngest";
 import { realtimeMiddleware, channel, topic } from "@inngest/realtime";
-import { VibeKit, VibeKitConfig } from "@vibe-kit/sdk";
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
 import { fetchMutation } from "convex/nextjs";
 
 import { api } from "@/convex/_generated/api";
@@ -61,24 +62,21 @@ export const runAgent = inngest.createFunction(
       template: Template;
     } = event.data;
 
-    const config: VibeKitConfig = {
-      agent: {
-        type: "claude",
-        model: {
-          apiKey: process.env.ANTHROPIC_API_KEY!,
-        },
-      },
-      environment: {
-        northflank: {
-          apiKey: process.env.NORTHFLANK_API_KEY!,
-          projectId: process.env.NORTHFLANK_PROJECT_ID!,
-        },
-      },
-      sessionId,
-    };
+    const e2bProvider = createE2BProvider({
+      apiKey: process.env.E2B_API_KEY!,
+      templateId: "vibekit-claude",
+    });
 
     const result = await step.run("generate code", async () => {
-      const vibekit = new VibeKit(config);
+      const vibekit = new VibeKit()
+        .withAgent({
+          type: "claude",
+          provider: "anthropic",
+          apiKey: process.env.ANTHROPIC_API_KEY!,
+          model: "claude-sonnet-4-20250514",
+        })
+        .withSession(sessionId)
+        .withSandbox(e2bProvider);
 
       await fetchMutation(api.sessions.update, {
         id,
@@ -86,124 +84,115 @@ export const runAgent = inngest.createFunction(
         statusMessage: "Working on task",
       });
 
+      vibekit.on("stdout", async (update) => {
+        const data = JSON.parse(update);
+
+        if (data.type === "user") {
+          await fetchMutation(api.sessions.update, {
+            id,
+            status: "CUSTOM",
+            statusMessage: data.message.content[0].content,
+          });
+        }
+
+        if (data.type === "assistant") {
+          await fetchMutation(api.sessions.update, {
+            id,
+            status: "CUSTOM",
+            statusMessage: "Working on task",
+          });
+
+          switch (data.message.content[0].type) {
+            case "text":
+              await fetchMutation(api.messages.add, {
+                sessionId: id,
+                content: data.message.content[0].text,
+                role: "assistant",
+              });
+              break;
+            case "tool_use":
+              const toolName = data.message.content[0].name;
+
+              switch (toolName) {
+                case "TodoWrite":
+                  // Add missing fields to each todo
+                  const todosWithRequiredFields = data.message.content[0].input.todos.map((todo: { content: string; status: string; activeForm?: string }, index: number) => ({
+                    content: todo.content,
+                    id: `todo-${index + 1}`,
+                    priority: "medium",
+                    status: todo.status,
+                  }));
+                  
+                  await fetchMutation(api.messages.add, {
+                    sessionId: id,
+                    role: "assistant",
+                    content: "",
+                    todos: todosWithRequiredFields,
+                  });
+                  break;
+                case "Write":
+                  await fetchMutation(api.messages.add, {
+                    sessionId: id,
+                    role: "assistant",
+                    content: "",
+                    edits: {
+                      filePath: data.message.content[0].input.file_path,
+                      oldString: "",
+                      newString: data.message.content[0].input.content,
+                    },
+                  });
+                  break;
+                case "Edit":
+                  await fetchMutation(api.messages.add, {
+                    sessionId: id,
+                    role: "assistant",
+                    content: "",
+                    edits: {
+                      filePath: data.message.content[0].input.file_path,
+                      oldString: data.message.content[0].input.old_string,
+                      newString: data.message.content[0].input.new_string,
+                    },
+                  });
+                  break;
+                case "Read":
+                  await fetchMutation(api.messages.add, {
+                    sessionId: id,
+                    role: "assistant",
+                    content: "",
+                    read: {
+                      filePath: data.message.content[0].input.file_path,
+                    },
+                  });
+                  break;
+                case "Write":
+                  await fetchMutation(api.messages.add, {
+                    sessionId: id,
+                    role: "assistant",
+                    content: "",
+                    read: {
+                      filePath: data.message.content[0].input.file_path,
+                    },
+                  });
+                default:
+                  break;
+              }
+              break;
+            default:
+              break;
+          }
+        }
+      });
+
       const prompt =
         template?.systemPrompt ||
         "# GOAL\nYou are an helpful assistant that is tasked with helping the user build a NextJS app.\n" +
           "- The NextJS dev server is running on port 3000.\n" +
-          +"Do not run tests or restart the dev server.\n" +
-          `Follow the users intructions:\n\n# INSTRUCTIONS\n${message}`;
+          "Do not run tests or restart the dev server.\n" +
+          `Follow the users instructions:\n\n# INSTRUCTIONS\n${message}`;
 
-      const response = await vibekit.generateCode({
-        prompt: prompt,
-        mode: "code",
-        callbacks: {
-          async onUpdate(message) {
-            const data = JSON.parse(message);
-
-            if (data.type === "user") {
-              await fetchMutation(api.sessions.update, {
-                id,
-                status: "CUSTOM",
-                statusMessage: data.message.content[0].content,
-              });
-            }
-
-            if (data.type === "assistant") {
-              await fetchMutation(api.sessions.update, {
-                id,
-                status: "CUSTOM",
-                statusMessage: "Working on task",
-              });
-
-              switch (data.message.content[0].type) {
-                case "text":
-                  await fetchMutation(api.messages.add, {
-                    sessionId: id,
-                    content: data.message.content[0].text,
-                    role: "assistant",
-                  });
-                  break;
-                case "tool_use":
-                  const toolName = data.message.content[0].name;
-
-                  switch (toolName) {
-                    case "TodoWrite":
-                      await fetchMutation(api.messages.add, {
-                        sessionId: id,
-                        role: "assistant",
-                        content: "",
-                        todos: data.message.content[0].input.todos,
-                      });
-                      break;
-                    case "Write":
-                      await fetchMutation(api.messages.add, {
-                        sessionId: id,
-                        role: "assistant",
-                        content: "",
-                        edits: {
-                          filePath: data.message.content[0].input.file_path,
-                          oldString: "",
-                          newString: data.message.content[0].input.content,
-                        },
-                      });
-                      break;
-                    case "Edit":
-                      await fetchMutation(api.messages.add, {
-                        sessionId: id,
-                        role: "assistant",
-                        content: "",
-                        edits: {
-                          filePath: data.message.content[0].input.file_path,
-                          oldString: data.message.content[0].input.old_string,
-                          newString: data.message.content[0].input.new_string,
-                        },
-                      });
-                      break;
-                    case "Read":
-                      await fetchMutation(api.messages.add, {
-                        sessionId: id,
-                        role: "assistant",
-                        content: "",
-                        read: {
-                          filePath: data.message.content[0].input.file_path,
-                        },
-                      });
-                      break;
-                    case "Write":
-                      await fetchMutation(api.messages.add, {
-                        sessionId: id,
-                        role: "assistant",
-                        content: "",
-                        read: {
-                          filePath: data.message.content[0].input.file_path,
-                        },
-                      });
-                    default:
-                      break;
-                  }
-                  break;
-                default:
-                  break;
-              }
-            }
-          },
-        },
-      });
-
-      // // Save checkpoint to database
-      // if (checkpointBranch) {
-      //   await fetchMutation(api.messages.add, {
-      //     sessionId: id,
-      //     role: "assistant",
-      //     content: "",
-      //     checkpoint: {
-      //       branch: checkpointBranch,
-      //       patch: patchContent.length > 0 ? patchContent : undefined,
-      //     },
-      //   });
-
-      //   console.log("Checkpoint saved:", checkpointBranch);
-      // }
+      const response = await vibekit.executeCommand(
+        `echo "${prompt}" | claude -p --output-format stream-json --verbose`
+      );
 
       return response;
     });
@@ -240,24 +229,20 @@ export const createSession = inngest.createFunction(
 
     let sandboxId: string;
 
-    const config: VibeKitConfig = {
-      agent: {
-        type: "claude",
-        model: {
-          apiKey: process.env.ANTHROPIC_API_KEY!,
-        },
-      },
-      environment: {
-        northflank: {
-          apiKey: process.env.NORTHFLANK_API_KEY!,
-          projectId: process.env.NORTHFLANK_PROJECT_ID!,
-          image: template?.image,
-        },
-      },
-      secrets: template?.secrets,
-    };
+    const e2bProvider = createE2BProvider({
+      apiKey: process.env.E2B_API_KEY!,
+      templateId: template?.image || "vibekit-claude",
+    });
 
-    const vibekit = new VibeKit(config);
+    const vibekit = new VibeKit()
+      .withAgent({
+        type: "claude",
+        provider: "anthropic",
+        apiKey: process.env.ANTHROPIC_API_KEY!,
+        model: "claude-sonnet-4-20250514",
+      })
+      .withSandbox(e2bProvider)
+      .withSecrets(template?.secrets || {});
 
     const data = await step.run("get tunnel url", async () => {
       const title = await generateSessionTitle(message);
@@ -283,6 +268,7 @@ export const createSession = inngest.createFunction(
 
         const commands = [
           // Clone the template repo directly to root
+          `cd /vibe0`,
           `git clone ${templateCloneUrl} .`,
           // Configure git user for commits
           `git config --global user.email "vibe0@vibekit.sh"`,
@@ -296,18 +282,13 @@ export const createSession = inngest.createFunction(
           `git add . && git commit -m "Initial commit from template ${template}" && git push -u origin main`,
         ];
 
-        for (const command of commands) {
-          const { sandboxId: _sandboxId } = await vibekit.executeCommand(
-            command,
-            {
-              callbacks: {
-                onUpdate(message) {
-                  console.log(message);
-                },
-              },
-            }
-          );
+        vibekit.on("update", (update) => {
+          console.log(update);
+        });
 
+        for (const command of commands) {
+          const { sandboxId: _sandboxId } =
+            await vibekit.executeCommand(command);
           sandboxId = _sandboxId;
         }
 
@@ -325,11 +306,6 @@ export const createSession = inngest.createFunction(
 
           await vibekit.executeCommand(command.command, {
             background: command.background,
-            callbacks: {
-              onUpdate(message) {
-                console.log(message);
-              },
-            },
           });
         }
 
@@ -351,13 +327,7 @@ export const createSession = inngest.createFunction(
           status: "INSTALLING_DEPENDENCIES",
         });
 
-        await vibekit.executeCommand("npm i", {
-          callbacks: {
-            onUpdate(message) {
-              console.log(message);
-            },
-          },
-        });
+        await vibekit.executeCommand("npm i");
 
         await fetchMutation(api.sessions.update, {
           id,
@@ -366,11 +336,6 @@ export const createSession = inngest.createFunction(
 
         await vibekit.executeCommand("npm run dev", {
           background: true,
-          callbacks: {
-            onUpdate(message) {
-              console.log(message);
-            },
-          },
         });
 
         await fetchMutation(api.sessions.update, {
