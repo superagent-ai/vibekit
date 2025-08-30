@@ -911,6 +911,422 @@ projectsCommand
     await showCurrentProject();
   });
 
+// Orchestrator commands for project orchestration
+const orchestratorCommand = program
+  .command('orchestrator')
+  .alias('orch')
+  .description('Project orchestration and session management');
+
+orchestratorCommand
+  .command('start')
+  .description('Start a new orchestration session')
+  .option('-t, --task <id>', 'Task ID to work on')
+  .option('--tag <tag>', 'Tag to work on (all tasks with this tag)')
+  .option('--new <title>', 'Create new task with this title')
+  .option('--description <description>', 'Description for new task (use with --new)')
+  .option('-n, --name <name>', 'Custom name for the task (if not auto-detected)')
+  .option('-p, --provider <provider>', 'Provider to use (taskmaster, linear, jira, github-issues)', 'taskmaster')
+  .option('--parallel', 'Enable parallel execution', false)
+  .option('--repo-url <url>', 'Repository URL for git operations')
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      // Dynamic import to avoid loading orchestrator at startup
+      const { SessionManager, ProviderRegistry, TaskmasterProvider, DEFAULT_PROVIDER_CONFIGS } = 
+        await import('@vibe-kit/orchestrator');
+      
+      const sessionManager = new SessionManager();
+      const providerRegistry = new ProviderRegistry();
+      
+      // Initialize providers
+      const taskmasterProvider = new TaskmasterProvider({
+        projectRoot: process.cwd(),
+        autoExpand: false
+      });
+      
+      providerRegistry.register('taskmaster', taskmasterProvider, {
+        ...DEFAULT_PROVIDER_CONFIGS.taskmaster,
+        projectRoot: process.cwd()
+      });
+
+      // Validate provider
+      if (!providerRegistry.hasProvider(options.provider)) {
+        throw new Error(`Provider '${options.provider}' is not available. Available providers: ${providerRegistry.listProviders().join(', ')}`);
+      }
+
+      const provider = providerRegistry.get(options.provider);
+      const providerConfig = providerRegistry.getConfig(options.provider);
+      
+      // Validate task options
+      const hasTaskId = !!options.task;
+      const hasTag = !!options.tag;
+      const hasNewTask = !!options.new;
+      
+      if (!hasTaskId && !hasTag && !hasNewTask) {
+        throw new Error('You must specify either --task <id>, --tag <tag>, or --new <title>');
+      }
+      
+      if ([hasTaskId, hasTag, hasNewTask].filter(Boolean).length > 1) {
+        throw new Error('You can only specify one of --task, --tag, or --new');
+      }
+
+      // Create session options
+      const sessionOptions = {
+        taskId: options.task,
+        taskName: options.name,
+        taskTag: options.tag,
+        createNewTask: hasNewTask ? {
+          title: options.new,
+          description: options.description || `Task: ${options.new}`,
+          tag: options.tag
+        } : undefined,
+        provider: {
+          type: options.provider,
+          config: providerConfig
+        },
+        parallel: options.parallel,
+        repoUrl: options.repoUrl
+      };
+
+      console.log(chalk.blue('🚀 Starting new orchestration session...'));
+      if (hasTaskId) console.log(`   Task ID: ${options.task}`);
+      if (hasTag) console.log(`   Tag: ${options.tag}`);
+      if (hasNewTask) console.log(`   New Task: ${options.new}`);
+      console.log(`   Provider: ${options.provider}`);
+      console.log(`   Parallel: ${options.parallel}`);
+
+      const session = await sessionManager.createSession(sessionOptions);
+      
+      console.log(chalk.green('✅ Session created successfully!'));
+      console.log(`   Session ID: ${chalk.cyan(session.id)}`);
+      console.log(`   Task: ${session.taskName} (${session.taskId})`);
+      if (session.taskTag) console.log(`   Tag: ${session.taskTag}`);
+      console.log(`   Status: ${chalk.yellow(session.status)}`);
+      console.log(`   Started: ${session.startedAt.toLocaleString()}`);
+      console.log(`   Provider: ${session.provider.type}`);
+      
+      console.log(chalk.gray('\n📋 Next steps:'));
+      console.log(chalk.gray(`   vibekit orch status --session=${session.id}`));
+      console.log(chalk.gray(`   vibekit orch sessions`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('sessions')
+  .alias('list')
+  .description('List all orchestration sessions')
+  .option('--status <status>', 'Filter by status (active, paused, completed, failed)')
+  .option('--provider <provider>', 'Filter by provider')
+  .option('--task <task>', 'Filter by task ID')
+  .option('--tag <tag>', 'Filter by tag')
+  .option('--limit <number>', 'Limit number of results', '10')
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { SessionManager } = await import('@vibe-kit/orchestrator');
+      const sessionManager = new SessionManager();
+      
+      console.log(chalk.blue('📋 Orchestration Sessions:'));
+      
+      // Build filters
+      const filters = {};
+      if (options.status) filters.status = options.status;
+      if (options.provider) filters.provider = options.provider;
+      if (options.task) filters.taskId = options.task;
+      if (options.tag) filters.taskTag = options.tag;
+
+      const sessions = await sessionManager.listSessions(filters);
+      
+      if (sessions.length === 0) {
+        console.log(chalk.gray('   No sessions found'));
+        if (Object.keys(filters).length > 0) {
+          console.log(chalk.gray('   Try removing filters or creating a new session with:'));
+          console.log(chalk.gray('   vibekit orch start --epic=<epic-id>'));
+        } else {
+          console.log(chalk.gray('   Create your first session with:'));
+          console.log(chalk.gray('   vibekit orch start --epic=<epic-id>'));
+        }
+        return;
+      }
+
+      console.log(`   Found ${chalk.cyan(sessions.length)} session(s):\n`);
+
+      // Sort by last active and apply limit
+      const sortedSessions = sessions
+        .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
+        .slice(0, parseInt(options.limit));
+
+      for (const session of sortedSessions) {
+        const statusEmoji = {
+          'active': '🟢',
+          'paused': '🟡', 
+          'completed': '✅',
+          'failed': '❌'
+        }[session.status] || '⚪';
+
+        const percentage = session.progress.total > 0 
+          ? Math.round((session.progress.completed / session.progress.total) * 100)
+          : 0;
+
+        console.log(`${statusEmoji} ${chalk.cyan(session.id)}`);
+        console.log(`   Task: ${session.taskName} (${session.taskId})`);
+        if (session.taskTag) console.log(`   Tag: ${session.taskTag}`);
+        console.log(`   Status: ${chalk.yellow(session.status.toUpperCase())} | Provider: ${session.provider}`);
+        console.log(`   Progress: ${session.progress.completed}/${session.progress.total} tasks (${percentage}%)`);
+        
+        const lastActive = new Date(session.lastActiveAt);
+        const minutesAgo = Math.floor((Date.now() - lastActive.getTime()) / (1000 * 60));
+        console.log(`   Last Active: ${lastActive.toLocaleString()} (${minutesAgo}m ago)`);
+        console.log('');
+      }
+
+      console.log(chalk.gray('💡 Commands:'));
+      console.log(chalk.gray(`   vibekit orch status --session=<id>    # Check specific session`));
+      console.log(chalk.gray(`   vibekit orch start --epic=<id>        # Create new session`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('status')
+  .description('Show status of a specific session')
+  .requiredOption('-s, --session <id>', 'Session ID to check')
+  .option('--detailed', 'Show detailed information', false)
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { SessionManager } = await import('@vibe-kit/orchestrator');
+      const sessionManager = new SessionManager();
+      
+      console.log(chalk.blue(`🔍 Checking status for session: ${options.session}`));
+      
+      const session = await sessionManager.loadSession(options.session);
+      if (!session) {
+        throw new Error(`Session '${options.session}' not found`);
+      }
+
+      console.log('\n' + chalk.blue('📊 Session Status:'));
+      console.log(`   ID: ${chalk.cyan(session.id)}`);
+      console.log(`   Epic: ${session.epicName} (${session.epicId})`);
+      console.log(`   Status: ${chalk.yellow(session.status.toUpperCase())}`);
+      console.log(`   Provider: ${session.provider.type}`);
+      console.log('');
+      
+      // Timing information
+      console.log(chalk.blue('⏱️  Timing:'));
+      console.log(`   Started: ${session.startedAt.toLocaleString()}`);
+      console.log(`   Last Active: ${session.lastActiveAt.toLocaleString()}`);
+      
+      const durationMs = session.lastActiveAt.getTime() - session.startedAt.getTime();
+      const durationMinutes = Math.floor(durationMs / (1000 * 60));
+      const durationHours = Math.floor(durationMinutes / 60);
+      const duration = durationHours > 0 
+        ? `${durationHours}h ${durationMinutes % 60}m`
+        : `${durationMinutes}m`;
+      console.log(`   Duration: ${duration}`);
+      
+      if (session.pausedAt) {
+        console.log(`   Paused: ${session.pausedAt.toLocaleString()}`);
+      }
+      if (session.completedAt) {
+        console.log(`   Completed: ${session.completedAt.toLocaleString()}`);
+      }
+      console.log('');
+
+      // Progress information
+      const progress = {
+        completed: session.checkpoint.completedTasks.length,
+        inProgress: session.checkpoint.inProgressTasks.length,
+        pending: session.checkpoint.pendingTasks.length,
+        total: session.checkpoint.completedTasks.length + 
+               session.checkpoint.inProgressTasks.length + 
+               session.checkpoint.pendingTasks.length
+      };
+      
+      console.log(chalk.blue('📈 Progress:'));
+      console.log(`   Completed: ${chalk.green(progress.completed)}`);
+      console.log(`   In Progress: ${chalk.yellow(progress.inProgress)}`);
+      console.log(`   Pending: ${chalk.gray(progress.pending)}`);
+      console.log(`   Total: ${progress.total}`);
+      
+      if (progress.total > 0) {
+        const percentage = Math.round((progress.completed / progress.total) * 100);
+        console.log(`   Completion: ${chalk.cyan(percentage)}%`);
+      }
+      console.log('');
+
+      // Checkpoint information
+      console.log(chalk.blue('💾 Checkpoint:'));
+      console.log(`   Current ID: ${session.checkpoint.id}`);
+      console.log(`   Timestamp: ${session.checkpoint.timestamp.toLocaleString()}`);
+      console.log(`   Last Synced: ${session.checkpoint.lastSyncedAt.toLocaleString()}`);
+      console.log('');
+
+      // Show possible actions
+      console.log(chalk.blue('🎯 Available Actions:'));
+      if (session.status === 'active') {
+        console.log(chalk.gray(`   vibekit orch pause --session=${session.id}    # Pause session`));
+      } else if (session.status === 'paused') {
+        console.log(chalk.gray(`   vibekit orch resume --session=${session.id}   # Resume session`));
+      }
+      console.log(chalk.gray(`   vibekit orch sessions                          # List all sessions`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('pause')
+  .description('Pause an active session')
+  .requiredOption('-s, --session <id>', 'Session ID to pause')
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { SessionManager } = await import('@vibe-kit/orchestrator');
+      const sessionManager = new SessionManager();
+      
+      console.log(chalk.yellow(`⏸️  Pausing session: ${options.session}`));
+      
+      await sessionManager.pauseSession(options.session);
+      
+      console.log(chalk.green('✅ Session paused successfully'));
+      console.log(chalk.gray(`   Resume with: vibekit orch resume --session=${options.session}`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('resume')
+  .description('Resume a paused session')
+  .requiredOption('-s, --session <id>', 'Session ID to resume')
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { SessionManager } = await import('@vibe-kit/orchestrator');
+      const sessionManager = new SessionManager();
+      
+      console.log(chalk.green(`▶️  Resuming session: ${options.session}`));
+      
+      const session = await sessionManager.resumeSession(options.session);
+      
+      console.log(chalk.green('✅ Session resumed successfully'));
+      console.log(`   Session ID: ${chalk.cyan(session.id)}`);
+      console.log(`   Status: ${chalk.yellow(session.status)}`);
+      console.log(chalk.gray(`   Check status: vibekit orch status --session=${session.id}`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('complete')
+  .description('Mark a session as completed')
+  .requiredOption('-s, --session <id>', 'Session ID to complete')
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { SessionManager } = await import('@vibe-kit/orchestrator');
+      const sessionManager = new SessionManager();
+      
+      console.log(chalk.green(`✅ Completing session: ${options.session}`));
+      
+      await sessionManager.completeSession(options.session);
+      
+      console.log(chalk.green('✅ Session completed successfully'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('providers')
+  .description('List available providers and their status')
+  .action(async () => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { ProviderRegistry, TaskmasterProvider, DEFAULT_PROVIDER_CONFIGS } = 
+        await import('@vibe-kit/orchestrator');
+      
+      const providerRegistry = new ProviderRegistry();
+      
+      // Initialize providers
+      const taskmasterProvider = new TaskmasterProvider({
+        projectRoot: process.cwd(),
+        autoExpand: false
+      });
+      
+      providerRegistry.register('taskmaster', taskmasterProvider, {
+        ...DEFAULT_PROVIDER_CONFIGS.taskmaster,
+        projectRoot: process.cwd()
+      });
+      
+      console.log(chalk.blue('🔌 Available Providers:'));
+      
+      const providers = providerRegistry.listProviders();
+      
+      if (providers.length === 0) {
+        console.log(chalk.gray('   No providers registered'));
+        return;
+      }
+
+      console.log('');
+      
+      for (const providerName of providers) {
+        const info = providerRegistry.getProviderInfo(providerName);
+        
+        console.log(`${chalk.cyan('📦')} ${chalk.bold(providerName)}`);
+        console.log(`   Type: ${info?.type || 'unknown'}`);
+        console.log(`   Configuration: ${info?.hasConfig ? chalk.green('Available') : chalk.gray('None')}`);
+        
+        // Try to get provider health
+        try {
+          const provider = providerRegistry.get(providerName);
+          if ('healthCheck' in provider && typeof provider.healthCheck === 'function') {
+            const health = await provider.healthCheck();
+            const healthEmoji = health.status === 'healthy' ? '🟢' : '🔴';
+            console.log(`   Health: ${healthEmoji} ${health.status}`);
+            if (health.message) {
+              console.log(`   Message: ${chalk.gray(health.message)}`);
+            }
+          } else {
+            console.log(`   Health: ${chalk.gray('⚪ Health check not available')}`);
+          }
+        } catch (error) {
+          console.log(`   Health: ${chalk.red('🔴 Error checking health')}`);
+        }
+        
+        console.log('');
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
 // Show welcome screen when just 'vibekit' is typed
 if (process.argv.length === 2) {
   render(React.createElement(Settings, { showWelcome: true }));

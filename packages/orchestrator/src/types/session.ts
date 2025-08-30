@@ -1,7 +1,8 @@
 export interface OrchestratorSession {
   id: string;
-  epicId: string;
-  epicName: string;
+  taskId: string;
+  taskName: string;
+  taskTag?: string; // Optional tag for grouping related tasks
   startedAt: Date;
   lastActiveAt: Date;
   pausedAt?: Date;
@@ -110,8 +111,9 @@ export interface TestResult {
 
 export interface SessionSummary {
   id: string;
-  epicId: string;
-  epicName: string;
+  taskId: string;
+  taskName: string;
+  taskTag?: string;
   status: string;
   startedAt: Date;
   lastActiveAt: Date;
@@ -132,8 +134,14 @@ export interface SessionIndex {
 }
 
 export interface CreateSessionOptions {
-  epicId: string;
-  epicName?: string;
+  taskId?: string;
+  taskName?: string;
+  taskTag?: string;
+  createNewTask?: {
+    title: string;
+    description: string;
+    tag?: string;
+  };
   provider: {
     type: string;
     config: any;
@@ -145,7 +153,8 @@ export interface CreateSessionOptions {
 export interface SessionFilters {
   status?: 'active' | 'paused' | 'completed' | 'failed';
   provider?: string;
-  epicId?: string;
+  taskId?: string;
+  taskTag?: string;
   since?: Date;
   until?: Date;
 }

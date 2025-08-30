@@ -18,10 +18,27 @@ export class SessionManager {
     const sessionId = this.generateSessionId();
     const now = new Date();
 
+    // Handle task creation if requested
+    let taskId = options.taskId;
+    let taskName = options.taskName;
+    
+    if (options.createNewTask && !taskId) {
+      const newTask = await this.createNewTask(options.createNewTask, options.provider);
+      taskId = newTask.id;
+      taskName = newTask.title;
+    } else if (taskId && !taskName) {
+      taskName = await this.getTaskName(taskId, options.provider);
+    }
+
+    if (!taskId) {
+      throw new Error('Either taskId or createNewTask must be provided');
+    }
+
     const session: OrchestratorSession = {
       id: sessionId,
-      epicId: options.epicId,
-      epicName: options.epicName || await this.getEpicName(options.epicId, options.provider),
+      taskId: taskId,
+      taskName: taskName || `Task ${taskId}`,
+      taskTag: options.taskTag,
       startedAt: now,
       lastActiveAt: now,
       status: 'active',
@@ -61,8 +78,9 @@ export class SessionManager {
       timestamp: now.toISOString(),
       sessionId: sessionId,
       data: { 
-        epicId: options.epicId,
-        epicName: session.epicName,
+        taskId: session.taskId,
+        taskName: session.taskName,
+        taskTag: session.taskTag,
         provider: options.provider.type,
         volumes: session.volumes
       }
@@ -332,7 +350,7 @@ export class SessionManager {
       type: 'session.deleted',
       timestamp: new Date().toISOString(),
       sessionId,
-      data: { epicId: session.epicId, epicName: session.epicName }
+      data: { taskId: session.taskId, taskName: session.taskName, taskTag: session.taskTag }
     });
   }
 
@@ -352,8 +370,11 @@ export class SessionManager {
       if (filters.provider) {
         sessions = sessions.filter(s => s.provider === filters.provider);
       }
-      if (filters.epicId) {
-        sessions = sessions.filter(s => s.epicId === filters.epicId);
+      if (filters.taskId) {
+        sessions = sessions.filter(s => s.taskId === filters.taskId);
+      }
+      if (filters.taskTag) {
+        sessions = sessions.filter(s => s.taskTag === filters.taskTag);
       }
       if (filters.since) {
         sessions = sessions.filter(s => new Date(s.startedAt) >= filters.since!);
@@ -464,8 +485,9 @@ export class SessionManager {
     
     const summary: SessionSummary = {
       id: session.id,
-      epicId: session.epicId,
-      epicName: session.epicName,
+      taskId: session.taskId,
+      taskName: session.taskName,
+      taskTag: session.taskTag,
       status: session.status,
       startedAt: session.startedAt,
       lastActiveAt: session.lastActiveAt,
@@ -513,14 +535,29 @@ export class SessionManager {
     return `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  private async getEpicName(epicId: string, provider: any): Promise<string> {
-    // Get epic name from provider
+  private async getTaskName(taskId: string, provider: any): Promise<string> {
+    // Get task name from provider
     try {
-      // This would integrate with the provider system in later phases
-      const epic = await provider.getEpic?.(epicId);
-      return epic?.title || epic?.name || `Epic ${epicId}`;
+      const task = await provider.getTask?.(taskId);
+      return task?.title || `Task ${taskId}`;
     } catch {
-      return `Epic ${epicId}`;
+      return `Task ${taskId}`;
+    }
+  }
+
+  private async createNewTask(taskData: { title: string; description: string; tag?: string }, provider: any): Promise<{ id: string; title: string }> {
+    // Create new task via provider
+    try {
+      const task = await provider.createTask({
+        title: taskData.title,
+        description: taskData.description,
+        tags: taskData.tag ? [taskData.tag] : undefined,
+        priority: 'medium',
+        status: 'pending'
+      });
+      return { id: task.id, title: task.title };
+    } catch (error) {
+      throw new Error(`Failed to create task: ${error instanceof Error ? error.message : error}`);
     }
   }
 }

@@ -32,10 +32,10 @@ describe('SessionManager', () => {
   });
 
   describe('createSession', () => {
-    it('should create a new session with all required properties', async () => {
+    it('should create a new session with existing task', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-123',
-        epicName: 'Test Epic',
+        taskId: 'task-123',
+        taskName: 'Test Task',
         provider: {
           type: 'taskmaster',
           config: { projectRoot: '/test' }
@@ -46,8 +46,8 @@ describe('SessionManager', () => {
       const session = await sessionManager.createSession(options);
 
       expect(session.id).toMatch(/^sess_\d+_[a-z0-9]{9}$/);
-      expect(session.epicId).toBe('epic-123');
-      expect(session.epicName).toBe('Test Epic');
+      expect(session.taskId).toBe('task-123');
+      expect(session.taskName).toBe('Test Task');
       expect(session.status).toBe('active');
       expect(session.startedAt).toBeInstanceOf(Date);
       expect(session.lastActiveAt).toBeInstanceOf(Date);
@@ -58,9 +58,9 @@ describe('SessionManager', () => {
       expect(session.volumes.workspace).toContain(session.id);
     });
 
-    it('should generate epic name when not provided', async () => {
+    it('should generate task name when not provided', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-456',
+        taskId: 'task-456',
         provider: {
           type: 'github-issues',
           config: {}
@@ -69,12 +69,12 @@ describe('SessionManager', () => {
 
       const session = await sessionManager.createSession(options);
 
-      expect(session.epicName).toBe('Epic epic-456');
+      expect(session.taskName).toBe('Task task-456');
     });
 
     it('should save session and update index', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-789',
+        taskId: 'task-789',
         provider: { type: 'linear', config: {} }
       };
 
@@ -99,7 +99,7 @@ describe('SessionManager', () => {
 
     it('should load existing session', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-load-test',
+        taskId: 'task-load-test',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -113,7 +113,7 @@ describe('SessionManager', () => {
   describe('pauseSession', () => {
     it('should pause active session', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-pause',
+        taskId: 'task-pause',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -129,7 +129,7 @@ describe('SessionManager', () => {
 
     it('should not error when pausing already paused session', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-double-pause',
+        taskId: 'task-double-pause',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -150,7 +150,7 @@ describe('SessionManager', () => {
   describe('resumeSession', () => {
     it('should resume paused session', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-resume',
+        taskId: 'task-resume',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -165,7 +165,7 @@ describe('SessionManager', () => {
 
     it('should return session when already active', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-already-active',
+        taskId: 'task-already-active',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -184,7 +184,7 @@ describe('SessionManager', () => {
   describe('completeSession', () => {
     it('should complete active session', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-complete',
+        taskId: 'task-complete',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -204,7 +204,7 @@ describe('SessionManager', () => {
   describe('failSession', () => {
     it('should fail session with reason', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-fail',
+        taskId: 'task-fail',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -219,7 +219,7 @@ describe('SessionManager', () => {
   describe('deleteSession', () => {
     it('should delete existing session', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-delete',
+        taskId: 'task-delete',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -250,14 +250,14 @@ describe('SessionManager', () => {
     beforeEach(async () => {
       // Create multiple test sessions
       const sessions = [
-        { epicId: 'epic-1', provider: { type: 'taskmaster', config: {} } },
-        { epicId: 'epic-2', provider: { type: 'linear', config: {} } },
-        { epicId: 'epic-3', provider: { type: 'taskmaster', config: {} } }
+        { taskId: 'task-1', provider: { type: 'taskmaster', config: {} } },
+        { taskId: 'task-2', provider: { type: 'linear', config: {} } },
+        { taskId: 'task-3', provider: { type: 'taskmaster', config: {} } }
       ];
 
       for (const sessionData of sessions) {
         const session = await sessionManager.createSession(sessionData);
-        if (sessionData.epicId === 'epic-2') {
+        if (sessionData.taskId === 'task-2') {
           await sessionManager.pauseSession(session.id);
         }
       }
@@ -305,7 +305,7 @@ describe('SessionManager', () => {
   describe('checkpoint management', () => {
     it('should create checkpoint', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-checkpoint',
+        taskId: 'task-checkpoint',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -326,7 +326,7 @@ describe('SessionManager', () => {
 
     it('should list checkpoints for session', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-checkpoints',
+        taskId: 'task-checkpoints',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -346,7 +346,7 @@ describe('SessionManager', () => {
 
     it('should restore from checkpoint', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-restore',
+        taskId: 'task-restore',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -369,7 +369,7 @@ describe('SessionManager', () => {
 
     it('should throw error when restoring from non-existent checkpoint', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-invalid-restore',
+        taskId: 'task-invalid-restore',
         provider: { type: 'taskmaster', config: {} }
       };
 
@@ -384,8 +384,8 @@ describe('SessionManager', () => {
   describe('session lifecycle integration', () => {
     it('should handle complete session lifecycle', async () => {
       const options: CreateSessionOptions = {
-        epicId: 'epic-lifecycle',
-        epicName: 'Full Lifecycle Test',
+        taskId: 'task-lifecycle',
+        taskName: 'Full Lifecycle Test',
         provider: { type: 'taskmaster', config: {} }
       };
 

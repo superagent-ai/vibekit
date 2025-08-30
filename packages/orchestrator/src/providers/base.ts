@@ -1,19 +1,18 @@
-import { Task, Epic, TaskEvent, TaskComplexity } from '../types/task';
+import { Task, TaskEvent, TaskComplexity } from '../types/task';
 import * as fs from 'fs/promises';
 
 export abstract class ProjectProvider {
   abstract type: string;
 
   // Core task operations
-  abstract getTasks(epicId?: string): Promise<Task[]>;
+  abstract getTasks(tag?: string): Promise<Task[]>;
   abstract getTask(id: string): Promise<Task>;
   abstract updateTaskStatus(id: string, status: Task['status']): Promise<void>;
   abstract createTask(task: Omit<Task, 'id'>): Promise<Task>;
-
-  // Epic operations
-  abstract getEpics?(): Promise<Epic[]>;
-  abstract getEpic?(id: string): Promise<Epic>;
-  abstract createEpic?(epic: Omit<Epic, 'id' | 'createdAt' | 'updatedAt'>): Promise<Epic>;
+  
+  // Task grouping operations
+  abstract getTasksByTag?(tag: string): Promise<Task[]>;
+  abstract getTaskWithSubtasks?(id: string): Promise<Task>;
 
   // Subtask operations
   abstract getSubtasks?(parentId: string): Promise<Task[]>;
@@ -24,7 +23,7 @@ export abstract class ProjectProvider {
   abstract subscribe?(callback: (event: TaskEvent) => void): () => void;
 
   // Decomposition and analysis
-  abstract decomposeEpic?(epicId: string): Promise<Task[]>;
+  abstract decomposeTask?(taskId: string): Promise<Task[]>;
   abstract analyzeTaskComplexity?(taskId: string): Promise<TaskComplexity>;
 }
 
@@ -135,7 +134,7 @@ export const DEFAULT_PROVIDER_CONFIGS = {
 
 // Provider capabilities interface
 export interface ProviderCapabilities {
-  supportsEpics: boolean;
+  supportsTagging: boolean; // Replaces supportsEpics
   supportsSubtasks: boolean;
   supportsDecomposition: boolean;
   supportsComplexityAnalysis: boolean;

@@ -6,8 +6,8 @@ export interface OrchestrationEvent {
   correlationId?: string;
   data: any;
   relationships?: {
-    epicId?: string;
     taskId?: string;
+    parentTaskId?: string; // For subtask relationships
     agentId?: string;
     worktreeId?: string;
     containerId?: string;

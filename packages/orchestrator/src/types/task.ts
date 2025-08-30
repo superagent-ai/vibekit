@@ -10,28 +10,22 @@ export interface Task {
   dependencies?: string[];
   fileScope?: string[]; // File patterns this task should work on
   estimatedHours?: number;
-}
-
-export interface Epic {
-  id: string;
-  title: string;
-  description: string;
-  tasks: Task[];
-  status: 'planning' | 'in_progress' | 'completed';
-  createdAt: Date;
-  updatedAt: Date;
+  tags?: string[]; // Tags for grouping tasks (replaces epic concept)
+  parentTaskId?: string; // Reference to parent task for subtasks
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface TaskEvent {
-  type: 'task.created' | 'task.updated' | 'task.deleted' | 'epic.updated';
+  type: 'task.created' | 'task.updated' | 'task.deleted';
   taskId: string;
-  epicId?: string;
+  parentTaskId?: string; // For subtask events
   data: any;
   timestamp: Date;
 }
 
 export interface TaskComplexity {
-  level: 'simple' | 'moderate' | 'complex' | 'epic';
+  level: 'simple' | 'moderate' | 'complex';
   estimatedHours: number;
   suggestedAgentTypes: string[];
   fileScopes: string[];

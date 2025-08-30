@@ -1,5 +1,5 @@
 import { EnhancedProjectProvider, ProviderCapabilities } from '../base';
-import { Task, Epic, TaskEvent, TaskComplexity } from '../../types/task';
+import { Task, TaskEvent, TaskComplexity } from '../../types/task';
 import { EventEmitter } from 'events';
 
 export interface TaskmasterConfig {
@@ -127,7 +127,7 @@ export class TaskmasterProvider extends EnhancedProjectProvider {
     }
   }
 
-  async getTasks(epicId?: string): Promise<Task[]> {
+  async getTasks(tag?: string): Promise<Task[]> {
     await this.ensureInitialized();
     
     try {
@@ -140,10 +140,10 @@ export class TaskmasterProvider extends EnhancedProjectProvider {
       const tasksData = this.extractTasksFromMCPResult(result.result);
       let tasks = this.mapTaskmasterTasks(tasksData || []);
       
-      // Filter by epic if specified (using tags as epic ID)
-      if (epicId) {
+      // Filter by tag if specified
+      if (tag) {
         tasks = tasks.filter(task => 
-          this.hasEpicTag(task, epicId)
+          this.hasTagReference(task, tag)
         );
       }
 
@@ -253,76 +253,27 @@ export class TaskmasterProvider extends EnhancedProjectProvider {
     }
   }
 
-  async getEpic(id: string): Promise<Epic> {
+  // Task grouping operations
+  async getTasksByTag(tag: string): Promise<Task[]> {
     await this.ensureInitialized();
     
-    // Taskmaster uses tags as epics
-    const tasks = await this.getTasks(id);
-    
-    return {
-      id,
-      title: `Epic: ${id}`,
-      description: `Tasks for epic ${id}`,
-      tasks,
-      status: this.determineEpicStatus(tasks),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+    // Get all tasks and filter by tag
+    const allTasks = await this.getTasks();
+    return allTasks.filter(task => 
+      task.tags?.includes(tag) || 
+      this.hasTagReference(task, tag)
+    );
   }
 
-  async getEpics(): Promise<Epic[]> {
+  async getTaskWithSubtasks(id: string): Promise<Task> {
     await this.ensureInitialized();
     
-    try {
-      // Get all tasks and extract unique epic tags
-      const allTasks = await this.getTasks();
-      const epicIds = new Set<string>();
-      
-      allTasks.forEach(task => {
-        // Extract epic tags from task content
-        const content = `${task.title} ${task.description} ${task.details || ''}`.toLowerCase();
-        const epicMatches = content.match(/epic:(\w+)/g);
-        if (epicMatches) {
-          epicMatches.forEach(match => {
-            const epicId = match.replace('epic:', '');
-            epicIds.add(epicId);
-          });
-        }
-      });
-
-      const epics: Epic[] = [];
-      for (const epicId of epicIds) {
-        epics.push(await this.getEpic(epicId));
-      }
-
-      return epics;
-    } catch (error) {
-      throw new Error(`Failed to get epics: ${error instanceof Error ? error.message : error}`);
-    }
+    const task = await this.getTask(id);
+    // Taskmaster automatically includes subtasks in the task object
+    return task;
   }
 
-  async createEpic(epic: Omit<Epic, 'id' | 'createdAt' | 'updatedAt'>): Promise<Epic> {
-    // Taskmaster doesn't have explicit epic creation, so we create an epic-level task
-    const epicTask = await this.createTask({
-      title: `Epic: ${epic.title}`,
-      description: epic.description,
-      details: `Epic-level task for: ${epic.title}\n\n${epic.description}`,
-      priority: 'high',
-      status: 'pending'
-    });
-
-    return {
-      id: epicTask.id,
-      title: epic.title,
-      description: epic.description,
-      tasks: epic.tasks || [],
-      status: epic.status || 'planning',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-  }
-
-  async decomposeEpic(epicId: string): Promise<Task[]> {
+  async decomposeTask(taskId: string): Promise<Task[]> {
     await this.ensureInitialized();
     
     try {
@@ -331,9 +282,12 @@ export class TaskmasterProvider extends EnhancedProjectProvider {
       if (!result.success) {
         throw new Error(`MCP tool execution failed: ${result.error}`);
       }
-      return this.getTasks(epicId);
+      
+      // Get the task with its decomposed subtasks
+      const task = await this.getTask(taskId);
+      return task.subtasks || [];
     } catch (error) {
-      throw new Error(`Failed to decompose epic ${epicId}: ${error instanceof Error ? error.message : error}`);
+      throw new Error(`Failed to decompose task ${taskId}: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -419,7 +373,7 @@ export class TaskmasterProvider extends EnhancedProjectProvider {
 
   getCapabilities(): ProviderCapabilities {
     return {
-      supportsEpics: true, // Via tags
+      supportsTagging: true, // Via tags
       supportsSubtasks: true,
       supportsDecomposition: true,
       supportsComplexityAnalysis: true,
@@ -669,11 +623,11 @@ export class TaskmasterProvider extends EnhancedProjectProvider {
       hasDependencies
     ].filter(Boolean).length;
 
-    if (complexityIndicators >= 4) {
-      level = 'epic';
+    if (complexityIndicators >= 3) {
+      level = 'complex';
       estimatedHours = 16;
     } else if (complexityIndicators >= 2) {
-      level = 'complex';
+      level = 'moderate';
       estimatedHours = 8;
     } else if (complexityIndicators >= 1) {
       level = 'moderate';
@@ -693,8 +647,8 @@ export class TaskmasterProvider extends EnhancedProjectProvider {
   private getSuggestedAgentTypes(level: TaskComplexity['level'], details: string): string[] {
     const agents = ['task-agent'];
     
-    if (level === 'epic') {
-      agents.push('epic-agent', 'coordinator');
+    if (level === 'complex') {
+      agents.push('senior-agent', 'coordinator');
     }
     
     if (details.includes('review') || details.includes('test')) {
@@ -723,21 +677,13 @@ export class TaskmasterProvider extends EnhancedProjectProvider {
     return risks;
   }
 
-  private hasEpicTag(task: Task, epicId: string): boolean {
-    // Check if task details contain epic reference or tags
+  private hasTagReference(task: Task, tag: string): boolean {
+    // Check if task has the specified tag in various ways
+    if (task.tags?.includes(tag)) return true;
+    
+    // Also check content for tag references
     const content = `${task.title} ${task.description} ${task.details || ''}`.toLowerCase();
-    return content.includes(epicId.toLowerCase()) || content.includes(`epic:${epicId.toLowerCase()}`);
-  }
-
-  private determineEpicStatus(tasks: Task[]): Epic['status'] {
-    if (tasks.length === 0) return 'planning';
-    
-    const completed = tasks.filter(t => t.status === 'completed').length;
-    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
-    
-    if (completed === tasks.length) return 'completed';
-    if (inProgress > 0 || completed > 0) return 'in_progress';
-    return 'planning';
+    return content.includes(tag.toLowerCase()) || content.includes(`tag:${tag.toLowerCase()}`);
   }
 
   private isSubtaskOf(task: Task, parentId: string): boolean {

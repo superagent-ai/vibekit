@@ -33,6 +33,7 @@
   "license": "MIT",
   "dependencies": {
     "@vibe-kit/auth": "^0.0.5",
+    "@vibe-kit/orchestrator": "file:../orchestrator",
     "@vibe-kit/projects": "file:../projects",
     "@vibe-kit/proxy": "latest",
     "cfonts": "^3.3.0",
