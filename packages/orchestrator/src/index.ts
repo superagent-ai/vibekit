@@ -19,9 +19,9 @@ export {
 } from './providers/base';
 export { TaskmasterProvider } from './providers/taskmaster/provider';
 
-// Export sandbox classes (these will be implemented in later phases)
-// export { OrchestratorSandbox } from './sandbox/orchestrator-sandbox';
-// export { TaskSandbox } from './sandbox/task-sandbox';
+// Export sandbox classes
+export { OrchestratorSandbox, TaskSandbox } from './sandbox';
+export type { SandboxVolumes, SandboxOptions, TaskExecutionResult } from './sandbox';
 
 // Export dashboard classes (these will be implemented in later phases)
 // export { OrchestrationWebSocketServer } from './dashboard/websocket-server';
