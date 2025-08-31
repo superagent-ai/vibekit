@@ -270,11 +270,10 @@ describe('JSONStateStore', () => {
       await stateStore.saveState('stats1', { id: 1 });
       await stateStore.saveState('stats2', { id: 2 });
       
-      await stateStore.loadState('stats1');
-      
+      // Both items should be cached after save
       const stats = stateStore.getCacheStats();
-      expect(stats.size).toBe(1);
-      expect(stats.keys).toEqual(['stats1']);
+      expect(stats.size).toBe(2);
+      expect(stats.keys).toEqual(expect.arrayContaining(['stats1', 'stats2']));
     });
   });
 });

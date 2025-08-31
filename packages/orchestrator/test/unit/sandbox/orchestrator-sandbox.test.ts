@@ -64,8 +64,17 @@ describe('OrchestratorSandbox', () => {
     
     // Setup mock connect to call callback with mock client
     const { connect } = await vi.importMock<typeof import('@dagger.io/dagger')>('@dagger.io/dagger');
-    connect.mockImplementation(async (callback: any) => {
-      await callback(mockClient);
+    connect.mockImplementation((callback: any) => {
+      // Mock the promise-based API that dagger uses
+      const promise = new Promise(async (resolve, reject) => {
+        try {
+          await callback(mockClient);
+          resolve(undefined);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      return promise;
     });
     
     sandbox = new OrchestratorSandbox(mockOptions);

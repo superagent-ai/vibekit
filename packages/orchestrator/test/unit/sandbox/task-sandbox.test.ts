@@ -58,8 +58,17 @@ describe('TaskSandbox', () => {
     
     // Setup mock connect to call callback with mock client
     const { connect } = await vi.importMock<typeof import('@dagger.io/dagger')>('@dagger.io/dagger');
-    connect.mockImplementation(async (callback: any) => {
-      await callback(mockClient);
+    connect.mockImplementation((callback: any) => {
+      // Mock the promise-based API that dagger uses
+      const promise = new Promise(async (resolve, reject) => {
+        try {
+          await callback(mockClient);
+          resolve(undefined);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      return promise;
     });
     
     taskSandbox = new TaskSandbox(sessionId, taskId, worktreePath);
@@ -284,8 +293,17 @@ describe('TaskSandbox', () => {
         vi.clearAllMocks();
         // Reset mock connect for each test
         const { connect } = await vi.importMock<typeof import('@dagger.io/dagger')>('@dagger.io/dagger');
-        connect.mockImplementation(async (callback: any) => {
-          await callback(mockClient);
+        connect.mockImplementation((callback: any) => {
+          // Mock the promise-based API that dagger uses
+          const promise = new Promise(async (resolve, reject) => {
+            try {
+              await callback(mockClient);
+              resolve(undefined);
+            } catch (error) {
+              reject(error);
+            }
+          });
+          return promise;
         });
         
         const sandbox = new TaskSandbox(sessionId, `task-${test.type}`, worktreePath);

@@ -325,15 +325,23 @@ export class TaskSandbox {
 
   private async withDaggerClient<T>(callback: (client: Client) => Promise<T>): Promise<T> {
     return new Promise((resolve, reject) => {
-      connect(async (client) => {
-        try {
-          const result = await callback(client);
-          resolve(result);
-        } catch (error) {
-          reject(error);
+      try {
+        const connectResult = connect(async (client) => {
+          try {
+            const result = await callback(client);
+            resolve(result);
+          } catch (error) {
+            reject(error);
+          }
+        }, this.connectOptions);
+        
+        // Handle case where connect returns a promise
+        if (connectResult && typeof connectResult.catch === 'function') {
+          connectResult.catch(reject);
         }
-      }, this.connectOptions)
-      .catch(reject);
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 
