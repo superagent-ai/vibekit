@@ -2,6 +2,7 @@ import { connect, close, type ConnectOpts } from "@dagger.io/dagger";
 import type { Client, Container, Directory } from "@dagger.io/dagger";
 import { JSONStateStore } from '../storage/json-state-store';
 import { JSONLEventStore } from '../storage/jsonl-event-store';
+import { WorktreeManager, type WorktreeState } from '../core/worktree-manager';
 
 export interface SandboxVolumes {
   workspace: string;
@@ -19,6 +20,7 @@ export interface SandboxOptions {
 export class OrchestratorSandbox {
   private stateStore = new JSONStateStore();
   private eventStore = new JSONLEventStore();
+  private worktreeManager: WorktreeManager;
   private sessionId: string;
   private volumes: SandboxVolumes;
   private initialized = false;
@@ -27,6 +29,12 @@ export class OrchestratorSandbox {
   constructor(options: SandboxOptions) {
     this.sessionId = options.sessionId;
     this.volumes = options.volumes;
+    this.worktreeManager = new WorktreeManager(this.sessionId, {
+      maxConcurrentWorktrees: 10,
+      cleanupAfterMerge: true,
+      branchNamingStrategy: 'taskId',
+      defaultBaseBranch: 'main'
+    });
   }
 
   async initialize(repoUrl?: string, options?: ConnectOpts): Promise<void> {
@@ -35,6 +43,10 @@ export class OrchestratorSandbox {
     }
 
     this.connectOptions = options;
+    
+    // Initialize WorktreeManager first
+    await this.worktreeManager.initialize();
+    
     this.initialized = true;
 
     try {
@@ -135,53 +147,39 @@ export class OrchestratorSandbox {
     }
   }
 
-  async createWorktree(taskId: string, baseBranch: string = 'main'): Promise<string> {
+  async createWorktree(taskId: string, baseBranch: string = 'main'): Promise<WorktreeState> {
     if (!this.initialized) {
       throw new Error('Sandbox not initialized');
     }
 
-    const worktreePath = `/workspace/tasks/${taskId}`;
-    const branchName = `task/${taskId}`;
-
     try {
+      // Create worktree state through WorktreeManager
+      const worktreeState = await this.worktreeManager.createWorktree(taskId, baseBranch);
+
+      // Actually create the git worktree in the container
       await this.withDaggerClient(async (client) => {
-        // Create master container for this operation
         const masterContainer = this.createMasterContainer(client);
         
-        // Create worktree with new branch
+        // Create worktree with the branch name from WorktreeManager
         await masterContainer
           .withExec([
             "sh", "-c",
-            `cd /workspace/main && git worktree add ${worktreePath} -b ${branchName} ${baseBranch}`
+            `cd /workspace/main && git worktree add ${worktreeState.path} -b ${worktreeState.branch} ${worktreeState.baseBranch}`
           ])
           .sync();
+
+        // Update worktree state after successful creation
+        await this.worktreeManager.updateWorktreeStatus(worktreeState.id, 'active', {
+          lastActiveAt: new Date()
+        });
       });
 
-      // Log worktree creation
-      await this.eventStore.appendEvent(`sessions/${this.sessionId}`, {
-        id: this.generateEventId(),
-        type: 'worktree.created',
-        timestamp: new Date().toISOString(),
-        sessionId: this.sessionId,
-        data: { taskId, branch: branchName, path: worktreePath, baseBranch }
-      });
-
-      console.log(`🌳 Created worktree for task ${taskId} at ${worktreePath}`);
-      return worktreePath;
+      console.log(`🌳 Created worktree for task ${taskId}: ${worktreeState.id} (${worktreeState.branch})`);
+      return worktreeState;
 
     } catch (error) {
-      await this.eventStore.appendEvent(`sessions/${this.sessionId}`, {
-        id: this.generateEventId(),
-        type: 'worktree.error',
-        timestamp: new Date().toISOString(),
-        sessionId: this.sessionId,
-        data: { 
-          taskId, 
-          error: error instanceof Error ? error.message : String(error) 
-        }
-      });
-      
-      throw new Error(`Failed to create worktree for task ${taskId}: ${error instanceof Error ? error.message : error}`);
+      // Let WorktreeManager handle the error logging
+      throw error;
     }
   }
 
@@ -258,6 +256,10 @@ export class OrchestratorSandbox {
 
   async cleanup(): Promise<void> {
     try {
+      // Cleanup all worktrees first
+      console.log(`🧹 Cleaning up worktrees for session ${this.sessionId}...`);
+      await this.worktreeManager.cleanupAll(false);
+      
       // Close any active Dagger connections
       close();
       
@@ -278,6 +280,56 @@ export class OrchestratorSandbox {
       this.initialized = false;
       await this.eventStore.close();
     }
+  }
+
+  // Worktree management methods
+  async getWorktree(worktreeId: string): Promise<WorktreeState | undefined> {
+    return this.worktreeManager.getWorktree(worktreeId);
+  }
+
+  async getWorktreeByTask(taskId: string): Promise<WorktreeState | undefined> {
+    return this.worktreeManager.getWorktreeByTask(taskId);
+  }
+
+  async getActiveWorktrees(): Promise<WorktreeState[]> {
+    return this.worktreeManager.getActiveWorktrees();
+  }
+
+  async updateWorktreeStatus(worktreeId: string, status: WorktreeState['status'], metadata?: Partial<WorktreeState>): Promise<void> {
+    return this.worktreeManager.updateWorktreeStatus(worktreeId, status, metadata);
+  }
+
+  async cleanupWorktree(worktreeId: string, force?: boolean): Promise<void> {
+    try {
+      // Get worktree info before cleanup
+      const worktree = await this.worktreeManager.getWorktree(worktreeId);
+      
+      if (worktree) {
+        // Clean up git worktree in container
+        await this.withDaggerClient(async (client) => {
+          const masterContainer = this.createMasterContainer(client);
+          
+          // Remove git worktree
+          await masterContainer
+            .withExec([
+              "sh", "-c",
+              `cd /workspace/main && git worktree remove ${worktree.path} ${force ? '--force' : ''} || true`
+            ])
+            .sync();
+        });
+      }
+
+      // Clean up through WorktreeManager
+      await this.worktreeManager.cleanupWorktree(worktreeId, force);
+
+    } catch (error) {
+      console.error(`Error cleaning up worktree ${worktreeId}:`, error);
+      throw error;
+    }
+  }
+
+  async getWorktreeStats() {
+    return this.worktreeManager.getStats();
   }
 
   // Getters for status

@@ -7,7 +7,7 @@ export { JSONStateStore } from './storage/json-state-store';
 
 // Export core classes
 export { SessionManager } from './core/session-manager';
-// export { WorktreeManager } from './core/worktree-manager';
+export { WorktreeManager } from './core/worktree-manager';
 // export { WorkflowEngine } from './core/workflow-engine';
 
 // Export provider classes
@@ -21,9 +21,7 @@ export { TaskmasterProvider } from './providers/taskmaster/provider';
 
 // Export sandbox classes
 export { OrchestratorSandbox, TaskSandbox } from './sandbox';
-export { FastOrchestratorSandbox } from './sandbox/fast-orchestrator-sandbox';
 export type { SandboxVolumes, SandboxOptions, TaskExecutionResult } from './sandbox';
-export type { FastSandboxVolumes, FastSandboxOptions } from './sandbox/fast-orchestrator-sandbox';
 
 // Export dashboard classes (these will be implemented in later phases)
 // export { OrchestrationWebSocketServer } from './dashboard/websocket-server';
