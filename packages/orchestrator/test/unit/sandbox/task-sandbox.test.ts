@@ -81,7 +81,7 @@ describe('TaskSandbox', () => {
       const { connect } = await vi.importMock<typeof import('@dagger.io/dagger')>('@dagger.io/dagger');
       expect(connect).toHaveBeenCalled();
       expect(mockClient.container).toHaveBeenCalled();
-      expect(mockContainer.from).toHaveBeenCalledWith('ubuntu:22.04');
+      expect(mockContainer.from).toHaveBeenCalledWith('vibekit-sandbox:latest');
       expect(mockContainer.withDirectory).toHaveBeenCalledWith("/code", {});
       expect(mockContainer.withWorkdir).toHaveBeenCalledWith("/code");
       expect(mockContainer.withEnvVariable).toHaveBeenCalledWith("TASK_ID", taskId);
@@ -96,7 +96,7 @@ describe('TaskSandbox', () => {
 
       const { connect } = await vi.importMock<typeof import('@dagger.io/dagger')>('@dagger.io/dagger');
       expect(connect).toHaveBeenCalled();
-      expect(mockContainer.from).toHaveBeenCalledWith('python:3.11-slim');
+      expect(mockContainer.from).toHaveBeenCalledWith('vibekit-sandbox:latest');
       expect(mockContainer.withEnvVariable).toHaveBeenCalledWith("AGENT_TYPE", agentType);
       expect(mockContainer.sync).toHaveBeenCalled();
     });
@@ -278,18 +278,12 @@ describe('TaskSandbox', () => {
     });
   });
 
-  describe('agent image mapping', () => {
-    it('should use correct images for different agent types', async () => {
-      // Test different agent types
-      const agentTests = [
-        { type: 'task-agent', image: 'ubuntu:22.04' },
-        { type: 'code-agent', image: 'node:18-alpine' },
-        { type: 'python-agent', image: 'python:3.11-slim' },
-        { type: 'review-agent', image: 'ubuntu:22.04' },
-        { type: 'unknown-agent', image: 'ubuntu:22.04' } // fallback
-      ];
+  describe('agent image consistency', () => {
+    it('should use VibeKit image for all agent types', async () => {
+      // All agent types now use the same optimized VibeKit image
+      const agentTypes = ['task-agent', 'code-agent', 'python-agent', 'review-agent', 'unknown-agent'];
 
-      for (const test of agentTests) {
+      for (const agentType of agentTypes) {
         vi.clearAllMocks();
         // Reset mock connect for each test
         const { connect } = await vi.importMock<typeof import('@dagger.io/dagger')>('@dagger.io/dagger');
@@ -306,11 +300,12 @@ describe('TaskSandbox', () => {
           return promise;
         });
         
-        const sandbox = new TaskSandbox(sessionId, `task-${test.type}`, worktreePath);
+        const sandbox = new TaskSandbox(sessionId, `task-${agentType}`, worktreePath);
         
-        await sandbox.initializeForAgent(test.type);
+        await sandbox.initializeForAgent(agentType);
         
-        expect(mockContainer.from).toHaveBeenCalledWith(test.image);
+        // All agents should use the same optimized VibeKit image
+        expect(mockContainer.from).toHaveBeenCalledWith('vibekit-sandbox:latest');
       }
     });
   });

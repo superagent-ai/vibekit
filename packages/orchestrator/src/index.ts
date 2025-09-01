@@ -21,7 +21,9 @@ export { TaskmasterProvider } from './providers/taskmaster/provider';
 
 // Export sandbox classes
 export { OrchestratorSandbox, TaskSandbox } from './sandbox';
+export { FastOrchestratorSandbox } from './sandbox/fast-orchestrator-sandbox';
 export type { SandboxVolumes, SandboxOptions, TaskExecutionResult } from './sandbox';
+export type { FastSandboxVolumes, FastSandboxOptions } from './sandbox/fast-orchestrator-sandbox';
 
 // Export dashboard classes (these will be implemented in later phases)
 // export { OrchestrationWebSocketServer } from './dashboard/websocket-server';

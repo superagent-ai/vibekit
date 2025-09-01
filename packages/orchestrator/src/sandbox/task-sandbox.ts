@@ -312,15 +312,9 @@ export class TaskSandbox {
   }
 
   private getAgentImage(agentType: string): string {
-    // Map agent types to Docker images
-    const imageMap: Record<string, string> = {
-      'task-agent': 'ubuntu:22.04',
-      'code-agent': 'node:18-alpine',
-      'python-agent': 'python:3.11-slim',
-      'review-agent': 'ubuntu:22.04'
-    };
-
-    return imageMap[agentType] || 'ubuntu:22.04';
+    // Use VibeKit sandbox image with all agents pre-installed from Docker Hub
+    // This image is built by 'vibekit sandbox build' and includes Claude, Codex, Gemini, OpenCode, Grok
+    return process.env.VIBEKIT_SANDBOX_IMAGE || "joedanziger/vibekit-sandbox:latest";
   }
 
   private async withDaggerClient<T>(callback: (client: Client) => Promise<T>): Promise<T> {
@@ -355,7 +349,8 @@ export class TaskSandbox {
       // Set task-specific environment
       .withEnvVariable("TASK_ID", this.taskId)
       .withEnvVariable("SESSION_ID", this.sessionId)
-      .withEnvVariable("AGENT_TYPE", agentType);
+      .withEnvVariable("AGENT_TYPE", agentType)
+      .withEnvVariable("VIBEKIT_SANDBOX_ACTIVE", "1");
   }
 
   private generateEventId(): string {

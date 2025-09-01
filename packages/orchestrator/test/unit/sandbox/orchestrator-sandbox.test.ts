@@ -101,7 +101,7 @@ describe('OrchestratorSandbox', () => {
       expect(sandbox.isInitialized).toBe(true);
       expect(mockClient.container).toHaveBeenCalled();
       expect(mockClient.cacheVolume).toHaveBeenCalledTimes(4); // workspace, git, state, agent
-      expect(mockContainer.from).toHaveBeenCalledWith('ubuntu:22.04');
+      expect(mockContainer.from).toHaveBeenCalledWith('vibekit-sandbox:latest');
       expect(mockContainer.withMountedCache).toHaveBeenCalledTimes(4);
     });
 

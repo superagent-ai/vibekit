@@ -46,13 +46,10 @@ export class OrchestratorSandbox {
         const stateCache = client.cacheVolume(this.volumes.state);
         const agentCache = client.cacheVolume(this.volumes.agentCache);
         
-        // Test container creation
+        // Use VibeKit CLI image with all agents pre-installed (Claude, Codex, Gemini, OpenCode, Grok)
         const masterContainer = client
           .container()
-          .from("ubuntu:22.04")
-          // Install essential tools
-          .withExec(["apt-get", "update"])
-          .withExec(["apt-get", "install", "-y", "git", "curl", "wget", "build-essential", "python3", "python3-pip"])
+          .from(process.env.VIBEKIT_SANDBOX_IMAGE || "joedanziger/vibekit-sandbox:latest")
           // Mount persistent volumes
           .withMountedCache("/workspace", workspaceCache)
           .withMountedCache("/git-cache", gitCache)
@@ -60,7 +57,7 @@ export class OrchestratorSandbox {
           .withMountedCache("/agent-cache", agentCache)
           // Set environment variables
           .withEnvVariable("SESSION_ID", this.sessionId)
-          .withEnvVariable("DEBIAN_FRONTEND", "noninteractive")
+          .withEnvVariable("VIBEKIT_SANDBOX_ACTIVE", "1")
           .withWorkdir("/workspace");
 
         // Clone repository if provided
@@ -194,19 +191,17 @@ export class OrchestratorSandbox {
     }
 
     return await this.withDaggerClient(async (client) => {
-      // Create task-specific container with worktree mounted
+      // Create task-specific container
       const taskContainer = client
         .container()
-        .from("ubuntu:22.04")
-        // Install basic tools
-        .withExec(["apt-get", "update"])
-        .withExec(["apt-get", "install", "-y", "git", "curl", "build-essential", "python3", "python3-pip", "nodejs", "npm"])
+        .from(process.env.VIBEKIT_SANDBOX_IMAGE || "joedanziger/vibekit-sandbox:latest")
         // Mount the specific worktree
         .withDirectory("/code", client.host().directory(worktreePath))
         .withWorkdir("/code")
         // Set environment variables
         .withEnvVariable("TASK_ID", taskId)
-        .withEnvVariable("SESSION_ID", this.sessionId);
+        .withEnvVariable("SESSION_ID", this.sessionId)
+        .withEnvVariable("VIBEKIT_SANDBOX_ACTIVE", "1");
 
       // Log task container creation
       await this.eventStore.appendEvent(`sessions/${this.sessionId}`, {
@@ -327,13 +322,10 @@ export class OrchestratorSandbox {
     const stateCache = client.cacheVolume(this.volumes.state);
     const agentCache = client.cacheVolume(this.volumes.agentCache);
     
-    // Master orchestrator container with git, docker, and tools
+    // Master orchestrator container
     return client
       .container()
-      .from("ubuntu:22.04")
-      // Install essential tools
-      .withExec(["apt-get", "update"])
-      .withExec(["apt-get", "install", "-y", "git", "curl", "wget", "build-essential", "python3", "python3-pip"])
+      .from(process.env.VIBEKIT_SANDBOX_IMAGE || "joedanziger/vibekit-sandbox:latest")
       // Mount persistent volumes
       .withMountedCache("/workspace", workspaceCache)
       .withMountedCache("/git-cache", gitCache)
@@ -341,7 +333,7 @@ export class OrchestratorSandbox {
       .withMountedCache("/agent-cache", agentCache)
       // Set environment variables
       .withEnvVariable("SESSION_ID", this.sessionId)
-      .withEnvVariable("DEBIAN_FRONTEND", "noninteractive")
+      .withEnvVariable("VIBEKIT_SANDBOX_ACTIVE", "1")
       .withWorkdir("/workspace");
   }
 
