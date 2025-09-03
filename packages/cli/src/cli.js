@@ -1327,6 +1327,494 @@ orchestratorCommand
     }
   });
 
+// GitHub Integration Commands
+orchestratorCommand
+  .command('github')
+  .alias('gh')
+  .description('GitHub integration commands')
+  .addHelpCommand(false)
+  .action(() => {
+    console.log(chalk.blue('🔗 GitHub Integration Commands:'));
+    console.log('');
+    console.log('  ' + chalk.cyan('sync <task-id>') + '          Sync task to GitHub issue');
+    console.log('  ' + chalk.cyan('issue create <task-id>') + '   Create GitHub issue from task');
+    console.log('  ' + chalk.cyan('pr create <task-id>') + '      Create GitHub PR from task');
+    console.log('  ' + chalk.cyan('pr merge <pr-number>') + '     Merge GitHub pull request');
+    console.log('  ' + chalk.cyan('config preset <name>') + '     Apply GitHub config preset');
+    console.log('  ' + chalk.cyan('config show') + '             Show current GitHub config');
+    console.log('  ' + chalk.cyan('webhook start') + '            Start webhook server');
+    console.log('  ' + chalk.cyan('status') + '                  Show GitHub connection status');
+    console.log('');
+    console.log(chalk.gray('Use --help with any command for more details'));
+  });
+
+const githubCommand = orchestratorCommand
+  .command('github', { hidden: false })
+  .alias('gh');
+
+// GitHub sync command
+githubCommand
+  .command('sync')
+  .description('Sync task to GitHub issue')
+  .argument('<task-id>', 'Task ID to sync')
+  .option('--create-issue', 'Create GitHub issue if not exists')
+  .option('--update-labels', 'Update GitHub issue labels')
+  .option('--close-completed', 'Close issues for completed tasks')
+  .option('--dry-run', 'Preview changes without executing')
+  .action(async (taskId, options) => {
+    const logger = new Logger('github');
+    
+    try {
+      const { GitHubIntegrationManager, GitHubSyncEngine } = 
+        await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const integrationManager = new GitHubIntegrationManager({
+        token: process.env.GITHUB_TOKEN,
+        repository: process.env.GITHUB_REPOSITORY,
+        defaultBranch: 'main',
+        labels: {
+          taskPending: 'task:pending',
+          taskInProgress: 'task:in-progress',
+          taskCompleted: 'task:completed',
+          taskFailed: 'task:failed',
+          priority: {
+            high: 'priority:high',
+            medium: 'priority:medium',
+            low: 'priority:low'
+          }
+        }
+      });
+      
+      await integrationManager.initialize();
+      
+      console.log(chalk.blue(`🔄 Syncing task ${taskId} to GitHub...`));
+      
+      if (options.dryRun) {
+        console.log(chalk.yellow('🔍 DRY RUN - No changes will be made'));
+      }
+      
+      // This would integrate with the task provider to get the task
+      console.log(chalk.gray('Note: Task provider integration not yet implemented'));
+      console.log(chalk.green('✅ GitHub sync command configured successfully'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub issue commands
+const issueCommand = githubCommand
+  .command('issue')
+  .description('GitHub issue operations');
+
+issueCommand
+  .command('create')
+  .description('Create GitHub issue from task')
+  .argument('<task-id>', 'Task ID to create issue for')
+  .option('--title <title>', 'Custom issue title')
+  .option('--labels <labels>', 'Comma-separated list of labels')
+  .option('--assignees <users>', 'Comma-separated list of assignees')
+  .action(async (taskId, options) => {
+    const logger = new Logger('github');
+    
+    try {
+      const { GitHubIntegrationManager } = 
+        await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const integrationManager = new GitHubIntegrationManager({
+        token: process.env.GITHUB_TOKEN,
+        repository: process.env.GITHUB_REPOSITORY,
+        defaultBranch: 'main',
+        labels: {
+          taskPending: 'task:pending',
+          taskInProgress: 'task:in-progress',
+          taskCompleted: 'task:completed',
+          taskFailed: 'task:failed',
+          priority: {
+            high: 'priority:high',
+            medium: 'priority:medium',
+            low: 'priority:low'
+          }
+        }
+      });
+      
+      await integrationManager.initialize();
+      
+      console.log(chalk.blue(`📝 Creating GitHub issue for task ${taskId}...`));
+      
+      // This would integrate with the task provider to get the actual task
+      const mockTask = {
+        id: taskId,
+        title: options.title || `Task: ${taskId}`,
+        description: `GitHub issue created for task ${taskId}`,
+        status: 'pending',
+        priority: 'medium',
+        type: 'feature'
+      };
+      
+      const issue = await integrationManager.createIssueFromTask(mockTask);
+      
+      console.log(chalk.green('✅ GitHub issue created successfully!'));
+      console.log(`   Issue: #${issue.number}`);
+      console.log(`   URL: ${issue.html_url}`);
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub PR commands
+const prCommand = githubCommand
+  .command('pr')
+  .description('GitHub pull request operations');
+
+prCommand
+  .command('create')
+  .description('Create GitHub PR from task')
+  .argument('<task-id>', 'Task ID to create PR for')
+  .option('--title <title>', 'Custom PR title')
+  .option('--branch <name>', 'Source branch name')
+  .option('--base <branch>', 'Target branch (default: main)')
+  .option('--draft', 'Create as draft PR')
+  .action(async (taskId, options) => {
+    const logger = new Logger('github');
+    
+    try {
+      const { GitHubAPI } = await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const githubAPI = new GitHubAPI({
+        token: process.env.GITHUB_TOKEN,
+        repository: process.env.GITHUB_REPOSITORY
+      });
+      
+      console.log(chalk.blue(`🔀 Creating GitHub PR for task ${taskId}...`));
+      
+      const prData = {
+        title: options.title || `[Task ${taskId}] Implementation`,
+        body: `This PR implements task ${taskId}.\n\n- [ ] Implementation complete\n- [ ] Tests added\n- [ ] Documentation updated`,
+        head: options.branch || `task-${taskId}`,
+        base: options.base || 'main',
+        draft: options.draft || false
+      };
+      
+      const pr = await githubAPI.createPullRequest(prData);
+      
+      console.log(chalk.green('✅ GitHub PR created successfully!'));
+      console.log(`   PR: #${pr.number}`);
+      console.log(`   URL: ${pr.html_url}`);
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+prCommand
+  .command('merge')
+  .description('Merge GitHub pull request')
+  .argument('<pr-number>', 'PR number to merge')
+  .option('--method <method>', 'Merge method: merge, squash, rebase', 'squash')
+  .option('--delete-branch', 'Delete branch after merge')
+  .action(async (prNumber, options) => {
+    const logger = new Logger('github');
+    
+    try {
+      const { PRMergeManager } = await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const prMergeManager = new PRMergeManager(
+        process.env.GITHUB_REPOSITORY,
+        process.env.GITHUB_TOKEN,
+        {
+          strategy: options.method,
+          deleteAfterMerge: options.deleteBranch || false
+        }
+      );
+      
+      console.log(chalk.blue(`🔀 Attempting to merge PR #${prNumber}...`));
+      
+      const result = await prMergeManager.attemptAutoMerge(parseInt(prNumber));
+      
+      if (result.status === 'success') {
+        console.log(chalk.green('✅ PR merged successfully!'));
+        console.log(`   Commit SHA: ${result.mergeCommitSha}`);
+        if (result.deletedBranch) {
+          console.log('   Branch deleted: ✅');
+        }
+      } else {
+        console.log(chalk.yellow(`⚠️ Merge attempt ${result.status}: ${result.reason}`));
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub config commands
+const configCommand = githubCommand
+  .command('config')
+  .description('GitHub configuration management');
+
+configCommand
+  .command('preset')
+  .description('Apply GitHub configuration preset')
+  .argument('<preset-name>', 'Preset name: development-team, enterprise, solo-developer, opensource')
+  .action(async (presetName) => {
+    const logger = new Logger('github');
+    
+    try {
+      const { GitHubConfigManager, GitHubConfigPresets } = 
+        await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const configManager = new GitHubConfigManager();
+      
+      const validPresets = Object.keys(GitHubConfigPresets);
+      if (!validPresets.includes(presetName)) {
+        throw new Error(`Invalid preset '${presetName}'. Valid presets: ${validPresets.join(', ')}`);
+      }
+      
+      console.log(chalk.blue(`🔧 Applying GitHub config preset: ${presetName}...`));
+      
+      await configManager.applyPreset(presetName, {
+        token: process.env.GITHUB_TOKEN,
+        repository: process.env.GITHUB_REPOSITORY
+      });
+      
+      console.log(chalk.green('✅ Configuration preset applied successfully!'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+configCommand
+  .command('show')
+  .description('Show current GitHub configuration')
+  .action(async () => {
+    const logger = new Logger('github');
+    
+    try {
+      console.log(chalk.blue('🔧 GitHub Configuration:'));
+      console.log('');
+      console.log(`  Repository: ${chalk.cyan(process.env.GITHUB_REPOSITORY || 'Not set')}`);
+      console.log(`  Token: ${process.env.GITHUB_TOKEN ? chalk.green('✅ Set') : chalk.red('❌ Not set')}`);
+      console.log('');
+      
+      if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
+        const { OctokitService } = await import('@vibe-kit/orchestrator');
+        
+        const octokitService = new OctokitService({
+          token: process.env.GITHUB_TOKEN,
+          repository: process.env.GITHUB_REPOSITORY
+        });
+        
+        const status = await octokitService.checkConnection();
+        if (status.connected) {
+          console.log(`  Connection: ${chalk.green('✅ Connected')}`);
+          console.log(`  User: ${chalk.cyan(status.user?.login || 'Unknown')}`);
+          
+          const rateLimit = await octokitService.getRateLimit();
+          console.log(`  Rate Limit: ${chalk.cyan(rateLimit.remaining)}/${chalk.cyan(rateLimit.limit)}`);
+          console.log(`  Reset: ${chalk.gray(rateLimit.reset.toLocaleString())}`);
+        } else {
+          console.log(`  Connection: ${chalk.red('❌ Failed')}`);
+          console.log(`  Error: ${chalk.red(status.error)}`);
+        }
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub webhook commands  
+const webhookCommand = githubCommand
+  .command('webhook')
+  .description('GitHub webhook server management');
+
+webhookCommand
+  .command('start')
+  .description('Start webhook server')
+  .option('-p, --port <number>', 'Port to run webhook server on', '3001')
+  .option('--secret <secret>', 'Webhook secret (or use VIBEKIT_WEBHOOK_SECRET)')
+  .action(async (options) => {
+    const logger = new Logger('github-webhook');
+    
+    try {
+      const { GitHubWebhookServer, WebhookServerPresets } = 
+        await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const webhookSecret = options.secret || process.env.VIBEKIT_WEBHOOK_SECRET;
+      if (!webhookSecret) {
+        throw new Error('Webhook secret is required. Use --secret or set VIBEKIT_WEBHOOK_SECRET environment variable.');
+      }
+      
+      const config = WebhookServerPresets.development({
+        port: parseInt(options.port),
+        secret: webhookSecret,
+        github: {
+          token: process.env.GITHUB_TOKEN,
+          repository: process.env.GITHUB_REPOSITORY
+        }
+      });
+      
+      const webhookServer = new GitHubWebhookServer(config);
+      
+      console.log(chalk.blue(`🌐 Starting webhook server on port ${options.port}...`));
+      
+      webhookServer.on('serverStarted', (port) => {
+        console.log(chalk.green('✅ Webhook server started successfully!'));
+        console.log(`   URL: http://localhost:${port}/webhooks/github`);
+        console.log('');
+        console.log(chalk.gray('Configure this URL in your GitHub repository:'));
+        console.log(chalk.gray(`   Repository Settings > Webhooks > Add webhook`));
+        console.log(chalk.gray(`   Payload URL: http://your-domain.com:${port}/webhooks/github`));
+        console.log(chalk.gray(`   Content type: application/json`));
+        console.log(chalk.gray(`   Secret: ${webhookSecret.substring(0, 8)}...`));
+        console.log('');
+        console.log(chalk.gray('Press Ctrl+C to stop the server'));
+      });
+      
+      webhookServer.on('webhookReceived', (event, headers) => {
+        console.log(chalk.cyan(`📨 Webhook received: ${headers['x-github-event']} - ${event.action}`));
+      });
+      
+      webhookServer.on('webhookError', (error) => {
+        console.error(chalk.red('❌ Webhook error:'), error.message);
+      });
+      
+      await webhookServer.start();
+      
+      // Keep the process running
+      process.on('SIGINT', async () => {
+        console.log(chalk.yellow('\n🛑 Stopping webhook server...'));
+        await webhookServer.stop();
+        console.log(chalk.green('✅ Webhook server stopped'));
+        process.exit(0);
+      });
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub status command
+githubCommand
+  .command('status')
+  .description('Show GitHub integration status')
+  .action(async () => {
+    const logger = new Logger('github');
+    
+    try {
+      console.log(chalk.blue('🔗 GitHub Integration Status:'));
+      console.log('');
+      
+      // Check environment variables
+      console.log(chalk.blue('📋 Configuration:'));
+      console.log(`   Repository: ${process.env.GITHUB_REPOSITORY ? chalk.green(process.env.GITHUB_REPOSITORY) : chalk.red('Not set (GITHUB_REPOSITORY)')}`);
+      console.log(`   Token: ${process.env.GITHUB_TOKEN ? chalk.green('✅ Set') : chalk.red('❌ Not set (GITHUB_TOKEN)')}`);
+      console.log('');
+      
+      if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
+        const { OctokitService, GitHubIntegrationManager } = 
+          await import('@vibe-kit/orchestrator');
+        
+        // Test connection
+        const octokitService = new OctokitService({
+          token: process.env.GITHUB_TOKEN,
+          repository: process.env.GITHUB_REPOSITORY
+        });
+        
+        const connectionStatus = await octokitService.checkConnection();
+        
+        console.log(chalk.blue('🌐 Connection:'));
+        console.log(`   Status: ${connectionStatus.connected ? chalk.green('✅ Connected') : chalk.red('❌ Failed')}`);
+        
+        if (connectionStatus.connected && connectionStatus.user) {
+          console.log(`   User: ${chalk.cyan(connectionStatus.user.login)}`);
+          
+          // Get rate limit
+          const rateLimit = await octokitService.getRateLimit();
+          console.log(`   Rate Limit: ${chalk.cyan(rateLimit.remaining)}/${chalk.cyan(rateLimit.limit)}`);
+          console.log(`   Reset: ${chalk.gray(rateLimit.reset.toLocaleString())}`);
+          
+          // Test repository access
+          try {
+            const repo = await octokitService.getRepository();
+            console.log('');
+            console.log(chalk.blue('📁 Repository:'));
+            console.log(`   Name: ${chalk.cyan(repo.full_name)}`);
+            console.log(`   Private: ${repo.private ? chalk.yellow('Yes') : chalk.green('Public')}`);
+            console.log(`   Default Branch: ${chalk.cyan(repo.default_branch)}`);
+          } catch (error) {
+            console.log('');
+            console.log(chalk.red('❌ Repository access failed:'), error.message);
+          }
+          
+        } else {
+          console.log(`   Error: ${chalk.red(connectionStatus.error)}`);
+        }
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
 // Show welcome screen when just 'vibekit' is typed
 if (process.argv.length === 2) {
   render(React.createElement(Settings, { showWelcome: true }));

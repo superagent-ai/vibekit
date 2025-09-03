@@ -8,18 +8,27 @@
 import { EventEmitter } from 'events';
 import { WorktreeWorker, WorktreeConfig, WorkerTask, WorkerResult } from './worktree-worker';
 import { AgentExecutor, AgentCredentials, SandboxProvider, AgentExecutorConfig } from './agent-executor';
-import { GitHubAPI, GitHubConfig } from '../utils/github-api';
+import { GitHubAPI, GitHubAPIConfig } from '../utils/github-api';
+import { GitHubIntegrationManager, GitHubConfig as GitHubIntegrationConfig } from '../core/github-integration-manager';
+import { Task } from '../providers/base';
 
 export interface ParallelTask {
   worktreeName: string;
   taskId?: string;
   title?: string;
   description?: string;
+  details?: string;
+  testStrategy?: string;
   prompt: string;
   mode?: 'code' | 'ask';
   agentType?: 'claude' | 'codex' | 'opencode' | 'gemini' | 'grok';
   priority?: 'high' | 'medium' | 'low';
   estimatedDuration?: string;
+  fileScope?: string[];
+  dependencies?: string[];
+  subtasks?: Task[];
+  estimatedHours?: number;
+  createGitHubIssue?: boolean; // Whether to create GitHub issue for this task
   onProgress?: (update: string) => void;
   onComplete?: (result: WorkerResult) => void;
   onError?: (error: Error) => void;
@@ -56,6 +65,7 @@ export class WorktreeOrchestrator extends EventEmitter {
   private activeTasks = new Map<string, Promise<WorkerResult>>();
   private agentExecutor: AgentExecutor;
   private githubAPI: GitHubAPI;
+  private githubIntegration: GitHubIntegrationManager;
   private isInitialized = false;
 
   private baseWorkspaceDir: string;
@@ -67,7 +77,7 @@ export class WorktreeOrchestrator extends EventEmitter {
 
   constructor(
     private config: OrchestratorConfig,
-    private githubConfig: GitHubConfig,
+    private githubConfig: GitHubAPIConfig,
     private agentCredentials: AgentCredentials,
     private sandboxProvider: SandboxProvider
   ) {
@@ -89,6 +99,25 @@ export class WorktreeOrchestrator extends EventEmitter {
     // Initialize GitHub API
     this.githubAPI = new GitHubAPI(githubConfig);
 
+    // Initialize GitHub Integration Manager
+    const githubIntegrationConfig: GitHubIntegrationConfig = {
+      repository: this.baseRepoUrl,
+      token: githubConfig.token,
+      defaultBranch: this.baseBranch,
+      labels: {
+        taskPending: '🔄 pending',
+        taskInProgress: '⚡ in-progress', 
+        taskCompleted: '✅ completed',
+        taskFailed: '❌ failed',
+        priority: {
+          high: '🔥 high-priority',
+          medium: '📋 medium-priority', 
+          low: '📝 low-priority'
+        }
+      }
+    };
+    this.githubIntegration = new GitHubIntegrationManager(githubIntegrationConfig);
+
     // Set up event forwarding from agent executor
     this.agentExecutor.on('executionStarted', (data) => this.emit('agentExecutionStarted', data));
     this.agentExecutor.on('executionCompleted', (data) => this.emit('agentExecutionCompleted', data));
@@ -107,6 +136,10 @@ export class WorktreeOrchestrator extends EventEmitter {
       this.emit('log', 'Initializing WorktreeOrchestrator with worker pool architecture');
       this.emit('log', `Base workspace dir: ${this.baseWorkspaceDir}`);
       this.emit('log', `Worktree base dir: ${this.worktreeBaseDir}`);
+
+      // Initialize GitHub Integration Manager
+      this.emit('log', 'Initializing GitHub integration...');
+      await this.githubIntegration.initialize();
 
       // Create base directories
       this.emit('log', 'Creating base directories...');
@@ -306,6 +339,36 @@ export class WorktreeOrchestrator extends EventEmitter {
       throw new Error(`Worktree '${worktreeName}' not found`);
     }
 
+    // Create GitHub issue for the task if requested
+    let githubIssue = null;
+    if (task.createGitHubIssue && task.taskId) {
+      try {
+        const taskForIssue: Task = {
+          id: task.taskId,
+          title: task.title || task.prompt.substring(0, 50),
+          description: task.description || task.prompt,
+          details: task.details,
+          testStrategy: task.testStrategy,
+          priority: task.priority || 'medium',
+          status: 'in_progress',
+          subtasks: task.subtasks,
+          dependencies: task.dependencies,
+          fileScope: task.fileScope,
+          estimatedHours: task.estimatedHours
+        };
+
+        githubIssue = await this.githubIntegration.createIssueFromTask(taskForIssue, this.sessionId);
+        this.emit('issueCreated', {
+          taskId: task.taskId,
+          issueNumber: githubIssue.number,
+          issueUrl: githubIssue.html_url,
+          worktreeName
+        });
+      } catch (error) {
+        this.emit('log', `Failed to create GitHub issue for task ${task.taskId}: ${error}`);
+      }
+    }
+
     // Update status to working
     const status = this.worktreeStatuses.get(worktreeName);
     if (status) {
@@ -327,6 +390,35 @@ export class WorktreeOrchestrator extends EventEmitter {
 
       const result = await worker.executeTask(workerTask);
 
+      // Update GitHub issue status if task completed
+      if (githubIssue && task.taskId) {
+        try {
+          const updatedTask: Task = {
+            id: task.taskId,
+            title: task.title || task.prompt.substring(0, 50),
+            description: task.description || task.prompt,
+            details: task.details,
+            testStrategy: task.testStrategy,
+            priority: task.priority || 'medium',
+            status: result.exitCode === 0 ? 'completed' : 'failed',
+            subtasks: task.subtasks,
+            dependencies: task.dependencies,
+            fileScope: task.fileScope,
+            estimatedHours: task.estimatedHours
+          };
+
+          await this.githubIntegration.syncTaskStatusToIssue(updatedTask);
+          
+          this.emit('issueSynced', {
+            taskId: task.taskId,
+            issueNumber: githubIssue.number,
+            status: updatedTask.status
+          });
+        } catch (error) {
+          this.emit('log', `Failed to sync GitHub issue status for task ${task.taskId}: ${error}`);
+        }
+      }
+
       // Update status
       if (status) {
         status.status = result.exitCode === 0 ? 'completed' : 'error';
@@ -340,6 +432,29 @@ export class WorktreeOrchestrator extends EventEmitter {
       return result;
 
     } catch (error) {
+      // Update GitHub issue status on error
+      if (githubIssue && task.taskId) {
+        try {
+          const failedTask: Task = {
+            id: task.taskId,
+            title: task.title || task.prompt.substring(0, 50),
+            description: task.description || task.prompt,
+            details: task.details,
+            testStrategy: task.testStrategy,
+            priority: task.priority || 'medium',
+            status: 'failed',
+            subtasks: task.subtasks,
+            dependencies: task.dependencies,
+            fileScope: task.fileScope,
+            estimatedHours: task.estimatedHours
+          };
+
+          await this.githubIntegration.syncTaskStatusToIssue(failedTask);
+        } catch (syncError) {
+          this.emit('log', `Failed to sync GitHub issue status for failed task ${task.taskId}: ${syncError}`);
+        }
+      }
+
       // Update status on error
       if (status) {
         status.status = 'error';
@@ -415,9 +530,7 @@ export class WorktreeOrchestrator extends EventEmitter {
   }
 
   /**
-   * Create pull requests from multiple worktrees
-   * NOTE: PRs are now created immediately after task completion in WorktreeWorker.executeTask()
-   * This method is kept for backward compatibility but returns empty results
+   * Create pull requests from multiple worktrees with enhanced GitHub issue linking
    */
   async createPullRequests(
     worktreeNames: string[],
@@ -425,12 +538,95 @@ export class WorktreeOrchestrator extends EventEmitter {
       branchPrefix?: string;
       labels?: string[];
       generateTitleFromTask?: boolean;
+      taskIds?: string[]; // Task IDs to link to issues
     } = {}
   ): Promise<Array<{ worktreeName: string; pr: any }>> {
-    this.emit('log', `PRs are created immediately after task completion - no additional action needed`);
+    this.emit('log', `Creating enhanced PRs with GitHub issue linking for ${worktreeNames.length} worktrees`);
 
-    // PRs are created automatically during task execution, return empty results
-    return [];
+    const prResults = [];
+
+    for (let i = 0; i < worktreeNames.length; i++) {
+      const worktreeName = worktreeNames[i];
+      const taskId = options.taskIds?.[i];
+      
+      const worker = this.workers.get(worktreeName);
+      if (!worker) {
+        this.emit('log', `Worktree '${worktreeName}' not found, skipping PR creation`);
+        continue;
+      }
+
+      try {
+        // Get issue reference for this task
+        let issueReference = null;
+        let issueClosingSyntax = null;
+        if (taskId) {
+          issueReference = this.githubIntegration.getIssueReference(taskId);
+          issueClosingSyntax = this.githubIntegration.getIssueClosingSyntax(taskId);
+        }
+
+        // Create enhanced PR description
+        const status = this.worktreeStatuses.get(worktreeName);
+        let prDescription = `## Summary\n\nImplemented changes for worktree: ${worktreeName}`;
+        
+        if (issueReference) {
+          prDescription += `\n\nRelated Issue: ${issueReference}`;
+        }
+        
+        if (status?.hasChanges && status.lastCommitSha) {
+          prDescription += `\n\n## Changes\n\n- Latest commit: ${status.lastCommitSha}`;
+          prDescription += `\n- Files modified: ${status.hasChanges ? 'Yes' : 'No'}`;
+        }
+
+        if (issueClosingSyntax) {
+          prDescription += `\n\n${issueClosingSyntax}`;
+        }
+
+        prDescription += `\n\n---\n*Generated by VibeKit Orchestrator*`;
+
+        // Create PR with enhanced description
+        const prTitle = options.generateTitleFromTask && taskId 
+          ? `${taskId}: ${worktreeName}${issueReference ? ` (${issueReference})` : ''}`
+          : `${options.branchPrefix || 'orchestrator'}-${worktreeName}${issueReference ? ` (${issueReference})` : ''}`;
+
+        // Use worker to create PR with enhanced metadata
+        const prResult = await worker.createPullRequest({
+          title: prTitle,
+          description: prDescription,
+          labels: options.labels
+        });
+
+        prResults.push({
+          worktreeName,
+          pr: {
+            ...prResult,
+            linkedIssue: issueReference,
+            taskId: taskId
+          }
+        });
+
+        this.emit('enhancedPrCreated', {
+          worktreeName,
+          taskId,
+          issueReference,
+          prUrl: prResult?.url || prResult?.html_url,
+          prNumber: prResult?.number
+        });
+
+      } catch (error) {
+        this.emit('log', `Failed to create PR for worktree ${worktreeName}: ${error}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        prResults.push({
+          worktreeName,
+          pr: {
+            error: errorMessage,
+            success: false
+          }
+        });
+      }
+    }
+
+    return prResults;
   }
 
   /**
@@ -532,6 +728,92 @@ export class WorktreeOrchestrator extends EventEmitter {
    */
   get isReady(): boolean {
     return this.isInitialized;
+  }
+
+  // GitHub Integration Methods
+
+  /**
+   * Create a GitHub issue from a task
+   */
+  async createGitHubIssue(task: Task): Promise<any> {
+    if (!this.isInitialized) {
+      throw new Error('Orchestrator not initialized');
+    }
+
+    const issue = await this.githubIntegration.createIssueFromTask(task, this.sessionId);
+    
+    this.emit('issueCreated', {
+      taskId: task.id,
+      issueNumber: issue.number,
+      issueUrl: issue.html_url
+    });
+
+    return issue;
+  }
+
+  /**
+   * Link an existing GitHub issue to a task
+   */
+  async linkTaskToGitHubIssue(taskId: string, issueNumber: number): Promise<void> {
+    if (!this.isInitialized) {
+      throw new Error('Orchestrator not initialized');
+    }
+
+    await this.githubIntegration.linkTaskToIssue(taskId, issueNumber);
+    
+    this.emit('taskLinkedToIssue', {
+      taskId,
+      issueNumber
+    });
+  }
+
+  /**
+   * Get GitHub issue for a task
+   */
+  async getGitHubIssueForTask(taskId: string): Promise<any> {
+    if (!this.isInitialized) {
+      throw new Error('Orchestrator not initialized');
+    }
+
+    return await this.githubIntegration.getIssueForTask(taskId);
+  }
+
+  /**
+   * Sync task status to GitHub issue
+   */
+  async syncTaskStatusToGitHub(task: Task): Promise<void> {
+    if (!this.isInitialized) {
+      throw new Error('Orchestrator not initialized');
+    }
+
+    await this.githubIntegration.syncTaskStatusToIssue(task);
+    
+    this.emit('taskStatusSyncedToGitHub', {
+      taskId: task.id,
+      status: task.status
+    });
+  }
+
+  /**
+   * Get all task-issue mappings
+   */
+  async getTaskIssueMappings(): Promise<any[]> {
+    if (!this.isInitialized) {
+      throw new Error('Orchestrator not initialized');
+    }
+
+    return await this.githubIntegration.getAllMappings();
+  }
+
+  /**
+   * Get GitHub integration statistics
+   */
+  getGitHubIntegrationStats() {
+    return {
+      repository: this.baseRepoUrl,
+      hasIntegration: true,
+      mappingsCount: this.githubIntegration ? 'Available' : 'Not initialized'
+    };
   }
 }
 

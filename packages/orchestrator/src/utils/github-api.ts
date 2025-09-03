@@ -5,7 +5,7 @@
  * and label operations for the orchestrator.
  */
 
-export interface GitHubConfig {
+export interface GitHubAPIConfig {
   token: string;
   repository: string; // owner/repo format
 }
@@ -68,7 +68,7 @@ export class GitHubAPI {
   private owner: string;
   private repo: string;
 
-  constructor(private config: GitHubConfig) {
+  constructor(private config: GitHubAPIConfig) {
     const [owner, repo] = config.repository.split('/');
     if (!owner || !repo) {
       throw new Error(`Invalid repository format: ${config.repository}. Expected format: owner/repo`);

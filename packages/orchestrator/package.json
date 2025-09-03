@@ -48,19 +48,21 @@
   ],
   "dependencies": {
     "@dagger.io/dagger": "^0.11.0",
+    "@octokit/auth-token": "^6.0.0",
+    "@octokit/rest": "^22.0.0",
+    "@vibe-kit/mcp-client": "file:../mcp-client",
     "@vibe-kit/sdk": "file:../sdk",
     "@vibe-kit/taskmaster": "file:../taskmaster",
-    "@vibe-kit/mcp-client": "file:../mcp-client",
     "commander": "^11.0.0",
-    "ws": "^8.14.0",
+    "eventemitter3": "^5.0.0",
     "express": "^4.18.0",
     "lru-cache": "^10.0.0",
-    "eventemitter3": "^5.0.0"
+    "ws": "^8.14.0"
   },
   "devDependencies": {
+    "@types/express": "^4.17.0",
     "@types/node": "^20.10.0",
     "@types/ws": "^8.5.0",
-    "@types/express": "^4.17.0",
     "@vitest/coverage-v8": "^1.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0",

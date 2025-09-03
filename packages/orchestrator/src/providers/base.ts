@@ -1,6 +1,9 @@
 import { Task, TaskEvent, TaskComplexity } from '../types/task';
 import * as fs from 'fs/promises';
 
+// Re-export types for external use
+export type { Task, TaskEvent, TaskComplexity } from '../types/task';
+
 export abstract class ProjectProvider {
   abstract type: string;
 

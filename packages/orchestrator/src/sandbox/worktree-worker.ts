@@ -32,7 +32,7 @@ export interface WorkerResult {
   commitSha?: string;
 }
 
-export interface GitHubConfig {
+export interface GitHubAPIConfig {
   token: string;
   repository: string; // owner/repo format
 }
@@ -50,7 +50,7 @@ export class WorktreeWorker extends EventEmitter {
 
   constructor(
     private config: WorktreeConfig,
-    private githubConfig: GitHubConfig,
+    private githubConfig: GitHubAPIConfig,
     private baseRepoPath: string,
     private sessionId: string,
     options: { useSharedSandbox?: boolean } = {}
