@@ -1,21 +1,15 @@
 /**
- * VibeKit Dagger Local Sandbox Provider
+ * VibeKit Local Sandbox Provider
  *
- * Implements the sandbox provider interface using Dagger for local containerized
- * development environments with ARM64 agent images.
+ * Implements the sandbox provider interface using Docker for local containerized
+ * development environments with streaming output and workspace persistence.
  */
 
-import { connect } from "@dagger.io/dagger";
-import type { Client, Directory } from "@dagger.io/dagger";
-import { exec, spawn } from "child_process";
-import { promisify } from "util";
-import { readFile } from "fs/promises";
-import { existsSync } from "fs";
+import { spawn } from "child_process";
+import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { EventEmitter } from "events";
-import { homedir } from "os";
-
-const execAsync = promisify(exec);
+import { homedir, tmpdir } from "os";
 
 // Logger interface for structured logging
 interface Logger {
@@ -141,7 +135,7 @@ export interface SandboxProvider {
     agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
     workingDirectory?: string
   ): Promise<SandboxInstance>;
-  resume(sandboxId: string): Promise<SandboxInstance>;
+  resume(sandboxId: string, envs?: Record<string, string>): Promise<SandboxInstance>;
 }
 
 export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
@@ -220,7 +214,7 @@ export class Configuration {
 
 // Validates and sanitizes command input to prevent injection
 function sanitizeCommand(command: string): string {
-  // For Dagger, we're already running in an isolated container
+  // For Docker, we're already running in an isolated container
   // and using sh -c, so we can be less restrictive
   // Still prevent some obvious injection patterns
   
@@ -355,10 +349,12 @@ class ImageResolver {
   }
 }
 
-// Local Dagger sandbox instance implementation
+// Local Docker sandbox instance implementation
 class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
   private isRunning = true;
-  private workspaceDirectory: Directory | null = null;
+  private hostWorkspaceDir: string | null = null;
+  private containerName: string;
+  private containerInitialized = false;
   private logger: Logger;
   private imageResolver: ImageResolver;
   private config: LocalConfig;
@@ -374,6 +370,18 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     this.config = Configuration.getInstance(config).get();
     this.logger = Configuration.getInstance().getLogger();
     this.imageResolver = new ImageResolver(this.config, this.logger);
+    this.containerName = `vibekit-${this.sandboxId}`;
+    
+    // Create a persistent host directory for workspace state
+    const tempDir = tmpdir();
+    this.hostWorkspaceDir = join(tempDir, 'vibekit-workspace', this.sandboxId);
+    try {
+      mkdirSync(this.hostWorkspaceDir, { recursive: true });
+      this.logger.debug(`Created workspace directory: ${this.hostWorkspaceDir}`);
+    } catch (error) {
+      this.logger.warn(`Failed to create workspace directory: ${error}`);
+      this.hostWorkspaceDir = null;
+    }
   }
 
   get commands(): SandboxCommands {
@@ -405,6 +413,8 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
         }));
 
         try {
+          // Ensure container is initialized before first command
+          await this.ensureContainerInitialized();
           return await this.executeCommand(sanitizedCommand, options);
         } catch (error) {
           // Emit error event
@@ -432,31 +442,51 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     };
   }
 
-  private async executeCommand(
-    command: string,
-    options?: SandboxCommandOptions
-  ): Promise<SandboxExecutionResult> {
-    // If streaming callbacks are provided, use Docker directly for real-time output
-    if (options?.onStdout || options?.onStderr) {
-      return this.executeCommandWithStreaming(command, options);
+  private async ensureContainerInitialized(): Promise<void> {
+    if (this.containerInitialized) {
+      return;
     }
 
-    // Fallback to Dagger for non-streaming execution
-    return this.executeCommandWithDagger(command, options);
-  }
-
-  private async executeCommandWithStreaming(
-    command: string,
-    options: SandboxCommandOptions
-  ): Promise<SandboxExecutionResult> {
-    // Get the image name
     const image = await this.imageResolver.resolveImage(this.agentType);
-    const timeout = options.timeoutMs || 120000; // 2 minutes default
+    
+    // Remove any existing container with the same name
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const removeProcess = spawn('docker', ['rm', '-f', this.containerName], { stdio: 'pipe' });
+        
+        removeProcess.on('close', (exitCode) => {
+          // Exit code 0 = success, exit code 1 = container doesn't exist (also fine)
+          if (exitCode === 0 || exitCode === 1) {
+            this.logger.debug(`Container removal completed: ${this.containerName}`);
+            resolve();
+          } else {
+            this.logger.warn(`Container removal failed with exit code ${exitCode}, continuing anyway`);
+            resolve(); // Continue anyway
+          }
+        });
+        
+        removeProcess.on('error', (error) => {
+          this.logger.warn(`Container removal error: ${error.message}, continuing anyway`);
+          resolve(); // Continue anyway
+        });
+        
+        // Timeout after 5 seconds
+        setTimeout(() => {
+          removeProcess.kill();
+          this.logger.warn(`Container removal timeout: ${this.containerName}, continuing anyway`);
+          resolve(); // Continue anyway
+        }, 5000);
+      });
+    } catch (error) {
+      this.logger.warn(`Container removal failed: ${error}, continuing anyway`);
+      // Container might not exist - that's fine, continue
+    }
 
-    // Build Docker run command
+    // Build Docker run command for long-running container
     const dockerArgs = [
       'run',
-      '--rm',
+      '-d', // Run in detached mode
+      '--name', this.containerName,
       '--workdir', this.workDir || '/vibe0',
     ];
 
@@ -467,13 +497,69 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
       }
     }
 
-    // Add volume mount if we have a workspace directory
-    // For now, we'll run without persistent workspace for streaming
-    // This is a trade-off for real-time output
-    dockerArgs.push(image, 'sh', '-c', command);
+    // Add volume mount for workspace persistence
+    if (this.hostWorkspaceDir) {
+      dockerArgs.push('--volume', `${this.hostWorkspaceDir}:${this.workDir || '/vibe0'}`);
+      this.logger.debug(`Mounting workspace: ${this.hostWorkspaceDir} -> ${this.workDir || '/vibe0'}`);
+    }
+    
+    // Keep container running with tail command
+    dockerArgs.push(image, 'tail', '-f', '/dev/null');
+
+    return new Promise<void>((resolve, reject) => {
+      this.logger.debug('Creating long-running Docker container', { containerName: this.containerName, image });
+
+      const dockerProcess = spawn('docker', dockerArgs, {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      let stderr = '';
+
+      dockerProcess.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      dockerProcess.on('close', (exitCode) => {
+        if (exitCode === 0) {
+          this.containerInitialized = true;
+          this.logger.debug('Long-running Docker container created successfully', { containerName: this.containerName });
+          resolve();
+        } else {
+          this.logger.error('Failed to create Docker container', { containerName: this.containerName, exitCode, stderr });
+          reject(new ContainerExecutionError(
+            `Failed to create container ${this.containerName}: exit code ${exitCode}`,
+            exitCode || -1
+          ));
+        }
+      });
+
+      dockerProcess.on('error', (error) => {
+        this.logger.error('Docker container creation process failed', error);
+        reject(new ContainerExecutionError(
+          `Docker process failed: ${error.message}`,
+          -1,
+          error
+        ));
+      });
+    });
+  }
+
+  private async executeCommand(
+    command: string,
+    options?: SandboxCommandOptions
+  ): Promise<SandboxExecutionResult> {
+    const opts = options || {};
+    const timeout = opts.timeoutMs || 120000; // 2 minutes default
+
+    // Build Docker exec command to run in existing container
+    const dockerArgs = [
+      'exec',
+      this.containerName,
+      'sh', '-c', command
+    ];
 
     return new Promise<SandboxExecutionResult>((resolve, reject) => {
-      this.logger.debug('Starting Docker streaming execution', { command, image });
+      this.logger.debug('Executing command in persistent container', { command, containerName: this.containerName });
 
       const dockerProcess = spawn('docker', dockerArgs, {
         stdio: ['pipe', 'pipe', 'pipe']
@@ -497,8 +583,8 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
         stdout += chunk;
         
         // Call streaming callback immediately
-        if (options.onStdout) {
-          options.onStdout(chunk);
+        if (opts.onStdout) {
+          opts.onStdout(chunk);
         }
       });
 
@@ -508,8 +594,8 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
         stderr += chunk;
         
         // Call streaming callback immediately
-        if (options.onStderr) {
-          options.onStderr(chunk);
+        if (opts.onStderr) {
+          opts.onStderr(chunk);
         }
       });
 
@@ -519,7 +605,8 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
           clearTimeout(timeoutId);
         }
 
-        this.logger.debug('Docker streaming execution completed', { 
+        this.logger.debug('Docker exec completed', { 
+          containerName: this.containerName,
           exitCode, 
           stdoutLength: stdout.length, 
           stderrLength: stderr.length 
@@ -538,9 +625,9 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
           clearTimeout(timeoutId);
         }
 
-        this.logger.error('Docker streaming execution failed', error);
+        this.logger.error('Docker exec failed', error);
         reject(new ContainerExecutionError(
-          `Docker process failed: ${error.message}`,
+          `Docker exec failed: ${error.message}`,
           -1,
           error
         ));
@@ -548,120 +635,77 @@ class LocalSandboxInstance extends EventEmitter implements SandboxInstance {
     });
   }
 
-  private async executeCommandWithDagger(
-    command: string,
-    options?: SandboxCommandOptions
-  ): Promise<SandboxExecutionResult> {
-    // Use direct connect instead of connection pool to avoid GraphQL sync issues
-    let result: SandboxExecutionResult | null = null;
-    
-    await connect(async (client) => {
-      // Resolve the image
-      const image = await this.imageResolver.resolveImage(this.agentType);
-      
-      // Create container
-      let container = client.container()
-        .from(image)
-        .withWorkdir(this.workDir || "/vibe0");
-
-      // Add environment variables
-      if (this.envs) {
-        for (const [key, value] of Object.entries(this.envs)) {
-          container = container.withEnvVariable(key, value);
-        }
-      }
-
-      // Restore workspace if exists
-      if (this.workspaceDirectory) {
-        container = container.withDirectory(
-          this.workDir || "/vibe0",
-          this.workspaceDirectory
-        );
-      }
-
-      // Execute command
-      if (options?.background) {
-        // Background execution
-        container = container.withExec(["sh", "-c", command], {
-          experimentalPrivilegedNesting: true,
-        });
-
-        // Save workspace state - await the directory call
-        this.workspaceDirectory = await container.directory(this.workDir || "/vibe0");
-
-        result = {
-          exitCode: 0,
-          stdout: `Background process started: ${command}`,
-          stderr: "",
-        };
-      } else {
-        // Foreground execution with timeout
-        const timeout = options?.timeoutMs || 600000; // 10 minutes default
-        const execContainer = container.withExec(["sh", "-c", command]);
-
-        try {
-          const [stdout, stderr, exitCode] = await Promise.race([
-            Promise.all([
-              execContainer.stdout(),
-              execContainer.stderr(),
-              execContainer.exitCode()
-            ]),
-            new Promise<never>((_, reject) => 
-              setTimeout(() => reject(new Error("Command execution timeout")), timeout)
-            )
-          ]);
-
-          // Save workspace state - await the directory call
-          this.workspaceDirectory = await execContainer.directory(this.workDir || "/vibe0");
-
-          result = { exitCode, stdout, stderr };
-        } catch (error) {
-          if (error instanceof Error && error.message === "Command execution timeout") {
-            throw new ContainerExecutionError("Command execution timeout", -1, error);
-          }
-          throw error;
-        }
-      }
-    });
-
-    if (!result) {
-      throw new ContainerExecutionError("Command execution failed - no result returned", -1);
-    }
-    
-    return result;
-  }
-
-  private emitOutput(
-    type: "stdout" | "stderr",
-    output: string,
-    callback?: (data: string) => void
-  ): void {
-    const lines = output.split("\n").filter(line => line.trim());
-    for (const line of lines) {
-      this.emit("update", `${type.toUpperCase()}: ${line}`);
-      if (callback) callback(line);
-    }
-  }
 
   async kill(): Promise<void> {
     this.isRunning = false;
-    this.workspaceDirectory = null;
+    
+    // Remove the long-running container
+    if (this.containerInitialized) {
+      try {
+        const dockerProcess = spawn('docker', ['rm', '-f', this.containerName], {
+          stdio: 'pipe'
+        });
+        
+        await new Promise<void>((resolve) => {
+          dockerProcess.on('close', () => {
+            this.logger.debug(`Removed Docker container: ${this.containerName}`);
+            this.containerInitialized = false;
+            resolve();
+          });
+          
+          dockerProcess.on('error', (error) => {
+            this.logger.warn(`Failed to remove Docker container ${this.containerName}:`, error.message);
+            this.containerInitialized = false;
+            resolve();
+          });
+        });
+      } catch (error) {
+        this.logger.warn(`Error during container cleanup: ${error}`);
+      }
+    }
+    
+    // Clean up host workspace directory
+    if (this.hostWorkspaceDir) {
+      try {
+        const { rmSync } = await import('fs');
+        rmSync(this.hostWorkspaceDir, { recursive: true, force: true });
+        this.logger.debug(`Cleaned up workspace directory: ${this.hostWorkspaceDir}`);
+      } catch (error) {
+        this.logger.warn(`Failed to cleanup workspace directory: ${error}`);
+      }
+      this.hostWorkspaceDir = null;
+    }
+    
     this.logger.debug(`Killed sandbox instance: ${this.sandboxId}`);
   }
 
   async pause(): Promise<void> {
-    // Not applicable for Dagger containers
+    // Not applicable for streaming Docker containers
     this.logger.debug(`Pause requested for sandbox: ${this.sandboxId} (no-op)`);
   }
 
   async getHost(_port: number): Promise<string> {
     return "localhost";
   }
+  
+  /**
+   * Get the agent type for this sandbox instance
+   */
+  getAgentType(): AgentType | undefined {
+    return this.agentType;
+  }
 }
 
 export class LocalSandboxProvider implements SandboxProvider {
   private logger: Logger;
   private config: LocalConfig;
+  
+  // Static container tracking for session persistence
+  private static activeContainers = new Map<string, {
+    instance: LocalSandboxInstance;
+    createdAt: Date;
+    lastUsed: Date;
+  }>();
 
   constructor(config: LocalConfig = {}) {
     this.config = Configuration.getInstance(config).get();
@@ -676,7 +720,7 @@ export class LocalSandboxProvider implements SandboxProvider {
     // Generate unique ID with timestamp + random suffix to avoid collisions
     const timestamp = Date.now().toString(36);
     const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const sandboxId = `dagger-${agentType || "default"}-${timestamp}-${randomSuffix}`;
+    const sandboxId = `docker-${agentType || "default"}-${timestamp}-${randomSuffix}`;
     const workDir = workingDirectory || "/vibe0";
 
     this.logger.info(`Creating sandbox instance`, { sandboxId, agentType, workDir });
@@ -688,17 +732,233 @@ export class LocalSandboxProvider implements SandboxProvider {
       agentType,
       this.config
     );
+    
+    // Track the container for resumption
+    LocalSandboxProvider.activeContainers.set(sandboxId, {
+      instance,
+      createdAt: new Date(),
+      lastUsed: new Date()
+    });
 
     return instance;
   }
+  
+  /**
+   * Check if a Docker container is healthy and running
+   */
+  private async isContainerHealthy(sandboxId: string): Promise<boolean> {
+    const containerName = `vibekit-${sandboxId}`;
+    
+    return new Promise<boolean>((resolve) => {
+      this.logger.debug(`Checking container health: ${containerName}`);
+      
+      const process = spawn('docker', ['inspect', '--format', '{{.State.Running}}', containerName], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      process.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+      
+      process.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+      
+      process.on('close', (exitCode) => {
+        if (exitCode === 0 && stdout.trim() === 'true') {
+          this.logger.debug(`Container ${containerName} is healthy and running`);
+          resolve(true);
+        } else {
+          this.logger.debug(`Container ${containerName} is not healthy`, { exitCode, stdout, stderr });
+          resolve(false);
+        }
+      });
+      
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        this.logger.debug(`Container health check timeout: ${containerName}`);
+        process.kill();
+        resolve(false);
+      }, 5000);
+    });
+  }
 
-  async resume(sandboxId: string): Promise<SandboxInstance> {
+  async resume(sandboxId: string, envs?: Record<string, string>): Promise<SandboxInstance> {
     this.logger.info(`Resuming sandbox instance: ${sandboxId}`);
-    return await this.create();
+    
+    // Check if we have a tracked container
+    const tracked = LocalSandboxProvider.activeContainers.get(sandboxId);
+    
+    if (tracked) {
+      // Verify the container is still healthy
+      if (await this.isContainerHealthy(sandboxId)) {
+        this.logger.info(`Resuming existing healthy container: ${sandboxId}`);
+        
+        // Update last used time
+        tracked.lastUsed = new Date();
+        LocalSandboxProvider.activeContainers.set(sandboxId, tracked);
+        
+        return tracked.instance;
+      } else {
+        this.logger.warn(`Tracked container ${sandboxId} is not healthy, cleaning up`);
+        LocalSandboxProvider.activeContainers.delete(sandboxId);
+        
+        // Force remove any existing Docker container with this name
+        try {
+          const containerName = `vibekit-${sandboxId}`;
+          await new Promise<void>((resolve) => {
+            const removeProcess = spawn('docker', ['rm', '-f', containerName], { stdio: 'pipe' });
+            removeProcess.on('close', () => {
+              this.logger.debug(`Forced removal of unhealthy container: ${containerName}`);
+              resolve();
+            });
+            removeProcess.on('error', () => resolve()); // Continue anyway
+            setTimeout(() => {
+              removeProcess.kill();
+              resolve();
+            }, 5000);
+          });
+        } catch (error) {
+          this.logger.warn(`Failed to force remove container: ${error}`);
+        }
+      }
+    }
+    
+    // Container doesn't exist or is unhealthy - parse the sandboxId to recreate with same parameters
+    this.logger.info(`Creating new container for resumption: ${sandboxId}`);
+    
+    // Extract agent type from sandboxId (format: docker-{agentType}-{timestamp}-{random})
+    // For custom session IDs, we'll use a default agent type
+    const parts = sandboxId.split('-');
+    let agentType: AgentType | undefined = undefined;
+    
+    // Check if the second part is a valid agent type
+    const possibleAgentType = parts.length >= 2 ? parts[1] : undefined;
+    const validAgentTypes: AgentType[] = ["codex", "claude", "opencode", "gemini", "grok"];
+    
+    if (possibleAgentType && validAgentTypes.includes(possibleAgentType as AgentType)) {
+      agentType = possibleAgentType as AgentType;
+    } else {
+      // For custom session IDs (like persistent-session-*), default to claude
+      agentType = "claude";
+      this.logger.info(`Using default agent type 'claude' for session: ${sandboxId}`);
+    }
+    
+    const workDir = "/vibe0"; // Default working directory
+    
+    // Build environment variables for the resumed container
+    // Include common API keys from process.env if not provided
+    const resumeEnvs = envs || {};
+    
+    // Auto-detect common API keys if not explicitly provided
+    if (!resumeEnvs.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY) {
+      resumeEnvs.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+      this.logger.debug('Auto-detected ANTHROPIC_API_KEY for container resumption');
+    }
+    
+    if (!resumeEnvs.CLAUDE_CODE_OAUTH_TOKEN && process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+      resumeEnvs.CLAUDE_CODE_OAUTH_TOKEN = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+      this.logger.debug('Auto-detected CLAUDE_CODE_OAUTH_TOKEN for container resumption');
+    }
+    
+    if (!resumeEnvs.OPENAI_API_KEY && process.env.OPENAI_API_KEY) {
+      resumeEnvs.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+      this.logger.debug('Auto-detected OPENAI_API_KEY for container resumption');
+    }
+    
+    if (!resumeEnvs.GEMINI_API_KEY && process.env.GEMINI_API_KEY) {
+      resumeEnvs.GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+      this.logger.debug('Auto-detected GEMINI_API_KEY for container resumption');
+    }
+    
+    if (!resumeEnvs.GROK_API_KEY && process.env.GROK_API_KEY) {
+      resumeEnvs.GROK_API_KEY = process.env.GROK_API_KEY;
+      this.logger.debug('Auto-detected GROK_API_KEY for container resumption');
+    }
+    
+    if (!resumeEnvs.GITHUB_TOKEN && process.env.GITHUB_TOKEN) {
+      resumeEnvs.GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+      this.logger.debug('Auto-detected GITHUB_TOKEN for container resumption');
+    }
+    
+    this.logger.info(`Resuming container with environment variables`, {
+      sandboxId,
+      envVarCount: Object.keys(resumeEnvs).length,
+      hasAnthropicKey: !!resumeEnvs.ANTHROPIC_API_KEY,
+      hasClaudeOAuth: !!resumeEnvs.CLAUDE_CODE_OAUTH_TOKEN,
+      hasGitHubToken: !!resumeEnvs.GITHUB_TOKEN
+    });
+    
+    // Create new instance with the specific sandboxId and environment variables
+    const instance = new LocalSandboxInstance(
+      sandboxId,
+      resumeEnvs, // Pass environment variables for resumed containers
+      workDir,
+      agentType,
+      this.config
+    );
+    
+    // Track the new container
+    LocalSandboxProvider.activeContainers.set(sandboxId, {
+      instance,
+      createdAt: new Date(),
+      lastUsed: new Date()
+    });
+    
+    return instance;
   }
 
   async listEnvironments(): Promise<Environment[]> {
-    return [];
+    const environments: Environment[] = [];
+    
+    for (const [sandboxId, tracked] of LocalSandboxProvider.activeContainers.entries()) {
+      const isHealthy = await this.isContainerHealthy(sandboxId);
+      
+      environments.push({
+        id: sandboxId,
+        name: `Container ${sandboxId}`,
+        status: isHealthy ? "running" : "stopped",
+        agentType: tracked.instance.getAgentType(),
+        createdAt: tracked.createdAt,
+        lastUsed: tracked.lastUsed,
+        environment: {
+          VIBEKIT_AGENT_TYPE: tracked.instance.getAgentType(),
+          AGENT_TYPE: tracked.instance.getAgentType()
+        }
+      });
+    }
+    
+    return environments;
+  }
+  
+  /**
+   * Clean up inactive containers (utility method)
+   */
+  static async cleanup(maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
+    const now = new Date();
+    const toRemove: string[] = [];
+    
+    for (const [sandboxId, tracked] of LocalSandboxProvider.activeContainers.entries()) {
+      const age = now.getTime() - tracked.lastUsed.getTime();
+      if (age > maxAgeMs) {
+        toRemove.push(sandboxId);
+      }
+    }
+    
+    for (const sandboxId of toRemove) {
+      const tracked = LocalSandboxProvider.activeContainers.get(sandboxId);
+      if (tracked) {
+        try {
+          await tracked.instance.kill();
+        } catch (error) {
+          // Ignore cleanup errors
+        }
+        LocalSandboxProvider.activeContainers.delete(sandboxId);
+      }
+    }
   }
 }
 
