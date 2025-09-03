@@ -588,7 +588,7 @@ export class GitHubIntegrationManager {
       html_url: octokitIssue.html_url,
       created_at: octokitIssue.created_at,
       updated_at: octokitIssue.updated_at,
-      closed_at: octokitIssue.closed_at
+      closed_at: octokitIssue.closed_at || undefined
     };
   }
 

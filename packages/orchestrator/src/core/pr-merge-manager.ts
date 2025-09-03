@@ -53,7 +53,7 @@ export interface ReviewStatus {
   dismissedReviews: number;
   reviews: Array<{
     user: { login: string };
-    state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED';
+    state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
     submitted_at: string;
   }>;
 }
@@ -418,7 +418,7 @@ export class PRMergeManager extends EventEmitter {
           ref: prResult.head.ref,
           sha: prResult.head.sha
         },
-        mergeable: prResult.mergeable,
+        mergeable: prResult.mergeable ?? undefined,
         mergeable_state: 'unknown', // Will be updated by mergeability check
         merged: prResult.merged,
         merged_at: prResult.created_at, // This should be merged_at from API

@@ -187,7 +187,13 @@ export class OctokitService {
         clone_url: repo.clone_url,
         ssh_url: repo.ssh_url,
         html_url: repo.html_url,
-        permissions: repo.permissions
+        permissions: repo.permissions ? {
+          admin: repo.permissions.admin || false,
+          maintain: repo.permissions.maintain || false,
+          push: repo.permissions.push || false,
+          triage: repo.permissions.triage || false,
+          pull: repo.permissions.pull || false
+        } : undefined
       };
     } catch (error: any) {
       throw new Error(`Failed to get repository ${this.owner}/${this.repo}: ${error.message}`);
@@ -433,7 +439,7 @@ export class OctokitService {
           },
           state: review.state as any,
           body: review.body,
-          submitted_at: review.submitted_at
+          submitted_at: review.submitted_at || null
         }))
       };
     } catch (error: any) {

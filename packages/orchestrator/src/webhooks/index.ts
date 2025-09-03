@@ -14,6 +14,7 @@ export {
 
 export { 
   WebhookUtils,
+  WebhookFilters,
   type WebhookValidationResult,
   type WebhookEventFilter
 } from './webhook-utils';

@@ -174,7 +174,7 @@ export class WebhookUtils {
       }
     };
 
-    let payload = { ...basePayload };
+    let payload: any = { ...basePayload };
 
     switch (eventType) {
       case 'issues':

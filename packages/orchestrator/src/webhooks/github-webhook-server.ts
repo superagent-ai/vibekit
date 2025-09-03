@@ -34,13 +34,13 @@ export interface GitHubWebhookConfig {
 }
 
 export interface WebhookServerEvents {
-  webhookReceived: (event: GitHubWebhookEvent, headers: Record<string, string>) => void;
-  webhookProcessed: (event: GitHubWebhookEvent, result: any) => void;
-  webhookError: (error: Error, event?: GitHubWebhookEvent) => void;
-  serverStarted: (port: number) => void;
-  serverStopped: () => void;
-  securityViolation: (ip: string, reason: string) => void;
-  rateLimited: (ip: string) => void;
+  webhookReceived: [event: GitHubWebhookEvent, headers: Record<string, string>];
+  webhookProcessed: [event: GitHubWebhookEvent, result: any];
+  webhookError: [error: Error, event?: GitHubWebhookEvent];
+  serverStarted: [port: number];
+  serverStopped: [];
+  securityViolation: [ip: string, reason: string];
+  rateLimited: [ip: string];
 }
 
 interface WebhookRequest extends Request {
