@@ -25,6 +25,26 @@ class DashboardServer {
     this.dashboardDir = join(os.homedir(), ".vibekit", "dashboard");
   }
 
+  private async getLocalDashboardPath(): Promise<string | null> {
+    // Check if we're in a VibeKit workspace by looking for local dashboard
+    const currentDir = process.cwd();
+    const possiblePaths = [
+      join(currentDir, "packages", "dashboard"),
+      join(currentDir, "..", "packages", "dashboard"), 
+      join(currentDir, "..", "..", "packages", "dashboard"),
+      join(__dirname, "..", "..", "..", "dashboard"),
+      join(__dirname, "..", "..", "dashboard")
+    ];
+
+    for (const path of possiblePaths) {
+      const serverPath = join(path, "server.js");
+      if (await fs.pathExists(serverPath)) {
+        return path;
+      }
+    }
+    return null;
+  }
+
   private async getPortFromSettings(): Promise<number> {
     try {
       const settingsPath = join(os.homedir(), '.vibekit', 'settings.json');
@@ -124,7 +144,20 @@ class DashboardServer {
       return;
     }
 
-    await this.ensureDashboardInstalled();
+    // Check for local development version first
+    const localDashboardPath = await this.getLocalDashboardPath();
+    let packagePath: string;
+    let serverPath: string;
+
+    if (localDashboardPath) {
+      console.log(chalk.gray("🔧 Using local development dashboard..."));
+      packagePath = localDashboardPath;
+      serverPath = join(packagePath, "server.js");
+    } else {
+      await this.ensureDashboardInstalled();
+      packagePath = join(this.dashboardDir, "node_modules", "@vibe-kit", "dashboard");
+      serverPath = join(packagePath, "server.js");
+    }
 
     return new Promise<void>(async (resolve, reject) => {
       // Get the port that will be used from settings
@@ -134,9 +167,6 @@ class DashboardServer {
       console.log(
         chalk.blue(`🚀 Starting VibeKit Dashboard on port ${configuredPort}...`)
       );
-
-      const packagePath = join(this.dashboardDir, "node_modules", "@vibe-kit", "dashboard");
-      const serverPath = join(packagePath, "server.js");
       
       if (!(await fs.pathExists(serverPath))) {
         reject(new Error("Dashboard server not found. Package may be corrupted."));
@@ -152,7 +182,7 @@ class DashboardServer {
           stdio: ["pipe", "pipe", "pipe"],
           env: {
             ...process.env,
-            NODE_ENV: "production",
+            NODE_ENV: localDashboardPath ? "development" : "production",
           },
         }
       );
