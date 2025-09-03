@@ -1,0 +1,37 @@
+{
+  "name": "@vibe-kit/logger",
+  "version": "0.0.1",
+  "description": "Unified structured logging for VibeKit packages",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./test-utils": {
+      "types": "./dist/test-utils.d.ts",
+      "import": "./dist/test-utils.mjs",
+      "require": "./dist/test-utils.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "tsup": "^8.5.0",
+    "vitest": "^3.2.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

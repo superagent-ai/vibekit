@@ -19,7 +19,23 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@vibe-kit/logger": ["../logger/dist/index.d.ts"],
+      "@vibe-kit/logger/*": ["../logger/dist/*"],
+      "@vibe-kit/mcp-client": ["../mcp-client/dist/index.d.ts"],
+      "@vibe-kit/mcp-client/*": ["../mcp-client/dist/*"],
+      "@vibe-kit/projects": ["../projects/dist/index.d.ts"],
+      "@vibe-kit/projects/*": ["../projects/dist/*"],
+      "@vibe-kit/taskmaster": ["../taskmaster/dist/index.d.ts"],
+      "@vibe-kit/taskmaster/*": ["../taskmaster/dist/*"],
+      "@vibe-kit/ai-chat": ["../ai-chat/dist/index.d.ts"],
+      "@vibe-kit/ai-chat/*": ["../ai-chat/dist/*"],
+      "@vibe-kit/auth": ["../auth/dist/index.d.ts"],
+      "@vibe-kit/auth/*": ["../auth/dist/*"],
+      "@vibe-kit/sdk": ["../sdk/dist/index.d.ts"],
+      "@vibe-kit/sdk/*": ["../sdk/dist/*"],
+      "@vibe-kit/dagger": ["../dagger/dist/index.d.ts"],
+      "@vibe-kit/dagger/*": ["../dagger/dist/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

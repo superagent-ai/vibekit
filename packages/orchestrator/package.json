@@ -1,0 +1,74 @@
+{
+  "name": "@vibe-kit/orchestrator",
+  "version": "0.1.0",
+  "description": "Provider-agnostic project orchestration with Dagger sandboxes and git worktrees",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:storage-manual": "node scripts/test-storage-manual.js",
+    "test:session": "vitest run --testPathPattern=session",
+    "test:providers": "vitest run --testPathPattern=provider",
+    "test:taskmaster-mcp": "node scripts/test-taskmaster-mcp.js",
+    "test:dagger-manual": "node scripts/test-dagger-manual.js",
+    "test:worktree-parallel": "node scripts/test-worktree-parallel.js",
+    "test:task-e2e": "vitest run --testPathPattern=e2e/single-task",
+    "test:pause-resume": "vitest run --testPathPattern=e2e/pause-resume",
+    "test:parallel-performance": "node scripts/test-parallel-performance.js",
+    "test:github-e2e": "vitest run --testPathPattern=e2e/github",
+    "test:stress": "node scripts/test-stress.js",
+    "test:integration": "vitest run -c vitest.integration.config.ts",
+    "test:integration:watch": "vitest -c vitest.integration.config.ts",
+    "test:integration:docker": "vitest run -c vitest.integration.config.ts test/integration/sandbox/",
+    "dev:test-session": "node scripts/dev-test-session.js",
+    "dev:test-providers": "node scripts/dev-test-providers.js",
+    "dev:test-cli": "node scripts/test-cli-basic.js",
+    "dev:dashboard-server": "node scripts/dev-dashboard-server.js"
+  },
+  "keywords": [
+    "orchestration",
+    "project-management",
+    "dagger",
+    "git-worktrees",
+    "automation",
+    "vibekit"
+  ],
+  "dependencies": {
+    "@dagger.io/dagger": "^0.11.0",
+    "@octokit/auth-token": "^6.0.0",
+    "@octokit/rest": "^22.0.0",
+    "@vibe-kit/mcp-client": "file:../mcp-client",
+    "@vibe-kit/sdk": "file:../sdk",
+    "@vibe-kit/taskmaster": "file:../taskmaster",
+    "commander": "^11.0.0",
+    "eventemitter3": "^5.0.0",
+    "express": "^4.18.0",
+    "lru-cache": "^10.0.0",
+    "ws": "^8.14.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.0",
+    "@types/node": "^20.10.0",
+    "@types/ws": "^8.5.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "peerDependencies": {
+    "@vibe-kit/dashboard": "file:../dashboard"
+  }
+}

@@ -4,12 +4,13 @@ import os from 'os';
 import { collectSystemInfo } from './system-info.js';
 
 class Analytics {
-  constructor(agentName, logger, fileChangeCallback = null, executionMode = 'local') {
+  constructor(agentName, logger, fileChangeCallback = null, executionMode = 'local', projectContext = null) {
     this.agentName = agentName;
     this.logger = logger;
     this.sessionId = Date.now().toString();
     this.startTime = Date.now();
     this.fileChangeCallback = fileChangeCallback;
+    this.projectContext = projectContext;
     
     // Analytics data
     this.metrics = {
@@ -20,6 +21,11 @@ class Analytics {
       duration: null,
       status: 'active', // active, terminated
       executionMode: executionMode, // sandbox, local
+      
+      // Project context
+      projectId: projectContext?.id || null,
+      projectName: projectContext?.name || null,
+      projectRoot: projectContext?.projectRoot || null,
       
       // Input/Output metrics
       inputBytes: 0,
@@ -47,12 +53,20 @@ class Analytics {
     this.outputBuffer = '';
     
     this.analyticsDir = path.join(os.homedir(), '.vibekit', 'analytics');
+    this.projectAnalyticsDir = projectContext 
+      ? path.join(this.analyticsDir, 'projects', projectContext.id)
+      : null;
     this.periodicInterval = null;
     this.initializeAnalytics();
   }
 
   async initializeAnalytics() {
     await fs.ensureDir(this.analyticsDir);
+    
+    // Create project-specific analytics directory if needed
+    if (this.projectAnalyticsDir) {
+      await fs.ensureDir(this.projectAnalyticsDir);
+    }
     
     // Collect system info at session start
     try {
@@ -202,24 +216,17 @@ class Analytics {
 
   async saveSessionUpdate(sessionData) {
     const date = new Date().toISOString().split('T')[0];
-    const analyticsFile = path.join(this.analyticsDir, `${this.agentName}-${date}.json`);
+    const globalFile = path.join(this.analyticsDir, `${this.agentName}-${date}.json`);
     
     try {
-      let existingData = [];
-      if (await fs.pathExists(analyticsFile)) {
-        const content = await fs.readFile(analyticsFile, 'utf8');
-        existingData = JSON.parse(content);
-      }
+      // Always save to global analytics
+      await this.saveToFile(globalFile, sessionData);
       
-      // Find existing session and update it, or add new one
-      const existingIndex = existingData.findIndex(s => s.sessionId === sessionData.sessionId);
-      if (existingIndex >= 0) {
-        existingData[existingIndex] = sessionData;
-      } else {
-        existingData.push(sessionData);
+      // Also save to project-specific analytics if we have a project
+      if (this.projectAnalyticsDir) {
+        const projectFile = path.join(this.projectAnalyticsDir, `${this.agentName}-${date}.json`);
+        await this.saveToFile(projectFile, sessionData);
       }
-      
-      await fs.writeFile(analyticsFile, JSON.stringify(existingData, null, 2));
       
       // Log session update
       await this.logger.log('debug', 'Session analytics updated', {
@@ -227,7 +234,9 @@ class Analytics {
         duration: sessionData.duration,
         inputBytes: sessionData.inputBytes,
         outputBytes: sessionData.outputBytes,
-        filesChanged: sessionData.filesChanged.length
+        filesChanged: sessionData.filesChanged.length,
+        projectId: sessionData.projectId,
+        projectName: sessionData.projectName
       });
       
       return sessionData;
@@ -282,28 +291,69 @@ class Analytics {
     // For now, use the basic metrics we collect
   }
 
-  async saveAnalytics() {
-    const date = new Date().toISOString().split('T')[0];
-    const analyticsFile = path.join(this.analyticsDir, `${this.agentName}-${date}.json`);
-    
+  async saveToFile(filePath, data) {
     try {
       let existingData = [];
-      if (await fs.pathExists(analyticsFile)) {
-        const content = await fs.readFile(analyticsFile, 'utf8');
+      if (await fs.pathExists(filePath)) {
+        const content = await fs.readFile(filePath, 'utf8');
         existingData = JSON.parse(content);
       }
       
       // Find existing session and update it, or add new one
-      const existingIndex = existingData.findIndex(s => s.sessionId === this.metrics.sessionId);
+      const existingIndex = existingData.findIndex(s => s.sessionId === data.sessionId);
       if (existingIndex >= 0) {
-        existingData[existingIndex] = this.metrics;
+        existingData[existingIndex] = data;
       } else {
-        existingData.push(this.metrics);
+        existingData.push(data);
       }
       
-      await fs.writeFile(analyticsFile, JSON.stringify(existingData, null, 2));
+      await fs.writeFile(filePath, JSON.stringify(existingData, null, 2));
+      return true;
+    } catch (error) {
+      console.error(`Failed to save analytics to ${filePath}:`, error.message);
+      return false;
+    }
+  }
+
+  saveToFileSync(filePath, data) {
+    try {
+      let existingData = [];
+      if (fs.pathExistsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        existingData = JSON.parse(content);
+      }
       
-      // Also log analytics summary
+      // Find existing session and update it, or add new one
+      const existingIndex = existingData.findIndex(s => s.sessionId === data.sessionId);
+      if (existingIndex >= 0) {
+        existingData[existingIndex] = data;
+      } else {
+        existingData.push(data);
+      }
+      
+      fs.writeFileSync(filePath, JSON.stringify(existingData, null, 2));
+      return true;
+    } catch (error) {
+      console.error(`Failed to save analytics to ${filePath}:`, error.message);
+      return false;
+    }
+  }
+
+  async saveAnalytics() {
+    const date = new Date().toISOString().split('T')[0];
+    const globalFile = path.join(this.analyticsDir, `${this.agentName}-${date}.json`);
+    
+    try {
+      // Always save to global analytics
+      await this.saveToFile(globalFile, this.metrics);
+      
+      // Also save to project-specific analytics if we have a project
+      if (this.projectAnalyticsDir) {
+        const projectFile = path.join(this.projectAnalyticsDir, `${this.agentName}-${date}.json`);
+        await this.saveToFile(projectFile, this.metrics);
+      }
+      
+      // Log analytics summary
       await this.logger.log('info', 'Analytics captured', {
         sessionId: this.metrics.sessionId,
         duration: this.metrics.duration,
@@ -313,6 +363,8 @@ class Analytics {
         errors: this.metrics.errors.length,
         warnings: this.metrics.warnings.length,
         exitCode: this.metrics.exitCode,
+        projectId: this.metrics.projectId,
+        projectName: this.metrics.projectName,
         machineId: this.metrics.systemInfo?.machineId,
         nodeVersion: this.metrics.systemInfo?.nodeVersion,
         projectLanguage: this.metrics.systemInfo?.projectLanguage
@@ -327,24 +379,17 @@ class Analytics {
   // Synchronous version for emergency saves (e.g., on process exit)
   saveAnalyticsSync() {
     const date = new Date().toISOString().split('T')[0];
-    const analyticsFile = path.join(this.analyticsDir, `${this.agentName}-${date}.json`);
+    const globalFile = path.join(this.analyticsDir, `${this.agentName}-${date}.json`);
     
     try {
-      let existingData = [];
-      if (fs.pathExistsSync(analyticsFile)) {
-        const content = fs.readFileSync(analyticsFile, 'utf8');
-        existingData = JSON.parse(content);
-      }
+      // Always save to global analytics
+      this.saveToFileSync(globalFile, this.metrics);
       
-      // Find existing session and update it, or add new one
-      const existingIndex = existingData.findIndex(s => s.sessionId === this.metrics.sessionId);
-      if (existingIndex >= 0) {
-        existingData[existingIndex] = this.metrics;
-      } else {
-        existingData.push(this.metrics);
+      // Also save to project-specific analytics if we have a project
+      if (this.projectAnalyticsDir) {
+        const projectFile = path.join(this.projectAnalyticsDir, `${this.agentName}-${date}.json`);
+        this.saveToFileSync(projectFile, this.metrics);
       }
-      
-      fs.writeFileSync(analyticsFile, JSON.stringify(existingData, null, 2));
       
       return this.metrics;
     } catch (error) {

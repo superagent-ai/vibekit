@@ -1,0 +1,239 @@
+---
+title: projects
+description: "List, get, or search VibeKit projects"
+---
+
+## Overview
+
+The `projects` tool provides comprehensive project discovery and filtering capabilities. It allows AI assistants to list all projects, retrieve specific project details, or search for projects based on various criteria.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | enum | No | Operation to perform: `list` (default), `get`, or `search` |
+| `id` | string | Conditional | Project ID (required for `get` action) |
+| `query` | string | No | Search term for name/description (for `search` action) |
+| `tags` | string[] | No | Filter projects by tags |
+| `status` | enum | No | Filter by status: `active` (default), `archived`, or `all` |
+| `priority` | enum | No | Filter by priority: `high`, `medium`, or `low` |
+
+## Actions
+
+### list
+
+Returns all projects with optional status filtering.
+
+**Example Request:**
+```json
+{
+  "action": "list",
+  "status": "active"
+}
+```
+
+**Example Response:**
+```json
+{
+  "projects": [
+    {
+      "id": "abc123",
+      "name": "my-app",
+      "projectRoot": "/home/user/projects/my-app",
+      "status": "active",
+      "description": "Main application",
+      "tags": ["react", "typescript"],
+      "priority": "high",
+      "createdAt": "2024-01-15T10:30:00Z",
+      "updatedAt": "2024-01-20T15:45:00Z"
+    },
+    {
+      "id": "def456",
+      "name": "api-service",
+      "projectRoot": "/home/user/projects/api",
+      "status": "active",
+      "description": "Backend API",
+      "tags": ["nodejs", "express"],
+      "priority": "medium",
+      "createdAt": "2024-01-10T09:00:00Z",
+      "updatedAt": "2024-01-18T14:30:00Z"
+    }
+  ],
+  "total": 2
+}
+```
+
+### get
+
+Retrieves details for a specific project by ID.
+
+**Example Request:**
+```json
+{
+  "action": "get",
+  "id": "abc123"
+}
+```
+
+**Example Response:**
+```json
+{
+  "id": "abc123",
+  "name": "my-app",
+  "projectRoot": "/home/user/projects/my-app",
+  "status": "active",
+  "description": "Main application",
+  "tags": ["react", "typescript"],
+  "priority": "high",
+  "setupScript": "npm install",
+  "devScript": "npm run dev",
+  "cleanupScript": "npm run clean",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-20T15:45:00Z"
+}
+```
+
+### search
+
+Search for projects based on query terms and filters.
+
+**Example Request:**
+```json
+{
+  "action": "search",
+  "query": "frontend",
+  "tags": ["react"],
+  "priority": "high"
+}
+```
+
+**Example Response:**
+```json
+{
+  "projects": [
+    {
+      "id": "abc123",
+      "name": "frontend-app",
+      "projectRoot": "/home/user/projects/frontend",
+      "status": "active",
+      "description": "Customer-facing frontend",
+      "tags": ["react", "typescript", "tailwind"],
+      "priority": "high"
+    }
+  ],
+  "total": 1
+}
+```
+
+## Response Fields
+
+### Project Object
+
+Each project in the response contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique project identifier |
+| `name` | string | Project name |
+| `projectRoot` | string | Absolute path to project directory |
+| `status` | string | Project status: `active` or `archived` |
+| `description` | string | Optional project description |
+| `tags` | string[] | Optional categorization tags |
+| `priority` | string | Optional priority level |
+| `setupScript` | string | Optional setup command |
+| `devScript` | string | Optional development command |
+| `cleanupScript` | string | Optional cleanup command |
+| `createdAt` | string | ISO 8601 creation timestamp |
+| `updatedAt` | string | ISO 8601 last update timestamp |
+
+### Response Metadata
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total` | number | Total number of projects in the result |
+
+## Use Cases
+
+### List All Active Projects
+
+```json
+{
+  "action": "list",
+  "status": "active"
+}
+```
+
+### Find High-Priority React Projects
+
+```json
+{
+  "action": "search",
+  "tags": ["react"],
+  "priority": "high",
+  "status": "active"
+}
+```
+
+### Search for API Projects
+
+```json
+{
+  "action": "search",
+  "query": "api",
+  "tags": ["nodejs"]
+}
+```
+
+### Include Archived Projects
+
+```json
+{
+  "action": "list",
+  "status": "all"
+}
+```
+
+## Error Handling
+
+### Project Not Found
+
+When requesting a specific project that doesn't exist:
+
+```json
+{
+  "error": "Project not found: invalid-id"
+}
+```
+
+### Invalid Parameters
+
+The tool validates parameters and will return appropriate error messages for invalid inputs.
+
+## Best Practices
+
+1. **Use specific actions**: Choose the appropriate action (`list`, `get`, `search`) for your needs
+2. **Filter efficiently**: Combine query, tags, and priority filters for precise results
+3. **Handle empty results**: Always check the `total` field to handle empty result sets
+4. **Status awareness**: Remember to specify `status: "all"` to include archived projects
+
+## Integration Examples
+
+### AI Assistant Context
+
+When an AI assistant needs to understand the current development context:
+
+1. Use `action: "list"` to see all active projects
+2. Use `action: "get"` with a project ID for full details
+3. Access `devScript` to understand how to run the project
+
+### Project Discovery
+
+For discovering related projects:
+
+1. Use `action: "search"` with relevant tags
+2. Filter by priority to focus on important projects
+3. Check descriptions to understand project purposes
+
+## Related Tools
+
+- [`project_manage`](/mcp/tools/project-management) - Create, update, or delete projects

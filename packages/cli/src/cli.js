@@ -18,6 +18,16 @@ import React from 'react';
 import { render } from 'ink';
 import Settings from './components/settings.js';
 import { setupAliases } from './utils/aliases.js';
+import {
+  listProjects,
+  showProject,
+  addProject,
+  editProject,
+  removeProject,
+  removeMultipleProjects,
+  selectProjectById,
+  showCurrentProject
+} from './components/projects.js';
 import SandboxEngine from './sandbox/sandbox-engine.js';
 import { setupProxySettings } from './utils/claude-settings.js';
 
@@ -549,7 +559,8 @@ program
 // Dashboard commands
 const dashboardCommand = program
   .command('dashboard')
-  .description('Manage analytics dashboard');
+  .description('Manage analytics dashboard')
+  .option('-p, --port <number>', 'Port to run dashboard on', '3001');
 
 dashboardCommand
   .command('start')
@@ -559,7 +570,7 @@ dashboardCommand
   .action(async (options) => {
     const port = parseInt(options.port) || 3001;
     const { default: dashboardManager } = await import('./dashboard/manager.ts');
-    const dashboardServer = dashboardManager.getDashboardServer(port);
+    const dashboardServer = await dashboardManager.getDashboardServer();
     
     try {
       await dashboardServer.start();
@@ -580,9 +591,9 @@ dashboardCommand
   .action(async (options, command) => {
     // If no subcommand was provided, start the dashboard with default settings
     if (command.args.length === 0) {
-      const port = parseInt(options.port) || 3001;
-      const { default: dashboardManager } = await import('./dashboard/manager.ts');
-      const dashboardServer = dashboardManager.getDashboardServer(port);
+      const port = parseInt(options.port) || 3001; // Use port option or default
+      const { default: dashboardManager } = await import('./dashboard/manager.js');
+      const dashboardServer = await dashboardManager.getDashboardServer();
       
       try {
         await dashboardServer.start();
@@ -614,7 +625,7 @@ dashboardCommand
   .description('Update the dashboard to the latest version')
   .action(async () => {
     const { default: dashboardManager } = await import('./dashboard/manager.ts');
-    const dashboardServer = dashboardManager.getDashboardServer(3001);
+    const dashboardServer = await dashboardManager.getDashboardServer();
     
     try {
       await dashboardServer.update();
@@ -808,6 +819,999 @@ program
         await fs.remove(analyticsDir);
         console.log(chalk.green('✓ Analytics cleaned'));
       }
+    }
+  });
+
+// Projects commands
+const projectsCommand = program
+  .command('projects')
+  .description('Manage development projects');
+
+projectsCommand
+  .command('list')
+  .alias('ls')
+  .description('List all projects')
+  .action(async () => {
+    await listProjects();
+  });
+
+// Default action for 'projects' without subcommand - list projects
+projectsCommand
+  .action(async (_, command) => {
+    // If no subcommand was provided, list projects
+    if (command.args.length === 0) {
+      await listProjects();
+    }
+  });
+
+projectsCommand
+  .command('add [name] [folder] [description...]')
+  .alias('create')
+  .description('Add a new project (interactive or with args)')
+  .helpOption('-h, --help', 'Display help for command')
+  .addHelpText('after', `
+Examples:
+  vibekit projects add                     # Interactive mode
+  vibekit projects add myproject . "A cool project"   # Add current dir as project
+  vibekit projects add myapp /path/to/app  # Add specific path
+  vibekit projects add webapp ./webapp "My web application"`)
+  .action(async (name, folder, descriptionParts) => {
+    // Join description parts if multiple words were provided
+    const description = descriptionParts ? descriptionParts.join(' ') : undefined;
+    await addProject(name, folder, description);
+  });
+
+projectsCommand
+  .command('show <idOrName>')
+  .alias('view')
+  .description('Show project details')
+  .option('-n, --name', 'Show by project name instead of ID')
+  .action(async (idOrName, options) => {
+    await showProject(idOrName, options.name || false);
+  });
+
+projectsCommand
+  .command('edit <id>')
+  .alias('update')
+  .description('Edit project (interactive)')
+  .action(async (id) => {
+    await editProject(id);
+  });
+
+projectsCommand
+  .command('delete <idsOrNames...>')
+  .alias('remove')
+  .alias('rm')
+  .description('Delete one or more projects by ID or name')
+  .option('-n, --name', 'Treat arguments as project names instead of IDs')
+  .addHelpText('after', `
+Examples:
+  vibekit projects delete abc123              # Delete single project by ID
+  vibekit projects delete abc123 def456       # Delete multiple projects by ID
+  vibekit projects remove -n myproject        # Delete by name
+  vibekit projects rm -n project1 project2    # Delete multiple by name
+  vibekit projects rm -n "My Project" test    # Delete multiple with spaces in names`)
+  .action(async (idsOrNames, options) => {
+    await removeMultipleProjects(idsOrNames, options.name || false);
+  });
+
+projectsCommand
+  .command('select <idOrName>')
+  .alias('use')
+  .description('Select project and change to its directory')
+  .option('-n, --name', 'Select by project name instead of ID')
+  .action(async (idOrName, options) => {
+    await selectProjectById(idOrName, options.name || false);
+  });
+
+projectsCommand
+  .command('current')
+  .description('Show currently selected project')
+  .action(async () => {
+    await showCurrentProject();
+  });
+
+// Orchestrator commands for project orchestration
+const orchestratorCommand = program
+  .command('orchestrator')
+  .alias('orch')
+  .description('Project orchestration and session management');
+
+orchestratorCommand
+  .command('start')
+  .description('Start a new orchestration session')
+  .option('-t, --task <id>', 'Task ID to work on')
+  .option('--tag <tag>', 'Tag to work on (all tasks with this tag)')
+  .option('--new <title>', 'Create new task with this title')
+  .option('--description <description>', 'Description for new task (use with --new)')
+  .option('-n, --name <name>', 'Custom name for the task (if not auto-detected)')
+  .option('-p, --provider <provider>', 'Provider to use (taskmaster, linear, jira, github-issues)', 'taskmaster')
+  .option('--parallel', 'Enable parallel execution', false)
+  .option('--repo-url <url>', 'Repository URL for git operations')
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      // Dynamic import to avoid loading orchestrator at startup
+      const { SessionManager, ProviderRegistry, TaskmasterProvider, DEFAULT_PROVIDER_CONFIGS } = 
+        await import('@vibe-kit/orchestrator');
+      
+      const sessionManager = new SessionManager();
+      const providerRegistry = new ProviderRegistry();
+      
+      // Initialize providers
+      const taskmasterProvider = new TaskmasterProvider({
+        projectRoot: process.cwd(),
+        autoExpand: false
+      });
+      
+      providerRegistry.register('taskmaster', taskmasterProvider, {
+        ...DEFAULT_PROVIDER_CONFIGS.taskmaster,
+        projectRoot: process.cwd()
+      });
+
+      // Validate provider
+      if (!providerRegistry.hasProvider(options.provider)) {
+        throw new Error(`Provider '${options.provider}' is not available. Available providers: ${providerRegistry.listProviders().join(', ')}`);
+      }
+
+      const provider = providerRegistry.get(options.provider);
+      const providerConfig = providerRegistry.getConfig(options.provider);
+      
+      // Validate task options
+      const hasTaskId = !!options.task;
+      const hasTag = !!options.tag;
+      const hasNewTask = !!options.new;
+      
+      if (!hasTaskId && !hasTag && !hasNewTask) {
+        throw new Error('You must specify either --task <id>, --tag <tag>, or --new <title>');
+      }
+      
+      if ([hasTaskId, hasTag, hasNewTask].filter(Boolean).length > 1) {
+        throw new Error('You can only specify one of --task, --tag, or --new');
+      }
+
+      // Create session options
+      const sessionOptions = {
+        taskId: options.task,
+        taskName: options.name,
+        taskTag: options.tag,
+        createNewTask: hasNewTask ? {
+          title: options.new,
+          description: options.description || `Task: ${options.new}`,
+          tag: options.tag
+        } : undefined,
+        provider: {
+          type: options.provider,
+          config: providerConfig
+        },
+        parallel: options.parallel,
+        repoUrl: options.repoUrl
+      };
+
+      console.log(chalk.blue('🚀 Starting new orchestration session...'));
+      if (hasTaskId) console.log(`   Task ID: ${options.task}`);
+      if (hasTag) console.log(`   Tag: ${options.tag}`);
+      if (hasNewTask) console.log(`   New Task: ${options.new}`);
+      console.log(`   Provider: ${options.provider}`);
+      console.log(`   Parallel: ${options.parallel}`);
+
+      const session = await sessionManager.createSession(sessionOptions);
+      
+      console.log(chalk.green('✅ Session created successfully!'));
+      console.log(`   Session ID: ${chalk.cyan(session.id)}`);
+      console.log(`   Task: ${session.taskName} (${session.taskId})`);
+      if (session.taskTag) console.log(`   Tag: ${session.taskTag}`);
+      console.log(`   Status: ${chalk.yellow(session.status)}`);
+      console.log(`   Started: ${session.startedAt.toLocaleString()}`);
+      console.log(`   Provider: ${session.provider.type}`);
+      
+      console.log(chalk.gray('\n📋 Next steps:'));
+      console.log(chalk.gray(`   vibekit orch status --session=${session.id}`));
+      console.log(chalk.gray(`   vibekit orch sessions`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('sessions')
+  .alias('list')
+  .description('List all orchestration sessions')
+  .option('--status <status>', 'Filter by status (active, paused, completed, failed)')
+  .option('--provider <provider>', 'Filter by provider')
+  .option('--task <task>', 'Filter by task ID')
+  .option('--tag <tag>', 'Filter by tag')
+  .option('--limit <number>', 'Limit number of results', '10')
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { SessionManager } = await import('@vibe-kit/orchestrator');
+      const sessionManager = new SessionManager();
+      
+      console.log(chalk.blue('📋 Orchestration Sessions:'));
+      
+      // Build filters
+      const filters = {};
+      if (options.status) filters.status = options.status;
+      if (options.provider) filters.provider = options.provider;
+      if (options.task) filters.taskId = options.task;
+      if (options.tag) filters.taskTag = options.tag;
+
+      const sessions = await sessionManager.listSessions(filters);
+      
+      if (sessions.length === 0) {
+        console.log(chalk.gray('   No sessions found'));
+        if (Object.keys(filters).length > 0) {
+          console.log(chalk.gray('   Try removing filters or creating a new session with:'));
+          console.log(chalk.gray('   vibekit orch start --epic=<epic-id>'));
+        } else {
+          console.log(chalk.gray('   Create your first session with:'));
+          console.log(chalk.gray('   vibekit orch start --epic=<epic-id>'));
+        }
+        return;
+      }
+
+      console.log(`   Found ${chalk.cyan(sessions.length)} session(s):\n`);
+
+      // Sort by last active and apply limit
+      const sortedSessions = sessions
+        .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
+        .slice(0, parseInt(options.limit));
+
+      for (const session of sortedSessions) {
+        const statusEmoji = {
+          'active': '🟢',
+          'paused': '🟡', 
+          'completed': '✅',
+          'failed': '❌'
+        }[session.status] || '⚪';
+
+        const percentage = session.progress.total > 0 
+          ? Math.round((session.progress.completed / session.progress.total) * 100)
+          : 0;
+
+        console.log(`${statusEmoji} ${chalk.cyan(session.id)}`);
+        console.log(`   Task: ${session.taskName} (${session.taskId})`);
+        if (session.taskTag) console.log(`   Tag: ${session.taskTag}`);
+        console.log(`   Status: ${chalk.yellow(session.status.toUpperCase())} | Provider: ${session.provider}`);
+        console.log(`   Progress: ${session.progress.completed}/${session.progress.total} tasks (${percentage}%)`);
+        
+        const lastActive = new Date(session.lastActiveAt);
+        const minutesAgo = Math.floor((Date.now() - lastActive.getTime()) / (1000 * 60));
+        console.log(`   Last Active: ${lastActive.toLocaleString()} (${minutesAgo}m ago)`);
+        console.log('');
+      }
+
+      console.log(chalk.gray('💡 Commands:'));
+      console.log(chalk.gray(`   vibekit orch status --session=<id>    # Check specific session`));
+      console.log(chalk.gray(`   vibekit orch start --epic=<id>        # Create new session`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('status')
+  .description('Show status of a specific session')
+  .requiredOption('-s, --session <id>', 'Session ID to check')
+  .option('--detailed', 'Show detailed information', false)
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { SessionManager } = await import('@vibe-kit/orchestrator');
+      const sessionManager = new SessionManager();
+      
+      console.log(chalk.blue(`🔍 Checking status for session: ${options.session}`));
+      
+      const session = await sessionManager.loadSession(options.session);
+      if (!session) {
+        throw new Error(`Session '${options.session}' not found`);
+      }
+
+      console.log('\n' + chalk.blue('📊 Session Status:'));
+      console.log(`   ID: ${chalk.cyan(session.id)}`);
+      console.log(`   Epic: ${session.epicName} (${session.epicId})`);
+      console.log(`   Status: ${chalk.yellow(session.status.toUpperCase())}`);
+      console.log(`   Provider: ${session.provider.type}`);
+      console.log('');
+      
+      // Timing information
+      console.log(chalk.blue('⏱️  Timing:'));
+      console.log(`   Started: ${session.startedAt.toLocaleString()}`);
+      console.log(`   Last Active: ${session.lastActiveAt.toLocaleString()}`);
+      
+      const durationMs = session.lastActiveAt.getTime() - session.startedAt.getTime();
+      const durationMinutes = Math.floor(durationMs / (1000 * 60));
+      const durationHours = Math.floor(durationMinutes / 60);
+      const duration = durationHours > 0 
+        ? `${durationHours}h ${durationMinutes % 60}m`
+        : `${durationMinutes}m`;
+      console.log(`   Duration: ${duration}`);
+      
+      if (session.pausedAt) {
+        console.log(`   Paused: ${session.pausedAt.toLocaleString()}`);
+      }
+      if (session.completedAt) {
+        console.log(`   Completed: ${session.completedAt.toLocaleString()}`);
+      }
+      console.log('');
+
+      // Progress information
+      const progress = {
+        completed: session.checkpoint.completedTasks.length,
+        inProgress: session.checkpoint.inProgressTasks.length,
+        pending: session.checkpoint.pendingTasks.length,
+        total: session.checkpoint.completedTasks.length + 
+               session.checkpoint.inProgressTasks.length + 
+               session.checkpoint.pendingTasks.length
+      };
+      
+      console.log(chalk.blue('📈 Progress:'));
+      console.log(`   Completed: ${chalk.green(progress.completed)}`);
+      console.log(`   In Progress: ${chalk.yellow(progress.inProgress)}`);
+      console.log(`   Pending: ${chalk.gray(progress.pending)}`);
+      console.log(`   Total: ${progress.total}`);
+      
+      if (progress.total > 0) {
+        const percentage = Math.round((progress.completed / progress.total) * 100);
+        console.log(`   Completion: ${chalk.cyan(percentage)}%`);
+      }
+      console.log('');
+
+      // Checkpoint information
+      console.log(chalk.blue('💾 Checkpoint:'));
+      console.log(`   Current ID: ${session.checkpoint.id}`);
+      console.log(`   Timestamp: ${session.checkpoint.timestamp.toLocaleString()}`);
+      console.log(`   Last Synced: ${session.checkpoint.lastSyncedAt.toLocaleString()}`);
+      console.log('');
+
+      // Show possible actions
+      console.log(chalk.blue('🎯 Available Actions:'));
+      if (session.status === 'active') {
+        console.log(chalk.gray(`   vibekit orch pause --session=${session.id}    # Pause session`));
+      } else if (session.status === 'paused') {
+        console.log(chalk.gray(`   vibekit orch resume --session=${session.id}   # Resume session`));
+      }
+      console.log(chalk.gray(`   vibekit orch sessions                          # List all sessions`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('pause')
+  .description('Pause an active session')
+  .requiredOption('-s, --session <id>', 'Session ID to pause')
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { SessionManager } = await import('@vibe-kit/orchestrator');
+      const sessionManager = new SessionManager();
+      
+      console.log(chalk.yellow(`⏸️  Pausing session: ${options.session}`));
+      
+      await sessionManager.pauseSession(options.session);
+      
+      console.log(chalk.green('✅ Session paused successfully'));
+      console.log(chalk.gray(`   Resume with: vibekit orch resume --session=${options.session}`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('resume')
+  .description('Resume a paused session')
+  .requiredOption('-s, --session <id>', 'Session ID to resume')
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { SessionManager } = await import('@vibe-kit/orchestrator');
+      const sessionManager = new SessionManager();
+      
+      console.log(chalk.green(`▶️  Resuming session: ${options.session}`));
+      
+      const session = await sessionManager.resumeSession(options.session);
+      
+      console.log(chalk.green('✅ Session resumed successfully'));
+      console.log(`   Session ID: ${chalk.cyan(session.id)}`);
+      console.log(`   Status: ${chalk.yellow(session.status)}`);
+      console.log(chalk.gray(`   Check status: vibekit orch status --session=${session.id}`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('complete')
+  .description('Mark a session as completed')
+  .requiredOption('-s, --session <id>', 'Session ID to complete')
+  .action(async (options) => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { SessionManager } = await import('@vibe-kit/orchestrator');
+      const sessionManager = new SessionManager();
+      
+      console.log(chalk.green(`✅ Completing session: ${options.session}`));
+      
+      await sessionManager.completeSession(options.session);
+      
+      console.log(chalk.green('✅ Session completed successfully'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+orchestratorCommand
+  .command('providers')
+  .description('List available providers and their status')
+  .action(async () => {
+    const logger = new Logger('orchestrator');
+    
+    try {
+      const { ProviderRegistry, TaskmasterProvider, DEFAULT_PROVIDER_CONFIGS } = 
+        await import('@vibe-kit/orchestrator');
+      
+      const providerRegistry = new ProviderRegistry();
+      
+      // Initialize providers
+      const taskmasterProvider = new TaskmasterProvider({
+        projectRoot: process.cwd(),
+        autoExpand: false
+      });
+      
+      providerRegistry.register('taskmaster', taskmasterProvider, {
+        ...DEFAULT_PROVIDER_CONFIGS.taskmaster,
+        projectRoot: process.cwd()
+      });
+      
+      console.log(chalk.blue('🔌 Available Providers:'));
+      
+      const providers = providerRegistry.listProviders();
+      
+      if (providers.length === 0) {
+        console.log(chalk.gray('   No providers registered'));
+        return;
+      }
+
+      console.log('');
+      
+      for (const providerName of providers) {
+        const info = providerRegistry.getProviderInfo(providerName);
+        
+        console.log(`${chalk.cyan('📦')} ${chalk.bold(providerName)}`);
+        console.log(`   Type: ${info?.type || 'unknown'}`);
+        console.log(`   Configuration: ${info?.hasConfig ? chalk.green('Available') : chalk.gray('None')}`);
+        
+        // Try to get provider health
+        try {
+          const provider = providerRegistry.get(providerName);
+          if ('healthCheck' in provider && typeof provider.healthCheck === 'function') {
+            const health = await provider.healthCheck();
+            const healthEmoji = health.status === 'healthy' ? '🟢' : '🔴';
+            console.log(`   Health: ${healthEmoji} ${health.status}`);
+            if (health.message) {
+              console.log(`   Message: ${chalk.gray(health.message)}`);
+            }
+          } else {
+            console.log(`   Health: ${chalk.gray('⚪ Health check not available')}`);
+          }
+        } catch (error) {
+          console.log(`   Health: ${chalk.red('🔴 Error checking health')}`);
+        }
+        
+        console.log('');
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub Integration Commands
+orchestratorCommand
+  .command('github')
+  .alias('gh')
+  .description('GitHub integration commands')
+  .addHelpCommand(false)
+  .action(() => {
+    console.log(chalk.blue('🔗 GitHub Integration Commands:'));
+    console.log('');
+    console.log('  ' + chalk.cyan('sync <task-id>') + '          Sync task to GitHub issue');
+    console.log('  ' + chalk.cyan('issue create <task-id>') + '   Create GitHub issue from task');
+    console.log('  ' + chalk.cyan('pr create <task-id>') + '      Create GitHub PR from task');
+    console.log('  ' + chalk.cyan('pr merge <pr-number>') + '     Merge GitHub pull request');
+    console.log('  ' + chalk.cyan('config preset <name>') + '     Apply GitHub config preset');
+    console.log('  ' + chalk.cyan('config show') + '             Show current GitHub config');
+    console.log('  ' + chalk.cyan('webhook start') + '            Start webhook server');
+    console.log('  ' + chalk.cyan('status') + '                  Show GitHub connection status');
+    console.log('');
+    console.log(chalk.gray('Use --help with any command for more details'));
+  });
+
+const githubCommand = orchestratorCommand
+  .command('github', { hidden: false })
+  .alias('gh');
+
+// GitHub sync command
+githubCommand
+  .command('sync')
+  .description('Sync task to GitHub issue')
+  .argument('<task-id>', 'Task ID to sync')
+  .option('--create-issue', 'Create GitHub issue if not exists')
+  .option('--update-labels', 'Update GitHub issue labels')
+  .option('--close-completed', 'Close issues for completed tasks')
+  .option('--dry-run', 'Preview changes without executing')
+  .action(async (taskId, options) => {
+    const logger = new Logger('github');
+    
+    try {
+      const { GitHubIntegrationManager, GitHubSyncEngine } = 
+        await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const integrationManager = new GitHubIntegrationManager({
+        token: process.env.GITHUB_TOKEN,
+        repository: process.env.GITHUB_REPOSITORY,
+        defaultBranch: 'main',
+        labels: {
+          taskPending: 'task:pending',
+          taskInProgress: 'task:in-progress',
+          taskCompleted: 'task:completed',
+          taskFailed: 'task:failed',
+          priority: {
+            high: 'priority:high',
+            medium: 'priority:medium',
+            low: 'priority:low'
+          }
+        }
+      });
+      
+      await integrationManager.initialize();
+      
+      console.log(chalk.blue(`🔄 Syncing task ${taskId} to GitHub...`));
+      
+      if (options.dryRun) {
+        console.log(chalk.yellow('🔍 DRY RUN - No changes will be made'));
+      }
+      
+      // This would integrate with the task provider to get the task
+      console.log(chalk.gray('Note: Task provider integration not yet implemented'));
+      console.log(chalk.green('✅ GitHub sync command configured successfully'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub issue commands
+const issueCommand = githubCommand
+  .command('issue')
+  .description('GitHub issue operations');
+
+issueCommand
+  .command('create')
+  .description('Create GitHub issue from task')
+  .argument('<task-id>', 'Task ID to create issue for')
+  .option('--title <title>', 'Custom issue title')
+  .option('--labels <labels>', 'Comma-separated list of labels')
+  .option('--assignees <users>', 'Comma-separated list of assignees')
+  .action(async (taskId, options) => {
+    const logger = new Logger('github');
+    
+    try {
+      const { GitHubIntegrationManager } = 
+        await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const integrationManager = new GitHubIntegrationManager({
+        token: process.env.GITHUB_TOKEN,
+        repository: process.env.GITHUB_REPOSITORY,
+        defaultBranch: 'main',
+        labels: {
+          taskPending: 'task:pending',
+          taskInProgress: 'task:in-progress',
+          taskCompleted: 'task:completed',
+          taskFailed: 'task:failed',
+          priority: {
+            high: 'priority:high',
+            medium: 'priority:medium',
+            low: 'priority:low'
+          }
+        }
+      });
+      
+      await integrationManager.initialize();
+      
+      console.log(chalk.blue(`📝 Creating GitHub issue for task ${taskId}...`));
+      
+      // This would integrate with the task provider to get the actual task
+      const mockTask = {
+        id: taskId,
+        title: options.title || `Task: ${taskId}`,
+        description: `GitHub issue created for task ${taskId}`,
+        status: 'pending',
+        priority: 'medium',
+        type: 'feature'
+      };
+      
+      const issue = await integrationManager.createIssueFromTask(mockTask);
+      
+      console.log(chalk.green('✅ GitHub issue created successfully!'));
+      console.log(`   Issue: #${issue.number}`);
+      console.log(`   URL: ${issue.html_url}`);
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub PR commands
+const prCommand = githubCommand
+  .command('pr')
+  .description('GitHub pull request operations');
+
+prCommand
+  .command('create')
+  .description('Create GitHub PR from task')
+  .argument('<task-id>', 'Task ID to create PR for')
+  .option('--title <title>', 'Custom PR title')
+  .option('--branch <name>', 'Source branch name')
+  .option('--base <branch>', 'Target branch (default: main)')
+  .option('--draft', 'Create as draft PR')
+  .action(async (taskId, options) => {
+    const logger = new Logger('github');
+    
+    try {
+      const { GitHubAPI } = await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const githubAPI = new GitHubAPI({
+        token: process.env.GITHUB_TOKEN,
+        repository: process.env.GITHUB_REPOSITORY
+      });
+      
+      console.log(chalk.blue(`🔀 Creating GitHub PR for task ${taskId}...`));
+      
+      const prData = {
+        title: options.title || `[Task ${taskId}] Implementation`,
+        body: `This PR implements task ${taskId}.\n\n- [ ] Implementation complete\n- [ ] Tests added\n- [ ] Documentation updated`,
+        head: options.branch || `task-${taskId}`,
+        base: options.base || 'main',
+        draft: options.draft || false
+      };
+      
+      const pr = await githubAPI.createPullRequest(prData);
+      
+      console.log(chalk.green('✅ GitHub PR created successfully!'));
+      console.log(`   PR: #${pr.number}`);
+      console.log(`   URL: ${pr.html_url}`);
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+prCommand
+  .command('merge')
+  .description('Merge GitHub pull request')
+  .argument('<pr-number>', 'PR number to merge')
+  .option('--method <method>', 'Merge method: merge, squash, rebase', 'squash')
+  .option('--delete-branch', 'Delete branch after merge')
+  .action(async (prNumber, options) => {
+    const logger = new Logger('github');
+    
+    try {
+      const { PRMergeManager } = await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const prMergeManager = new PRMergeManager(
+        process.env.GITHUB_REPOSITORY,
+        process.env.GITHUB_TOKEN,
+        {
+          strategy: options.method,
+          deleteAfterMerge: options.deleteBranch || false
+        }
+      );
+      
+      console.log(chalk.blue(`🔀 Attempting to merge PR #${prNumber}...`));
+      
+      const result = await prMergeManager.attemptAutoMerge(parseInt(prNumber));
+      
+      if (result.status === 'success') {
+        console.log(chalk.green('✅ PR merged successfully!'));
+        console.log(`   Commit SHA: ${result.mergeCommitSha}`);
+        if (result.deletedBranch) {
+          console.log('   Branch deleted: ✅');
+        }
+      } else {
+        console.log(chalk.yellow(`⚠️ Merge attempt ${result.status}: ${result.reason}`));
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub config commands
+const configCommand = githubCommand
+  .command('config')
+  .description('GitHub configuration management');
+
+configCommand
+  .command('preset')
+  .description('Apply GitHub configuration preset')
+  .argument('<preset-name>', 'Preset name: development-team, enterprise, solo-developer, opensource')
+  .action(async (presetName) => {
+    const logger = new Logger('github');
+    
+    try {
+      const { GitHubConfigManager, GitHubConfigPresets } = 
+        await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const configManager = new GitHubConfigManager();
+      
+      const validPresets = Object.keys(GitHubConfigPresets);
+      if (!validPresets.includes(presetName)) {
+        throw new Error(`Invalid preset '${presetName}'. Valid presets: ${validPresets.join(', ')}`);
+      }
+      
+      console.log(chalk.blue(`🔧 Applying GitHub config preset: ${presetName}...`));
+      
+      await configManager.applyPreset(presetName, {
+        token: process.env.GITHUB_TOKEN,
+        repository: process.env.GITHUB_REPOSITORY
+      });
+      
+      console.log(chalk.green('✅ Configuration preset applied successfully!'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+configCommand
+  .command('show')
+  .description('Show current GitHub configuration')
+  .action(async () => {
+    const logger = new Logger('github');
+    
+    try {
+      console.log(chalk.blue('🔧 GitHub Configuration:'));
+      console.log('');
+      console.log(`  Repository: ${chalk.cyan(process.env.GITHUB_REPOSITORY || 'Not set')}`);
+      console.log(`  Token: ${process.env.GITHUB_TOKEN ? chalk.green('✅ Set') : chalk.red('❌ Not set')}`);
+      console.log('');
+      
+      if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
+        const { OctokitService } = await import('@vibe-kit/orchestrator');
+        
+        const octokitService = new OctokitService({
+          token: process.env.GITHUB_TOKEN,
+          repository: process.env.GITHUB_REPOSITORY
+        });
+        
+        const status = await octokitService.checkConnection();
+        if (status.connected) {
+          console.log(`  Connection: ${chalk.green('✅ Connected')}`);
+          console.log(`  User: ${chalk.cyan(status.user?.login || 'Unknown')}`);
+          
+          const rateLimit = await octokitService.getRateLimit();
+          console.log(`  Rate Limit: ${chalk.cyan(rateLimit.remaining)}/${chalk.cyan(rateLimit.limit)}`);
+          console.log(`  Reset: ${chalk.gray(rateLimit.reset.toLocaleString())}`);
+        } else {
+          console.log(`  Connection: ${chalk.red('❌ Failed')}`);
+          console.log(`  Error: ${chalk.red(status.error)}`);
+        }
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub webhook commands  
+const webhookCommand = githubCommand
+  .command('webhook')
+  .description('GitHub webhook server management');
+
+webhookCommand
+  .command('start')
+  .description('Start webhook server')
+  .option('-p, --port <number>', 'Port to run webhook server on', '3001')
+  .option('--secret <secret>', 'Webhook secret (or use VIBEKIT_WEBHOOK_SECRET)')
+  .action(async (options) => {
+    const logger = new Logger('github-webhook');
+    
+    try {
+      const { GitHubWebhookServer, WebhookServerPresets } = 
+        await import('@vibe-kit/orchestrator');
+      
+      if (!process.env.GITHUB_TOKEN) {
+        throw new Error('GITHUB_TOKEN environment variable is required');
+      }
+      
+      if (!process.env.GITHUB_REPOSITORY) {
+        throw new Error('GITHUB_REPOSITORY environment variable is required (format: owner/repo)');
+      }
+      
+      const webhookSecret = options.secret || process.env.VIBEKIT_WEBHOOK_SECRET;
+      if (!webhookSecret) {
+        throw new Error('Webhook secret is required. Use --secret or set VIBEKIT_WEBHOOK_SECRET environment variable.');
+      }
+      
+      const config = WebhookServerPresets.development({
+        port: parseInt(options.port),
+        secret: webhookSecret,
+        github: {
+          token: process.env.GITHUB_TOKEN,
+          repository: process.env.GITHUB_REPOSITORY
+        }
+      });
+      
+      const webhookServer = new GitHubWebhookServer(config);
+      
+      console.log(chalk.blue(`🌐 Starting webhook server on port ${options.port}...`));
+      
+      webhookServer.on('serverStarted', (port) => {
+        console.log(chalk.green('✅ Webhook server started successfully!'));
+        console.log(`   URL: http://localhost:${port}/webhooks/github`);
+        console.log('');
+        console.log(chalk.gray('Configure this URL in your GitHub repository:'));
+        console.log(chalk.gray(`   Repository Settings > Webhooks > Add webhook`));
+        console.log(chalk.gray(`   Payload URL: http://your-domain.com:${port}/webhooks/github`));
+        console.log(chalk.gray(`   Content type: application/json`));
+        console.log(chalk.gray(`   Secret: ${webhookSecret.substring(0, 8)}...`));
+        console.log('');
+        console.log(chalk.gray('Press Ctrl+C to stop the server'));
+      });
+      
+      webhookServer.on('webhookReceived', (event, headers) => {
+        console.log(chalk.cyan(`📨 Webhook received: ${headers['x-github-event']} - ${event.action}`));
+      });
+      
+      webhookServer.on('webhookError', (error) => {
+        console.error(chalk.red('❌ Webhook error:'), error.message);
+      });
+      
+      await webhookServer.start();
+      
+      // Keep the process running
+      process.on('SIGINT', async () => {
+        console.log(chalk.yellow('\n🛑 Stopping webhook server...'));
+        await webhookServer.stop();
+        console.log(chalk.green('✅ Webhook server stopped'));
+        process.exit(0);
+      });
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// GitHub status command
+githubCommand
+  .command('status')
+  .description('Show GitHub integration status')
+  .action(async () => {
+    const logger = new Logger('github');
+    
+    try {
+      console.log(chalk.blue('🔗 GitHub Integration Status:'));
+      console.log('');
+      
+      // Check environment variables
+      console.log(chalk.blue('📋 Configuration:'));
+      console.log(`   Repository: ${process.env.GITHUB_REPOSITORY ? chalk.green(process.env.GITHUB_REPOSITORY) : chalk.red('Not set (GITHUB_REPOSITORY)')}`);
+      console.log(`   Token: ${process.env.GITHUB_TOKEN ? chalk.green('✅ Set') : chalk.red('❌ Not set (GITHUB_TOKEN)')}`);
+      console.log('');
+      
+      if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
+        const { OctokitService, GitHubIntegrationManager } = 
+          await import('@vibe-kit/orchestrator');
+        
+        // Test connection
+        const octokitService = new OctokitService({
+          token: process.env.GITHUB_TOKEN,
+          repository: process.env.GITHUB_REPOSITORY
+        });
+        
+        const connectionStatus = await octokitService.checkConnection();
+        
+        console.log(chalk.blue('🌐 Connection:'));
+        console.log(`   Status: ${connectionStatus.connected ? chalk.green('✅ Connected') : chalk.red('❌ Failed')}`);
+        
+        if (connectionStatus.connected && connectionStatus.user) {
+          console.log(`   User: ${chalk.cyan(connectionStatus.user.login)}`);
+          
+          // Get rate limit
+          const rateLimit = await octokitService.getRateLimit();
+          console.log(`   Rate Limit: ${chalk.cyan(rateLimit.remaining)}/${chalk.cyan(rateLimit.limit)}`);
+          console.log(`   Reset: ${chalk.gray(rateLimit.reset.toLocaleString())}`);
+          
+          // Test repository access
+          try {
+            const repo = await octokitService.getRepository();
+            console.log('');
+            console.log(chalk.blue('📁 Repository:'));
+            console.log(`   Name: ${chalk.cyan(repo.full_name)}`);
+            console.log(`   Private: ${repo.private ? chalk.yellow('Yes') : chalk.green('Public')}`);
+            console.log(`   Default Branch: ${chalk.cyan(repo.default_branch)}`);
+          } catch (error) {
+            console.log('');
+            console.log(chalk.red('❌ Repository access failed:'), error.message);
+          }
+          
+        } else {
+          console.log(`   Error: ${chalk.red(connectionStatus.error)}`);
+        }
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error:'), error.message);
+      process.exit(1);
     }
   });
 

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -22,7 +23,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { AnalyticsSession, AnalyticsSummary } from "@/lib/types";
+import type { AnalyticsSession, AnalyticsSummary, Project } from "@/lib/types";
+import { useRouter } from "next/navigation";
 
 // Define proper types for Recharts tooltip
 interface TooltipPayload {
@@ -91,13 +93,16 @@ function formatDuration(ms: number): string {
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [recentSessions, setRecentSessions] = useState<AnalyticsSession[]>([]);
   const [allSessions, setAllSessions] = useState<AnalyticsSession[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<string>("7d");
+  const [checkingRedirect, setCheckingRedirect] = useState(true);
   const sessionsPerPage = 10;
 
   const timeFilters = [
@@ -108,7 +113,44 @@ export default function Dashboard() {
     { label: "3 Months", value: "90d", days: 90 },
   ];
 
+  // Check for redirect on initial load
   useEffect(() => {
+    async function checkRedirect() {
+      try {
+        const response = await fetch("/api/settings");
+        if (response.ok) {
+          const settings = await response.json();
+          const defaultPage = settings.dashboard?.defaultPage || 'analytics';
+          
+          // If default page is not analytics, redirect
+          if (defaultPage !== 'analytics') {
+            const routeMap: Record<string, string> = {
+              'projects-cards': '/projects',
+              'projects-table': '/projects?view=table',
+              'chat': '/chat',
+              'monitoring': '/monitoring'
+            };
+            
+            const targetRoute = routeMap[defaultPage];
+            if (targetRoute) {
+              router.replace(targetRoute);
+              return; // Don't continue with loading
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to check default page setting:", error);
+      }
+      setCheckingRedirect(false);
+    }
+
+    checkRedirect();
+  }, [router]);
+
+  useEffect(() => {
+    // Only fetch data if we're not redirecting
+    if (checkingRedirect) return;
+
     async function fetchData() {
       try {
         setLoading(true);
@@ -117,6 +159,13 @@ export default function Dashboard() {
           (f) => f.value === selectedFilter
         );
         const days = selectedFilterData?.days || 7;
+
+        // Fetch projects data
+        const projectsResponse = await fetch("/api/projects");
+        if (projectsResponse.ok) {
+          const projectsData = await projectsResponse.json();
+          setProjects(projectsData.data || []);
+        }
 
         // Fetch summary data
         const summaryResponse = await fetch(
@@ -146,9 +195,9 @@ export default function Dashboard() {
 
     // Cleanup interval on unmount
     return () => clearInterval(interval);
-  }, [selectedFilter]);
+  }, [selectedFilter, checkingRedirect]);
 
-  if (loading) {
+  if (checkingRedirect || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center flex items-center gap-2 justify-center">
@@ -262,6 +311,31 @@ export default function Dashboard() {
   });
   const agentsToRender = Array.from(allAgentsInData);
 
+  // Helper function to get project name and id
+  const getProjectInfo = (session: AnalyticsSession) => {
+    // First try to find project by projectId
+    if (session.projectId) {
+      const project = projects.find(p => p.id === session.projectId);
+      if (project) {
+        return { id: project.id, name: project.name };
+      }
+    }
+    
+    // Fallback to session.projectName or systemInfo.projectName
+    const projectName = session.projectName || session.systemInfo?.projectName;
+    if (projectName) {
+      // Try to find project by name
+      const project = projects.find(p => p.name === projectName);
+      if (project) {
+        return { id: project.id, name: project.name };
+      }
+      // Return name without id if project not found in projects list
+      return { id: null, name: projectName };
+    }
+    
+    return { id: null, name: "Unknown" };
+  };
+
   return (
     <div className="px-6 space-y-6">
       <div className="-mx-6 px-4 border-b flex h-12 items-center">
@@ -324,7 +398,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {summary.successRate.toFixed(1)}%
+              {Math.round(summary.successRate * 100)}%
             </div>
             <p className="text-xs text-muted-foreground">
               Sessions completed successfully
@@ -593,9 +667,24 @@ export default function Dashboard() {
                     </TableCell>
                     <TableCell>{session.filesChanged.length}</TableCell>
                     <TableCell>
-                      <span className="text-sm font-medium">
-                        {session.systemInfo?.projectName || "Unknown"}
-                      </span>
+                      {(() => {
+                        const projectInfo = getProjectInfo(session);
+                        if (projectInfo.id) {
+                          return (
+                            <Link 
+                              href={`/projects/${projectInfo.id}`}
+                              className="text-sm font-medium text-primary hover:underline"
+                            >
+                              {projectInfo.name}
+                            </Link>
+                          );
+                        }
+                        return (
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {projectInfo.name}
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <span className="text-sm font-mono">

@@ -167,7 +167,7 @@ export abstract class BaseAgent {
   protected sandboxInstance?: SandboxInstance;
   protected lastPrompt?: string;
   protected currentBranch?: string;
-  protected readonly WORKING_DIR: string;
+  protected WORKING_DIR: string;
 
   constructor(config: BaseAgentConfig) {
     this.config = config;
@@ -273,6 +273,15 @@ export abstract class BaseAgent {
     return this.currentBranch;
   }
 
+  public withWorkingDirectory(path: string): void {
+    this.WORKING_DIR = path;
+  }
+
+  // Helper method to run git commands in workspace-persistent context
+  private async runGitCommand(command: string): Promise<AgentResponse> {
+    return await this.executeCommand(command, { timeoutMs: 3600000 });
+  }
+
   public async executeCommand(
     command: string,
     options: ExecuteCommandOptions = {}
@@ -363,20 +372,10 @@ export abstract class BaseAgent {
           background: background || false,
         });
 
-        // Only clone repository if GitHub config is provided
+        // Git clone will now happen as part of the agent command execution
         if (this.config.githubToken && this.config.repoUrl) {
           callbacks?.onUpdate?.(
-            `{"type": "git", "output": "Cloning repository: ${this.config.repoUrl}"}`
-          );
-          // Clone directly into the working directory, not into a subdirectory
-          await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git clone https://x-access-token:${this.config.githubToken}@github.com/${this.config.repoUrl}.git .`,
-            { timeoutMs: 3600000, background: background || false }
-          );
-
-          await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git config user.name "github-actions[bot]" && git config user.email "github-actions[bot]@users.noreply.github.com"`,
-            { timeoutMs: 60000, background: background || false }
+            `{"type": "git", "output": "Repository will be cloned during agent execution for workspace persistence"}`
           );
         }
       } else if (this.config.sandboxId) {
@@ -428,8 +427,16 @@ export abstract class BaseAgent {
         }
       }
 
-      // Always use working directory for all commands (repo is cloned directly into working directory)
-      const executeCommand = `cd ${this.WORKING_DIR} && ${commandConfig.command}`;
+      // Include git clone as part of the command execution to ensure it persists
+      let executeCommand = `cd ${this.WORKING_DIR}`;
+      
+      if (this.config.githubToken && this.config.repoUrl) {
+        // Enhanced git worktree detection: check for .git file/directory AND git status
+        // In worktrees, .git is a file pointing to main repo; in regular repos, .git is a directory
+        executeCommand += ` && if ! git status >/dev/null 2>&1; then git clone https://x-access-token:${this.config.githubToken}@github.com/${this.config.repoUrl}.git . && git config user.name "github-actions[bot]" && git config user.email "github-actions[bot]@users.noreply.github.com"; fi`;
+      }
+      
+      executeCommand += ` && ${commandConfig.command}`;
 
       // Set up streaming buffers for stdout and stderr if callbacks are provided
       let stdoutBuffer: StreamingBuffer | undefined;
@@ -486,16 +493,10 @@ export abstract class BaseAgent {
     const sbx = await this.getSandbox();
 
     // Check git status for changes
-    const gitStatus = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git status --porcelain`,
-      { timeoutMs: 3600000 }
-    );
+    const gitStatus = await this.runGitCommand("git status --porcelain");
 
     // Check for untracked files
-    const untrackedFiles = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git ls-files --others --exclude-standard`,
-      { timeoutMs: 3600000 }
-    );
+    const untrackedFiles = await this.runGitCommand("git ls-files --others --exclude-standard");
 
     // Check if there are any changes to commit
     if (!gitStatus?.stdout && !untrackedFiles?.stdout) {
@@ -504,33 +505,15 @@ export abstract class BaseAgent {
 
     // Switch to the specified branch (create if it doesn't exist)
     try {
-      await sbx.commands.run(
-        `cd ${this.WORKING_DIR} && git checkout ${targetBranch}`,
-        {
-          timeoutMs: 60000,
-        }
-      );
+      await this.runGitCommand(`git checkout ${targetBranch}`);
     } catch (error) {
       // If branch doesn't exist, create it
-      await sbx.commands.run(
-        `cd ${this.WORKING_DIR} && git checkout -b ${targetBranch}`,
-        {
-          timeoutMs: 60000,
-        }
-      );
+      await this.runGitCommand(`git checkout -b ${targetBranch}`);
     }
 
-    const diffHead = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git --no-pager diff --no-color HEAD`,
-      {
-        timeoutMs: 3600000,
-      }
-    );
+    const diffHead = await this.runGitCommand("git --no-pager diff --no-color HEAD");
 
-    const patch = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git --no-pager diff --no-color --diff-filter=ACMR`,
-      { timeoutMs: 3600000 }
-    );
+    const patch = await this.runGitCommand("git --no-pager diff --no-color --diff-filter=ACMR");
 
     let patchContent = patch?.stdout || diffHead?.stdout || "";
 
@@ -541,18 +524,10 @@ export abstract class BaseAgent {
       this.lastPrompt || ""
     );
 
-    await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git add -A && git commit -m "${commitMessage}"`,
-      { timeoutMs: 3600000 }
-    );
+    await this.runGitCommand(`git add -A && git commit -m "${commitMessage}"`);
 
     // Push the branch to GitHub
-    await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git push origin ${targetBranch}`,
-      {
-        timeoutMs: 3600000,
-      }
-    );
+    await this.runGitCommand(`git push origin ${targetBranch}`);
   }
 
   public async createPullRequest(
@@ -570,33 +545,17 @@ export abstract class BaseAgent {
     const commandConfig = this.getCommandConfig("", "code");
     const sbx = await this.getSandbox();
     // Get the current branch (base branch) BEFORE creating a new branch
-    const baseBranch = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git rev-parse --abbrev-ref HEAD`,
-      { timeoutMs: 3600000 }
-    );
+    const baseBranch = await this.runGitCommand("git rev-parse --abbrev-ref HEAD");
 
     // Debug: Check git status first
-    await sbx.commands.run(`cd ${this.WORKING_DIR} && git status --porcelain`, {
-      timeoutMs: 3600000,
-    });
+    await this.runGitCommand("git status --porcelain");
 
     // Debug: Check for untracked files
-    const untrackedFiles = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git ls-files --others --exclude-standard`,
-      { timeoutMs: 3600000 }
-    );
+    const untrackedFiles = await this.runGitCommand("git ls-files --others --exclude-standard");
 
-    const diffHead = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git --no-pager diff --no-color HEAD`,
-      {
-        timeoutMs: 3600000,
-      }
-    );
+    const diffHead = await this.runGitCommand("git --no-pager diff --no-color HEAD");
 
-    const patch = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git --no-pager diff --no-color --diff-filter=ACMR`,
-      { timeoutMs: 3600000 }
-    );
+    const patch = await this.runGitCommand("git --no-pager diff --no-color --diff-filter=ACMR");
 
     if (
       !patch ||
@@ -612,14 +571,9 @@ export abstract class BaseAgent {
 
     // If no diff but there are untracked files, we need to add them first
     if (!patchContent && untrackedFiles?.stdout) {
-      await sbx.commands.run(`cd ${this.WORKING_DIR} && git add .`, {
-        timeoutMs: 3600000,
-      });
+      await this.runGitCommand("git add .");
 
-      const patchAfterAdd = await sbx.commands.run(
-        `cd ${this.WORKING_DIR} && git --no-pager diff --no-color --cached`,
-        { timeoutMs: 3600000 }
-      );
+      const patchAfterAdd = await this.runGitCommand("git --no-pager diff --no-color --cached");
       patchContent = patchAfterAdd?.stdout || "";
     }
 
@@ -640,20 +594,10 @@ export abstract class BaseAgent {
     // Escape any quotes in the commit message to prevent shell parsing issues
     const escapedCommitMessage = commitMessage.replace(/"/g, '\\"');
 
-    const checkout = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git checkout -b ${_branchName} && git add -A && git commit -m "${escapedCommitMessage}"`,
-      {
-        timeoutMs: 3600000,
-      }
-    );
+    const checkout = await this.runGitCommand(`git checkout -b ${_branchName} && git add -A && git commit -m "${escapedCommitMessage}"`);
 
     // Push the branch to GitHub
-    await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git push origin ${_branchName}`,
-      {
-        timeoutMs: 3600000,
-      }
-    );
+    await this.runGitCommand(`git push origin ${_branchName}`);
 
     // Extract commit SHA from checkout output
     const commitMatch = checkout?.stdout.match(/\[[\w-]+ ([a-f0-9]+)\]/);

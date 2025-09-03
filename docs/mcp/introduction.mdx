@@ -1,0 +1,87 @@
+---
+title: Introduction to VibeKit MCP
+description: "Model Context Protocol server for AI-powered development workflows"
+---
+
+## What is MCP?
+
+The Model Context Protocol (MCP) is an open protocol that enables seamless integration between AI assistants and development tools. VibeKit provides an MCP server that exposes project management capabilities to AI assistants like Claude Desktop.
+
+## VibeKit MCP Server
+
+The VibeKit MCP server (`@vibe-kit/mcp-server`) provides AI assistants with direct access to your development projects and workflows. This enables AI to:
+
+- **Browse and search** your projects
+- **Create and manage** project configurations
+- **Access project metadata** like scripts, tags, and status
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Project Management" icon="folder">
+    Complete CRUD operations for managing development projects
+  </Card>
+  <Card title="Smart Search" icon="magnifying-glass">
+    Powerful search and filtering across all your projects
+  </Card>
+  <Card title="AI Integration" icon="robot">
+    Direct integration with Claude Desktop and other MCP clients
+  </Card>
+  <Card title="Extensible Design" icon="puzzle-piece">
+    Built for future expansion with additional development tools
+  </Card>
+</CardGroup>
+
+## Architecture
+
+The MCP server is built on the `@vibe-kit/projects` package, which provides the core project management functionality. This separation allows the same project system to be used by:
+
+- **CLI Commands** - `vibekit projects` command-line interface
+- **MCP Server** - AI assistant integration
+- **Web Dashboard** - Visual project management interface
+- **SDK** - Programmatic access for custom integrations
+
+```mermaid
+graph LR
+    A[AI Assistant] -->|MCP Protocol| B[VibeKit MCP Server]
+    B --> C[@vibe-kit/projects]
+    C --> D[Project Storage]
+    
+    E[CLI] --> C
+    F[Dashboard] --> C
+    G[SDK] --> C
+```
+
+## Available Tools
+
+The MCP server provides two streamlined tools:
+
+### `projects`
+List, get, or search for projects with filtering capabilities.
+
+### `project_manage`
+Create, update, or delete projects with full metadata management.
+
+## Transport Modes
+
+The server supports two transport modes:
+
+- **stdio** (default) - For local integration with desktop applications
+- **HTTP Stream** - For remote access and web-based clients
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/mcp/quickstart">
+    Get up and running with VibeKit MCP in minutes
+  </Card>
+  <Card title="Claude Desktop Setup" icon="desktop" href="/mcp/claude-desktop">
+    Configure Claude Desktop to use VibeKit MCP
+  </Card>
+  <Card title="Tool Reference" icon="wrench" href="/mcp/tools/projects">
+    Explore the available MCP tools in detail
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/mcp/deployment">
+    Deploy the MCP server for team access
+  </Card>
+</CardGroup>

@@ -69,7 +69,15 @@ export class VibeKit extends EventEmitter {
 
   withWorkingDirectory(path: string): this {
     this.options.workingDirectory = path;
+    // Propagate to existing agent
+    if (this.agent && this.agent.withWorkingDirectory) {
+      this.agent.withWorkingDirectory(path);
+    }
     return this;
+  }
+
+  get WORKING_DIR(): string | undefined {
+    return this.options.workingDirectory;
   }
 
   withSecrets(secrets: Record<string, string>): this {

@@ -1,15 +1,18 @@
-import fs from 'fs-extra';
+import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 
 export interface AnalyticsSession {
   sessionId: string;
   agentName: string;
+  projectId?: string;
   startTime: number;
   endTime: number | null;
   duration: number | null;
   status?: 'active' | 'terminated';
   executionMode?: 'sandbox' | 'local';
+  projectName?: string | null;
+  projectRoot?: string | null;
   inputBytes: number;
   outputBytes: number;
   commands: Array<{
@@ -46,10 +49,12 @@ export interface AnalyticsSummary {
   }>;
 }
 
-export async function getAnalyticsData(days = 7, agentName?: string): Promise<AnalyticsSession[]> {
+export async function getAnalyticsData(days = 7, agentName?: string, projectId?: string): Promise<AnalyticsSession[]> {
   const analyticsDir = path.join(os.homedir(), '.vibekit', 'analytics');
   
-  if (!await fs.pathExists(analyticsDir)) {
+  try {
+    await fs.access(analyticsDir);
+  } catch {
     return [];
   }
   
@@ -70,10 +75,17 @@ export async function getAnalyticsData(days = 7, agentName?: string): Promise<An
       const content = await fs.readFile(filePath, 'utf8');
       const data = JSON.parse(content);
       
-      const filteredData = data.filter((session: AnalyticsSession) => {
+      let filteredData = data.filter((session: AnalyticsSession) => {
         const sessionDate = new Date(session.startTime);
         return sessionDate >= cutoffDate;
       });
+      
+      // Filter by projectId if specified
+      if (projectId) {
+        filteredData = filteredData.filter((session: AnalyticsSession) => 
+          session.projectId === projectId
+        );
+      }
       
       allAnalytics.push(...filteredData);
     } catch (error) {
@@ -82,6 +94,10 @@ export async function getAnalyticsData(days = 7, agentName?: string): Promise<An
   }
   
   return allAnalytics.sort((a, b) => b.startTime - a.startTime);
+}
+
+export async function getProjectAnalyticsData(projectId: string, days = 7, agentName?: string): Promise<AnalyticsSession[]> {
+  return getAnalyticsData(days, agentName, projectId);
 }
 
 export function generateSummary(analytics: AnalyticsSession[]): AnalyticsSummary {
@@ -112,7 +128,7 @@ export function generateSummary(analytics: AnalyticsSession[]): AnalyticsSummary
   };
 
   const averageDuration = summary.totalDuration / summary.totalSessions;
-  const successRate = (summary.successfulSessions / summary.totalSessions) * 100;
+  const successRate = summary.successfulSessions / summary.totalSessions;
 
   // Top errors
   const errorCounts: Record<string, number> = {};
@@ -152,7 +168,7 @@ export function generateSummary(analytics: AnalyticsSession[]): AnalyticsSummary
 
   Object.keys(agentBreakdown).forEach(agentName => {
     const agent = agentBreakdown[agentName];
-    agent.successRate = (agent.successfulSessions / agent.sessions) * 100;
+    agent.successRate = agent.successfulSessions / agent.sessions;
     agent.averageDuration = agent.duration / agent.sessions;
   });
 

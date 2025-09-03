@@ -12,7 +12,7 @@ import {
   createCloudflareProvider,
   CloudflareSandboxProvider,
   type CloudflareConfig,
-} from "../packages/cloudflare/dist/index.js";
+} from "@vibe-kit/cloudflare";
 
 describe("Cloudflare Sandbox Provider - Unit Tests", () => {
   // Mock Worker environment with Durable Object binding
