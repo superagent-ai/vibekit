@@ -18,7 +18,24 @@ export class JSONStateStore {
     // Write atomically with temp file
     const tempPath = `${filePath}.tmp`;
     await fs.writeFile(tempPath, JSON.stringify(state, this.jsonReplacer, 2));
-    await fs.rename(tempPath, filePath);
+    
+    try {
+      await fs.rename(tempPath, filePath);
+    } catch (error: any) {
+      // Handle race conditions during cleanup where directory might be removed
+      if (error.code === 'ENOENT') {
+        // Try to clean up temp file if it still exists
+        try {
+          await fs.unlink(tempPath);
+        } catch {
+          // Ignore cleanup errors
+        }
+        // If directory/file doesn't exist during cleanup, that's likely expected
+        console.warn(`State save failed (likely during cleanup): ${error.message}`);
+        return;
+      }
+      throw error;
+    }
     
     // Update cache
     this.cache.set(key, state);
