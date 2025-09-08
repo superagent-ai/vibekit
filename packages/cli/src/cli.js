@@ -11,6 +11,7 @@ import GeminiAgent from './agents/gemini.js';
 import CodexAgent from './agents/codex.js';
 import CursorAgent from './agents/cursor.js';
 import OpenCodeAgent from './agents/opencode.js';
+import GrokAgent from './agents/grok.js';
 import Logger from './logging/logger.js';
 import Analytics from './analytics/analytics.js';
 // Dashboard manager will be imported lazily when needed
@@ -215,6 +216,35 @@ program
       }
     };
     const agent = new OpenCodeAgent(logger, agentOptions);
+    
+    
+    const args = command.args || [];
+    await agent.run(args);
+  });
+
+program
+  .command('grok')
+  .description('Run Grok CLI')
+  .option('-s, --sandbox', 'Enable sandbox mode')
+  .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
+  .allowUnknownOption()
+  .allowExcessArguments()
+  .action(async (options, command) => {
+    const logger = new Logger('grok');
+    const settings = await readSettings();
+    
+    // Get proxy from global option or environment variable
+    let proxy = command.parent.opts().proxy || process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+    
+    const agentOptions = {
+      proxy: proxy,
+      settings: settings,
+      sandboxOptions: {
+        sandbox: options.sandbox,
+        sandboxType: options.sandboxType
+      }
+    };
+    const agent = new GrokAgent(logger, agentOptions);
     
     
     const args = command.args || [];
