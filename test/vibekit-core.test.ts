@@ -118,7 +118,7 @@ describe('VibeKit Core SDK - Unit Tests', () => {
   describe('Agent Configuration Validation', () => {
     it('should accept valid agent types', () => {
       const vibeKit = new VibeKit();
-      const agentTypes = ['claude', 'codex', 'opencode', 'gemini'] as const;
+      const agentTypes = ['claude', 'codex', 'opencode', 'gemini', 'grok'] as const;
       
       agentTypes.forEach(type => {
         expect(() => {
