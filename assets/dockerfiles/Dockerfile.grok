@@ -10,5 +10,5 @@ RUN curl -sL https://deb.nodesource.com/setup_24.x | bash - && apt-get install -
 # Confirm installations
 RUN node -v && npm -v && git --version
 
-# Install OpenAI Codex globally
+# Install Grok CLI globally
 RUN npm install -g @vibe-kit/grok-cli@latest
