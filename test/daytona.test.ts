@@ -31,11 +31,11 @@ describe("Daytona Sandbox", () => {
         repository: process.env.GH_REPOSITORY || "superagent-ai/signals",
       });
 
-    // const updateSpy = vi.fn();
-    // const errorSpy = vi.fn();
+    const updateSpy = vi.fn();
+    const errorSpy = vi.fn();
 
-    vibeKit.on("update", (data) => console.log(data));
-    vibeKit.on("error", (data) => console.error(data));
+    vibeKit.on("update", updateSpy);
+    vibeKit.on("error", errorSpy);
 
     const result = await vibeKit.generateCode({ prompt, mode: "ask" });
     const host = await vibeKit.getHost(3000);
@@ -44,7 +44,7 @@ describe("Daytona Sandbox", () => {
 
     expect(result).toBeDefined();
     expect(host).toBeDefined();
-    // expect(updateSpy).toHaveBeenCalled();
-    // expect(errorSpy).not.toHaveBeenCalled();
+    expect(updateSpy).toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
   }, 60000);
 });
