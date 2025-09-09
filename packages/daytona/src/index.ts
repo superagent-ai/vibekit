@@ -81,63 +81,34 @@ class DaytonaSandboxInstance implements SandboxInstance {
         const session = await this.workspace.process.getSession(
           this.workspace.id
         );
-        // Check if background execution is requested - not supported in Daytona
-        if (options?.background) {
-          const response = await this.workspace.process.executeSessionCommand(
-            session.sessionId, // sessionId - using a default session name
-            {
-              command: command,
-              runAsync: true, // run asynchronously for background execution
-            },
-            undefined // timeout - use default working directory
-          );
-
-          // Set up logging for the background command
-          this.workspace.process.getSessionCommandLogs(
-            session.sessionId,
-            response.cmdId!,
-            (chunk) => {
-              options?.onStdout?.(chunk);
-            }
-          );
-
-          // Wait for the command to complete
-          while (true) {
-            const commandInfo = await this.workspace.process.getSessionCommand(
-              session.sessionId,
-              response.cmdId!
-            );
-
-            const exitCode = commandInfo.exitCode;
-            if (exitCode !== null && exitCode !== undefined) {
-              return {
-                exitCode: exitCode,
-                stdout: "Background command started successfully",
-                stderr: "", // SessionExecuteResponse doesn't have stderr
-              };
-            }
-
-            // Wait before checking again
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          }
-        }
 
         try {
           // Execute command using Daytona's process execution API
-          // Format: executeCommand(command, cwd?, env?, timeout?)
           const response = await this.workspace.process.executeSessionCommand(
-            session.sessionId, // sessionId - using a default session name
+            session.sessionId,
             {
               command: command,
-              runAsync: false,
+              runAsync: options?.background,
             },
-            undefined // timeout - use default working directory
+            undefined
+          );
+
+          await this.workspace.process.getSessionCommandLogs(
+            session.sessionId,
+            response.cmdId!,
+            (stdout) => options?.onStdout?.(stdout),
+            (stderr) => options?.onStderr?.(stderr)
+          );
+
+          const logs = await this.workspace.process.getSessionCommandLogs(
+            session.sessionId,
+            response.cmdId!
           );
 
           return {
-            exitCode: response.exitCode || 0,
-            stdout: response.output || "",
-            stderr: "", // ExecuteResponse doesn't have stderr
+            exitCode: 0,
+            stdout: logs.stdout || "",
+            stderr: logs.stderr || "",
           };
         } catch (error) {
           const errorMessage =
