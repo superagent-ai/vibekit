@@ -1,13 +1,13 @@
 ---
 title: 'GitHub Integration'
-description: 'Create branches, open pull requests, and more.'
+description: 'Clone repositories, create branches, open pull requests, and more.'
 ---
 
-VibeKit integrates with GitHub to allow you to create branches, open pull requests, and more. This is particularly powerful for conversational UIs where users can iteratively request changes and see them reflected in real-time through GitHub.
+VibeKit integrates with GitHub to allow you to clone repositories, create branches, open pull requests, and more. This is particularly powerful for conversational UIs where users can iteratively request changes and see them reflected in real-time through GitHub.
 
 ## Setup
 
-First, configure your VibeKit instance with GitHub credentials:
+First, configure your VibeKit instance with GitHub credentials using secrets:
 
 ```typescript
 import { VibeKit } from "@vibe-kit/sdk";
@@ -26,9 +26,8 @@ const vibeKit = new VibeKit()
     model: "claude-sonnet-4-20250514",
   })
   .withSandbox(e2bProvider)
-  .withGitHub({
-    token: process.env.GITHUB_TOKEN!, // GitHub Personal Access Token
-    repository: "your-org/your-repo", // Repository in format "owner/repo"
+  .withSecrets({
+    GH_TOKEN: process.env.GITHUB_TOKEN!, // GitHub Personal Access Token
   });
 ```
 
@@ -36,13 +35,33 @@ const vibeKit = new VibeKit()
 Your GitHub token needs the following permissions:
 - `repo` (Full control of private repositories)
 - `workflow` (Update GitHub Action workflows)
+
+For public repositories, no token is required for cloning.
 </Tip>
+
+## Cloning Repositories
+
+The new `cloneRepository` method allows you to explicitly clone any GitHub repository:
+
+```typescript
+// Clone a public repository (no token needed)
+await vibeKit.cloneRepository("octocat/Hello-World");
+
+// Clone a private repository (requires GH_TOKEN in secrets)
+await vibeKit.cloneRepository("your-org/private-repo");
+
+// Clone to a specific directory
+await vibeKit.cloneRepository("your-org/your-repo", "/custom/path");
+
+// Clone to default working directory (if not specified, uses workingDirectory option)
+await vibeKit.cloneRepository("your-org/your-repo");
+```
 
 ## Creating a PR
 
 ### The basic way
 
-The simplest way to create a pull request is to generate code and then create a PR:
+After cloning a repository and generating code changes, you can create a pull request:
 
 ```typescript
 // Add event listeners
@@ -54,14 +73,17 @@ vibeKit.on("error", (error) => {
   console.error("Error:", error);
 });
 
+// Clone the repository first
+await vibeKit.cloneRepository("your-org/your-repo");
+
 // Generate initial code
 const response = await vibeKit.generateCode({
   prompt: "Create a React component for user authentication with email and password fields",
   mode: "code",
 });
 
-// Create pull request with the generated changes
-const pullRequest = await vibeKit.createPullRequest();
+// Create pull request with the generated changes (requires repository parameter)
+const pullRequest = await vibeKit.createPullRequest("your-org/your-repo");
 
 console.log("Pull Request created!");
 console.log(`URL: ${pullRequest.html_url}`);
@@ -86,18 +108,18 @@ await vibeKit.pushToBranch();
 
 ## Merging Pull Requests
 
-Once a pull request has been reviewed and approved, you can programmatically merge it using the `mergePullRequest` method. This method only requires GitHub configuration - no agent or sandbox needed:
+Once a pull request has been reviewed and approved, you can programmatically merge it using the `mergePullRequest` method:
 
 ```typescript
-// Create a simple VibeKit instance with just GitHub config
+// Create a VibeKit instance with GitHub token in secrets
 const vibekit = new VibeKit()
-  .withGithub({
-    token: process.env.GITHUB_TOKEN,
-    repository: "myorg/myrepo"
+  .withSecrets({
+    GH_TOKEN: process.env.GITHUB_TOKEN,
   });
 
 // Merge a pull request with default settings (regular merge)
 const mergeResult = await vibekit.mergePullRequest({
+  repository: "myorg/myrepo", // Repository is now a required parameter
   pullNumber: 42
 });
 
@@ -105,6 +127,7 @@ console.log(`PR merged! Commit SHA: ${mergeResult.sha}`);
 
 // Or use squash merge with custom commit message
 const squashResult = await vibekit.mergePullRequest({
+  repository: "myorg/myrepo",
   pullNumber: 42,
   mergeMethod: "squash",
   commitTitle: "feat: Add user authentication",
@@ -117,5 +140,51 @@ const squashResult = await vibekit.mergePullRequest({
 - **`merge`** (default): Creates a merge commit with all commits from the feature branch
 - **`squash`**: Squashes all commits into a single commit before merging
 - **`rebase`**: Rebases the commits onto the base branch
+
+## Migration from withGithub
+
+If you're migrating from the old `withGithub` API, here are the key changes:
+
+### Before (deprecated)
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent(agentConfig)
+  .withSandbox(sandbox)
+  .withGithub({
+    token: process.env.GITHUB_TOKEN,
+    repository: "owner/repo"
+  });
+
+// Repository was cloned automatically when generateCode was called
+await vibeKit.generateCode({ prompt: "Fix bug" });
+await vibeKit.createPullRequest();
+```
+
+### After (new API)
+```typescript
+const vibeKit = new VibeKit()
+  .withAgent(agentConfig)
+  .withSandbox(sandbox)
+  .withSecrets({
+    GH_TOKEN: process.env.GITHUB_TOKEN
+  });
+
+// Explicitly clone repository
+await vibeKit.cloneRepository("owner/repo");
+
+// Generate code (no longer triggers cloning)
+await vibeKit.generateCode({ prompt: "Fix bug" });
+
+// Create PR (now requires repository parameter)
+await vibeKit.createPullRequest("owner/repo");
+```
+
+## Benefits of the New API
+
+- **Explicit Control**: Repository cloning is now an explicit operation
+- **Public Repository Support**: Clone public repositories without authentication
+- **Flexible Repository Management**: Work with multiple repositories in the same session
+- **Cleaner Separation**: GitHub operations are clearly separated from code generation
+- **Better Error Handling**: More specific error messages for authentication issues
 
 This comprehensive GitHub integration allows you to build powerful conversational UIs where users can iteratively request code changes, see them applied in real-time, create pull requests, and merge them programmatically when they're satisfied with the results.

@@ -7,6 +7,7 @@ description: "Create a pull request after generating code changes."
 
 ```typescript
 async createPullRequest(
+  repository: string,
   labelOptions?: LabelOptions,
   branchPrefix?: string
 ): Promise<PullRequestResponse>
@@ -20,6 +21,7 @@ The `createPullRequest` method allows you to create a GitHub pull request after 
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `repository` | `string` | Yes | The GitHub repository in format "owner/repo" |
 | `labelOptions` | `LabelOptions` | No | Optional label configuration for the pull request |
 | `branchPrefix` | `string` | No | Optional prefix for the branch name that will be created |
 
@@ -63,7 +65,8 @@ The `createPullRequest` method allows you to create a GitHub pull request after 
 - **Agent Type**: This method is available for all supported agents (Codex, Claude, OpenCode, and Gemini)
 - **Initialization**: The VibeKit instance must be properly initialized with valid agent configuration
 - **Code Generation**: Code changes should be generated before creating a pull request
-- **GitHub Integration**: A valid GitHub token and repository URL must be configured
+- **GitHub Integration**: A valid GitHub token must be configured using `withSecrets({ GH_TOKEN: "your_token" })`
+- **Repository Access**: The provided GitHub token must have access to the specified repository
 
 ## Error handling
 
@@ -82,10 +85,28 @@ throw new Error("Agent not initialized")
 
 ```typescript
 import { VibeKit } from 'vibekit';
+import { createE2BProvider } from "@vibe-kit/e2b";
 
-const vibekit = new VibeKit(config);
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+});
 
-// Generate code first
+const vibekit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider)
+  .withSecrets({
+    GH_TOKEN: process.env.GITHUB_TOKEN!,
+  });
+
+// Clone repository first
+await vibekit.cloneRepository("your-org/your-repo");
+
+// Generate code changes
 await vibekit.generateCode({
   prompt: "Add a new user registration feature",
   mode: "code"
@@ -93,7 +114,7 @@ await vibekit.generateCode({
 
 // Create pull request with default settings
 try {
-  const prResponse = await vibekit.createPullRequest();
+  const prResponse = await vibekit.createPullRequest("your-org/your-repo");
   
   console.log(`Pull request created: ${prResponse.html_url}`);
   console.log(`PR ID: ${prResponse.id}`);
@@ -113,10 +134,28 @@ try {
 
 ```typescript
 import { VibeKit, LabelOptions } from 'vibekit';
+import { createE2BProvider } from "@vibe-kit/e2b";
 
-const vibekit = new VibeKit(config);
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+});
 
-// Generate code first
+const vibekit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider)
+  .withSecrets({
+    GH_TOKEN: process.env.GITHUB_TOKEN!,
+  });
+
+// Clone repository first
+await vibekit.cloneRepository("your-org/your-repo");
+
+// Generate code changes
 await vibekit.generateCode({
   prompt: "Add authentication middleware",
   mode: "code"
@@ -131,6 +170,7 @@ const labelOptions: LabelOptions = {
 
 try {
   const prResponse = await vibekit.createPullRequest(
+    "your-org/your-repo",       // Repository parameter (required)
     labelOptions,               // Custom label options
     "feature"                   // Branch prefix (will create feature/xyz branch)
   );
@@ -177,21 +217,22 @@ const refactorLabel: LabelOptions = {
 
 ```typescript
 // Works with any agent type
-const vibekitClaude = new VibeKit({
-  agent: { type: "claude", model: { ... } },
-  github: { token: "...", repository: "..." },
-  // ... other config
-});
+const vibekitClaude = new VibeKit()
+  .withAgent({ type: "claude", provider: "anthropic", model: "claude-sonnet-4-20250514", apiKey: "..." })
+  .withSecrets({ GH_TOKEN: process.env.GITHUB_TOKEN })
+  .withSandbox(sandbox);
 
-const vibekitCodex = new VibeKit({
-  agent: { type: "codex", model: { ... } },
-  github: { token: "...", repository: "..." },
-  // ... other config
-});
+const vibekitCodex = new VibeKit()
+  .withAgent({ type: "codex", provider: "openai", model: "codex-mini-latest", apiKey: "..." })
+  .withSecrets({ GH_TOKEN: process.env.GITHUB_TOKEN })
+  .withSandbox(sandbox);
 
-// Both agents support createPullRequest
-await vibekitClaude.createPullRequest();
-await vibekitCodex.createPullRequest();
+// Both agents support createPullRequest (now requires repository parameter)
+await vibekitClaude.cloneRepository("your-org/your-repo");
+await vibekitClaude.createPullRequest("your-org/your-repo");
+
+await vibekitCodex.cloneRepository("your-org/your-repo");
+await vibekitCodex.createPullRequest("your-org/your-repo");
 ```
 
 ## Notes
@@ -200,6 +241,8 @@ await vibekitCodex.createPullRequest();
 - Ensure your GitHub token has the necessary permissions to create pull requests in the target repository
 - The method creates a new branch for the pull request automatically
 - Code changes must be generated before calling this method
+- Repository must be explicitly cloned using `cloneRepository()` before generating code
 - When using `branchPrefix`, the final branch name will be in the format `{branchPrefix}/{generated-suffix}`
 - The `labelOptions` parameter creates a new label if it doesn't exist in the repository and applies it to the pull request
 - The response includes the complete GitHub API pull request data, allowing access to detailed information like user details, branch information, timestamps, and merge status
+- The `repository` parameter is now required and specifies which repository to create the pull request in

@@ -30,8 +30,6 @@ export class CodexAgent extends BaseAgent {
 
   constructor(config: CodexConfig) {
     const baseConfig: BaseAgentConfig = {
-      githubToken: config.githubToken,
-      repoUrl: config.repoUrl,
       sandboxProvider: config.sandboxProvider,
       secrets: config.secrets,
       sandboxId: config.sandboxId,

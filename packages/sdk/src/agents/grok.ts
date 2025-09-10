@@ -30,8 +30,6 @@ export class GrokAgent extends BaseAgent {
 
   constructor(config: GrokConfig) {
     const baseConfig: BaseAgentConfig = {
-      githubToken: config.githubToken,
-      repoUrl: config.repoUrl,
       sandboxProvider: config.sandboxProvider,
       secrets: config.secrets,
       sandboxId: config.sandboxId,
