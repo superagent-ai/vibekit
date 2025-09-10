@@ -88,27 +88,20 @@ describe("VibeKit SDK", () => {
         model: "claude-sonnet-4-20250514",
       })
       .withSandbox(e2bProvider)
-      .withWorkingDirectory(dir);
+      .withWorkingDirectory(dir)
+      .withSecrets({
+        GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
+      });
 
-    let gitUpdateReceived = false;
+    // Clone repository explicitly
+    await vibeKit.cloneRepository("superagent-ai/signals");
 
-    vibeKit.on("update", (data) => {
-      try {
-        const parsedData = JSON.parse(data);
-        if (
-          parsedData.type === "git" &&
-          parsedData.output === "Cloning repository: superagent-ai/signals"
-        ) {
-          gitUpdateReceived = true;
-        }
-      } catch {}
-    });
-
-    await vibeKit.generateCode({ prompt: "Hi there" });
+    // Verify the repository was cloned by checking for git directory
+    const result = await vibeKit.executeCommand("test -d .git && echo 'git_repo_exists'");
 
     await vibeKit.kill();
 
-    expect(gitUpdateReceived).toBe(true);
+    expect(result.stdout.trim()).toBe("git_repo_exists");
   }, 60000);
   it("should set env variables", async () => {
     if (skipIfNoVibeKitKeys()) {
