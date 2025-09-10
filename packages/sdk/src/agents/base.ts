@@ -111,6 +111,7 @@ export interface ExecuteCommandOptions {
   timeoutMs?: number;
   background?: boolean;
   callbacks?: StreamCallbacks;
+  branch?: string;
 }
 
 export interface AgentResponse {
@@ -267,7 +268,7 @@ export abstract class BaseAgent {
     command: string,
     options: ExecuteCommandOptions = {}
   ): Promise<AgentResponse> {
-    const { timeoutMs = 3600000, background = false, callbacks } = options;
+    const { timeoutMs = 3600000, background = false, callbacks, branch } = options;
 
     try {
       const sbx = await this.getSandbox();
@@ -284,6 +285,54 @@ export abstract class BaseAgent {
         background: false,
         onStdout: (data) => console.log(data),
       });
+
+      // Handle branch switching if specified
+      if (branch) {
+        // Store the branch for later use
+        this.currentBranch = branch;
+
+        // Check if we're in a git repository first
+        try {
+          await sbx.commands.run(
+            `cd ${this.WORKING_DIR} && git rev-parse --git-dir`,
+            {
+              timeoutMs: 10000,
+              background: false,
+            }
+          );
+
+          callbacks?.onUpdate?.(
+            `{"type": "git", "output": "Switching to branch: ${branch}"}`
+          );
+          try {
+            // Try to switch to existing branch
+            await sbx.commands.run(
+              `cd ${this.WORKING_DIR} && git checkout ${branch}`,
+              { timeoutMs: 30000, background: false }
+            );
+            callbacks?.onUpdate?.(
+              `{"type": "git", "output": "Switched to existing branch: ${branch}"}`
+            );
+          } catch (checkoutError) {
+            // If switching fails, create and checkout new branch
+            callbacks?.onUpdate?.(
+              `{"type": "git", "output": "Creating new branch: ${branch}"}`
+            );
+            await sbx.commands.run(
+              `cd ${this.WORKING_DIR} && git checkout -b ${branch}`,
+              { timeoutMs: 30000, background: false }
+            );
+            callbacks?.onUpdate?.(
+              `{"type": "git", "output": "Created and switched to new branch: ${branch}"}`
+            );
+          }
+        } catch (error) {
+          // Not in a git repository, skip branch switching
+          callbacks?.onUpdate?.(
+            `{"type": "git", "output": "Not in a git repository, skipping branch operations"}`
+          );
+        }
+      }
 
       // For executeCommand, always use working directory directly
       const executeCommand = `cd ${this.WORKING_DIR} && ${command}`;

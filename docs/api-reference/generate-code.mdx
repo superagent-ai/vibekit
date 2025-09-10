@@ -1,7 +1,13 @@
 ---
-title: 'generateCode'
+title: 'generateCode (Deprecated)'
 description: 'Generates code using the configured AI agent (Codex or Claude) with optional streaming callbacks and conversation history.'
 ---
+
+<Warning>
+**⚠️ DEPRECATED**: The `generateCode` method is deprecated and will be removed in a future version. Please migrate to [`executeCommand`](/api-reference/execute-command) for better flexibility and control.
+
+[See migration guide below](#migration-to-executecommand) for how to update your code.
+</Warning>
 
 ## Method signature
 
@@ -152,6 +158,105 @@ try {
 
 
 
+
+## Migration to executeCommand
+
+The `generateCode` method has been deprecated in favor of the more flexible `executeCommand` method. Here's how to migrate your code:
+
+### Basic Migration
+
+**Before (generateCode):**
+```typescript
+const response = await vibeKit.generateCode({
+  prompt: "Create a React component for a todo list",
+  mode: "code"
+});
+```
+
+**After (executeCommand):**
+```typescript
+const claudeCommand = `echo "Create a React component for a todo list" | claude -p --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
+const response = await vibeKit.executeCommand(claudeCommand);
+```
+
+### With Branch Support
+
+**Before (generateCode):**
+```typescript
+const response = await vibeKit.generateCode({
+  prompt: "Create a React component",
+  mode: "code",
+  branch: "feature-react-components"
+});
+```
+
+**After (executeCommand):**
+```typescript
+const claudeCommand = `echo "Create a React component" | claude -p --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
+const response = await vibeKit.executeCommand(claudeCommand, {
+  branch: "feature-react-components"
+});
+```
+
+### Event Handling Migration
+
+**Before (generateCode with callbacks):**
+```typescript
+const response = await vibeKit.generateCode({
+  prompt: "Explain React hooks",
+  mode: "ask",
+  callbacks: {
+    onUpdate: (message) => console.log("Update:", message),
+    onError: (error) => console.error("Error:", error)
+  }
+});
+```
+
+**After (executeCommand with events):**
+```typescript
+vibeKit.on('stdout', (message) => console.log("Update:", message));
+vibeKit.on('stderr', (error) => console.error("Error:", error));
+
+const claudeCommand = `echo "Explain React hooks" | claude -p --disallowedTools "Edit" "Replace" "Write" --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
+const response = await vibeKit.executeCommand(claudeCommand);
+```
+
+### Agent-Specific Commands
+
+For different agents, use these command patterns:
+
+**Claude:**
+```typescript
+const claudeCommand = `echo "${prompt}" | claude -p --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
+```
+
+**Codex:**
+```typescript
+const codexCommand = `codex exec --full-auto --skip-git-repo-check "${prompt}"`;
+```
+
+**Gemini:**
+```typescript
+const geminiCommand = `echo "${prompt}" | gemini --model gemini-2.5-pro --yolo`;
+```
+
+**OpenCode:**
+```typescript
+const opencodeCommand = `echo "${prompt}" | opencode run`;
+```
+
+**Grok:**
+```typescript
+const grokCommand = `echo "${prompt}" | grok --prompt "Help with the following request by providing code or guidance."`;
+```
+
+## Benefits of executeCommand
+
+- **More Control:** Direct access to agent CLI commands
+- **Branch Support:** Automatic git branch switching
+- **Better Events:** Use standard `stdout`/`stderr` events instead of custom callbacks
+- **Flexibility:** Execute any shell command in the sandbox environment
+- **Consistency:** Single method for all command execution needs
 
 ## Notes
 

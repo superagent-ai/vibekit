@@ -11,9 +11,13 @@ Streaming enables your application to process and display data as soon as it is 
 
 ## How to Use Streaming
 
-To enable streaming with the `generateCode` method, use the event-driven approach with `.on()` listeners. The API will emit events as data is generated.
+To enable streaming with commands, use the event-driven approach with `.on()` listeners for `stdout` and `stderr` events. The API will emit events as data is generated.
 
-### Example Usage
+<Info>
+**💡 Recommended**: Use `executeCommand` with `stdout`/`stderr` events for the best streaming experience. The deprecated `generateCode` method also supports streaming but will be removed in a future version.
+</Info>
+
+### Example Usage with executeCommand (Recommended)
 
 ```typescript
 import { VibeKit } from "@vibe-kit/sdk";
@@ -34,6 +38,30 @@ const vibeKit = new VibeKit()
   .withSandbox(e2bProvider);
 
 // Set up event listeners for streaming
+vibeKit.on("stdout", (output) => {
+  // Handle streaming output from commands
+  console.log('Streaming output:', output);
+  // Update your UI with the new content
+  updateUI(output);
+});
+
+vibeKit.on("stderr", (error) => {
+  // Handle streaming errors
+  console.error('Streaming error:', error);
+});
+
+// Execute a command
+const claudeCommand = `echo "Create a React component for a todo list" | claude -p --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
+const response = await vibeKit.executeCommand(claudeCommand);
+
+// The final response is still available
+console.log('Final response:', response);
+```
+
+### Legacy Streaming with generateCode (Deprecated)
+
+```typescript
+// Set up event listeners for streaming (deprecated approach)
 vibeKit.on("update", (message) => {
   // Handle streaming updates
   console.log('Streaming update:', message);
@@ -46,7 +74,7 @@ vibeKit.on("error", (error) => {
   console.error('Streaming error:', error);
 });
 
-// Generate code
+// Generate code (deprecated)
 const response = await vibeKit.generateCode({
   prompt: "Create a React component for a todo list",
   mode: "code",
@@ -56,7 +84,23 @@ const response = await vibeKit.generateCode({
 console.log('Final response:', response);
 ```
 
-### With Conversation History
+### With Branch Support
+
+```typescript
+// Event listeners are already set up from previous example
+vibeKit.on("stdout", (output) => {
+  // Display incremental updates to the user
+  appendToOutput(output);
+});
+
+// Execute command on a specific branch
+const claudeCommand = `echo "Add error handling to the React component" | claude -p --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
+const response = await vibeKit.executeCommand(claudeCommand, {
+  branch: "feature-error-handling"
+});
+```
+
+### Legacy: With Conversation History (Deprecated)
 
 ```typescript
 // Event listeners are already set up from previous example

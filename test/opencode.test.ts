@@ -31,10 +31,12 @@ describe("Opencode CLI", () => {
     const updateSpy = vi.fn();
     const errorSpy = vi.fn();
 
-    vibeKit.on("update", updateSpy);
-    vibeKit.on("error", errorSpy);
+    vibeKit.on("stdout", updateSpy);  // executeCommand emits stdout events
+    vibeKit.on("stderr", errorSpy);   // executeCommand emits stderr events
 
-    const result = await vibeKit.generateCode({ prompt, mode: "ask" });
+    // Get the opencode command for the prompt
+    const opencodeCommand = `echo "${prompt}" | opencode run`;
+    const result = await vibeKit.executeCommand(opencodeCommand);
     const host = await vibeKit.getHost(3000);
 
     await vibeKit.kill();

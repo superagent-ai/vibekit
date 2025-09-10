@@ -38,7 +38,7 @@ describe("GitHub Integration", () => {
     const updateSpy = vi.fn();
     const errorSpy = vi.fn();
 
-    vibeKit.on("update", updateSpy);
+    vibeKit.on("stdout", updateSpy);  // executeCommand emits stdout events
     vibeKit.on("error", errorSpy);
 
     // Test cloning a public repository
@@ -68,7 +68,9 @@ describe("GitHub Integration", () => {
 
     // Test basic code generation in the cloned repository
     const prompt = "List the files in the current directory";
-    const result = await vibeKit.generateCode({ prompt, mode: "code" });
+    // Get the claude command for the prompt  
+    const claudeCommand = `echo "${prompt}" | claude -p --append-system-prompt "Help with the following request by providing code or guidance." --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
+    const result = await vibeKit.executeCommand(claudeCommand);
 
     // Test createPullRequest method signature (should require repository parameter)
     try {
