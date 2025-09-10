@@ -1,0 +1,220 @@
+---
+title: "cloneRepository"
+description: "Clone a GitHub repository to the working directory."
+---
+
+## Method signature
+
+```typescript
+async cloneRepository(
+  repoId: string,
+  directoryPath?: string
+): Promise<void>
+```
+
+## Description
+
+The `cloneRepository` method allows you to explicitly clone any GitHub repository into your sandbox environment. It supports both public and private repositories and provides flexible directory management.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `repoId` | `string` | Yes | The GitHub repository in format "owner/repo" |
+| `directoryPath` | `string` | No | Target directory path (defaults to `workingDirectory` option or "/vibe0") |
+
+## Return type
+
+| Type | Description |
+|------|-------------|
+| `Promise<void>` | Promise that resolves when the repository is successfully cloned |
+
+## Requirements
+
+- **Agent Type**: This method is available for all supported agents (Codex, Claude, OpenCode, and Gemini)
+- **Initialization**: The VibeKit instance must be properly initialized with valid agent and sandbox configuration
+- **GitHub Access**: For private repositories, a valid GitHub token must be configured using `withSecrets({ GH_TOKEN: "your_token" })`
+
+## Error handling
+
+The method throws errors in the following scenarios:
+
+### Repository Access Error
+```typescript
+throw new Error("Failed to clone repository 'owner/repo'. If this is a private repository, please provide GH_TOKEN in secrets using withSecrets().")
+```
+- **When**: Attempting to clone a private repository without a GitHub token
+- **Resolution**: Configure `GH_TOKEN` in secrets using `withSecrets({ GH_TOKEN: "your_token" })`
+
+### General Clone Error
+```typescript
+throw new Error("Failed to clone repository: [error details]")
+```
+- **When**: Git clone operation fails for any other reason
+- **Resolution**: Check repository URL, network connectivity, and permissions
+
+## Usage examples
+
+### Clone Public Repository
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider);
+  // Note: No secrets needed for public repositories
+
+// Clone a public repository to default directory
+try {
+  await vibeKit.cloneRepository("octocat/Hello-World");
+  console.log("Successfully cloned public repository");
+} catch (error) {
+  console.error("Failed to clone repository:", error.message);
+}
+```
+
+### Clone Private Repository
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider)
+  .withSecrets({
+    GH_TOKEN: process.env.GITHUB_TOKEN!, // Required for private repos
+  });
+
+// Clone a private repository to default directory
+try {
+  await vibeKit.cloneRepository("myorg/private-repo");
+  console.log("Successfully cloned private repository");
+} catch (error) {
+  console.error("Failed to clone repository:", error.message);
+}
+```
+
+### Clone to Custom Directory
+
+```typescript
+// Clone to a specific directory
+try {
+  await vibeKit.cloneRepository("owner/repo", "/custom/project/path");
+  console.log("Repository cloned to custom directory");
+} catch (error) {
+  console.error("Failed to clone repository:", error.message);
+}
+
+// Clone to working directory (explicit)
+try {
+  await vibeKit.cloneRepository("owner/repo", vibeKit.options.workingDirectory);
+  console.log("Repository cloned to working directory");
+} catch (error) {
+  console.error("Failed to clone repository:", error.message);
+}
+```
+
+### Complete Workflow Example
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider)
+  .withSecrets({
+    GH_TOKEN: process.env.GITHUB_TOKEN!,
+  });
+
+// Step 1: Clone repository
+await vibeKit.cloneRepository("myorg/myrepo");
+
+// Step 2: Generate code changes
+const response = await vibeKit.generateCode({
+  prompt: "Add user authentication with email and password",
+  mode: "code",
+});
+
+// Step 3: Create pull request
+const pullRequest = await vibeKit.createPullRequest("myorg/myrepo");
+
+console.log(`Pull Request created: ${pullRequest.html_url}`);
+```
+
+### Error Handling Best Practices
+
+```typescript
+async function safeClone(vibeKit: VibeKit, repoId: string) {
+  try {
+    await vibeKit.cloneRepository(repoId);
+    console.log(`✅ Successfully cloned ${repoId}`);
+    return true;
+  } catch (error) {
+    if (error.message.includes("private repository")) {
+      console.error(`❌ ${repoId} is private. Please configure GH_TOKEN in secrets.`);
+      console.log("Use: vibeKit.withSecrets({ GH_TOKEN: 'your_token' })");
+    } else if (error.message.includes("not found")) {
+      console.error(`❌ Repository ${repoId} not found or not accessible.`);
+    } else {
+      console.error(`❌ Failed to clone ${repoId}:`, error.message);
+    }
+    return false;
+  }
+}
+
+// Usage
+const success = await safeClone(vibeKit, "owner/repo");
+if (success) {
+  // Continue with code generation
+  await vibeKit.generateCode({ prompt: "Add new feature", mode: "code" });
+}
+```
+
+## Notes
+
+- **Explicit Operation**: Unlike the deprecated `withGithub` approach, repository cloning is now an explicit step
+- **Public Repository Support**: Public repositories can be cloned without any authentication
+- **Private Repository Support**: Private repositories require `GH_TOKEN` in secrets
+- **Directory Management**: If no directory is specified, uses the `workingDirectory` option or defaults to "/vibe0"
+- **Git Configuration**: Automatically configures git user as "github-actions[bot]" for consistency
+- **Overwrite Behavior**: Cloning into an existing directory will overwrite the contents
+- **Working Directory**: The cloned repository becomes the working directory for subsequent operations
+- **Branch Operations**: After cloning, you can use `generateCode` with branch parameters for branch-specific operations
+
+## Related Methods
+
+- [`generateCode`](/api-reference/generate-code) - Generate code changes in the cloned repository
+- [`createPullRequest`](/api-reference/create-pull-request) - Create a pull request with changes
+- [`pushToBranch`](/api-reference/push-to-branch) - Push changes to a specific branch
+- [`mergePullRequest`](/api-reference/merge-pull-request) - Merge an existing pull request

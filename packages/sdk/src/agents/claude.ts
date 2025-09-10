@@ -32,8 +32,6 @@ export class ClaudeAgent extends BaseAgent {
 
   constructor(config: ClaudeConfig) {
     const baseConfig: BaseAgentConfig = {
-      githubToken: config.githubToken,
-      repoUrl: config.repoUrl,
       sandboxProvider: config.sandboxProvider,
       secrets: config.secrets,
       sandboxId: config.sandboxId,

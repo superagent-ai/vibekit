@@ -26,11 +26,14 @@ describe("Codex CLI", () => {
         apiKey: process.env.OPENAI_API_KEY!,
         model: "codex-mini-latest",
       })
-      .withGithub({
-        token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
-        repository: process.env.GH_REPOSITORY || "superagent-ai/signals",
+      .withSecrets({
+        GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
       })
       .withSandbox(e2bProvider);
+
+    // Clone repository first
+    const repository = process.env.GH_REPOSITORY || "superagent-ai/signals";
+    await vibeKit.cloneRepository(repository);
 
     const updateSpy = vi.fn();
     const errorSpy = vi.fn();

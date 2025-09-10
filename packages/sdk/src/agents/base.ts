@@ -96,8 +96,6 @@ class StreamingBuffer {
 }
 
 export interface BaseAgentConfig {
-  githubToken?: string;
-  repoUrl?: string;
   sandboxProvider?: SandboxProvider;
   secrets?: Record<string, string>;
   sandboxId?: string;
@@ -256,14 +254,6 @@ export abstract class BaseAgent {
     this.config.sandboxId = sessionId;
   }
 
-  public setGithubToken(token: string): void {
-    this.config.githubToken = token;
-  }
-
-  public setGithubRepository(repoUrl: string): void {
-    this.config.repoUrl = repoUrl;
-  }
-
   public async getHost(port: number): Promise<string> {
     const sbx = await this.getSandbox();
     return await sbx.getHost(port);
@@ -362,68 +352,67 @@ export abstract class BaseAgent {
           timeoutMs: 30000,
           background: background || false,
         });
-
-        // Only clone repository if GitHub config is provided
-        if (this.config.githubToken && this.config.repoUrl) {
-          callbacks?.onUpdate?.(
-            `{"type": "git", "output": "Cloning repository: ${this.config.repoUrl}"}`
-          );
-          // Clone directly into the working directory, not into a subdirectory
-          await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git clone https://x-access-token:${this.config.githubToken}@github.com/${this.config.repoUrl}.git .`,
-            { timeoutMs: 3600000, background: background || false }
-          );
-
-          await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git config user.name "github-actions[bot]" && git config user.email "github-actions[bot]@users.noreply.github.com"`,
-            { timeoutMs: 60000, background: background || false }
-          );
-        }
       } else if (this.config.sandboxId) {
         callbacks?.onUpdate?.(
           `{"type": "start", "sandbox_id": "${this.config.sandboxId}"}`
         );
       }
 
-      // Switch to specified branch if provided and repository is available
-      if (branch && this.config.repoUrl) {
+      // Switch to specified branch if provided and we're in a git repository
+      if (branch) {
         // Store the branch for later use
         this.currentBranch = branch;
 
-        callbacks?.onUpdate?.(
-          `{"type": "git", "output": "Switching to branch: ${branch}"}`
-        );
+        // Check if we're in a git repository first
         try {
-          // Try to checkout existing branch first
           await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git checkout ${branch}`,
+            `cd ${this.WORKING_DIR} && git rev-parse --git-dir`,
             {
-              timeoutMs: 60000,
+              timeoutMs: 10000,
               background: background || false,
             }
           );
-          // Pull latest changes from the remote branch
+
           callbacks?.onUpdate?.(
-            `{"type": "git", "output": "Pulling latest changes from ${branch}"}`
+            `{"type": "git", "output": "Switching to branch: ${branch}"}`
           );
-          await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git pull origin ${branch}`,
-            {
-              timeoutMs: 60000,
-              background: background || false,
-            }
-          );
+          try {
+            // Try to checkout existing branch first
+            await sbx.commands.run(
+              `cd ${this.WORKING_DIR} && git checkout ${branch}`,
+              {
+                timeoutMs: 60000,
+                background: background || false,
+              }
+            );
+            // Pull latest changes from the remote branch
+            callbacks?.onUpdate?.(
+              `{"type": "git", "output": "Pulling latest changes from ${branch}"}`
+            );
+            await sbx.commands.run(
+              `cd ${this.WORKING_DIR} && git pull origin ${branch}`,
+              {
+                timeoutMs: 60000,
+                background: background || false,
+              }
+            );
+          } catch (error) {
+            // If branch doesn't exist, create it
+            callbacks?.onUpdate?.(
+              `{"type": "git", "output": "Branch ${branch} not found, creating new branch"}`
+            );
+            await sbx.commands.run(
+              `cd ${this.WORKING_DIR} && git checkout -b ${branch}`,
+              {
+                timeoutMs: 60000,
+                background: background || false,
+              }
+            );
+          }
         } catch (error) {
-          // If branch doesn't exist, create it
+          // Not in a git repository, skip branch switching
           callbacks?.onUpdate?.(
-            `{"type": "git", "output": "Branch ${branch} not found, creating new branch"}`
-          );
-          await sbx.commands.run(
-            `cd ${this.WORKING_DIR} && git checkout -b ${branch}`,
-            {
-              timeoutMs: 60000,
-              background: background || false,
-            }
+            `{"type": "git", "output": "Not in a git repository, skipping branch operations"}`
           );
         }
       }
@@ -556,14 +545,15 @@ export abstract class BaseAgent {
   }
 
   public async createPullRequest(
+    repository: string,
     labelOptions?: LabelOptions,
     branchPrefix?: string
   ): Promise<PullRequestResult> {
-    const { githubToken, repoUrl } = this.config;
+    const githubToken = this.config.secrets?.GH_TOKEN;
 
-    if (!githubToken || !repoUrl) {
+    if (!githubToken || !repository) {
       throw new Error(
-        "GitHub configuration is required for creating pull requests. Please provide githubToken and repoUrl in your configuration."
+        "GitHub token and repository are required for creating pull requests. Please provide GH_TOKEN in secrets and repository parameter."
       );
     }
 
@@ -660,7 +650,7 @@ export abstract class BaseAgent {
     const commitSha = commitMatch ? commitMatch[1] : undefined;
 
     // Create Pull Request using GitHub API
-    const [owner, repo] = repoUrl?.split("/") || [];
+    const [owner, repo] = repository?.split("/") || [];
     const prResponse = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/pulls`,
       {
@@ -740,7 +730,7 @@ export abstract class BaseAgent {
     prNumber: number,
     labelConfig: LabelOptions
   ) {
-    const { githubToken } = this.config;
+    const githubToken = this.config.secrets?.GH_TOKEN;
     const {
       name: labelName,
       color: labelColor,

@@ -30,8 +30,6 @@ export class OpenCodeAgent extends BaseAgent {
 
   constructor(config: OpenCodeConfig) {
     const baseConfig: BaseAgentConfig = {
-      githubToken: config.githubToken,
-      repoUrl: config.repoUrl,
       sandboxProvider: config.sandboxProvider,
       secrets: config.secrets,
       sandboxId: config.sandboxId,
