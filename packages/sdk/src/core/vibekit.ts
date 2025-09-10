@@ -128,27 +128,37 @@ export class VibeKit extends EventEmitter {
     this.agent = new AgentClass(agentConfig);
   }
 
+  /**
+   * @deprecated Use executeCommand instead. This method will be removed in a future version.
+   */
   async generateCode({
     prompt,
     mode = "code",
     branch,
-    history,
+    history: _history, // Keep for backward compatibility but don't use
   }: {
     prompt: string;
     mode?: AgentMode;
     branch?: string;
     history?: Conversation[];
   }): Promise<AgentResponse> {
+    // Deprecation warning
+    console.warn(
+      "⚠️  generateCode() is deprecated and will be removed in a future version. " +
+      "Please use executeCommand() instead for better flexibility and control."
+    );
+
     if (!this.agent) {
       await this.initializeAgent();
     }
 
-    const callbacks = {
-      onUpdate: (data: string) => this.emit("update", data),
-      onError: (error: string) => this.emit("error", error),
-    };
-
-    return this.agent.generateCode(prompt, mode, branch, history, callbacks);
+    // Extract the command that would be generated and use executeCommand instead
+    const commandConfig = (this.agent as any).getCommandConfig(prompt, mode);
+    
+    return this.executeCommand(commandConfig.command, {
+      branch,
+      background: false,
+    });
   }
 
   async createPullRequest(

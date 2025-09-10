@@ -31,10 +31,12 @@ describe("Claude Code CLI", () => {
     const updateSpy = vi.fn();
     const errorSpy = vi.fn();
 
-    vibeKit.on("update", updateSpy);
-    vibeKit.on("error", errorSpy);
+    vibeKit.on("stdout", updateSpy);  // executeCommand emits stdout events
+    vibeKit.on("stderr", errorSpy);   // executeCommand emits stderr events
 
-    const result = await vibeKit.generateCode({ prompt, mode: "ask" });
+    // Get the claude command for the prompt
+    const claudeCommand = `echo "${prompt}" | claude -p --append-system-prompt "Help with the following request by providing code or guidance." --disallowedTools "Edit" "Replace" "Write" --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
+    const result = await vibeKit.executeCommand(claudeCommand);
     const host = await vibeKit.getHost(3000);
 
     await vibeKit.kill();

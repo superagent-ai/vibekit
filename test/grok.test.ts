@@ -31,10 +31,12 @@ describe("Grok CLI", () => {
     const updateSpy = vi.fn();
     const errorSpy = vi.fn();
 
-    vibeKit.on("update", updateSpy);
-    vibeKit.on("error", errorSpy);
+    vibeKit.on("stdout", updateSpy);  // executeCommand emits stdout events
+    vibeKit.on("stderr", errorSpy);   // executeCommand emits stderr events
 
-    const result = await vibeKit.generateCode({ prompt, mode: "ask" });
+    // Get the grok command for the prompt
+    const grokCommand = `echo "${prompt}" | grok --prompt "Help with the following request by providing code or guidance. Do NOT make any changes to any files in the repository."`;
+    const result = await vibeKit.executeCommand(grokCommand);
     const host = await vibeKit.getHost(3000);
 
     await vibeKit.kill();
