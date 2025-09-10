@@ -23,14 +23,6 @@ export const taskChannel = channel("tasks")
     }>()
   );
 
-// Helper function to simulate streaming by chunking text
-function* chunkText(text: string, chunkSize: number = 10): Generator<string, void, unknown> {
-  const words = text.split(' ');
-  for (let i = 0; i < words.length; i += chunkSize) {
-    yield words.slice(i, i + chunkSize).join(' ') + (i + chunkSize < words.length ? ' ' : '');
-  }
-}
-
 export const createTask = inngest.createFunction(
   { id: "create-task" },
   { event: "clonedex/create.task" },
