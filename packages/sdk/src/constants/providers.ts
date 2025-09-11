@@ -5,6 +5,7 @@ export enum SANDBOX_PROVIDERS {
   DAYTONA = "Daytona",
   E2B = "E2B",
   NORTHFLANK = "Northflank",
+  MODAL = "Modal",
 }
 
 // Provider type constants
@@ -14,6 +15,7 @@ export const PROVIDER_TYPES = {
   DAYTONA: 'daytona',
   E2B: 'e2b',
   NORTHFLANK: 'northflank',
+  MODAL: 'modal'
 } as const;
 
 export type ProviderType = typeof PROVIDER_TYPES[keyof typeof PROVIDER_TYPES];
@@ -45,6 +47,11 @@ export const PROVIDER_TEMPLATES = [
     display: "Northflank",
     message: "Northflank - Cloud deployment and infrastructure platform",
   },
+  {
+    name: PROVIDER_TYPES.MODAL,
+    display: "Modal",
+    message: "Modal - Serverless cloud platform for running code in containers",
+  }
 ];
 
 // Provider display names mapping
@@ -54,6 +61,7 @@ export const PROVIDER_DISPLAY_NAMES: Record<ProviderType, string> = {
   [PROVIDER_TYPES.DAYTONA]: 'Daytona',
   [PROVIDER_TYPES.E2B]: 'E2B',
   [PROVIDER_TYPES.NORTHFLANK]: 'Northflank',
+  [PROVIDER_TYPES.MODAL]: 'Modal'
 };
 
 // Provider descriptions mapping
@@ -63,4 +71,5 @@ export const PROVIDER_DESCRIPTIONS: Record<ProviderType, string> = {
   [PROVIDER_TYPES.DAYTONA]: "Development environment orchestration platform",
   [PROVIDER_TYPES.E2B]: "Cloud development sandbox platform",
   [PROVIDER_TYPES.NORTHFLANK]: "Cloud deployment and infrastructure platform",
+  [PROVIDER_TYPES.MODAL]: "Serverless cloud platform for running code in containers",
 };

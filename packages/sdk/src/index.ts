@@ -12,6 +12,7 @@ export type {
   AgentModel,
   E2BConfig,
   DaytonaConfig,
+  ModalConfig,
   NorthflankConfig,
   EnvironmentConfig,
   GithubConfig,
