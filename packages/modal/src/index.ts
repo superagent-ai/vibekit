@@ -88,7 +88,7 @@ export class ModalSandboxInstance implements SandboxInstance {
     }
 
     async pause(): Promise<void> {
-        console.log("Pause not supported in Modal");//maybe is? read thru examples more
+        console.log("Pause not directly supported");//TODO: implement via FS or memory snapshots
     }
 
     async getHost(port: number): Promise<string> {
