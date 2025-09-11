@@ -135,6 +135,18 @@ const cloudflareProvider = createCloudflareProvider({
 .withSandbox(cloudflareProvider)
 ```
 
+### Modal Configuration
+
+```typescript
+import { createModalProvider } from "@vibe-kit/modal";
+
+const modalProvider = createModalProvider({}); //refer to https://modal.com/docs/reference/cli/setup for CLI setup beforehand
+
+
+.withSandbox(modalProvider);
+```
+
+
 For detailed configuration options for each provider, see the [Supported Sandboxes](/supported-sandboxes) section.
 
 ### GitHub Integration

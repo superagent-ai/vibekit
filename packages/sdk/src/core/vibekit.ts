@@ -10,7 +10,11 @@ import type {
   MergePullRequestResult,
 } from "../types";
 import { AGENT_TYPES } from "../constants/agents";
-import { AgentResponse, ExecuteCommandOptions, PullRequestResult } from "../agents/base";
+import {
+  AgentResponse,
+  ExecuteCommandOptions,
+  PullRequestResult,
+} from "../agents/base";
 
 export interface VibeKitEvents {
   stdout: (chunk: string) => void;
@@ -145,7 +149,7 @@ export class VibeKit extends EventEmitter {
     // Deprecation warning
     console.warn(
       "⚠️  generateCode() is deprecated and will be removed in a future version. " +
-      "Please use executeCommand() instead for better flexibility and control."
+        "Please use executeCommand() instead for better flexibility and control."
     );
 
     if (!this.agent) {
@@ -154,7 +158,7 @@ export class VibeKit extends EventEmitter {
 
     // Extract the command that would be generated and use executeCommand instead
     const commandConfig = (this.agent as any).getCommandConfig(prompt, mode);
-    
+
     return this.executeCommand(commandConfig.command, {
       branch,
       background: false,
@@ -184,7 +188,13 @@ export class VibeKit extends EventEmitter {
   async mergePullRequest(
     options: MergePullRequestOptions & { repository: string }
   ): Promise<MergePullRequestResult> {
-    const { pullNumber, commitTitle, commitMessage, mergeMethod = 'merge', repository } = options;
+    const {
+      pullNumber,
+      commitTitle,
+      commitMessage,
+      mergeMethod = "merge",
+      repository,
+    } = options;
 
     const githubToken = this.options.secrets?.GH_TOKEN;
     if (!githubToken || !repository) {
@@ -193,14 +203,16 @@ export class VibeKit extends EventEmitter {
       );
     }
 
-    if (!pullNumber || typeof pullNumber !== 'number') {
+    if (!pullNumber || typeof pullNumber !== "number") {
       throw new Error("Pull request number is required and must be a number");
     }
 
     const [owner, repo] = repository?.split("/") || [];
-    
+
     if (!owner || !repo) {
-      throw new Error("Invalid repository URL format. Expected format: owner/repo");
+      throw new Error(
+        "Invalid repository URL format. Expected format: owner/repo"
+      );
     }
 
     // Merge the pull request using GitHub API directly
@@ -227,11 +239,17 @@ export class VibeKit extends EventEmitter {
     if (!mergeResponse.ok) {
       // Handle specific error cases
       if (mergeResponse.status === 404) {
-        throw new Error(`Pull request #${pullNumber} not found in ${repository}`);
+        throw new Error(
+          `Pull request #${pullNumber} not found in ${repository}`
+        );
       } else if (mergeResponse.status === 405) {
-        throw new Error(`Pull request #${pullNumber} is not mergeable. It may have conflicts or failed status checks.`);
+        throw new Error(
+          `Pull request #${pullNumber} is not mergeable. It may have conflicts or failed status checks.`
+        );
       } else if (mergeResponse.status === 422) {
-        throw new Error(`Invalid merge parameters: ${responseData.message || 'Unknown validation error'}`);
+        throw new Error(
+          `Invalid merge parameters: ${responseData.message || "Unknown validation error"}`
+        );
       } else {
         throw new Error(
           `Failed to merge pull request #${pullNumber}: ${mergeResponse.status} ${responseData.message || mergeResponse.statusText}`
@@ -261,7 +279,7 @@ export class VibeKit extends EventEmitter {
 
   async executeCommand(
     command: string,
-    options: Omit<ExecuteCommandOptions, "callbacks"> = {},
+    options: Omit<ExecuteCommandOptions, "callbacks"> = {}
   ): Promise<any> {
     if (!this.agent) {
       await this.initializeAgent();
@@ -308,9 +326,10 @@ export class VibeKit extends EventEmitter {
   }
 
   async cloneRepository(repoId: string, directoryPath?: string): Promise<void> {
-    const targetDirectory = directoryPath || this.options.workingDirectory || "/vibe0";
+    const targetDirectory =
+      directoryPath || this.options.workingDirectory || "/vibe0";
     const githubToken = this.options.secrets?.GH_TOKEN;
-    
+
     // Get or create sandbox
     if (!this.agent) {
       await this.initializeAgent();
@@ -322,6 +341,8 @@ export class VibeKit extends EventEmitter {
     await sbx.commands.run(`mkdir -p ${targetDirectory}`, {
       timeoutMs: 30000,
       background: false,
+      onStdout: (data: string) => this.emit("stdout", data),
+      onStderr: (data: string) => this.emit("stderr", data),
     });
 
     // Clone repository - use token if available, otherwise try public clone
@@ -333,9 +354,13 @@ export class VibeKit extends EventEmitter {
     }
 
     try {
+      this.emit("stdout", { type: "git", message: "Cloning repository..." });
+
       await sbx.commands.run(cloneCommand, {
         timeoutMs: 3600000,
         background: false,
+        onStdout: (data: string) => this.emit("stdout", data),
+        onStderr: (data: string) => this.emit("stderr", data),
       });
     } catch (error) {
       if (!githubToken) {
@@ -349,7 +374,12 @@ export class VibeKit extends EventEmitter {
     // Configure git user
     await sbx.commands.run(
       `cd ${targetDirectory} && git config user.name "github-actions[bot]" && git config user.email "github-actions[bot]@users.noreply.github.com"`,
-      { timeoutMs: 60000, background: false }
+      {
+        timeoutMs: 60000,
+        background: false,
+        onStdout: (d: string) => this.emit("stdout", d),
+        onStderr: (d: string) => this.emit("stderr", d),
+      }
     );
   }
 }

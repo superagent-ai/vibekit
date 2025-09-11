@@ -37,6 +37,13 @@ export type DaytonaConfig = {
   serverUrl?: string;
 };
 
+export type ModalConfig = {
+  image: string;
+  encryptedPorts?: number[];
+  h2Ports?: number[];
+
+}
+
 export type NorthflankConfig = {
   apiKey: string;
   image?: string;
@@ -49,6 +56,7 @@ export type EnvironmentConfig = {
   e2b?: E2BConfig;
   daytona?: DaytonaConfig;
   northflank?: NorthflankConfig;
+  modal?: ModalConfig;
 };
 
 export type GithubConfig = {
@@ -291,6 +299,8 @@ export interface SandboxConfig {
   persistentVolume?: string; // for Northflank
   persistentVolumeStorage?: number; // for Northflank
   workingDirectory?: string; // for Nortflank
+  encryptedPorts?: number[]; // for Modal
+  h2Ports?: number[]; // for Modal
 }
 
 export interface SandboxProvider {
