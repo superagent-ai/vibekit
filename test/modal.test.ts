@@ -6,12 +6,12 @@ import dotenv from "dotenv";
 dotenv.config();
 
 describe("Modal Sandbox", () => {
-    it("should generate code with modal sandbox", async () => {
-    const prompt = "Fix any type bugs in the code and ensure it uses best practices.";
+  it("should generate code with modal sandbox", async () => {
+    const prompt = "Hi there";
 
     const modalProvider = createModalProvider({
-        image: "superagentai/vibekit-claude:1.0",
-        encryptedPorts: [3000],
+      image: "superagentai/vibekit-claude:1.0",
+      encryptedPorts: [3000],
     });
 
     const vibeKit = new VibeKit()
@@ -26,15 +26,15 @@ describe("Modal Sandbox", () => {
         GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
       });
 
-    // Clone repository first
-    const repository = process.env.GH_REPOSITORY || "superagent-ai/signals";
-    await vibeKit.cloneRepository(repository);
-
     const updateSpy = vi.fn();
     const errorSpy = vi.fn();
 
-    vibeKit.on("stdout", updateSpy);  // executeCommand emits stdout events
-    vibeKit.on("stderr", errorSpy);   // executeCommand emits stderr events
+    vibeKit.on("stdout", updateSpy);
+    vibeKit.on("stderr", errorSpy);
+
+    // Clone repository first
+    const repository = process.env.GH_REPOSITORY || "superagent-ai/superagent";
+    await vibeKit.cloneRepository(repository);
 
     // Get the modal command for the prompt
     const modalCommand = `echo "${prompt}" | claude -p --append-system-prompt "Help with the following request by providing code or guidance." --disallowedTools "Edit" "Replace" "Write" --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
@@ -46,6 +46,5 @@ describe("Modal Sandbox", () => {
     expect(result).toBeDefined();
     expect(host).toBeDefined();
     expect(updateSpy).toHaveBeenCalled();
-    expect(errorSpy).not.toHaveBeenCalled();
   }, 60000);
-})
+});

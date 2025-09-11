@@ -1,4 +1,4 @@
-import {App, Image, Secret, Sandbox as ModalSandbox} from "modal";
+import { App, Image, Secret, Sandbox as ModalSandbox } from "modal";
 
 // Define the interfaces we need from the SDK
 export interface SandboxExecutionResult {
@@ -8,7 +8,7 @@ export interface SandboxExecutionResult {
 }
 // Define interfaces we need from the SDK
 export interface SandboxCommandOptions {
-  timeoutMs?: number
+  timeoutMs?: number;
   background?: boolean;
   onStdout?: (data: string) => void;
   onStderr?: (data: string) => void;
@@ -45,7 +45,6 @@ export interface ModalConfig {
   h2Ports?: number[];
 }
 
-
 const getDockerImageFromAgentType = (agentType?: AgentType) => {
   if (agentType === "codex") {
     return "superagentai/vibekit-codex:1.0";
@@ -63,79 +62,120 @@ const getDockerImageFromAgentType = (agentType?: AgentType) => {
 
 //Modal implementation
 export class ModalSandboxInstance implements SandboxInstance {
-    constructor(
-        private sandbox: ModalSandbox,
-    ) {}
-    get sandboxId(): string {
-      return this.sandbox.sandboxId;
-    }
-    get commands(): SandboxCommands {
-        return {
-          run: async (command: string, options?: SandboxCommandOptions): Promise<SandboxExecutionResult> => {
-            let commands: string[] = ["bash", "-c", command];
-            const result = await this.sandbox.exec(commands, {stdout: "pipe", stderr: "pipe", timeout: options?.timeoutMs});
-            const [exit_code, contentStdOut, contentStdErr] = await Promise.all([result.wait(), result.stdout.readText(),result.stderr.readText()]);
-            return{
-                exitCode: exit_code,
-                stdout: contentStdOut || "",
-                stderr: contentStdErr || ""
-            };
+  constructor(private sandbox: ModalSandbox) {}
+  get sandboxId(): string {
+    return this.sandbox.sandboxId;
+  }
+  get commands(): SandboxCommands {
+    return {
+      run: async (
+        command: string,
+        options?: SandboxCommandOptions
+      ): Promise<SandboxExecutionResult> => {
+        const commands: string[] = ["bash", "-c", command];
+        const proc = await this.sandbox.exec(commands, {
+          stdout: "pipe",
+          stderr: "pipe",
+          timeout: options?.timeoutMs,
+        });
+
+        let stdoutBuffer = "";
+        let stderrBuffer = "";
+
+        // Stream stdout
+        if (options?.onStdout && proc.stdout) {
+          (async () => {
+            try {
+              // @ts-ignore - Modal stream is async iterable of Uint8Array|string
+              for await (const chunk of proc.stdout as any) {
+                const text =
+                  typeof chunk === "string"
+                    ? chunk
+                    : new TextDecoder().decode(chunk);
+                stdoutBuffer += text;
+                options.onStdout!(text);
               }
+            } catch {}
+          })();
         }
-    }
-    async kill(): Promise<void> {
-        await this.sandbox.terminate();
-    }
 
-    async pause(): Promise<void> {
-        console.log("Pause not directly supported");//TODO: implement via FS or memory snapshots
-    }
-
-    async getHost(port: number): Promise<string> {
-        const tunnels = await this.sandbox.tunnels();
-        if (port in tunnels) {
-            return tunnels[port].url;
-        } else {
-            return Promise.reject(`Port ${port} not found in Modal sandbox tunnels`);
+        // Stream stderr
+        if (options?.onStderr && proc.stderr) {
+          (async () => {
+            try {
+              // @ts-ignore - Modal stream is async iterable of Uint8Array|string
+              for await (const chunk of proc.stderr as any) {
+                const text =
+                  typeof chunk === "string"
+                    ? chunk
+                    : new TextDecoder().decode(chunk);
+                stderrBuffer += text;
+                options.onStderr!(text);
+              }
+            } catch {}
+          })();
         }
+
+        const exitCode = await proc.wait();
+        return {
+          exitCode: exitCode,
+          stdout: stdoutBuffer,
+          stderr: stderrBuffer,
+        };
+      },
+    };
+  }
+  async kill(): Promise<void> {
+    await this.sandbox.terminate();
+  }
+
+  async pause(): Promise<void> {
+    console.log("Pause not directly supported"); //TODO: implement via FS or memory snapshots
+  }
+
+  async getHost(port: number): Promise<string> {
+    const tunnels = await this.sandbox.tunnels();
+    if (port in tunnels) {
+      return tunnels[port].url;
+    } else {
+      return Promise.reject(`Port ${port} not found in Modal sandbox tunnels`);
     }
-
-} 
-
-
+  }
+}
 
 export class ModalSandboxProvider implements SandboxProvider {
-    constructor(private config: ModalConfig) {}
+  constructor(private config: ModalConfig) {}
 
-    async create(envs?: Record<string, string>,
+  async create(
+    envs?: Record<string, string>,
     agentType?: AgentType,
     workingDirectory?: string
   ): Promise<ModalSandboxInstance> {
     try {
-        const sbSecrets = await Secret.fromObject(envs || {});
-        console.log("Creating Modal sandbox");
-        let imageName = this.config.image || getDockerImageFromAgentType(agentType);
-        let newAppName = Math.random().toString(36).substring(2, 15);// random app name
-        const appPromise = App.lookup(newAppName, {createIfMissing: true});
-        const imagePromise = Image.fromRegistry(imageName);
-        const [app, image] = await Promise.all([appPromise, imagePromise]);
-        const sandbox = await app.createSandbox( image, {encryptedPorts: this.config.encryptedPorts || [],
+      const sbSecrets = await Secret.fromObject(envs || {});
+      console.log("Creating Modal sandbox");
+      let imageName =
+        this.config.image || getDockerImageFromAgentType(agentType);
+      let newAppName = Math.random().toString(36).substring(2, 15); // random app name
+      const appPromise = App.lookup(newAppName, { createIfMissing: true });
+      const imagePromise = Image.fromRegistry(imageName);
+      const [app, image] = await Promise.all([appPromise, imagePromise]);
+      const sandbox = await app.createSandbox(image, {
+        encryptedPorts: this.config.encryptedPorts || [],
         h2Ports: this.config.h2Ports || [],
-        secrets: [sbSecrets]
+        secrets: [sbSecrets],
       });
       console.log(await sandbox.tunnels());
-        return new ModalSandboxInstance(sandbox);
+      return new ModalSandboxInstance(sandbox);
     } catch (error) {
-        throw new Error(`Failed to create Modal sandbox: ${error}`);
+      throw new Error(`Failed to create Modal sandbox: ${error}`);
     }
   }
-    async resume(sandboxId: string): 
-    Promise<ModalSandboxInstance> {
-        return await this.create();//default to creating new instance as dagger and daytona implementations do
+  async resume(sandboxId: string): Promise<ModalSandboxInstance> {
+    return await this.create(); //default to creating new instance as dagger and daytona implementations do
   }
 }
 
-
 export function createModalProvider(config: ModalConfig): ModalSandboxProvider {
-    return new ModalSandboxProvider(config);
+  return new ModalSandboxProvider(config);
 }
