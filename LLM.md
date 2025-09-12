@@ -12,7 +12,7 @@ VibeKit is a TypeScript SDK for running AI coding agents (Claude, Codex, Gemini,
 - `@vibe-kit/daytona` - Daytona development platform  
 - `@vibe-kit/northflank` - Northflank container platform
 - `@vibe-kit/cloudflare` - Cloudflare edge sandboxes (Workers only)
-
+- `@vibe-kit/modal` - Modal sandboxes
 ## Installation
 ```bash
 # Core VibeKit package
@@ -23,6 +23,7 @@ npm install @vibe-kit/e2b        # E2B sandbox provider
 npm install @vibe-kit/daytona    # Daytona sandbox provider  
 npm install @vibe-kit/northflank # Northflank sandbox provider
 npm install @vibe-kit/cloudflare # Cloudflare sandbox provider (Workers only)
+npm install @vibe-kit/modal # Modal sandbox provider
 ```
 
 ## Quick Start
@@ -135,6 +136,7 @@ import { createE2BProvider } from '@vibe-kit/e2b';
 import { createDaytonaProvider } from '@vibe-kit/daytona';
 import { createNorthflankProvider } from '@vibe-kit/northflank';
 import { createCloudflareProvider } from '@vibe-kit/cloudflare';
+import { createModalProvider } from '@vibe-kit/modal';
 
 // Using E2B
 const e2bProvider = createE2BProvider({
@@ -160,6 +162,9 @@ const cloudflareProvider = createCloudflareProvider({
   hostname: "your-worker.domain.workers.dev"
 });
 
+const modalProvider = createModalProvider({
+}); // no required config fields (some optional), but will need to setup CLI. See https://modal.com/docs/reference/cli/setup
+
 // Create VibeKit with any provider
 const vibekit = new VibeKit()
   .withAgent({
@@ -168,7 +173,7 @@ const vibekit = new VibeKit()
     apiKey: process.env.OPENAI_API_KEY,
     model: 'codex-mini-latest'
   })
-  .withSandbox(e2bProvider) // or daytonaProvider, northflankProvider, cloudflareProvider
+  .withSandbox(e2bProvider) // or daytonaProvider, northflankProvider, cloudflareProvider, modalProvider
   .withGithub({
     token: process.env.GITHUB_TOKEN,
     repository: 'owner/repo'
@@ -516,6 +521,7 @@ Set these in wrangler.json `vars` section or via Cloudflare dashboard:
 - **Daytona**: Development environment platform
 - **Northflank**: Container-based sandbox platform
 - **Cloudflare**: Edge-native sandboxes on Cloudflare Workers (Workers only)
+- **Modal**: Sandboxes product environment 
 
 ## Error Handling
 
@@ -575,4 +581,8 @@ import type {
 import type {
   CloudflareConfig
 } from '@vibe-kit/cloudflare';
+
+import type {
+  ModalConfig
+} from '@vibe-kit/modal';
 ```

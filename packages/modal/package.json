@@ -1,0 +1,31 @@
+{
+    "name": "@vibe-kit/modal",
+    "version": "0.0.1",
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "require": "./dist/index.cjs"
+      }
+    },
+    "scripts": {
+      "build": "tsup src/index.ts --format esm,cjs --dts",
+      "dev": "tsup src/index.ts --watch",
+      "type-check": "tsc --noEmit"
+    },
+    "peerDependencies": {
+      "@vibe-kit/sdk": "*"
+    },
+    "devDependencies": {
+      "@types/node": "^22.15.18",
+      "tsup": "^8.4.0",
+      "typescript": "^5.8.3"
+    },
+    "dependencies": {
+        "modal": "0.3.21"
+    }
+  }
+  

@@ -93,6 +93,14 @@ const daytonaProvider = createDaytonaProvider({
 });
 
 .withSandbox(provider)
+
+// Modal
+
+import { createModalProvider } from "@vibe-kit/modal";
+const modalProvider = createModalProvider({ // must conduct CLI setup specified in https://modal.com/docs/reference/cli/setup beforehand
+  image: "my-codex-image" // optional
+});
+
 ```
 
 ### Additional Configuration

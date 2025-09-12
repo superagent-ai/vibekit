@@ -179,7 +179,7 @@ describe('VibeKit Core SDK - Unit Tests', () => {
       expect(typeof vibeKit.executeCommand).toBe('function');
     });
 
-    it('should provide generateCode method', async () => {
+    it('should provide generateCode method (deprecated)', async () => {
       const vibeKit = new VibeKit();
       const mockProvider = createMockProvider();
       
@@ -193,6 +193,7 @@ describe('VibeKit Core SDK - Unit Tests', () => {
         .withSandbox(mockProvider);
       
       expect(typeof vibeKit.generateCode).toBe('function');
+      // Note: generateCode is deprecated, use executeCommand instead
     });
   });
 

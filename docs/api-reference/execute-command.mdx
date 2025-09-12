@@ -11,6 +11,7 @@ public async executeCommand(
   options: {
     timeoutMs?: number;
     background?: boolean;
+    branch?: string;
     callbacks?: StreamCallbacks;
   } = {}
 ): Promise<AgentResponse>
@@ -29,14 +30,15 @@ public async executeCommand(
 |----------|------|----------|---------|-------------|
 | `timeoutMs` | `number` | No | - | Maximum time in milliseconds to wait for command completion |
 | `background` | `boolean` | No | `false` | Whether to run the command in the background (non-blocking) |
+| `branch` | `string` | No | - | Git branch to checkout or create before executing the command |
 | `callbacks` | `StreamCallbacks` | No | - | Streaming callbacks for real-time command output |
 
 ### StreamCallbacks Interface
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `onUpdate` | `(message: string) => void` | No | Called with streaming updates from command output |
-| `onError` | `(error: string) => void` | No | Called when errors occur during command execution |
+| `onUpdate` | `(message: string) => void` | No | Called with streaming updates from command output (stdout) |
+| `onError` | `(error: string) => void` | No | Called when errors occur during command execution (stderr) |
 
 ## Return value
 
@@ -99,7 +101,24 @@ console.log('Background process started with sandbox ID:', result.sandboxId);
 ### Streaming Command Output
 
 ```typescript
-// Execute command with streaming output
+// Execute command with streaming output using stdout/stderr events
+vibekit.on('stdout', (output) => {
+  console.log('Command output:', output);
+});
+
+vibekit.on('stderr', (error) => {
+  console.error('Command error:', error);
+});
+
+const result = await vibekit.executeCommand('npm test');
+
+console.log('Final test result:', result.exitCode === 0 ? 'PASSED' : 'FAILED');
+```
+
+### Streaming with Callbacks (Legacy)
+
+```typescript
+// Execute command with streaming output using callbacks (deprecated approach)
 const result = await vibekit.executeCommand('npm test', {
   callbacks: {
     onUpdate: (message) => {
@@ -114,21 +133,38 @@ const result = await vibekit.executeCommand('npm test', {
 console.log('Final test result:', result.exitCode === 0 ? 'PASSED' : 'FAILED');
 ```
 
+### Command with Branch Switching
+
+```typescript
+// Execute command on a specific git branch
+const result = await vibekit.executeCommand('npm run build', {
+  branch: 'feature-new-ui',
+  timeoutMs: 60000
+});
+
+if (result.exitCode === 0) {
+  console.log('Build completed successfully on feature-new-ui branch');
+} else {
+  console.log('Build failed:', result.stderr);
+}
+```
+
 ### Complex Command with All Options
 
 ```typescript
 // Execute a complex command with multiple options
+vibekit.on('stdout', (output) => {
+  console.log('pytest:', output);
+});
+
+vibekit.on('stderr', (error) => {
+  console.error('pytest error:', error);
+});
+
 const result = await vibekit.executeCommand('python -m pytest tests/', {
   timeoutMs: 60000,
   background: false,
-  callbacks: {
-    onUpdate: (output) => {
-      console.log('pytest:', output);
-    },
-    onError: (error) => {
-      console.error('pytest error:', error);
-    }
-  }
+  branch: 'test-improvements'
 });
 
 console.log(`Tests completed with exit code: ${result.exitCode}`);
@@ -171,9 +207,11 @@ try {
 
 - **Sandbox Environment:** Commands are executed within the active sandbox environment
 - **Working Directory:** Commands execute in the sandbox's default working directory
+- **Branch Support:** Automatically switches to the specified branch (creates if it doesn't exist)
 - **Environment Variables:** Sandbox environment variables are available to executed commands
 - **Resource Limits:** Commands are subject to sandbox CPU, memory, and time limitations
 - **Background Execution:** Background commands continue running after the method returns
-- **Streaming Support:** Real-time output streaming is available through callbacks
+- **Streaming Support:** Real-time output streaming is available through stdout/stderr events or callbacks
 - **Exit Codes:** Standard Unix exit codes apply (0 = success, non-zero = error)
+- **Event Handling:** Prefer using `vibekit.on('stdout')` and `vibekit.on('stderr')` over callback options
 

@@ -1,6 +1,6 @@
 {
   "name": "@vibe-kit/daytona",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -25,6 +25,6 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@daytonaio/sdk": "^0.22.1"
+    "@daytonaio/sdk": "^0.27.0"
   }
 }

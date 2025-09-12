@@ -29,8 +29,6 @@ export class GeminiAgent extends BaseAgent {
 
   constructor(config: GeminiConfig) {
     const baseConfig: BaseAgentConfig = {
-      githubToken: config.githubToken,
-      repoUrl: config.repoUrl,
       sandboxProvider: config.sandboxProvider,
       secrets: config.secrets,
       sandboxId: config.sandboxId,

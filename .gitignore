@@ -51,6 +51,7 @@ test-pr.ts
 test-claude.ts
 test-codex-gemini.ts
 test-daytona.ts
+test-modal.ts
 test-package.ts
 test-envs.ts
 test-run-tests.ts

@@ -10,7 +10,11 @@ import type {
   MergePullRequestResult,
 } from "../types";
 import { AGENT_TYPES } from "../constants/agents";
-import { AgentResponse, ExecuteCommandOptions, PullRequestResult } from "../agents/base";
+import {
+  AgentResponse,
+  ExecuteCommandOptions,
+  PullRequestResult,
+} from "../agents/base";
 
 export interface VibeKitEvents {
   stdout: (chunk: string) => void;
@@ -28,10 +32,6 @@ export interface VibeKitOptions {
     model?: string;
   };
   sandbox?: SandboxProvider;
-  github?: {
-    token: string;
-    repository: string;
-  };
   workingDirectory?: string;
   secrets?: Record<string, string>;
   sandboxId?: string;
@@ -60,12 +60,6 @@ export class VibeKit extends EventEmitter {
     this.options.sandbox = provider;
     return this;
   }
-
-  withGithub(config: { token: string; repository: string }): this {
-    this.options.github = config;
-    return this;
-  }
-
 
   withWorkingDirectory(path: string): this {
     this.options.workingDirectory = path;
@@ -129,8 +123,6 @@ export class VibeKit extends EventEmitter {
       oauthToken: oauthToken,
       provider,
       model,
-      githubToken: this.options.github?.token,
-      repoUrl: this.options.github?.repository,
       sandboxProvider: this.options.sandbox,
       secrets: this.options.secrets,
       workingDirectory: this.options.workingDirectory,
@@ -140,30 +132,41 @@ export class VibeKit extends EventEmitter {
     this.agent = new AgentClass(agentConfig);
   }
 
+  /**
+   * @deprecated Use executeCommand instead. This method will be removed in a future version.
+   */
   async generateCode({
     prompt,
     mode = "code",
     branch,
-    history,
+    history: _history, // Keep for backward compatibility but don't use
   }: {
     prompt: string;
     mode?: AgentMode;
     branch?: string;
     history?: Conversation[];
   }): Promise<AgentResponse> {
+    // Deprecation warning
+    console.warn(
+      "⚠️  generateCode() is deprecated and will be removed in a future version. " +
+        "Please use executeCommand() instead for better flexibility and control."
+    );
+
     if (!this.agent) {
       await this.initializeAgent();
     }
 
-    const callbacks = {
-      onUpdate: (data: string) => this.emit("update", data),
-      onError: (error: string) => this.emit("error", error),
-    };
+    // Extract the command that would be generated and use executeCommand instead
+    const commandConfig = (this.agent as any).getCommandConfig(prompt, mode);
 
-    return this.agent.generateCode(prompt, mode, branch, history, callbacks);
+    return this.executeCommand(commandConfig.command, {
+      branch,
+      background: false,
+    });
   }
 
   async createPullRequest(
+    repository: string,
     labelOptions?: LabelOptions,
     branchPrefix?: string
   ): Promise<PullRequestResult> {
@@ -171,7 +174,7 @@ export class VibeKit extends EventEmitter {
       await this.initializeAgent();
     }
 
-    return this.agent.createPullRequest(labelOptions, branchPrefix);
+    return this.agent.createPullRequest(repository, labelOptions, branchPrefix);
   }
 
   async pushToBranch(branch?: string): Promise<void> {
@@ -183,26 +186,33 @@ export class VibeKit extends EventEmitter {
   }
 
   async mergePullRequest(
-    options: MergePullRequestOptions
+    options: MergePullRequestOptions & { repository: string }
   ): Promise<MergePullRequestResult> {
-    const { github } = this.options;
+    const {
+      pullNumber,
+      commitTitle,
+      commitMessage,
+      mergeMethod = "merge",
+      repository,
+    } = options;
 
-    if (!github?.token || !github?.repository) {
+    const githubToken = this.options.secrets?.GH_TOKEN;
+    if (!githubToken || !repository) {
       throw new Error(
-        "GitHub configuration is required for merging pull requests. Please use withGithub() to configure GitHub credentials."
+        "GitHub token and repository are required for merging pull requests. Please provide GH_TOKEN in secrets using withSecrets()."
       );
     }
 
-    const { pullNumber, commitTitle, commitMessage, mergeMethod = 'merge' } = options;
-
-    if (!pullNumber || typeof pullNumber !== 'number') {
+    if (!pullNumber || typeof pullNumber !== "number") {
       throw new Error("Pull request number is required and must be a number");
     }
 
-    const [owner, repo] = github.repository?.split("/") || [];
-    
+    const [owner, repo] = repository?.split("/") || [];
+
     if (!owner || !repo) {
-      throw new Error("Invalid repository URL format. Expected format: owner/repo");
+      throw new Error(
+        "Invalid repository URL format. Expected format: owner/repo"
+      );
     }
 
     // Merge the pull request using GitHub API directly
@@ -211,7 +221,7 @@ export class VibeKit extends EventEmitter {
       {
         method: "PUT",
         headers: {
-          Authorization: `token ${github.token}`,
+          Authorization: `token ${githubToken}`,
           Accept: "application/vnd.github+json",
           "X-GitHub-Api-Version": "2022-11-28",
           "Content-Type": "application/json",
@@ -229,11 +239,17 @@ export class VibeKit extends EventEmitter {
     if (!mergeResponse.ok) {
       // Handle specific error cases
       if (mergeResponse.status === 404) {
-        throw new Error(`Pull request #${pullNumber} not found in ${github.repository}`);
+        throw new Error(
+          `Pull request #${pullNumber} not found in ${repository}`
+        );
       } else if (mergeResponse.status === 405) {
-        throw new Error(`Pull request #${pullNumber} is not mergeable. It may have conflicts or failed status checks.`);
+        throw new Error(
+          `Pull request #${pullNumber} is not mergeable. It may have conflicts or failed status checks.`
+        );
       } else if (mergeResponse.status === 422) {
-        throw new Error(`Invalid merge parameters: ${responseData.message || 'Unknown validation error'}`);
+        throw new Error(
+          `Invalid merge parameters: ${responseData.message || "Unknown validation error"}`
+        );
       } else {
         throw new Error(
           `Failed to merge pull request #${pullNumber}: ${mergeResponse.status} ${responseData.message || mergeResponse.statusText}`
@@ -263,7 +279,7 @@ export class VibeKit extends EventEmitter {
 
   async executeCommand(
     command: string,
-    options: Omit<ExecuteCommandOptions, "callbacks"> = {},
+    options: Omit<ExecuteCommandOptions, "callbacks"> = {}
   ): Promise<any> {
     if (!this.agent) {
       await this.initializeAgent();
@@ -307,5 +323,63 @@ export class VibeKit extends EventEmitter {
       await this.initializeAgent();
     }
     return this.agent.getHost(port);
+  }
+
+  async cloneRepository(repoId: string, directoryPath?: string): Promise<void> {
+    const targetDirectory =
+      directoryPath || this.options.workingDirectory || "/vibe0";
+    const githubToken = this.options.secrets?.GH_TOKEN;
+
+    // Get or create sandbox
+    if (!this.agent) {
+      await this.initializeAgent();
+    }
+
+    const sbx = await this.agent.getSandbox();
+
+    // Create target directory
+    await sbx.commands.run(`mkdir -p ${targetDirectory}`, {
+      timeoutMs: 30000,
+      background: false,
+      onStdout: (data: string) => this.emit("stdout", data),
+      onStderr: (data: string) => this.emit("stderr", data),
+    });
+
+    // Clone repository - use token if available, otherwise try public clone
+    let cloneCommand: string;
+    if (githubToken) {
+      cloneCommand = `cd ${targetDirectory} && git clone https://x-access-token:${githubToken}@github.com/${repoId}.git .`;
+    } else {
+      cloneCommand = `cd ${targetDirectory} && git clone https://github.com/${repoId}.git .`;
+    }
+
+    try {
+      this.emit("stdout", { type: "git", message: "Cloning repository..." });
+
+      await sbx.commands.run(cloneCommand, {
+        timeoutMs: 3600000,
+        background: false,
+        onStdout: (data: string) => this.emit("stdout", data),
+        onStderr: (data: string) => this.emit("stderr", data),
+      });
+    } catch (error) {
+      if (!githubToken) {
+        throw new Error(
+          `Failed to clone repository '${repoId}'. If this is a private repository, please provide GH_TOKEN in secrets using withSecrets().`
+        );
+      }
+      throw error;
+    }
+
+    // Configure git user
+    await sbx.commands.run(
+      `cd ${targetDirectory} && git config user.name "github-actions[bot]" && git config user.email "github-actions[bot]@users.noreply.github.com"`,
+      {
+        timeoutMs: 60000,
+        background: false,
+        onStdout: (d: string) => this.emit("stdout", d),
+        onStderr: (d: string) => this.emit("stderr", d),
+      }
+    );
   }
 }

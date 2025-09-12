@@ -26,19 +26,24 @@ describe("Codex CLI", () => {
         apiKey: process.env.OPENAI_API_KEY!,
         model: "codex-mini-latest",
       })
-      .withGithub({
-        token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
-        repository: process.env.GH_REPOSITORY || "superagent-ai/signals",
+      .withSecrets({
+        GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
       })
       .withSandbox(e2bProvider);
+
+    // Clone repository first
+    const repository = process.env.GH_REPOSITORY || "superagent-ai/signals";
+    await vibeKit.cloneRepository(repository);
 
     const updateSpy = vi.fn();
     const errorSpy = vi.fn();
 
-    vibeKit.on("update", updateSpy);
-    vibeKit.on("error", errorSpy);
+    vibeKit.on("stdout", updateSpy);  // executeCommand emits stdout events
+    vibeKit.on("stderr", errorSpy);   // executeCommand emits stderr events
 
-    const result = await vibeKit.generateCode({ prompt, mode: "ask" });
+    // Get the codex command for the prompt
+    const codexCommand = `codex exec --full-auto --skip-git-repo-check "${prompt}"`;
+    const result = await vibeKit.executeCommand(codexCommand);
     const host = await vibeKit.getHost(3000);
 
     await vibeKit.kill();

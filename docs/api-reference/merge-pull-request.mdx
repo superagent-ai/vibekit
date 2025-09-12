@@ -11,7 +11,7 @@ The `mergePullRequest` method allows you to programmatically merge an existing p
 
 ```typescript
 async mergePullRequest(
-  options: MergePullRequestOptions
+  options: MergePullRequestOptions & { repository: string }
 ): Promise<MergePullRequestResult>
 ```
 
@@ -21,6 +21,7 @@ async mergePullRequest(
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `repository` | `string` | Yes | The GitHub repository in format "owner/repo" |
 | `pullNumber` | `number` | Yes | The number of the pull request to merge |
 | `commitTitle` | `string` | No | Custom title for the merge commit |
 | `commitMessage` | `string` | No | Custom message for the merge commit |
@@ -46,11 +47,10 @@ async mergePullRequest(
 
 Before using this method, ensure:
 
-1. **GitHub Configuration**: You only need to configure GitHub credentials:
+1. **GitHub Configuration**: You only need to configure GitHub credentials using secrets:
    ```typescript
-   vibekit.withGithub({
-     token: "your-github-token",
-     repository: "owner/repo"
+   vibekit.withSecrets({
+     GH_TOKEN: "your-github-token"
    })
    ```
    Note: Unlike other methods, `mergePullRequest` does NOT require agent or sandbox configuration.
@@ -69,13 +69,13 @@ Before using this method, ensure:
 import { VibeKit } from "vibekit";
 
 const vibekit = new VibeKit()
-  .withGithub({
-    token: process.env.GITHUB_TOKEN,
-    repository: "myorg/myrepo"
+  .withSecrets({
+    GH_TOKEN: process.env.GITHUB_TOKEN,
   });
 
 // Merge a pull request with default settings
 const mergeResult = await vibekit.mergePullRequest({
+  repository: "myorg/myrepo",
   pullNumber: 42
 });
 
@@ -87,6 +87,7 @@ console.log(`PR merged with commit SHA: ${mergeResult.sha}`);
 ```typescript
 // Squash all commits and merge with a custom message
 const mergeResult = await vibekit.mergePullRequest({
+  repository: "myorg/myrepo",
   pullNumber: 42,
   mergeMethod: "squash",
   commitTitle: "feat: Add new feature",
@@ -97,21 +98,29 @@ const mergeResult = await vibekit.mergePullRequest({
 ### Complete Workflow Example
 
 ```typescript
+import { VibeKit } from "vibekit";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+});
+
 // For operations that require code generation, you'll need agent and sandbox
 const vibkitWithAgent = new VibeKit()
   .withAgent({
     type: "claude",
     provider: "anthropic",
     apiKey: process.env.ANTHROPIC_API_KEY,
-    model: "claude-3-opus-20240229"
+    model: "claude-sonnet-4-20250514"
   })
-  .withSandbox("docker")
-  .withGithub({
-    token: process.env.GITHUB_TOKEN,
-    repository: "myorg/myrepo"
+  .withSandbox(e2bProvider)
+  .withSecrets({
+    GH_TOKEN: process.env.GITHUB_TOKEN,
   });
 
-// Generate code and create PR (requires agent/sandbox)
+// Clone repository and generate code changes
+await vibkitWithAgent.cloneRepository("myorg/myrepo");
+
 await vibkitWithAgent.generateCode({
   prompt: "Add a new user authentication feature",
   mode: "code",
@@ -120,6 +129,7 @@ await vibkitWithAgent.generateCode({
 
 await vibkitWithAgent.pushToBranch();
 const prResponse = await vibkitWithAgent.createPullRequest(
+  "myorg/myrepo",  // Repository parameter now required
   {
     name: "feature",
     color: "0366d6",
@@ -132,12 +142,12 @@ console.log(`Created PR #${prResponse.number}`);
 
 // After review and approval, merge the PR (only needs GitHub config)
 const vibkitSimple = new VibeKit()
-  .withGithub({
-    token: process.env.GITHUB_TOKEN,
-    repository: "myorg/myrepo"
+  .withSecrets({
+    GH_TOKEN: process.env.GITHUB_TOKEN,
   });
 
 const mergeResult = await vibkitSimple.mergePullRequest({
+  repository: "myorg/myrepo",  // Repository parameter now required
   pullNumber: prResponse.number,
   mergeMethod: "squash"
 });
@@ -165,6 +175,7 @@ The method will throw an error in the following cases:
 ```typescript
 try {
   const result = await vibekit.mergePullRequest({
+    repository: "myorg/myrepo",
     pullNumber: 42,
     mergeMethod: "squash"
   });

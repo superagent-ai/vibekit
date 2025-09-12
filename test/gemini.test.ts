@@ -34,11 +34,13 @@ describe("Gemini CLI", () => {
     const updateSpy = vi.fn();
     const errorSpy = vi.fn();
 
-    vibeKit.on("update", updateSpy);
-    vibeKit.on("error", errorSpy);
+    vibeKit.on("stdout", updateSpy);  // executeCommand emits stdout events
+    vibeKit.on("stderr", errorSpy);   // executeCommand emits stderr events
 
     console.log("Starting code generation...");
-    const result = await vibeKit.generateCode({ prompt, mode: "ask" });
+    // Get the gemini command for the prompt
+    const geminiCommand = `echo "${prompt}" | gemini --model gemini-2.5-pro --yolo`;
+    const result = await vibeKit.executeCommand(geminiCommand);
     console.log("Code generation completed, getting host...");
     const host = await vibeKit.getHost(3000);
 
