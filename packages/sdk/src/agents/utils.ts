@@ -137,7 +137,7 @@ function getDefaultModel(provider: ModelProvider): string {
     case "deepseek":
       return "deepseek-chat";
     case "xai":
-      return "grok-beta";
+      return "grok-4";
     case "groq":
       return "llama-3.1-70b-versatile";
     case "arceeai":

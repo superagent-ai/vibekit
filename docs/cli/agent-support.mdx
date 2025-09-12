@@ -40,6 +40,16 @@ vibekit codex "Convert this JavaScript to TypeScript"
 vibekit codex --sandbox "Generate production-ready code"
 ```
 
+### Grok
+[Grok](https://x.ai/grok) by xAI with VibeKit protection:
+```bash
+# Run Grok with VibeKit features
+vibekit grok "Generate a Go microservice"
+
+# With sandbox isolation
+vibekit grok --sandbox-type docker "Write comprehensive tests for the new microservice"
+```
+
 ### Cursor Agent
 Cursor's AI agent with VibeKit wrapper:
 ```bash
@@ -87,6 +97,7 @@ Same observability features for all agents:
 vibekit logs --agent claude
 vibekit logs --agent gemini
 vibekit logs --agent codex
+vibekit logs --agent grok
 
 # Analytics for specific agents
 vibekit analytics --agent cursor-agent
@@ -128,6 +139,7 @@ VibeKit settings apply to all agents:
 export ANTHROPIC_API_KEY="your-claude-key"
 export GEMINI_API_KEY="your-gemini-key" 
 export OPENAI_API_KEY="your-openai-key"
+export GROK_API_KEY="your-grok-key"
 
 # VibeKit global settings
 export VIBEKIT_SANDBOX=true
@@ -165,6 +177,7 @@ VibeKit assumes the underlying agent CLIs are installed:
 - `claude` command for Claude Code CLI
 - `gemini` command for Gemini CLI
 - `codex` command for Codex CLI
+- `grok` command for Grok CLI
 - `cursor-agent` command for Cursor Agent
 - `opencode` command for OpenCode
 
@@ -190,6 +203,7 @@ Choose agents based on their strengths:
 - **Claude**: Complex reasoning, detailed analysis
 - **Gemini**: Multimodal capabilities, diverse tasks
 - **Codex**: Code completion and generation
+- **Grok**: Real-time information and context
 - **Cursor Agent**: IDE-integrated workflows
 - **OpenCode**: Open-source flexibility
 
