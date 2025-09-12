@@ -35,6 +35,11 @@ export interface VibeKitOptions {
   workingDirectory?: string;
   secrets?: Record<string, string>;
   sandboxId?: string;
+  worktrees?: {
+    enabled?: boolean;
+    root?: string;
+    cleanup?: boolean;
+  };
 }
 
 export class VibeKit extends EventEmitter {
@@ -73,6 +78,15 @@ export class VibeKit extends EventEmitter {
 
   withSession(sandboxId: string): this {
     this.options.sandboxId = sandboxId;
+    return this;
+  }
+
+  withWorktrees(options: { root?: string; cleanup?: boolean } = {}): this {
+    this.options.worktrees = {
+      enabled: true,
+      root: options.root,
+      cleanup: options.cleanup,
+    };
     return this;
   }
 
@@ -127,6 +141,7 @@ export class VibeKit extends EventEmitter {
       secrets: this.options.secrets,
       workingDirectory: this.options.workingDirectory,
       sandboxId: this.options.sandboxId,
+      worktrees: this.options.worktrees,
     };
 
     this.agent = new AgentClass(agentConfig);

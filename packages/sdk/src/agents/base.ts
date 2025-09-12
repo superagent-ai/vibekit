@@ -100,6 +100,11 @@ export interface BaseAgentConfig {
   secrets?: Record<string, string>;
   sandboxId?: string;
   workingDirectory?: string;
+  worktrees?: {
+    enabled?: boolean;
+    root?: string;
+    cleanup?: boolean;
+  };
 }
 
 export interface StreamCallbacks {
@@ -167,6 +172,7 @@ export abstract class BaseAgent {
   protected lastPrompt?: string;
   protected currentBranch?: string;
   protected readonly WORKING_DIR: string;
+  protected currentWorktreeDir?: string;
 
   constructor(config: BaseAgentConfig) {
     this.config = config;
@@ -204,17 +210,10 @@ export abstract class BaseAgent {
       );
     }
 
-
     return this.sandboxInstance;
   }
 
-
-
-
-
-
   protected abstract getEnvironmentVariables(): Record<string, string>;
-
 
   private getMkdirCommand(path: string): string {
     // Use non-sudo commands for better compatibility with Docker containers
@@ -223,7 +222,6 @@ export abstract class BaseAgent {
   }
 
   public async killSandbox() {
-
     if (this.sandboxInstance) {
       await this.sandboxInstance.kill();
       this.sandboxInstance = undefined;
@@ -268,7 +266,12 @@ export abstract class BaseAgent {
     command: string,
     options: ExecuteCommandOptions = {}
   ): Promise<AgentResponse> {
-    const { timeoutMs = 3600000, background = false, callbacks, branch } = options;
+    const {
+      timeoutMs = 3600000,
+      background = false,
+      callbacks,
+      branch,
+    } = options;
 
     try {
       const sbx = await this.getSandbox();
@@ -286,7 +289,8 @@ export abstract class BaseAgent {
         onStdout: (data) => console.log(data),
       });
 
-      // Handle branch switching if specified
+      // Handle branch/worktree if specified
+      let activeDir = this.WORKING_DIR;
       if (branch) {
         // Store the branch for later use
         this.currentBranch = branch;
@@ -301,41 +305,68 @@ export abstract class BaseAgent {
             }
           );
 
-          callbacks?.onUpdate?.(
-            `{"type": "git", "output": "Switching to branch: ${branch}"}`
-          );
-          try {
-            // Try to switch to existing branch
+          const useWorktree = !!this.config.worktrees?.enabled;
+          if (useWorktree) {
+            const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, "-");
+            const baseRoot =
+              this.config.worktrees?.root || `${this.WORKING_DIR}-wt`;
+            const wtPath = `${baseRoot}/${sanitize(branch)}`;
+
+            // Ensure root exists
+            await sbx.commands.run(this.getMkdirCommand(baseRoot), {
+              timeoutMs: 30000,
+              background: false,
+            });
+
+            callbacks?.onUpdate?.(
+              `{"type": "git", "output": "Preparing worktree at: ${wtPath}"}`
+            );
+
+            // Fetch and add worktree, prefer creating/updating branch off origin/main
             await sbx.commands.run(
-              `cd ${this.WORKING_DIR} && git checkout ${branch}`,
-              { timeoutMs: 30000, background: false }
+              `cd ${this.WORKING_DIR} && git fetch --all --prune && (git worktree add -B ${branch} ${wtPath} origin/main || git worktree add ${wtPath} ${branch})`,
+              { timeoutMs: 120000, background: false }
             );
+
+            this.currentWorktreeDir = wtPath;
+            activeDir = wtPath;
+          } else {
             callbacks?.onUpdate?.(
-              `{"type": "git", "output": "Switched to existing branch: ${branch}"}`
+              `{"type": "git", "output": "Switching to branch: ${branch}"}`
             );
-          } catch (checkoutError) {
-            // If switching fails, create and checkout new branch
-            callbacks?.onUpdate?.(
-              `{"type": "git", "output": "Creating new branch: ${branch}"}`
-            );
-            await sbx.commands.run(
-              `cd ${this.WORKING_DIR} && git checkout -b ${branch}`,
-              { timeoutMs: 30000, background: false }
-            );
-            callbacks?.onUpdate?.(
-              `{"type": "git", "output": "Created and switched to new branch: ${branch}"}`
-            );
+            try {
+              // Try to switch to existing branch
+              await sbx.commands.run(
+                `cd ${this.WORKING_DIR} && git checkout ${branch}`,
+                { timeoutMs: 30000, background: false }
+              );
+              callbacks?.onUpdate?.(
+                `{"type": "git", "output": "Switched to existing branch: ${branch}"}`
+              );
+            } catch (checkoutError) {
+              // If switching fails, create and checkout new branch
+              callbacks?.onUpdate?.(
+                `{"type": "git", "output": "Creating new branch: ${branch}"}`
+              );
+              await sbx.commands.run(
+                `cd ${this.WORKING_DIR} && git checkout -b ${branch}`,
+                { timeoutMs: 30000, background: false }
+              );
+              callbacks?.onUpdate?.(
+                `{"type": "git", "output": "Created and switched to new branch: ${branch}"}`
+              );
+            }
           }
         } catch (error) {
-          // Not in a git repository, skip branch switching
+          // Not in a git repository, skip branch/worktree operations
           callbacks?.onUpdate?.(
-            `{"type": "git", "output": "Not in a git repository, skipping branch operations"}`
+            `{"type": "git", "output": "Not in a git repository, skipping branch/worktree operations"}`
           );
         }
       }
 
       // For executeCommand, always use working directory directly
-      const executeCommand = `cd ${this.WORKING_DIR} && ${command}`;
+      const executeCommand = `cd ${activeDir} && ${command}`;
 
       // Set up streaming buffers for stdout and stderr if callbacks are provided
       let stdoutBuffer: StreamingBuffer | undefined;
@@ -362,7 +393,6 @@ export abstract class BaseAgent {
           sbx.sandboxId
         }", "output": "${JSON.stringify(result)}"}`
       );
-
 
       return {
         sandboxId: sbx.sandboxId,
@@ -497,7 +527,6 @@ export abstract class BaseAgent {
 
       this.lastPrompt = prompt;
 
-
       return {
         sandboxId: sbx.sandboxId,
         ...result,
@@ -522,16 +551,25 @@ export abstract class BaseAgent {
     }
 
     const sbx = await this.getSandbox();
+    const useWorktree = !!this.config.worktrees?.enabled;
+    const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const baseRoot = this.config.worktrees?.root || `${this.WORKING_DIR}-wt`;
+    const wtPath = targetBranch
+      ? `${baseRoot}/${sanitize(targetBranch)}`
+      : undefined;
+
+    // Determine active directory
+    const activeDir = useWorktree && wtPath ? wtPath : this.WORKING_DIR;
 
     // Check git status for changes
     const gitStatus = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git status --porcelain`,
+      `cd ${activeDir} && git status --porcelain`,
       { timeoutMs: 3600000 }
     );
 
     // Check for untracked files
     const untrackedFiles = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git ls-files --others --exclude-standard`,
+      `cd ${activeDir} && git ls-files --others --exclude-standard`,
       { timeoutMs: 3600000 }
     );
 
@@ -540,33 +578,30 @@ export abstract class BaseAgent {
       throw new Error("No changes found to commit and push");
     }
 
-    // Switch to the specified branch (create if it doesn't exist)
-    try {
-      await sbx.commands.run(
-        `cd ${this.WORKING_DIR} && git checkout ${targetBranch}`,
-        {
-          timeoutMs: 60000,
-        }
-      );
-    } catch (error) {
-      // If branch doesn't exist, create it
-      await sbx.commands.run(
-        `cd ${this.WORKING_DIR} && git checkout -b ${targetBranch}`,
-        {
-          timeoutMs: 60000,
-        }
-      );
+    // Ensure branch context when not using worktree
+    if (!useWorktree) {
+      try {
+        await sbx.commands.run(
+          `cd ${activeDir} && git checkout ${targetBranch}`,
+          { timeoutMs: 60000 }
+        );
+      } catch (error) {
+        await sbx.commands.run(
+          `cd ${activeDir} && git checkout -b ${targetBranch}`,
+          { timeoutMs: 60000 }
+        );
+      }
     }
 
     const diffHead = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git --no-pager diff --no-color HEAD`,
+      `cd ${activeDir} && git --no-pager diff --no-color HEAD`,
       {
         timeoutMs: 3600000,
       }
     );
 
     const patch = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git --no-pager diff --no-color --diff-filter=ACMR`,
+      `cd ${activeDir} && git --no-pager diff --no-color --diff-filter=ACMR`,
       { timeoutMs: 3600000 }
     );
 
@@ -580,17 +615,24 @@ export abstract class BaseAgent {
     );
 
     await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git add -A && git commit -m "${commitMessage}"`,
+      `cd ${activeDir} && git add -A && git commit -m "${commitMessage}"`,
       { timeoutMs: 3600000 }
     );
 
     // Push the branch to GitHub
     await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git push origin ${targetBranch}`,
+      `cd ${activeDir} && git push -u origin ${targetBranch}`,
       {
         timeoutMs: 3600000,
       }
     );
+
+    // Auto cleanup worktree after push if enabled
+    if (useWorktree && wtPath && this.config.worktrees?.cleanup !== false) {
+      await sbx.commands.run(`git worktree remove --force ${wtPath}`, {
+        timeoutMs: 60000,
+      });
+    }
   }
 
   public async createPullRequest(
@@ -608,32 +650,37 @@ export abstract class BaseAgent {
 
     const commandConfig = this.getCommandConfig("", "code");
     const sbx = await this.getSandbox();
+    const useWorktree = !!this.config.worktrees?.enabled;
     // Get the current branch (base branch) BEFORE creating a new branch
+    const baseDir =
+      useWorktree && this.currentBranch && this.currentWorktreeDir
+        ? this.currentWorktreeDir
+        : this.WORKING_DIR;
     const baseBranch = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git rev-parse --abbrev-ref HEAD`,
+      `cd ${baseDir} && git rev-parse --abbrev-ref HEAD`,
       { timeoutMs: 3600000 }
     );
 
     // Debug: Check git status first
-    await sbx.commands.run(`cd ${this.WORKING_DIR} && git status --porcelain`, {
+    await sbx.commands.run(`cd ${baseDir} && git status --porcelain`, {
       timeoutMs: 3600000,
     });
 
     // Debug: Check for untracked files
     const untrackedFiles = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git ls-files --others --exclude-standard`,
+      `cd ${baseDir} && git ls-files --others --exclude-standard`,
       { timeoutMs: 3600000 }
     );
 
     const diffHead = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git --no-pager diff --no-color HEAD`,
+      `cd ${baseDir} && git --no-pager diff --no-color HEAD`,
       {
         timeoutMs: 3600000,
       }
     );
 
     const patch = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git --no-pager diff --no-color --diff-filter=ACMR`,
+      `cd ${baseDir} && git --no-pager diff --no-color --diff-filter=ACMR`,
       { timeoutMs: 3600000 }
     );
 
@@ -680,7 +727,7 @@ export abstract class BaseAgent {
     const escapedCommitMessage = commitMessage.replace(/"/g, '\\"');
 
     const checkout = await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git checkout -b ${_branchName} && git add -A && git commit -m "${escapedCommitMessage}"`,
+      `cd ${baseDir} && git checkout -b ${_branchName} && git add -A && git commit -m "${escapedCommitMessage}"`,
       {
         timeoutMs: 3600000,
       }
@@ -688,7 +735,7 @@ export abstract class BaseAgent {
 
     // Push the branch to GitHub
     await sbx.commands.run(
-      `cd ${this.WORKING_DIR} && git push origin ${_branchName}`,
+      `cd ${baseDir} && git push -u origin ${_branchName}`,
       {
         timeoutMs: 3600000,
       }
@@ -770,7 +817,12 @@ export abstract class BaseAgent {
   }
 
   protected abstract getApiKey(): string;
-  protected abstract getAgentType(): "codex" | "claude" | "opencode" | "gemini" | "grok";
+  protected abstract getAgentType():
+    | "codex"
+    | "claude"
+    | "opencode"
+    | "gemini"
+    | "grok";
   protected abstract getModelConfig(): ModelConfig;
 
   private async handlePRLabeling(
