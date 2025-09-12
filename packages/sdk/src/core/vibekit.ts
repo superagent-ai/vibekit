@@ -8,6 +8,9 @@ import type {
   LabelOptions,
   MergePullRequestOptions,
   MergePullRequestResult,
+  StreamingOutputMessage,
+  TypedExecuteCommandOptions,
+  TypedGenerateCodeOptions,
 } from "../types";
 import { AGENT_TYPES } from "../constants/agents";
 import {
@@ -17,9 +20,9 @@ import {
 } from "../agents/base";
 
 export interface VibeKitEvents {
-  stdout: (chunk: string) => void;
+  stdout: (chunk: string | StreamingOutputMessage) => void;
   stderr: (chunk: string) => void;
-  update: (message: string) => void;
+  update: (message: string | StreamingOutputMessage) => void;
   error: (error: string) => void;
 }
 
@@ -279,7 +282,7 @@ export class VibeKit extends EventEmitter {
     };
   }
 
-  async runTests(): Promise<any> {
+  async runTests(): Promise<AgentResponse> {
     if (!this.agent) {
       await this.initializeAgent();
     }
@@ -295,7 +298,7 @@ export class VibeKit extends EventEmitter {
   async executeCommand(
     command: string,
     options: Omit<ExecuteCommandOptions, "callbacks"> = {}
-  ): Promise<any> {
+  ): Promise<AgentResponse> {
     if (!this.agent) {
       await this.initializeAgent();
     }

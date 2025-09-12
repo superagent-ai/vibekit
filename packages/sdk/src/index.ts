@@ -43,6 +43,12 @@ export type {
   SandboxInstance,
   SandboxConfig,
   SandboxProvider,
+  // New typed output interfaces
+  StreamingOutputMessage,
+  SpecificAgentResponse,
+  AgentStreamCallbacks,
+  TypedExecuteCommandOptions,
+  TypedGenerateCodeOptions,
 } from "./types";
 
 // Optional exports with dynamic imports
@@ -80,5 +86,6 @@ export type {
   PullRequestResult,
   AgentResponse,
   ExecuteCommandOptions,
-  StreamCallbacks
+  StreamCallbacks,
+  TypedStreamCallbacks
 } from "./agents/base";

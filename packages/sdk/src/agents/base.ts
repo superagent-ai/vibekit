@@ -112,6 +112,11 @@ export interface StreamCallbacks {
   onError?: (error: string) => void;
 }
 
+export interface TypedStreamCallbacks {
+  onUpdate?: (message: import('../types').StreamingOutputMessage | string) => void;
+  onError?: (error: string) => void;
+}
+
 export interface ExecuteCommandOptions {
   timeoutMs?: number;
   background?: boolean;

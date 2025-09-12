@@ -131,9 +131,60 @@ const modalProvider = createModalProvider({ // must conduct CLI setup specified 
 })
 ```
 
+## Typed Outputs
+
+VibeKit provides full TypeScript support for both streaming and non-streaming outputs:
+
+### Agent Response Types
+
+```typescript
+import { AgentResponse, SpecificAgentResponse, TypedExecuteCommandOptions } from '@vibe-kit/sdk';
+
+// Base agent response (from any agent)
+const response: AgentResponse = await vibeKit.executeCommand('npm test');
+console.log(`Exit code: ${response.exitCode}`);
+console.log(`Output: ${response.stdout}`);
+console.log(`Sandbox: ${response.sandboxId}`);
+```
+
+### Streaming Output Types
+
+```typescript
+import { StreamingOutputMessage } from '@vibe-kit/sdk';
+
+const options: TypedExecuteCommandOptions = {
+  callbacks: {
+    onUpdate: (message: StreamingOutputMessage | string) => {
+      if (typeof message === 'object') {
+        console.log(`[${message.type}] ${message.message}`);
+      } else {
+        console.log(message);
+      }
+    },
+    onError: (error: string) => console.error(error)
+  }
+};
+
+await vibeKit.executeCommand('npm install', options);
+```
+
+### Streaming Message Structure
+
+```typescript
+interface StreamingOutputMessage {
+  type: 'start' | 'git' | 'end' | 'tool_call' | 'tool_result' | 'text';
+  sandbox_id?: string;
+  output?: string;     // Raw output (usually JSON)
+  message?: string;    // Human-readable message
+  timestamp?: number;  // Unix timestamp
+}
+```
+
 ## API Reference
 
 ### `generateCode(options)`
+
+**⚠️ Deprecated** - Use `executeCommand()` instead for better type safety.
 
 Generate code using the configured AI agent.
 
@@ -156,18 +207,36 @@ const pr = await vibeKit.createPullRequest();
 
 ### `executeCommand(command, options?)`
 
-Execute a command in the sandbox.
+Execute a command in the sandbox with full type safety.
 
 ```typescript
-const result = await vibeKit.executeCommand("npm test");
+import { AgentResponse, TypedExecuteCommandOptions } from '@vibe-kit/sdk';
+
+// Simple execution
+const result: AgentResponse = await vibeKit.executeCommand("npm test");
+
+// With typed options and streaming
+const options: TypedExecuteCommandOptions = {
+  timeoutMs: 300000,
+  branch: 'feature/new-feature',
+  callbacks: {
+    onUpdate: (message) => console.log('Update:', message),
+    onError: (error) => console.error('Error:', error)
+  }
+};
+
+const result: AgentResponse = await vibeKit.executeCommand("npm run build", options);
 ```
 
 ### `runTests()`
 
-Run tests in the sandbox.
+Run tests in the sandbox with typed output.
 
 ```typescript
-const result = await vibeKit.runTests();
+import { AgentResponse } from '@vibe-kit/sdk';
+
+const result: AgentResponse = await vibeKit.runTests();
+console.log(`Tests ${result.exitCode === 0 ? 'passed' : 'failed'}`);
 ```
 
 ### Session Management
@@ -200,19 +269,23 @@ console.log(`App running at: ${host}`);
 
 ## Events
 
-VibeKit extends EventEmitter and emits the following events:
+VibeKit extends EventEmitter and emits the following events with proper typing:
 
 ```typescript
-vibeKit.on("update", (message: string) => {
+import { StreamingOutputMessage } from '@vibe-kit/sdk';
+
+vibeKit.on("update", (message: string | StreamingOutputMessage) => {
   // Streaming updates during code generation
+  // Can be structured StreamingOutputMessage or raw string
 });
 
 vibeKit.on("error", (error: string) => {
   // Error notifications
 });
 
-vibeKit.on("stdout", (data: string) => {
+vibeKit.on("stdout", (data: string | StreamingOutputMessage) => {
   // Standard output from command execution
+  // Can be structured data or raw output
 });
 
 vibeKit.on("stderr", (data: string) => {

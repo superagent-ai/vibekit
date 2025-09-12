@@ -137,6 +137,50 @@ export interface GrokStreamCallbacks {
   onError?: (error: string) => void;
 }
 
+// UNIFIED STREAMING OUTPUT TYPES
+/**
+ * Represents a structured message from agent streaming output.
+ * Used to provide typed feedback during code generation and command execution.
+ */
+export interface StreamingOutputMessage {
+  /** The type of streaming message */
+  type: 'start' | 'git' | 'end' | 'tool_call' | 'tool_result' | 'text';
+  /** The sandbox ID where the operation is running */
+  sandbox_id?: string;
+  /** Raw output from the operation (usually JSON stringified) */
+  output?: string;
+  /** Human-readable message describing the operation */
+  message?: string;
+  /** Unix timestamp when the message was generated */
+  timestamp?: number;
+}
+
+// UNION TYPES FOR AGENT RESPONSES
+/**
+ * Union type representing the response from any coding agent.
+ * Contains execution results including exit code, stdout, stderr, and metadata.
+ * 
+ * Note: The base AgentResponse interface is defined in agents/base.ts
+ * This union type extends that for specific agent implementations.
+ */
+export type SpecificAgentResponse = 
+  | CodexResponse 
+  | ClaudeResponse 
+  | OpenCodeResponse 
+  | GeminiResponse 
+  | GrokResponse;
+
+/**
+ * Union type for streaming callbacks across all agent types.
+ * Provides typed onUpdate and onError handlers for real-time feedback.
+ */
+export type AgentStreamCallbacks = 
+  | CodexStreamCallbacks 
+  | ClaudeStreamCallbacks 
+  | OpenCodeStreamCallbacks 
+  | GeminiStreamCallbacks 
+  | GrokStreamCallbacks;
+
 // CODEX CONFIG
 export interface CodexConfig {
   providerApiKey?: string;
@@ -310,4 +354,48 @@ export interface SandboxProvider {
     workingDirectory?: string
   ): Promise<SandboxInstance>;
   resume(sandboxId: string): Promise<SandboxInstance>;
+}
+
+// TYPED COMMAND EXECUTION OPTIONS
+/**
+ * Options for executing commands with proper typing for streaming output.
+ */
+export interface TypedExecuteCommandOptions {
+  /** Timeout in milliseconds (default: 3600000) */
+  timeoutMs?: number;
+  /** Whether to run the command in the background */
+  background?: boolean;
+  /** Typed callback handlers for streaming output */
+  callbacks?: {
+    /** Receives structured streaming messages or raw strings */
+    onUpdate?: (message: StreamingOutputMessage | string) => void;
+    /** Receives error messages */
+    onError?: (error: string) => void;
+  };
+  /** Git branch to execute the command on */
+  branch?: string;
+}
+
+// TYPED GENERATE CODE OPTIONS
+/**
+ * Options for generating code with proper typing for streaming output.
+ */
+export interface TypedGenerateCodeOptions {
+  /** The prompt to send to the coding agent */
+  prompt: string;
+  /** Mode: 'ask' for questions only, 'code' for code generation (default: 'code') */
+  mode?: 'ask' | 'code';
+  /** Git branch to work on */
+  branch?: string;
+  /** Conversation history for context */
+  history?: Conversation[];
+  /** Typed callback handlers for streaming output */
+  callbacks?: {
+    /** Receives structured streaming messages or raw strings */
+    onUpdate?: (message: StreamingOutputMessage | string) => void;
+    /** Receives error messages */
+    onError?: (error: string) => void;
+  };
+  /** Whether to run in the background */
+  background?: boolean;
 }
