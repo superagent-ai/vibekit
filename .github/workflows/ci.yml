@@ -34,6 +34,8 @@ jobs:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       GH_REPOSITORY: ${{ secrets.GH_REPOSITORY }}
       WORKING_DIRECTORY: ${{ secrets.WORKING_DIRECTORY }}
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
