@@ -1,0 +1,141 @@
+---
+title: "Git Worktrees"
+description: "Use isolated workspace environments for different branches with automatic worktree management"
+---
+
+Git worktrees provide isolated workspace environments for different branches, allowing you to work on multiple features simultaneously without switching between branches. When enabled, VibeKit automatically creates separate worktrees for each branch operation.
+
+## Configuration
+
+Enable worktrees in your VibeKit setup:
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createE2BProvider } from "@vibe-kit/e2b";
+
+const e2bProvider = createE2BProvider({
+  apiKey: process.env.E2B_API_KEY!,
+  templateId: "vibekit-claude",
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "claude-sonnet-4-20250514",
+  })
+  .withSandbox(e2bProvider)
+  .withWorktrees({
+    root: "/tmp/my-worktrees",  // optional: custom root directory for worktrees
+    cleanup: true               // optional: auto-cleanup after operations (default: true)
+  });
+```
+
+## How It Works
+
+When worktrees are enabled:
+
+1. **Branch Creation**: Each new branch gets its own isolated directory
+2. **Automatic Setup**: VibeKit automatically creates worktrees based on branch names
+3. **Isolation**: Changes in one worktree don't affect others
+4. **Cleanup**: Worktrees are automatically removed after operations (unless `cleanup: false`)
+
+## Usage Examples
+
+### Generate Code in Feature Branch
+
+```typescript
+// Generate code in a feature branch (creates worktree automatically)
+const result = await vibeKit.generateCode({
+  prompt: "Add user authentication",
+  mode: "code",
+  branch: "feature/auth" // Creates worktree at {root}/feature-auth
+});
+```
+
+### Execute Commands in Worktree
+
+```typescript
+// Execute commands in branch-specific worktree
+const testResult = await vibeKit.executeCommand("npm test", {
+  branch: "feature/auth" // Runs tests in the worktree for this branch
+});
+```
+
+### Create Pull Request from Worktree
+
+```typescript
+// Create pull request from worktree
+const pr = await vibeKit.createPullRequest();
+```
+
+## Benefits
+
+<CardGroup cols={2}>
+  <Card title="Parallel Development" icon="code-branch">
+    Work on multiple features without branch switching
+  </Card>
+  <Card title="Clean Isolation" icon="shield-check">
+    Each branch has its own workspace and dependencies
+  </Card>
+  <Card title="Automatic Management" icon="robot">
+    No manual worktree commands needed
+  </Card>
+  <Card title="Safe Operations" icon="lock">
+    Changes are isolated until merged
+  </Card>
+</CardGroup>
+
+## Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `root` | `string` | `{workingDir}-wt` | Base directory for worktrees |
+| `cleanup` | `boolean` | `true` | Auto-remove worktrees after operations |
+
+## Advanced Usage
+
+### Custom Worktree Root
+
+```typescript
+.withWorktrees({
+  root: "/custom/path/worktrees", // All worktrees created under this path
+  cleanup: true
+})
+```
+
+### Disable Cleanup
+
+```typescript
+.withWorktrees({
+  cleanup: false // Keep worktrees after operations for debugging
+})
+```
+
+### Multiple Branches Example
+
+```typescript
+// Work on multiple features simultaneously
+const authResult = await vibeKit.generateCode({
+  prompt: "Implement OAuth login",
+  mode: "code",
+  branch: "feature/oauth"
+});
+
+const dashboardResult = await vibeKit.generateCode({
+  prompt: "Create admin dashboard",
+  mode: "code", 
+  branch: "feature/dashboard"
+});
+
+// Each feature gets its own isolated worktree
+```
+
+<Info>
+  Worktrees are particularly useful in CI/CD environments and when working with large codebases where branch switching is expensive.
+</Info>
+
+<Warning>
+  Ensure your git repository has a clean state before enabling worktrees. Uncommitted changes may cause issues during worktree creation.
+</Warning>

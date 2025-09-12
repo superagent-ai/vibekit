@@ -39,6 +39,7 @@
               "sdk/github-integration",
               "sdk/streaming",
               "sdk/session-management",
+              "sdk/worktrees",
               "sdk/secrets"
             ]
           },

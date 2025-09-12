@@ -131,69 +131,6 @@ const modalProvider = createModalProvider({ // must conduct CLI setup specified 
 })
 ```
 
-## Git Worktrees
-
-Git worktrees provide isolated workspace environments for different branches, allowing you to work on multiple features simultaneously without switching between branches. When enabled, VibeKit automatically creates separate worktrees for each branch operation.
-
-### Configuration
-
-```typescript
-const vibeKit = new VibeKit()
-  .withAgent({
-    type: "claude",
-    provider: "anthropic",
-    apiKey: process.env.ANTHROPIC_API_KEY!,
-    model: "claude-sonnet-4-20250514",
-  })
-  .withSandbox(e2bProvider)
-  .withWorktrees({
-    root: "/tmp/my-worktrees",  // optional: custom root directory for worktrees
-    cleanup: true               // optional: auto-cleanup after operations (default: true)
-  });
-```
-
-### How It Works
-
-When worktrees are enabled:
-
-1. **Branch Creation**: Each new branch gets its own isolated directory
-2. **Automatic Setup**: VibeKit automatically creates worktrees based on branch names
-3. **Isolation**: Changes in one worktree don't affect others
-4. **Cleanup**: Worktrees are automatically removed after operations (unless `cleanup: false`)
-
-### Usage Examples
-
-```typescript
-// Generate code in a feature branch (creates worktree automatically)
-const result = await vibeKit.generateCode({
-  prompt: "Add user authentication",
-  mode: "code",
-  branch: "feature/auth" // Creates worktree at {root}/feature-auth
-});
-
-// Execute commands in branch-specific worktree
-const testResult = await vibeKit.executeCommand("npm test", {
-  branch: "feature/auth" // Runs tests in the worktree for this branch
-});
-
-// Create pull request from worktree
-const pr = await vibeKit.createPullRequest();
-```
-
-### Benefits
-
-- **Parallel Development**: Work on multiple features without branch switching
-- **Clean Isolation**: Each branch has its own workspace and dependencies
-- **Automatic Management**: No manual worktree commands needed
-- **Safe Operations**: Changes are isolated until merged
-
-### Configuration Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `root` | `string` | `{workingDir}-wt` | Base directory for worktrees |
-| `cleanup` | `boolean` | `true` | Auto-remove worktrees after operations |
-
 ## API Reference
 
 ### `generateCode(options)`
