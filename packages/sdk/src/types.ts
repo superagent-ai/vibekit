@@ -111,30 +111,45 @@ export interface MergePullRequestResult {
   message: string;
 }
 
-// STREAMING CALLBACKS
-export interface CodexStreamCallbacks {
-  onUpdate?: (message: string) => void;
+// UNIFIED STREAMING TYPES
+export interface StreamingMessage {
+  type: 'start' | 'git' | 'end';
+  sandbox_id?: string;
+  output?: string;
+}
+
+export interface StreamCallbacks {
+  onUpdate?: (message: StreamingMessage | string) => void;
   onError?: (error: string) => void;
 }
 
-export interface ClaudeStreamCallbacks {
-  onUpdate?: (message: string) => void;
-  onError?: (error: string) => void;
+// AGENT-SPECIFIC STREAMING CALLBACKS (for backward compatibility)
+export interface CodexStreamCallbacks extends StreamCallbacks {}
+export interface ClaudeStreamCallbacks extends StreamCallbacks {}
+export interface OpenCodeStreamCallbacks extends StreamCallbacks {}
+export interface GeminiStreamCallbacks extends StreamCallbacks {}
+export interface GrokStreamCallbacks extends StreamCallbacks {}
+
+// UNIFIED AGENT RESPONSE TYPES
+export interface AgentResponse {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  sandboxId: string;
+  patch?: string;
+  patchApplyScript?: string;
+  branchName?: string;
+  commitSha?: string;
 }
 
-export interface OpenCodeStreamCallbacks {
-  onUpdate?: (message: string) => void;
-  onError?: (error: string) => void;
-}
+export interface ExecuteCommandResponse extends AgentResponse {}
 
-export interface GeminiStreamCallbacks {
-  onUpdate?: (message: string) => void;
-  onError?: (error: string) => void;
-}
-
-export interface GrokStreamCallbacks {
-  onUpdate?: (message: string) => void;
-  onError?: (error: string) => void;
+// EXECUTE COMMAND OPTIONS
+export interface ExecuteCommandOptions {
+  timeoutMs?: number;
+  background?: boolean;
+  callbacks?: StreamCallbacks;
+  branch?: string;
 }
 
 // CODEX CONFIG
@@ -150,16 +165,7 @@ export interface CodexConfig {
   workingDirectory?: string;
 }
 
-export interface CodexResponse {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-  sandboxId: string;
-  patch?: string;
-  patchApplyScript?: string;
-  branchName?: string;
-  commitSha?: string;
-}
+export interface CodexResponse extends AgentResponse {}
 
 // CLAUDE CONFIG
 export interface ClaudeConfig {
@@ -175,16 +181,7 @@ export interface ClaudeConfig {
   workingDirectory?: string;
 }
 
-export interface ClaudeResponse {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-  sandboxId: string;
-  patch?: string;
-  patchApplyScript?: string;
-  branchName?: string;
-  commitSha?: string;
-}
+export interface ClaudeResponse extends AgentResponse {}
 
 // OPENCODE CONFIG
 export interface OpenCodeConfig {
@@ -199,16 +196,7 @@ export interface OpenCodeConfig {
   workingDirectory?: string;
 }
 
-export interface OpenCodeResponse {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-  sandboxId: string;
-  patch?: string;
-  patchApplyScript?: string;
-  branchName?: string;
-  commitSha?: string;
-}
+export interface OpenCodeResponse extends AgentResponse {}
 
 // GEMINI CONFIG
 export interface GeminiConfig {
@@ -223,16 +211,7 @@ export interface GeminiConfig {
   workingDirectory?: string;
 }
 
-export interface GeminiResponse {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-  sandboxId: string;
-  patch?: string;
-  patchApplyScript?: string;
-  branchName?: string;
-  commitSha?: string;
-}
+export interface GeminiResponse extends AgentResponse {}
 
 // GROK CONFIG
 export interface GrokConfig {
@@ -248,16 +227,7 @@ export interface GrokConfig {
   baseUrl?: string; // for custom xAI API endpoints
 }
 
-export interface GrokResponse {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-  sandboxId: string;
-  patch?: string;
-  patchApplyScript?: string;
-  branchName?: string;
-  commitSha?: string;
-}
+export interface GrokResponse extends AgentResponse {}
 
 // SANDBOX ABSTRACTION
 export interface SandboxExecutionResult {

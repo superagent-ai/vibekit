@@ -22,11 +22,16 @@ export type {
   LabelOptions,
   MergePullRequestOptions,
   MergePullRequestResult,
+  StreamingMessage,
+  StreamCallbacks,
   CodexStreamCallbacks,
   ClaudeStreamCallbacks,
   OpenCodeStreamCallbacks,
   GeminiStreamCallbacks,
   GrokStreamCallbacks,
+  AgentResponse,
+  ExecuteCommandResponse,
+  ExecuteCommandOptions,
   CodexConfig,
   CodexResponse,
   ClaudeConfig,
@@ -77,8 +82,5 @@ export const createGrokAgent = async () => {
 // Additional type exports from agent base
 export type { 
   BaseAgentConfig, 
-  PullRequestResult,
-  AgentResponse,
-  ExecuteCommandOptions,
-  StreamCallbacks
+  PullRequestResult
 } from "./agents/base";

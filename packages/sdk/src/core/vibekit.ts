@@ -11,10 +11,13 @@ import type {
 } from "../types";
 import { AGENT_TYPES } from "../constants/agents";
 import {
-  AgentResponse,
-  ExecuteCommandOptions,
   PullRequestResult,
 } from "../agents/base";
+import {
+  AgentResponse,
+  ExecuteCommandOptions,
+  ExecuteCommandResponse,
+} from "../types";
 
 export interface VibeKitEvents {
   stdout: (chunk: string) => void;
@@ -295,7 +298,7 @@ export class VibeKit extends EventEmitter {
   async executeCommand(
     command: string,
     options: Omit<ExecuteCommandOptions, "callbacks"> = {}
-  ): Promise<any> {
+  ): Promise<ExecuteCommandResponse> {
     if (!this.agent) {
       await this.initializeAgent();
     }

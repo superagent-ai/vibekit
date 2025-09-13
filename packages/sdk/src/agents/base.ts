@@ -8,14 +8,19 @@ import {
   SandboxInstance,
   SandboxProvider,
   LabelOptions,
+  StreamingMessage,
+  StreamCallbacks,
+  AgentResponse,
+  ExecuteCommandResponse,
+  ExecuteCommandOptions,
 } from "../types";
 
 // StreamingBuffer class to handle chunked JSON data
 class StreamingBuffer {
   private buffer = "";
-  private onComplete: (data: string) => void;
+  private onComplete: (data: StreamingMessage | string) => void;
 
-  constructor(onComplete: (data: string) => void) {
+  constructor(onComplete: (data: StreamingMessage | string) => void) {
     this.onComplete = onComplete;
   }
 
@@ -63,11 +68,12 @@ class StreamingBuffer {
           // Found complete JSON object
           const jsonStr = this.buffer.slice(start, i + 1);
           try {
-            // Validate JSON before calling callback
-            JSON.parse(jsonStr);
-            this.onComplete(jsonStr);
+            // Parse and validate JSON, then pass as typed object
+            const parsed = JSON.parse(jsonStr) as StreamingMessage;
+            this.onComplete(parsed);
           } catch (e) {
-            // Invalid JSON, continue buffering
+            // If not valid JSON, pass as raw string
+            this.onComplete(jsonStr);
           }
 
           // Move to next potential JSON object
@@ -107,24 +113,6 @@ export interface BaseAgentConfig {
   };
 }
 
-export interface StreamCallbacks {
-  onUpdate?: (message: string) => void;
-  onError?: (error: string) => void;
-}
-
-export interface ExecuteCommandOptions {
-  timeoutMs?: number;
-  background?: boolean;
-  callbacks?: StreamCallbacks;
-  branch?: string;
-}
-
-export interface AgentResponse {
-  sandboxId: string;
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
 
 export interface PullRequestResult {
   id: number;
@@ -265,7 +253,7 @@ export abstract class BaseAgent {
   public async executeCommand(
     command: string,
     options: ExecuteCommandOptions = {}
-  ): Promise<AgentResponse> {
+  ): Promise<ExecuteCommandResponse> {
     const {
       timeoutMs = 3600000,
       background = false,
@@ -277,9 +265,10 @@ export abstract class BaseAgent {
       const sbx = await this.getSandbox();
 
       if (!this.config.sandboxId && sbx.sandboxId) {
-        callbacks?.onUpdate?.(
-          `{"type": "start", "sandbox_id": "${sbx.sandboxId}"}`
-        );
+        callbacks?.onUpdate?.({
+          type: "start",
+          sandbox_id: sbx.sandboxId
+        });
       }
 
       // Ensure working directory exists first
@@ -318,9 +307,10 @@ export abstract class BaseAgent {
               background: false,
             });
 
-            callbacks?.onUpdate?.(
-              `{"type": "git", "output": "Preparing worktree at: ${wtPath}"}`
-            );
+            callbacks?.onUpdate?.({
+              type: "git",
+              output: `Preparing worktree at: ${wtPath}`
+            });
 
             // Fetch and add worktree, prefer creating/updating branch off origin/main
             await sbx.commands.run(
@@ -331,37 +321,42 @@ export abstract class BaseAgent {
             this.currentWorktreeDir = wtPath;
             activeDir = wtPath;
           } else {
-            callbacks?.onUpdate?.(
-              `{"type": "git", "output": "Switching to branch: ${branch}"}`
-            );
+            callbacks?.onUpdate?.({
+              type: "git",
+              output: `Switching to branch: ${branch}`
+            });
             try {
               // Try to switch to existing branch
               await sbx.commands.run(
                 `cd ${this.WORKING_DIR} && git checkout ${branch}`,
                 { timeoutMs: 30000, background: false }
               );
-              callbacks?.onUpdate?.(
-                `{"type": "git", "output": "Switched to existing branch: ${branch}"}`
-              );
+              callbacks?.onUpdate?.({
+                type: "git",
+                output: `Switched to existing branch: ${branch}`
+              });
             } catch (checkoutError) {
               // If switching fails, create and checkout new branch
-              callbacks?.onUpdate?.(
-                `{"type": "git", "output": "Creating new branch: ${branch}"}`
-              );
+              callbacks?.onUpdate?.({
+                type: "git",
+                output: `Creating new branch: ${branch}`
+              });
               await sbx.commands.run(
                 `cd ${this.WORKING_DIR} && git checkout -b ${branch}`,
                 { timeoutMs: 30000, background: false }
               );
-              callbacks?.onUpdate?.(
-                `{"type": "git", "output": "Created and switched to new branch: ${branch}"}`
-              );
+              callbacks?.onUpdate?.({
+                type: "git",
+                output: `Created and switched to new branch: ${branch}`
+              });
             }
           }
         } catch (error) {
           // Not in a git repository, skip branch/worktree operations
-          callbacks?.onUpdate?.(
-            `{"type": "git", "output": "Not in a git repository, skipping branch/worktree operations"}`
-          );
+          callbacks?.onUpdate?.({
+            type: "git",
+            output: "Not in a git repository, skipping branch/worktree operations"
+          });
         }
       }
 
@@ -388,11 +383,11 @@ export abstract class BaseAgent {
       stdoutBuffer?.flush();
       stderrBuffer?.flush();
 
-      callbacks?.onUpdate?.(
-        `{"type": "end", "sandbox_id": "${
-          sbx.sandboxId
-        }", "output": "${JSON.stringify(result)}"}`
-      );
+      callbacks?.onUpdate?.({
+        type: "end",
+        sandbox_id: sbx.sandboxId,
+        output: JSON.stringify(result)
+      });
 
       return {
         sandboxId: sbx.sandboxId,
@@ -422,9 +417,10 @@ export abstract class BaseAgent {
       const sbx = await this.getSandbox();
 
       if (!this.config.sandboxId && sbx.sandboxId) {
-        callbacks?.onUpdate?.(
-          `{"type": "start", "sandbox_id": "${sbx.sandboxId}"}`
-        );
+        callbacks?.onUpdate?.({
+          type: "start",
+          sandbox_id: sbx.sandboxId
+        });
 
         // Create working directory
         await sbx.commands.run(this.getMkdirCommand(this.WORKING_DIR), {
@@ -432,9 +428,10 @@ export abstract class BaseAgent {
           background: background || false,
         });
       } else if (this.config.sandboxId) {
-        callbacks?.onUpdate?.(
-          `{"type": "start", "sandbox_id": "${this.config.sandboxId}"}`
-        );
+        callbacks?.onUpdate?.({
+          type: "start",
+          sandbox_id: this.config.sandboxId
+        });
       }
 
       // Switch to specified branch if provided and we're in a git repository
@@ -452,9 +449,10 @@ export abstract class BaseAgent {
             }
           );
 
-          callbacks?.onUpdate?.(
-            `{"type": "git", "output": "Switching to branch: ${branch}"}`
-          );
+          callbacks?.onUpdate?.({
+            type: "git",
+            output: `Switching to branch: ${branch}`
+          });
           try {
             // Try to checkout existing branch first
             await sbx.commands.run(
@@ -465,9 +463,10 @@ export abstract class BaseAgent {
               }
             );
             // Pull latest changes from the remote branch
-            callbacks?.onUpdate?.(
-              `{"type": "git", "output": "Pulling latest changes from ${branch}"}`
-            );
+            callbacks?.onUpdate?.({
+              type: "git",
+              output: `Pulling latest changes from ${branch}`
+            });
             await sbx.commands.run(
               `cd ${this.WORKING_DIR} && git pull origin ${branch}`,
               {
@@ -477,9 +476,10 @@ export abstract class BaseAgent {
             );
           } catch (error) {
             // If branch doesn't exist, create it
-            callbacks?.onUpdate?.(
-              `{"type": "git", "output": "Branch ${branch} not found, creating new branch"}`
-            );
+            callbacks?.onUpdate?.({
+              type: "git",
+              output: `Branch ${branch} not found, creating new branch`
+            });
             await sbx.commands.run(
               `cd ${this.WORKING_DIR} && git checkout -b ${branch}`,
               {
@@ -490,9 +490,10 @@ export abstract class BaseAgent {
           }
         } catch (error) {
           // Not in a git repository, skip branch switching
-          callbacks?.onUpdate?.(
-            `{"type": "git", "output": "Not in a git repository, skipping branch operations"}`
-          );
+          callbacks?.onUpdate?.({
+            type: "git",
+            output: "Not in a git repository, skipping branch operations"
+          });
         }
       }
 
@@ -519,11 +520,11 @@ export abstract class BaseAgent {
       stdoutBuffer?.flush();
       stderrBuffer?.flush();
 
-      callbacks?.onUpdate?.(
-        `{"type": "end", "sandbox_id": "${
-          sbx.sandboxId
-        }", "output": "${JSON.stringify(result)}"}`
-      );
+      callbacks?.onUpdate?.({
+        type: "end",
+        sandbox_id: sbx.sandboxId,
+        output: JSON.stringify(result)
+      });
 
       this.lastPrompt = prompt;
 
