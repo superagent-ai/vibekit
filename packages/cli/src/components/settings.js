@@ -523,6 +523,7 @@ const Settings = ({ showWelcome = false }) => {
                 <Text color="gray" dimColor>  vibekit claude        Run Claude Code CLI</Text>
                 <Text color="gray" dimColor>  vibekit gemini        Run Gemini CLI</Text>
                 <Text color="gray" dimColor>  vibekit codex         Run Codex CLI</Text>
+                <Text color="gray" dimColor>  vibekit grok          Run Grok CLI</Text>
                 <Text color="gray" dimColor>  vibekit cursor-agent  Run Cursor Agent</Text>
                 <Text color="gray" dimColor>  vibekit opencode      Run OpenCode CLI</Text>
                 <Text color="gray" dimColor>  vibekit              Configure settings</Text>
