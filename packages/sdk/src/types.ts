@@ -144,12 +144,19 @@ export interface AgentResponse {
 
 export interface ExecuteCommandResponse extends AgentResponse {}
 
+// STREAM-JSON EXECUTE COMMAND RESPONSE
+export interface StreamJsonExecuteCommandResponse extends AgentResponse {
+  messages: StreamingMessage[];
+  rawStdout: string;
+}
+
 // EXECUTE COMMAND OPTIONS
 export interface ExecuteCommandOptions {
   timeoutMs?: number;
   background?: boolean;
   callbacks?: StreamCallbacks;
   branch?: string;
+  outputFormat?: 'text' | 'stream-json';
 }
 
 // CODEX CONFIG

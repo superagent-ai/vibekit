@@ -179,6 +179,77 @@ describe('VibeKit Core SDK - Unit Tests', () => {
       expect(typeof vibeKit.executeCommand).toBe('function');
     });
 
+    it('should detect and parse stream-JSON output format', async () => {
+      const vibeKit = new VibeKit();
+      const mockProvider = createMockProvider();
+      
+      // Mock stream-JSON output
+      const streamJsonOutput = '{"type":"start","sandbox_id":"test-123"}\n{"type":"git","output":"test git message"}\n{"type":"end","output":"command complete"}';
+      
+      mockProvider.create.mockResolvedValue({
+        sandboxId: 'mock-sandbox-123',
+        commands: {
+          run: vi.fn().mockResolvedValue({
+            exitCode: 0,
+            stdout: streamJsonOutput,
+            stderr: ''
+          })
+        },
+        kill: vi.fn().mockResolvedValue(undefined),
+        pause: vi.fn().mockResolvedValue(undefined),
+        getHost: vi.fn().mockResolvedValue('localhost:3000'),
+        on: vi.fn(),
+        emit: vi.fn()
+      });
+
+      vibeKit
+        .withAgent({
+          type: 'claude',
+          provider: 'anthropic',
+          apiKey: 'test-key',
+          model: 'claude-sonnet-4-20250514'
+        })
+        .withSandbox(mockProvider);
+
+      // Test with explicit outputFormat option
+      const resultExplicit = await vibeKit.executeCommand('echo "test"', { outputFormat: 'stream-json' });
+      expect(resultExplicit).toHaveProperty('messages');
+      expect(resultExplicit).toHaveProperty('rawStdout');
+      
+      if ('messages' in resultExplicit) {
+        expect(resultExplicit.messages).toHaveLength(3);
+        expect(resultExplicit.messages[0]).toEqual({ type: 'start', sandbox_id: 'test-123' });
+        expect(resultExplicit.messages[1]).toEqual({ type: 'git', output: 'test git message' });
+        expect(resultExplicit.messages[2]).toEqual({ type: 'end', output: 'command complete' });
+        expect(resultExplicit.rawStdout).toBe(streamJsonOutput);
+      }
+
+      // Test with command auto-detection
+      const resultAutoDetect = await vibeKit.executeCommand('claude --output-format stream-json "test"');
+      expect(resultAutoDetect).toHaveProperty('messages');
+      expect(resultAutoDetect).toHaveProperty('rawStdout');
+    });
+
+    it('should return standard response for non-stream-JSON commands', async () => {
+      const vibeKit = new VibeKit();
+      const mockProvider = createMockProvider();
+
+      vibeKit
+        .withAgent({
+          type: 'claude',
+          provider: 'anthropic',
+          apiKey: 'test-key',
+          model: 'claude-sonnet-4-20250514'
+        })
+        .withSandbox(mockProvider);
+
+      const result = await vibeKit.executeCommand('echo "test"');
+      expect(result).not.toHaveProperty('messages');
+      expect(result).toHaveProperty('stdout');
+      expect(result).toHaveProperty('stderr');
+      expect(result).toHaveProperty('exitCode');
+    });
+
     it('should provide generateCode method (deprecated)', async () => {
       const vibeKit = new VibeKit();
       const mockProvider = createMockProvider();

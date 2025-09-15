@@ -17,6 +17,7 @@ import {
   AgentResponse,
   ExecuteCommandOptions,
   ExecuteCommandResponse,
+  StreamJsonExecuteCommandResponse,
 } from "../types";
 
 export interface VibeKitEvents {
@@ -298,7 +299,7 @@ export class VibeKit extends EventEmitter {
   async executeCommand(
     command: string,
     options: Omit<ExecuteCommandOptions, "callbacks"> = {}
-  ): Promise<ExecuteCommandResponse> {
+  ): Promise<ExecuteCommandResponse | StreamJsonExecuteCommandResponse> {
     if (!this.agent) {
       await this.initializeAgent();
     }

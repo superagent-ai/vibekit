@@ -12,6 +12,7 @@ import {
   StreamCallbacks,
   AgentResponse,
   ExecuteCommandResponse,
+  StreamJsonExecuteCommandResponse,
   ExecuteCommandOptions,
 } from "../types";
 
@@ -250,16 +251,53 @@ export abstract class BaseAgent {
     return this.currentBranch;
   }
 
+  // Utility function to detect stream-JSON format in command
+  private detectStreamJsonFormat(command: string, options: ExecuteCommandOptions): boolean {
+    // Check if explicitly set in options
+    if (options.outputFormat === 'stream-json') {
+      return true;
+    }
+    if (options.outputFormat === 'text') {
+      return false;
+    }
+    
+    // Auto-detect from command string - look for Claude CLI with stream-json output
+    return command.includes('--output-format stream-json') || 
+           command.includes('--output-format=stream-json');
+  }
+
+  // Parse stream-JSON output into structured messages
+  private parseStreamJsonOutput(stdout: string): StreamingMessage[] {
+    const messages: StreamingMessage[] = [];
+    const lines = stdout.split('\n').filter(line => line.trim());
+    
+    for (const line of lines) {
+      try {
+        const parsed = JSON.parse(line) as StreamingMessage;
+        // Validate that it's a proper StreamingMessage
+        if (parsed && typeof parsed === 'object' && 'type' in parsed) {
+          messages.push(parsed);
+        }
+      } catch (error) {
+        // Ignore non-JSON lines
+      }
+    }
+    
+    return messages;
+  }
+
   public async executeCommand(
     command: string,
     options: ExecuteCommandOptions = {}
-  ): Promise<ExecuteCommandResponse> {
+  ): Promise<ExecuteCommandResponse | StreamJsonExecuteCommandResponse> {
     const {
       timeoutMs = 3600000,
       background = false,
       callbacks,
       branch,
     } = options;
+
+    const isStreamJson = this.detectStreamJsonFormat(command, options);
 
     try {
       const sbx = await this.getSandbox();
@@ -389,10 +427,23 @@ export abstract class BaseAgent {
         output: JSON.stringify(result)
       });
 
-      return {
+      const baseResponse = {
         sandboxId: sbx.sandboxId,
         ...result,
       };
+
+      // If stream-JSON format is detected, parse the output and return enhanced response
+      if (isStreamJson) {
+        const messages = this.parseStreamJsonOutput(result.stdout);
+        return {
+          ...baseResponse,
+          messages,
+          rawStdout: result.stdout,
+        } as StreamJsonExecuteCommandResponse;
+      }
+
+      // Return standard response for non-stream-JSON commands
+      return baseResponse as ExecuteCommandResponse;
     } catch (error) {
       console.error("Error executing command:", error);
       const errorMessage = `Failed to execute command: ${

@@ -31,6 +31,7 @@ export type {
   GrokStreamCallbacks,
   AgentResponse,
   ExecuteCommandResponse,
+  StreamJsonExecuteCommandResponse,
   ExecuteCommandOptions,
   CodexConfig,
   CodexResponse,
