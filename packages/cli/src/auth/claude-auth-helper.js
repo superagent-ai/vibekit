@@ -121,7 +121,9 @@ export class ClaudeAuthHelper {
       # Create merge script using Node.js (available in Claude container)
       cat > /tmp/merge-settings.js << 'MERGE_EOF'
 const fs = require('fs');
-const path = '/root/.claude.json';
+const os = require('os');
+const pathLib = require('path');
+const path = pathLib.join(os.homedir(), '.claude.json');
 const tempPath = '/tmp/vibekit-settings.json';
 
 // Deep merge function
@@ -138,14 +140,42 @@ function deepMerge(target, source) {
 }
 
 try {
+  // Ensure the parent directory exists with path validation
+  const parentDir = pathLib.dirname(path);
+  const homeDir = os.homedir();
+  
+  // Validate that the parent directory is within the home directory
+  if (!parentDir.startsWith(homeDir)) {
+    throw new Error('Invalid config directory path - must be within home directory');
+  }
+  
+  if (!fs.existsSync(parentDir)) {
+    fs.mkdirSync(parentDir, { recursive: true });
+  }
+  
   // Read existing config or start with empty object
   let existingConfig = {};
   if (fs.existsSync(path)) {
-    existingConfig = JSON.parse(fs.readFileSync(path, 'utf8'));
+    try {
+      const existingContent = fs.readFileSync(path, 'utf8');
+      existingConfig = JSON.parse(existingContent);
+    } catch (parseError) {
+      console.warn('[vibekit] Warning: Existing .claude.json has syntax errors, using empty config:', parseError.message);
+      existingConfig = {};
+    }
   }
   
   // Read our settings
-  const newSettings = JSON.parse(fs.readFileSync(tempPath, 'utf8'));
+  let newSettings = {};
+  try {
+    const newContent = fs.readFileSync(tempPath, 'utf8');
+    newSettings = JSON.parse(newContent);
+  } catch (parseError) {
+    console.warn('[vibekit] Warning: Vibekit settings have syntax errors, skipping merge:', parseError.message);
+    // Continue with Claude startup even if settings merge fails
+    console.log('[vibekit] Continuing Claude startup without merged settings');
+    process.exit(0); // Exit successfully to continue Claude startup
+  }
   
   // Deep merge and write back
   const mergedConfig = deepMerge(existingConfig, newSettings);
@@ -153,13 +183,15 @@ try {
   
   console.log('[vibekit] Settings merged successfully');
 } catch (error) {
-  console.error('[vibekit] Settings merge failed:', error.message);
-  process.exit(1);
+  console.warn('[vibekit] Settings merge failed, continuing Claude startup:', error.message);
+  // Don't crash vibekit - let Claude continue running
+  process.exit(0);
 }
 MERGE_EOF
 
-      # Run merge script then start claude
-      node /tmp/merge-settings.js && claude ${args.join(' ')}
+      # Run merge script then start claude with absolute path
+      # Always start Claude even if merge script fails
+      node /tmp/merge-settings.js; /usr/local/bin/claude ${args.join(' ')}
     `;
     
     return {
@@ -177,36 +209,22 @@ MERGE_EOF
       const homeDir = os.homedir();
       const claudeAuthFile = path.join(homeDir, '.claude.json');
       
-      console.log(chalk.blue(`[auth] 🔍 Looking for MCP servers in: ${claudeAuthFile}`));
-      
       if (await fs.pathExists(claudeAuthFile)) {
-        console.log(chalk.blue('[auth] 📁 Host .claude.json file exists, reading...'));
-        const hostConfig = await fs.readJson(claudeAuthFile);
-        
-        console.log(chalk.blue(`[auth] 📋 Host config keys: ${Object.keys(hostConfig).join(', ')}`));
-        
-        // Extract user-scope MCP server configs
-        if (hostConfig.mcpServers && typeof hostConfig.mcpServers === 'object') {
-          console.log(chalk.green(`[auth] ✅ Found root-level mcpServers: ${JSON.stringify(hostConfig.mcpServers)}`));
-          return hostConfig.mcpServers;
-        } else {
-          console.log(chalk.yellow('[auth] ⚠️  No root-level mcpServers found in host .claude.json'));
-          if (hostConfig.mcpServers === undefined) {
-            console.log(chalk.blue('[auth] 📝 mcpServers key is undefined'));
-          } else {
-            console.log(chalk.blue(`[auth] 📝 mcpServers value: ${JSON.stringify(hostConfig.mcpServers)}`));
+        try {
+          const hostConfig = await fs.readJson(claudeAuthFile);
+          
+          // Extract user-scope MCP server configs
+          if (hostConfig.mcpServers && typeof hostConfig.mcpServers === 'object') {
+            console.log(chalk.green('[auth] ✅ Found MCP servers in host config'));
+            return hostConfig.mcpServers;
           }
+        } catch (jsonError) {
+          console.log(chalk.yellow('[auth] ⚠️  Host config has JSON syntax errors, continuing with empty mcpServers'));
         }
-      } else {
-        console.log(chalk.yellow(`[auth] ⚠️  Host .claude.json file does not exist at: ${claudeAuthFile}`));
       }
     } catch (error) {
-      // Log more detailed error information
-      console.log(chalk.red(`[auth] ❌ Error extracting MCP servers from host .claude.json: ${error.message}`));
-      console.log(chalk.red(`[auth] 📍 Error stack: ${error.stack}`));
+      console.log(chalk.red(`[auth] ❌ Error extracting MCP servers: ${error.message}`));
     }
-    
-    console.log(chalk.blue('[auth] 📤 Returning empty mcpServers object: {}'));
     return {};
   }
 
