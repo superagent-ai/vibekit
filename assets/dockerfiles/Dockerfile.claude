@@ -2,7 +2,7 @@
 FROM ubuntu:22.04
 
 # Install curl and git, update package list
-RUN apt-get update && apt-get install -y curl git ripgrep
+RUN apt-get update && apt-get install -y curl git ripgrep procps
 
 # Install Node.js 24.x
 RUN curl -sL https://deb.nodesource.com/setup_24.x | bash - && apt-get install -y nodejs

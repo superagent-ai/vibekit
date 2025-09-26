@@ -332,6 +332,16 @@ class BaseAgent {
         ...options.env 
       };
       
+      // Ensure PATH includes system directories for commands like ps
+      if (!env.PATH || !env.PATH.includes('/usr/bin')) {
+        const systemPaths = ['/usr/local/bin', '/usr/bin', '/bin'];
+        const currentPath = env.PATH || '';
+        const missingPaths = systemPaths.filter(p => !currentPath.split(':').includes(p));
+        if (missingPaths.length > 0) {
+          env.PATH = currentPath ? `${currentPath}:${missingPaths.join(':')}` : systemPaths.join(':');
+        }
+      }
+      
       // Add proxy settings to environment if specified
       if (this.proxy) {
         env.HTTP_PROXY = this.proxy;
