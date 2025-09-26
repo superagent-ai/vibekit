@@ -121,7 +121,9 @@ export class ClaudeAuthHelper {
       # Create merge script using Node.js (available in Claude container)
       cat > /tmp/merge-settings.js << 'MERGE_EOF'
 const fs = require('fs');
-const path = '/root/.claude.json';
+const os = require('os');
+const pathLib = require('path');
+const path = pathLib.join(os.homedir(), '.claude.json');
 const tempPath = '/tmp/vibekit-settings.json';
 
 // Deep merge function
