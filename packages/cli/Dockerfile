@@ -20,6 +20,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
 # Set up Bun environment
 ENV BUN_INSTALL="/home/.bun"
 ENV PATH="$BUN_INSTALL/bin:$PATH"
+ENV EDITOR="nvim"
 
 # Install coding agents globally
 RUN bun add -g @anthropic-ai/claude-code@latest || echo "Claude CLI install failed"
