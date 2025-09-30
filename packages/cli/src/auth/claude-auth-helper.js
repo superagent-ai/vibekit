@@ -259,8 +259,8 @@ MERGE_EOF
     
     // Merge host and project MCP servers (project takes precedence)
     const mergedMcpServers = { ...hostMcpServers, ...projectMcpServers };
-    
-    console.log(chalk.green(`[auth] 🔗 Merged MCP servers: ${Object.keys(mergedMcpServers).join(', ')}`));
+
+    console.log(chalk.green(`[auth] 🔗 Merged ${Object.keys(mergedMcpServers).length} MCP server(s)`));
     
     return {
       hasCompletedOnboarding: true, // Skip first-time setup
