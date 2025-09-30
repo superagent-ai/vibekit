@@ -110,14 +110,20 @@ export class ClaudeAuthHelper {
   static createClaudeWrapper(credentials, args) {
     // Create bash wrapper that deep merges our settings into /root/.claude.json
     const settingsJson = JSON.stringify(credentials.settings);
+    
+    // Use base64 encoding to avoid shell escaping issues with JSON content
+    const settingsBase64 = Buffer.from(settingsJson).toString('base64');
+    
     const mergeScript = `
-      # Write our settings to temp file
-      echo '${settingsJson}' > /tmp/vibekit-settings.json
+      # Write our settings to temp file (decode from base64 to avoid shell escaping issues)
+      echo '${settingsBase64}' | base64 -d > /tmp/vibekit-settings.json
       
       # Create merge script using Node.js (available in Claude container)
       cat > /tmp/merge-settings.js << 'MERGE_EOF'
 const fs = require('fs');
-const path = '/root/.claude.json';
+const os = require('os');
+const pathLib = require('path');
+const path = pathLib.join(os.homedir(), '.claude.json');
 const tempPath = '/tmp/vibekit-settings.json';
 
 // Deep merge function
@@ -165,6 +171,38 @@ MERGE_EOF
   }
   
   /**
+   * Extract project-specific MCP server configurations from .mcp.json file
+   * @param {string} projectPath - Path to the project directory
+   * @returns {Object} Project MCP server configurations or empty object
+   */
+  static async extractProjectMcpServers(projectPath) {
+    try {
+      const mcpJsonFile = path.join(projectPath, '.mcp.json');
+      
+      console.log(chalk.blue(`[auth] 🔍 Looking for project MCP servers in: ${mcpJsonFile}`));
+      
+      if (await fs.pathExists(mcpJsonFile)) {
+        console.log(chalk.blue('[auth] 📁 Project .mcp.json file exists, reading...'));
+        const mcpConfig = await fs.readJson(mcpJsonFile);
+        
+        if (mcpConfig.mcpServers && typeof mcpConfig.mcpServers === 'object') {
+          console.log(chalk.green(`[auth] ✅ Found ${Object.keys(mcpConfig.mcpServers).length} project-level MCP servers`));
+          return mcpConfig.mcpServers;
+        } else {
+          console.log(chalk.yellow('[auth] ⚠️  No mcpServers found in project .mcp.json'));
+        }
+      } else {
+        console.log(chalk.blue('[auth] 📝 No project .mcp.json file found'));
+      }
+    } catch (error) {
+      console.log(chalk.red(`[auth] ❌ Error extracting project MCP servers: ${error.message}`));
+    }
+    
+    console.log(chalk.blue('[auth] 📤 Returning empty project mcpServers object: {}'));
+    return {};
+  }
+
+  /**
    * Extract MCP server configurations from host .claude.json file
    * @returns {Object} MCP server configurations or empty object
    */
@@ -183,7 +221,7 @@ MERGE_EOF
         
         // Extract user-scope MCP server configs
         if (hostConfig.mcpServers && typeof hostConfig.mcpServers === 'object') {
-          console.log(chalk.green(`[auth] ✅ Found root-level mcpServers: ${JSON.stringify(hostConfig.mcpServers)}`));
+          console.log(chalk.green(`[auth] ✅ Found ${Object.keys(hostConfig.mcpServers).length} root-level MCP servers`));
           return hostConfig.mcpServers;
         } else {
           console.log(chalk.yellow('[auth] ⚠️  No root-level mcpServers found in host .claude.json'));
@@ -199,7 +237,6 @@ MERGE_EOF
     } catch (error) {
       // Log more detailed error information
       console.log(chalk.red(`[auth] ❌ Error extracting MCP servers from host .claude.json: ${error.message}`));
-      console.log(chalk.red(`[auth] 📍 Error stack: ${error.stack}`));
     }
     
     console.log(chalk.blue('[auth] 📤 Returning empty mcpServers object: {}'));
@@ -209,11 +246,21 @@ MERGE_EOF
   /**
    * Generate Claude CLI settings for onboarding bypass
    * @param {Object} tokenData - Raw token data from ClaudeAuth
+   * @param {string} projectPath - Project directory path (defaults to process.cwd())
    * @returns {Promise<Object>} Settings object for Claude CLI
    */
-  static async generateClaudeSettings(tokenData) {
-    // Extract MCP server configurations from host file
+  static async generateClaudeSettings(tokenData, projectPath = null) {
+    // Use current working directory if no project path provided
+    const workingDir = projectPath || process.cwd();
+    
+    // Extract MCP server configurations from host file and project file
     const hostMcpServers = await this.extractHostMcpServers();
+    const projectMcpServers = await this.extractProjectMcpServers(workingDir);
+    
+    // Merge host and project MCP servers (project takes precedence)
+    const mergedMcpServers = { ...hostMcpServers, ...projectMcpServers };
+    
+    console.log(chalk.green(`[auth] 🔗 Merged MCP servers: ${Object.keys(mergedMcpServers).join(', ')}`));
     
     return {
       hasCompletedOnboarding: true, // Skip first-time setup
@@ -225,8 +272,8 @@ MERGE_EOF
         'new-user-warmup': 1
       },
       firstStartTime: new Date().toISOString(),
-      // Always inject user-scope MCP server configurations from host (even if empty)
-      mcpServers: hostMcpServers,
+      // Always inject merged MCP server configurations (host + project)
+      mcpServers: mergedMcpServers,
       // Project-level configuration for /workspace
       projects: {
         "/workspace": {
