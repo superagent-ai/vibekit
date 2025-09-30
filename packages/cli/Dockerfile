@@ -10,7 +10,12 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     build-essential \
     procps \
+    neovim \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js for MCP server support
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs
 
 # Set up Bun environment
 ENV BUN_INSTALL="/home/.bun"
@@ -30,8 +35,8 @@ ENV PATH="/root/.local/bin:$BUN_INSTALL/bin:$PATH"
 # Install vibekit CLI globally and create symlink
 RUN bun add -g vibekit || echo "Vibekit install failed"
 
-# Create workspace directory
-RUN mkdir -p /workspace
+# Create workspace directory and Claude directories
+RUN mkdir -p /workspace /root/.claude
 WORKDIR /workspace
 
 # Expose common local development ports
