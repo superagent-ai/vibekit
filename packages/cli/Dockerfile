@@ -33,6 +33,9 @@ RUN bun add -g @vibe-kit/grok-cli@latest || echo "Grok CLI install failed"
 RUN curl -sSL https://install.anthropic.com | bash || echo "Alternative Claude install failed"
 ENV PATH="/root/.local/bin:$BUN_INSTALL/bin:$PATH"
 
+# Install ccusage for Claude Code usage tracking
+RUN bun add -g @anthropic-ai/ccusage@latest || npm install -g @anthropic-ai/ccusage || echo "ccusage install failed (non-critical)"
+
 # Install vibekit CLI globally and create symlink
 RUN bun add -g vibekit || echo "Vibekit install failed"
 
