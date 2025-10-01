@@ -29,8 +29,8 @@ ENV PATH="/root/.local/bin:$BUN_INSTALL/bin:$PATH"
 # Install vibekit CLI globally and create symlink
 RUN bun add -g vibekit || echo "Vibekit install failed"
 
-# Create workspace directory
-RUN mkdir -p /workspace
+# Create workspace directory and Claude directories
+RUN mkdir -p /workspace /root/.claude
 WORKDIR /workspace
 
 # Expose common local development ports
