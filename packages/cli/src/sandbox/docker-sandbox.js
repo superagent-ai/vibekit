@@ -427,6 +427,11 @@ export class DockerSandbox {
 
       script += `mkdir -p "${targetDir}"\n`;
       script += `echo '${contentBase64}' | base64 -d > "${file.targetPath}"\n`;
+
+      // Set executable permission for scripts
+      if (file.targetPath.endsWith('.sh') || file.targetPath.includes('/scripts/') || file.targetPath.includes('/commands/')) {
+        script += `chmod +x "${file.targetPath}"\n`;
+      }
     }
 
     return script;
