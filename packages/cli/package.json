@@ -1,6 +1,6 @@
 {
   "name": "vibekit",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Run Claude Code, Gemini, Codex — or any coding agent — in a clean, isolated sandbox with sensitive data redaction and observability baked in.",
   "main": "dist/cli.js",
   "type": "module",

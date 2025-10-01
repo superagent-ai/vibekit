@@ -110,14 +110,20 @@ export class ClaudeAuthHelper {
   static createClaudeWrapper(credentials, args) {
     // Create bash wrapper that deep merges our settings into /root/.claude.json
     const settingsJson = JSON.stringify(credentials.settings);
+    
+    // Use base64 encoding to avoid shell escaping issues with JSON content
+    const settingsBase64 = Buffer.from(settingsJson).toString('base64');
+    
     const mergeScript = `
-      # Write our settings to temp file
-      echo '${settingsJson}' > /tmp/vibekit-settings.json
+      # Write our settings to temp file (decode from base64 to avoid shell escaping issues)
+      echo '${settingsBase64}' | base64 -d > /tmp/vibekit-settings.json
       
       # Create merge script using Node.js (available in Claude container)
       cat > /tmp/merge-settings.js << 'MERGE_EOF'
 const fs = require('fs');
-const path = '/root/.claude.json';
+const os = require('os');
+const pathLib = require('path');
+const path = pathLib.join(os.homedir(), '.claude.json');
 const tempPath = '/tmp/vibekit-settings.json';
 
 // Deep merge function
