@@ -3,6 +3,7 @@ FROM oven/bun:1
 # Install system dependencies including build tools for native modules
 RUN apt-get update && apt-get install -y \
     bash \
+    bc \
     curl \
     wget \
     git \
@@ -37,6 +38,10 @@ ENV PATH="/root/.local/bin:$BUN_INSTALL/bin:$PATH"
 
 # Install ccusage for Claude Code usage tracking
 RUN npm install -g ccusage || echo "ccusage install failed (non-critical)"
+
+# Install uv package manager for fetch MCP server
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
 
 # Install vibekit CLI globally and create symlink
 RUN bun add -g vibekit || echo "Vibekit install failed"
