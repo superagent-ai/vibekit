@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     procps \
     neovim \
+    jq \
+    tini \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js for MCP server support
@@ -34,7 +36,7 @@ RUN curl -sSL https://install.anthropic.com | bash || echo "Alternative Claude i
 ENV PATH="/root/.local/bin:$BUN_INSTALL/bin:$PATH"
 
 # Install ccusage for Claude Code usage tracking
-RUN bun add -g @anthropic-ai/ccusage@latest || npm install -g @anthropic-ai/ccusage || echo "ccusage install failed (non-critical)"
+RUN npm install -g ccusage || echo "ccusage install failed (non-critical)"
 
 # Install vibekit CLI globally and create symlink
 RUN bun add -g vibekit || echo "Vibekit install failed"
@@ -46,6 +48,9 @@ WORKDIR /workspace
 # Expose common local development ports
 EXPOSE 3001
 EXPOSE 8080
+
+# Use tini as PID 1 to properly handle subprocesses and signals
+ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Keep container running for persistent use
 CMD ["tail", "-f", "/dev/null"]

@@ -65,20 +65,20 @@ export class ClaudeAuthHelper {
       // Get valid OAuth token and raw token data
       const token = await ClaudeAuth.getValidToken();
       const tokenData = await ClaudeAuth.getRawToken();
-      
+
       if (!token || !tokenData) {
         return null;
       }
-      
+
       // Generate settings for onboarding bypass (now includes MCP servers from host)
       const settings = await this.generateClaudeSettings(tokenData);
-      
+
       return {
         oauthToken: token,
         settings: settings,
         tokenData: tokenData
       };
-      
+
     } catch (error) {
       // Return null if auth fails - this is expected when not authenticated
       return null;
