@@ -203,6 +203,9 @@ export class DockerSandbox {
     const customFlags = SandboxConfig.getSandboxFlags();
     containerArgs.push(...customFlags);
 
+    // Mark container as sandbox environment (for hooks and scripts)
+    containerArgs.push('-e', 'VIBEKIT_SANDBOX_ACTIVE=1');
+
     // Mount project directory
     containerArgs.push('-v', `${this.projectRoot}:/workspace`);
 
