@@ -108,7 +108,7 @@ export class ClaudeAuthHelper {
    * @returns {Object} Command modification object
    */
   static createClaudeWrapper(credentials, args) {
-    // Create bash wrapper that deep merges our settings into /root/.claude.json
+    // Create bash wrapper that deep merges our settings into /home/vibekit/.claude.json
     const settingsJson = JSON.stringify(credentials.settings);
     
     // Use base64 encoding to avoid shell escaping issues with JSON content

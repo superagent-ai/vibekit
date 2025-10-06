@@ -9,6 +9,7 @@ import SandboxUtils from './sandbox-utils.js';
 import SandboxConfig from './sandbox-config.js';
 
 const exec = promisify(execCallback);
+const CONTAINER_HOME = '/home/vibekit';
 
 /**
  * Docker-based sandbox implementation
@@ -102,6 +103,8 @@ export class DockerSandbox {
       const buildArgs = [
         'build',
         '-t', this.imageName,
+        '--build-arg', `HOST_UID=${process.getuid()}`,
+        '--build-arg', `HOST_GID=${process.getgid()}`,
         '-f', dockerfilePath,
         packageRoot
       ];
@@ -252,13 +255,13 @@ export class DockerSandbox {
 
     // Mount .anthropic directory if it exists
     if (await fs.pathExists(anthropicDir)) {
-      containerArgs.push('-v', `${anthropicDir}:/root/.anthropic`);
+      containerArgs.push('-v', `${anthropicDir}:${CONTAINER_HOME}/.anthropic`);
     }
 
     // Mount .config directory if it exists (for potential Claude config)
     const claudeConfigDir = path.join(configDir, 'claude');
     if (await fs.pathExists(claudeConfigDir)) {
-      containerArgs.push('-v', `${claudeConfigDir}:/root/.config/claude`);
+      containerArgs.push('-v', `${claudeConfigDir}:${CONTAINER_HOME}/.config/claude`);
     }
 
     // Add security options
@@ -341,7 +344,7 @@ export class DockerSandbox {
       const content = await fs.readFile(userClaudeMd, 'utf8');
       filesToInject.push({
         content: content,
-        targetPath: '/root/.claude/CLAUDE.md'
+        targetPath: `${CONTAINER_HOME}/.claude/CLAUDE.md`
       });
     }
 
@@ -354,7 +357,7 @@ export class DockerSandbox {
           const relativePath = path.relative(userDir, file.path);
           filesToInject.push({
             content: file.content,
-            targetPath: `/root/.claude/${dirName}/${relativePath}`
+            targetPath: `${CONTAINER_HOME}/.claude/${dirName}/${relativePath}`
           });
         }
       }
