@@ -9,6 +9,7 @@ import SandboxUtils from './sandbox-utils.js';
 import SandboxConfig from './sandbox-config.js';
 
 const exec = promisify(execCallback);
+const CONTAINER_HOME = '/home/vibekit';
 
 /**
  * Docker-based sandbox implementation
@@ -102,6 +103,8 @@ export class DockerSandbox {
       const buildArgs = [
         'build',
         '-t', this.imageName,
+        '--build-arg', `HOST_UID=${process.getuid()}`,
+        '--build-arg', `HOST_GID=${process.getgid()}`,
         '-f', dockerfilePath,
         packageRoot
       ];
@@ -147,6 +150,18 @@ export class DockerSandbox {
         cwd: this.projectRoot,
         env: containerEnv
       });
+
+      // Clean up temp injection file after a short delay (container has read it)
+      if (this._injectionTempFile) {
+        setTimeout(async () => {
+          try {
+            await fs.unlink(this._injectionTempFile);
+            this._injectionTempFile = null;
+          } catch (error) {
+            // Ignore cleanup errors
+          }
+        }, 5000);
+      }
 
       child.on('close', (code) => {
         resolve({ code });
@@ -211,6 +226,13 @@ export class DockerSandbox {
       containerArgs.push(...options.additionalContainerArgs);
     }
 
+    // Copy CLAUDE.md files and .claude/agents, commands directories into container during startup
+    // This must happen AFTER additionalContainerArgs (which contain auth credentials)
+    await this.injectClaudeFiles(containerArgs, os.homedir());
+
+    // Inject environment variables dynamically from .mcp.json
+    await this.injectEnvironmentVariables(containerArgs);
+
     // Mount authentication files if they exist (always enabled for persistence)
     // This works alongside OAuth injection to provide hybrid authentication:
     // 1. Files are mounted for base authentication and persistence
@@ -228,18 +250,18 @@ export class DockerSandbox {
     //    accessible from the sandbox and thus would make no sense and even provide
     //    additional attack vectors to parts of the filesystem in the sandbox that should
     //    not be configured to do so.
-    // Instead, OAuth credentials, settings, and user-scope MCP server configs are 
+    // Instead, OAuth credentials, settings, and user-scope MCP server configs are
     // extracted from the host file and injected via environment variables above.
 
     // Mount .anthropic directory if it exists
     if (await fs.pathExists(anthropicDir)) {
-      containerArgs.push('-v', `${anthropicDir}:/root/.anthropic`);
+      containerArgs.push('-v', `${anthropicDir}:${CONTAINER_HOME}/.anthropic`);
     }
 
     // Mount .config directory if it exists (for potential Claude config)
     const claudeConfigDir = path.join(configDir, 'claude');
     if (await fs.pathExists(claudeConfigDir)) {
-      containerArgs.push('-v', `${claudeConfigDir}:/root/.config/claude`);
+      containerArgs.push('-v', `${claudeConfigDir}:${CONTAINER_HOME}/.config/claude`);
     }
 
     // Add security options
@@ -248,11 +270,174 @@ export class DockerSandbox {
     // Add image name
     containerArgs.push(this.imageName);
 
-    // Add command and arguments
-    containerArgs.push(command);
-    containerArgs.push(...args);
+    // Wrap command to execute file injection if present
+    // This allows the VIBEKIT_FILE_INJECTION env var to be decoded and executed
+    containerArgs.push('bash', '-c');
+
+    // Escape arguments properly for shell execution
+    const escapedArgs = args.map(arg => {
+      // Escape single quotes by replacing ' with '\''
+      const escaped = arg.replace(/'/g, "'\\''");
+      return `'${escaped}'`;
+    }).join(' ');
+
+    const wrappedCommand = `
+(
+  if [ -f /tmp/vibekit-inject.sh ]; then
+    bash /tmp/vibekit-inject.sh
+  fi
+) && exec ${command} ${escapedArgs}
+`.trim();
+
+    containerArgs.push(wrappedCommand);
 
     return containerArgs;
+  }
+
+
+  async injectEnvironmentVariables(containerArgs) {
+    const projectMcpConfig = path.join(this.projectRoot, '.mcp.json');
+
+    if (await fs.pathExists(projectMcpConfig)) {
+      try {
+        const mcpConfig = JSON.parse(await fs.readFile(projectMcpConfig, 'utf8'));
+        const envVarsToInject = new Set();
+        this.extractEnvVarsFromMcpConfig(mcpConfig, envVarsToInject);
+
+        for (const envVar of envVarsToInject) {
+          if (process.env[envVar]) {
+            containerArgs.push('-e', `${envVar}=${process.env[envVar]}`);
+          }
+        }
+      } catch (error) {
+        console.warn(`[vibekit] Failed to parse .mcp.json: ${error.message}`);
+      }
+    }
+  }
+
+  extractEnvVarsFromMcpConfig(config, envVarsSet) {
+    const extractFromValue = (value) => {
+      if (typeof value === 'string') {
+        const envMatches = value.match(/\$\{?([A-Z_][A-Z0-9_]*)\}?/g);
+        if (envMatches) {
+          envMatches.forEach(match => {
+            const envVar = match.replace(/\$\{?([A-Z_][A-Z0-9_]*)\}?/, '$1');
+            envVarsSet.add(envVar);
+          });
+        }
+      } else if (typeof value === 'object' && value !== null) {
+        Object.values(value).forEach(extractFromValue);
+      } else if (Array.isArray(value)) {
+        value.forEach(extractFromValue);
+      }
+    };
+
+    extractFromValue(config);
+  }
+
+  async injectClaudeFiles(containerArgs, homeDir) {
+    const filesToInject = [];
+
+    // User scope: ~/.claude/
+    const userClaudeMd = path.join(homeDir, '.claude', 'CLAUDE.md');
+    if (await fs.pathExists(userClaudeMd)) {
+      const content = await fs.readFile(userClaudeMd, 'utf8');
+      filesToInject.push({
+        content: content,
+        targetPath: `${CONTAINER_HOME}/.claude/CLAUDE.md`
+      });
+    }
+
+    const userDirs = ['agents', 'commands', 'scripts'];
+    for (const dirName of userDirs) {
+      const userDir = path.join(homeDir, '.claude', dirName);
+      if (await fs.pathExists(userDir)) {
+        const files = await this.readDirectoryRecursive(userDir);
+        for (const file of files) {
+          const relativePath = path.relative(userDir, file.path);
+          filesToInject.push({
+            content: file.content,
+            targetPath: `${CONTAINER_HOME}/.claude/${dirName}/${relativePath}`
+          });
+        }
+      }
+    }
+
+    // Project scope: project/.claude/ and project/CLAUDE.md
+    const projectClaudeMd = path.join(this.projectRoot, 'CLAUDE.md');
+    if (await fs.pathExists(projectClaudeMd)) {
+      const content = await fs.readFile(projectClaudeMd, 'utf8');
+      filesToInject.push({
+        content: content,
+        targetPath: '/workspace/CLAUDE.md'
+      });
+    }
+
+    for (const dirName of userDirs) {
+      const projectDir = path.join(this.projectRoot, '.claude', dirName);
+      if (await fs.pathExists(projectDir)) {
+        const files = await this.readDirectoryRecursive(projectDir);
+        for (const file of files) {
+          const relativePath = path.relative(projectDir, file.path);
+          filesToInject.push({
+            content: file.content,
+            targetPath: `/workspace/.claude/${dirName}/${relativePath}`
+          });
+        }
+      }
+    }
+
+    // Inject files if any exist
+    if (filesToInject.length > 0) {
+      const injectionScript = this.createFileInjectionScript(filesToInject);
+
+      // Write script to temp file and mount it (avoids E2BIG error from large env vars)
+      const tempFile = path.join(os.tmpdir(), `vibekit-inject-${Date.now()}.sh`);
+      await fs.writeFile(tempFile, injectionScript, { mode: 0o755 });
+
+      // Mount the injection script into container
+      containerArgs.push('-v', `${tempFile}:/tmp/vibekit-inject.sh:ro`);
+
+      // Store temp file path for cleanup after container starts
+      this._injectionTempFile = tempFile;
+    }
+  }
+
+  async readDirectoryRecursive(dir) {
+    const files = [];
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const subFiles = await this.readDirectoryRecursive(fullPath);
+        files.push(...subFiles);
+      } else if (entry.isFile()) {
+        const content = await fs.readFile(fullPath, 'utf8');
+        files.push({ path: fullPath, content });
+      }
+    }
+
+    return files;
+  }
+
+  createFileInjectionScript(filesToInject) {
+    let script = '#!/bin/bash\n';
+
+    for (const file of filesToInject) {
+      const contentBase64 = Buffer.from(file.content).toString('base64');
+      const targetDir = path.dirname(file.targetPath);
+
+      script += `mkdir -p "${targetDir}"\n`;
+      script += `echo '${contentBase64}' | base64 -d > "${file.targetPath}"\n`;
+
+      // Set executable permission for scripts
+      if (file.targetPath.endsWith('.sh') || file.targetPath.includes('/scripts/') || file.targetPath.includes('/commands/')) {
+        script += `chmod +x "${file.targetPath}"\n`;
+      }
+    }
+
+    return script;
   }
 
   /**
