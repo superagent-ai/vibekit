@@ -193,7 +193,7 @@ export class BeamSandboxProvider implements SandboxProvider {
   async create(
     envs?: Record<string, string>,
     agentType?: AgentType,
-    workingDirectory?: string
+    _workingDirectory?: string
   ): Promise<SandboxInstance> {
     try {
       const imageName =
@@ -216,15 +216,6 @@ export class BeamSandboxProvider implements SandboxProvider {
 
       const instance = await sandbox.create();
 
-      if (workingDirectory) {
-        const setupProcess = await instance.exec(
-          "bash",
-          "-c",
-          `mkdir -p ${workingDirectory}`
-        );
-        await setupProcess.wait();
-      }
-
       return new BeamSandboxInstanceWrapper(instance);
     } catch (error) {
       throw new Error(
@@ -237,21 +228,7 @@ export class BeamSandboxProvider implements SandboxProvider {
 
   async resume(sandboxId: string): Promise<SandboxInstance> {
     try {
-      // We need to create a dummy sandbox to use the connect method
-      // This is a bit hacky, but Beam's API requires a Sandbox instance to call connect
-      const image = new Image({
-        baseImage: this.config.image || "ubuntu:22.04",
-      });
-
-      const sandbox = new BeamSandbox({
-        name: "dummy-for-resume",
-        image: image,
-        cpu: this.config.cpu || 2,
-        memory: this.config.memory || "1Gi",
-      });
-
-      // Connect to the existing sandbox
-      const instance = await sandbox.connect(sandboxId);
+      const instance = await BeamSandbox.connect(sandboxId);
 
       return new BeamSandboxInstanceWrapper(instance);
     } catch (error) {
