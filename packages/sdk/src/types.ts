@@ -52,11 +52,21 @@ export type NorthflankConfig = {
   persistentVolumeStorage?: number;
 };
 
+export type BeamConfig = {
+  token: string;
+  workspaceId: string;
+  image?: string;
+  cpu?: number;
+  memory?: number | string;
+  keepWarmSeconds?: number;
+};
+
 export type EnvironmentConfig = {
   e2b?: E2BConfig;
   daytona?: DaytonaConfig;
   northflank?: NorthflankConfig;
   modal?: ModalConfig;
+  beam?: BeamConfig;
 };
 
 export type GithubConfig = {
