@@ -54,7 +54,6 @@ export interface BeamConfig {
   keepWarmSeconds?: number;
 }
 
-// Helper function to get Docker image based on agent type
 const getDockerImageFromAgentType = (agentType?: AgentType): string => {
   if (agentType === "codex") {
     return "superagentai/vibekit-codex:1.0";
