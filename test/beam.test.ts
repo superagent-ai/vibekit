@@ -6,7 +6,7 @@
  * These tests run without requiring actual Beam credentials.
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Mock the @beamcloud/beam-js module before importing our provider
 vi.mock("@beamcloud/beam-js", () => {
@@ -35,10 +35,12 @@ vi.mock("@beamcloud/beam-js", () => {
 
   const MockSandbox = vi.fn().mockImplementation(() => ({
     create: vi.fn().mockResolvedValue(createMockSandboxInstance()),
-    connect: vi.fn().mockImplementation(async (id: string) => ({
-      ...createMockSandboxInstance(),
-      sandboxId: id,
-    })),
+  }));
+
+  // Add static connect method directly to MockSandbox
+  (MockSandbox as any).connect = vi.fn().mockImplementation(async (id: string) => ({
+    ...createMockSandboxInstance(),
+    sandboxId: id,
   }));
 
   const MockImage = vi.fn().mockImplementation(() => ({}));
@@ -68,10 +70,6 @@ describe("Beam Sandbox Provider - Unit Tests", () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  afterEach(() => {
     vi.clearAllMocks();
   });
 
@@ -502,33 +500,6 @@ describe("Beam Sandbox Provider - Unit Tests", () => {
     });
   });
 
-  describe("Agent Type Handling", () => {
-    it("should handle all supported agent types", async () => {
-      const provider = createBeamProvider(validConfig);
-      const agentTypes: Array<"claude" | "codex" | "opencode" | "gemini" | "grok"> = [
-        "claude",
-        "codex",
-        "opencode",
-        "gemini",
-        "grok",
-      ];
-
-      for (const agentType of agentTypes) {
-        const sandbox = await provider.create({}, agentType);
-        expect(sandbox).toBeDefined();
-        expect(sandbox.sandboxId).toBeDefined();
-      }
-    });
-
-    it("should use default settings when agent type not specified", async () => {
-      const provider = createBeamProvider(validConfig);
-      const sandbox = await provider.create();
-
-      expect(sandbox).toBeDefined();
-      expect(sandbox.sandboxId).toBeDefined();
-    });
-  });
-
   describe("Custom Image Configuration", () => {
     it("should use custom image when specified", async () => {
       const customConfig: BeamConfig = {
@@ -558,6 +529,31 @@ describe("Beam Sandbox Provider - Unit Tests", () => {
         const sandbox = await provider.create();
         expect(sandbox).toBeDefined();
       }
+    });
+
+    it("should use agent-specific images when agent type provided", async () => {
+      const provider = createBeamProvider(validConfig);
+      const agentTypes: Array<"claude" | "codex" | "opencode" | "gemini" | "grok"> = [
+        "claude",
+        "codex",
+        "opencode",
+        "gemini",
+        "grok",
+      ];
+
+      for (const agentType of agentTypes) {
+        const sandbox = await provider.create({}, agentType);
+        expect(sandbox).toBeDefined();
+        expect(sandbox.sandboxId).toBeDefined();
+      }
+    });
+
+    it("should use default image when no agent type or custom image specified", async () => {
+      const provider = createBeamProvider(validConfig);
+      const sandbox = await provider.create();
+
+      expect(sandbox).toBeDefined();
+      expect(sandbox.sandboxId).toBeDefined();
     });
   });
 
@@ -650,7 +646,7 @@ describe("Beam Sandbox Provider - Unit Tests", () => {
     });
   });
 
-  describe("Environment Variables", () => {
+  describe("Environment Variables and Working Directory", () => {
     it("should handle empty environment variables", async () => {
       const provider = createBeamProvider(validConfig);
       const sandbox = await provider.create({});
@@ -683,9 +679,7 @@ describe("Beam Sandbox Provider - Unit Tests", () => {
       const sandbox = await provider.create(envVars);
       expect(sandbox).toBeDefined();
     });
-  });
 
-  describe("Working Directory", () => {
     it("should handle various working directory paths", async () => {
       const provider = createBeamProvider(validConfig);
       const workingDirs = [
