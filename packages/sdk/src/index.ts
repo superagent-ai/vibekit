@@ -1,4 +1,17 @@
-// Slim core export with dynamic imports
+// ===== Telemetry Opt-Out Feature =====
+import { initTelemetry } from "./telemetry";
+
+const telemetryEnabled = process.env.VIBEKIT_TELEMETRY !== 'false';
+
+if (telemetryEnabled) {
+  initTelemetry(); // Initializes telemetry
+} else {
+  console.log(
+    "Vibekit telemetry is disabled by user via VIBEKIT_TELEMETRY=false"
+  );
+}
+
+// ===== Core exports =====
 export { VibeKit } from "./core/vibekit";
 
 // Constants exports
@@ -71,10 +84,7 @@ export const createGrokAgent = async () => {
   return GrokAgent;
 };
 
-// Authentication is handled separately via @vibe-kit/auth package
-// Users should get tokens from auth package and pass them as API keys
-
-// Additional type exports from agent base
+// Authentication handled separately
 export type { 
   BaseAgentConfig, 
   PullRequestResult,

@@ -1,24 +1,64 @@
-name: Bug Report
-description: File a bug report
-title: "[Bug]: "
-labels: ["bug"]
+name: 🐞 Bug Report
+description: Report a reproducible bug or unexpected behavior in Vibekit
+title: "[BUG] <short summary>"
+labels: ["bug", "needs-triage"]
+
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug 🧠  
+        Please fill out the details below to help us reproduce and fix it faster.
+
   - type: textarea
     id: description
     attributes:
-      label: Bug Description
-      description: Describe what happened and what you expected
-      placeholder: What went wrong?
+      label: 🧩 Bug Description
+      description: What happened and what you expected to happen.
+      placeholder: |
+        When running `vibekit dev`, I expected the preview to start but instead got a TypeError.
     validations:
       required: true
 
   - type: textarea
     id: steps
     attributes:
-      label: Steps to reproduce
+      label: 🧪 Steps to Reproduce
+      description: Please list the exact steps to reproduce the issue.
       placeholder: |
-        1. 
-        2. 
-        3. 
+        1. Run `npm install vibekit`
+        2. Execute `vibekit dev`
+        3. Observe the crash message in console
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 💻 Environment
+      description: Provide your setup details.
+      placeholder: |
+        - OS: Ubuntu 22.04
+        - Node.js: v20.x
+        - Vibekit: 0.2.1
+        - Docker: 27.0.3
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📸 Logs / Screenshots
+      description: Paste any relevant logs or screenshots.
+      placeholder: Paste console output, error messages, or screenshots here.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 🧠 Additional Context
+      description: Any other details you think might help us understand or reproduce the issue.
+      placeholder: Related issues, workarounds, or configurations.
     validations:
       required: false
