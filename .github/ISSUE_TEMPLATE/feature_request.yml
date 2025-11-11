@@ -1,13 +1,56 @@
-name: Feature Request
-description: Suggest an idea for this project
-title: "[Feature]: "
-labels: ["enhancement"]
+name: 🚀 Feature Request
+description: Suggest a new idea, improvement, or enhancement for Vibekit
+title: "[FEATURE] <short summary>"
+labels: ["enhancement", "needs-triage"]
+
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for proposing a feature 💡  
+        Please provide as much detail as possible to help us understand the problem and potential solution.
+
   - type: textarea
     id: description
     attributes:
-      label: Feature Description
-      description: What feature would you like to see?
-      placeholder: Describe the feature you'd like
+      label: 🧩 Feature Description
+      description: Describe the feature you would like to see implemented.
+      placeholder: I would like Vibekit to support multiple agent providers in the same sandbox session.
     validations:
       required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 🔍 Problem to Solve
+      description: Explain the problem this feature would address.
+      placeholder: Currently, the SDK only supports a single agent provider at a time.
+    validations:
+      required: false
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: 💡 Proposed Solution
+      description: Optional. Share your ideas for how this feature could work.
+      placeholder: Add a configuration object that allows registering multiple agent providers.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 🔄 Alternatives Considered
+      description: Optional. List any alternative solutions or workarounds you considered.
+      placeholder: Currently, we can only run multiple agent providers sequentially in separate containers.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: 🧠 Additional Context
+      description: Any other context, references, or links that might help.
+      placeholder: Related issues, references, or example implementations.
+    validations:
+      required: false

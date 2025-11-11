@@ -1,9 +1,20 @@
-## Description
-<!-- A brief summary of the changes in this pull request. -->
+## 🧾 Description
+Provide a brief summary of the changes in this pull request. Include context, reasoning, and references to relevant issues.
 
-## Related Issue
-Fixes #<issue number>
+## 🔗 Related Issue
+Closes #<issue number> (if applicable)
 
-## Checklist
-- [ ] I tested my changes
-- [ ] I reviewed my own code
+## ✅ Type of Change
+- [ ] 🐞 Bug fix
+- [ ] 🚀 New feature
+- [ ] 🧱 Refactor / internal change
+- [ ] 📚 Documentation
+- [ ] 🧪 Tests
+
+## 🛠 Checklist
+- [ ] I have tested my changes locally
+- [ ] All CI checks pass
+- [ ] Documentation updated (if applicable)
+
+## 🧠 Additional Context
+Any extra context, screenshots, or notes for reviewers.

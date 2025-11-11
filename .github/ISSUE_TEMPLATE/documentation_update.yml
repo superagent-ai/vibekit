@@ -1,0 +1,46 @@
+name: 📚 Documentation Update
+description: Suggest an improvement or correction in Vibekit documentation
+title: "[DOCS] <short title>"
+labels: ["documentation", "good first issue"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve Vibekit documentation!  
+        Please provide details to make it clear and actionable.
+
+  - type: textarea
+    id: section
+    attributes:
+      label: Section of Documentation
+      description: Specify which part of the docs needs updating (README, CONTRIBUTING.md, examples, etc.)
+      placeholder: README.md, examples/usage.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: Describe the Issue
+      description: What is unclear, missing, or outdated?
+      placeholder: The CLI section is missing instructions for Windows users.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Changes
+      description: How should this be updated or improved?
+      placeholder: Add Windows-specific setup steps.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Any extra details, references, or links.
+      placeholder: Related issues, links, or screenshots.
+    validations:
+      required: false
