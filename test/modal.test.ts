@@ -1,50 +1,115 @@
-import { describe, it, expect, vi } from "vitest";
-import { VibeKit } from "../packages/sdk/src/index.js";
-import { createModalProvider } from "../packages/modal/dist/index.js";
-import dotenv from "dotenv";
+/**
+ * Integration Tests for Modal Sandbox Provider
+ *
+ * Tests the new createSandbox() API for the Modal sandbox provider.
+ * Requires Modal CLI authentication (modal token set).
+ */
 
-dotenv.config();
+import { describe, it, expect, afterEach } from "vitest";
+import { createSandbox, type ModalSandboxWithAgents } from "../packages/modal/dist/index.js";
+import { skipIfNoModalKeys, skipTest } from "./helpers/test-utils.js";
 
 describe("Modal Sandbox", () => {
-  it("should generate code with modal sandbox", async () => {
-    const prompt = "Hi there";
+  let sandbox: ModalSandboxWithAgents | null = null;
 
-    const modalProvider = createModalProvider({
-      image: "superagentai/vibekit-claude:1.0",
+  afterEach(async () => {
+    if (sandbox) {
+      await sandbox.close();
+      sandbox = null;
+    }
+  });
+
+  it("should create a sandbox with createSandbox()", async () => {
+    if (skipIfNoModalKeys()) {
+      return skipTest();
+    }
+
+    sandbox = await createSandbox({
+      image: "ubuntu:22.04",
+    });
+
+    expect(sandbox).toBeDefined();
+    expect(sandbox.sandboxId).toBeDefined();
+    expect(typeof sandbox.close).toBe("function");
+  }, 120000);
+
+  it("should have agent methods attached", async () => {
+    if (skipIfNoModalKeys()) {
+      return skipTest();
+    }
+
+    sandbox = await createSandbox({});
+
+    expect(typeof sandbox.claude).toBe("function");
+    expect(typeof sandbox.codex).toBe("function");
+    expect(typeof sandbox.gemini).toBe("function");
+    expect(typeof sandbox.grok).toBe("function");
+    expect(typeof sandbox.opencode).toBe("function");
+  }, 120000);
+
+  it("should execute commands via native Modal methods", async () => {
+    if (skipIfNoModalKeys()) {
+      return skipTest();
+    }
+
+    sandbox = await createSandbox({});
+
+    const proc = await sandbox.exec(["bash", "-c", "echo 'Hello from Modal'"], {
+      stdout: "pipe",
+    });
+
+    let stdout = "";
+    if (proc.stdout) {
+      for await (const chunk of proc.stdout as AsyncIterable<Uint8Array | string>) {
+        stdout += typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
+      }
+    }
+
+    const exitCode = await proc.wait();
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Hello from Modal");
+  }, 120000);
+
+  it("should support custom configuration options", async () => {
+    if (skipIfNoModalKeys()) {
+      return skipTest();
+    }
+
+    sandbox = await createSandbox({
+      image: "python:3.11",
+      encryptedPorts: [3000, 8080],
+      envs: {
+        TEST_VAR: "test_value",
+      },
+    });
+
+    expect(sandbox).toBeDefined();
+    expect(sandbox.sandboxId).toBeDefined();
+  }, 120000);
+
+  it("should get tunnel URLs for exposed ports", async () => {
+    if (skipIfNoModalKeys()) {
+      return skipTest();
+    }
+
+    sandbox = await createSandbox({
       encryptedPorts: [3000],
     });
 
-    const vibeKit = new VibeKit()
-      .withAgent({
-        type: "claude",
-        provider: "anthropic",
-        apiKey: process.env.ANTHROPIC_API_KEY!,
-        model: "claude-sonnet-4-20250514",
-      })
-      .withSandbox(modalProvider)
-      .withSecrets({
-        GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
-      });
+    const tunnels = await sandbox.tunnels();
 
-    const updateSpy = vi.fn();
-    const errorSpy = vi.fn();
+    expect(tunnels).toBeDefined();
+  }, 120000);
 
-    vibeKit.on("stdout", updateSpy);
-    vibeKit.on("stderr", errorSpy);
+  it("should clean up with close()", async () => {
+    if (skipIfNoModalKeys()) {
+      return skipTest();
+    }
 
-    // Clone repository first
-    const repository = process.env.GH_REPOSITORY || "superagent-ai/superagent";
-    await vibeKit.cloneRepository(repository);
+    const tempSandbox = await createSandbox({});
 
-    // Get the modal command for the prompt
-    const modalCommand = `echo "${prompt}" | claude -p --append-system-prompt "Help with the following request by providing code or guidance." --disallowedTools "Edit" "Replace" "Write" --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
-    const result = await vibeKit.executeCommand(modalCommand);
-    const host = await vibeKit.getHost(3000);
-
-    await vibeKit.kill();
-
-    expect(result).toBeDefined();
-    expect(host).toBeDefined();
-    expect(updateSpy).toHaveBeenCalled();
-  }, 60000);
+    expect(tempSandbox).toBeDefined();
+    await expect(tempSandbox.close()).resolves.not.toThrow();
+  }, 120000);
 });

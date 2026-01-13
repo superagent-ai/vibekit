@@ -3,9 +3,6 @@
     "private": true,
     "type": "module",
     "version": "1.0.0",
-    "bin": {
-        "vibekit": "./packages/cli/dist/cli.js"
-    },
     "engines": {
         "node": ">=18.0.0"
     },
@@ -13,10 +10,10 @@
         "packages/*"
     ],
     "scripts": {
-        "build": "npm run build --workspaces",
-        "build:packages": "npm run build --workspace=packages/core && npm run build --workspace=packages/e2b && npm run build --workspace=packages/daytona && npm run build --workspace=packages/northflank && npm run build --workspace=packages/cloudflare && npm run build --workspace=packages/modal && npm run build --workspace=packages/beam && npm run build --workspace=packages/blaxel && npm run build --workspace=packages/dagger && npm run build --workspace=packages/auth && npm run build --workspace=packages/sdk && npm run build --workspace=packages/cli",
-        "dev": "npm run dev --workspace=packages/sdk",
-        "type-check": "npm run build --workspace=packages/sdk && npm run build:types --workspace=packages/dagger && npm run type-check --workspaces",
+        "build": "npm run build:packages",
+        "build:packages": "npm run build --workspace=packages/core && npm run build --workspace=packages/e2b && npm run build --workspace=packages/daytona && npm run build --workspace=packages/cloudflare && npm run build --workspace=packages/modal && npm run build --workspace=packages/beam && npm run build --workspace=packages/blaxel",
+        "dev": "npm run dev --workspace=packages/core",
+        "type-check": "npm run type-check --workspaces",
         "test": "vitest"
     },
     "devDependencies": {

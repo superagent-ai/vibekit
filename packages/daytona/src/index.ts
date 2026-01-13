@@ -87,16 +87,18 @@ function adaptToBaseSandbox(workspace: Sandbox): BaseSandbox {
         let stderrData = "";
 
         // Get logs with callbacks
-        const logsPromise = workspace.process.getSessionCommandLogs(
+        const logsPromise = (workspace.process as any).getSessionCommandLogs(
           session.sessionId,
           response.cmdId!,
-          (stdout: string) => {
-            stdoutData += stdout;
-            if (opts?.onStdout) opts.onStdout(stdout);
-          },
-          (stderr: string) => {
-            stderrData += stderr;
-            if (opts?.onStderr) opts.onStderr(stderr);
+          {
+            onStdout: (stdout: string) => {
+              stdoutData += stdout;
+              if (opts?.onStdout) opts.onStdout(stdout);
+            },
+            onStderr: (stderr: string) => {
+              stderrData += stderr;
+              if (opts?.onStderr) opts.onStderr(stderr);
+            },
           }
         );
 
@@ -136,16 +138,18 @@ function adaptToBaseSandbox(workspace: Sandbox): BaseSandbox {
         let stdoutData = "";
         let stderrData = "";
 
-        await workspace.process.getSessionCommandLogs(
+        await (workspace.process as any).getSessionCommandLogs(
           session.sessionId,
           response.cmdId!,
-          (stdout: string) => {
-            stdoutData += stdout;
-            if (opts?.onStdout) opts.onStdout(stdout);
-          },
-          (stderr: string) => {
-            stderrData += stderr;
-            if (opts?.onStderr) opts.onStderr(stderr);
+          {
+            onStdout: (stdout: string) => {
+              stdoutData += stdout;
+              if (opts?.onStdout) opts.onStdout(stdout);
+            },
+            onStderr: (stderr: string) => {
+              stderrData += stderr;
+              if (opts?.onStderr) opts.onStderr(stderr);
+            },
           }
         );
 
