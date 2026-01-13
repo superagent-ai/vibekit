@@ -2,9 +2,9 @@
 
 <img width="700px" src="./assets/vibekit-cli.png" />
 
-# VibeKit is the safety layer for your coding agent 🖖
+# VibeKit 🖖
 
-Run Claude Code, Gemini, Codex — or any coding agent — in a clean, isolated sandbox with sensitive data redaction and observability baked in.
+Run Claude Code, Gemini, Codex — or any coding agent — in cloud sandboxes.
 
 ---
 
@@ -15,53 +15,126 @@ Run Claude Code, Gemini, Codex — or any coding agent — in a clean, isolated 
 
 ## 🚀 Quick Start
 
-Install the VibeKit CLI globally:
-
 ```bash
-npm install -g vibekit
+npm install @vibe-kit/e2b
 ```
 
-Run claude code with enhanced security and tracking
+```typescript
+import { createSandbox } from "@vibe-kit/e2b";
 
-```bash
-vibekit claude
+const sandbox = await createSandbox({
+  apiKey: process.env.E2B_API_KEY,
+});
+
+await sandbox.claude({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  model: "claude-sonnet-4-20250514",
+}).run("Create a REST API with Express");
+
+await sandbox.close();
 ```
 
-## ⚡️ Key Features
+## 📦 Packages
 
-🐳 **Local sandbox** - Runs agent output in isolated Docker containers — zero risk to your local setup
-
-🔒 **Built-in redaction** - Auto-removes secrets, api keys, and other sensitive data completions
-
-📊 **Observability** - Complete visibility into agent operations with real-time logs, traces, and metrics
-
-🌐 **Universal agent support** - Works with Claude Code, Gemini CLI, Grok CLI, Codex CLI, OpenCode, and more
-
-💻 **Works offline & locally** - No cloud dependencies or internet required — works entirely on your machine
-
-## 📦 Related Packages
-
-Looking to integrate VibeKit into your application? Check out these packages:
-
-
-### [📚 VibeKit SDK](https://github.com/superagent-ai/vibekit/tree/main/packages/sdk)
-Run coding agents in secure sandboxes with full control and monitoring.
+### Core
 
 ```bash
-npm install @vibe-kit/sdk
+npm install @vibe-kit/core
 ```
 
-Perfect for building applications that need to execute AI-generated code safely.
+Agent implementations and the `attachAgents` utility.
 
-### [🔐 VibeKit Auth](https://github.com/superagent-ai/vibekit/tree/main/packages/auth) 
-Use your MAX subscriptions in AI Apps.
+### Providers
 
-```bash
-npm install @vibe-kit/auth
+| Package | Provider |
+|---------|----------|
+| `@vibe-kit/e2b` | [E2B](https://e2b.dev) |
+| `@vibe-kit/modal` | [Modal](https://modal.com) |
+| `@vibe-kit/daytona` | [Daytona](https://daytona.io) |
+| `@vibe-kit/cloudflare` | [Cloudflare Workers](https://workers.cloudflare.com) |
+| `@vibe-kit/beam` | [Beam](https://beam.cloud) |
+| `@vibe-kit/blaxel` | [Blaxel](https://blaxel.ai) |
+
+## 💡 Usage
+
+### Basic
+
+```typescript
+import { createSandbox } from "@vibe-kit/e2b";
+
+const sandbox = await createSandbox({
+  apiKey: process.env.E2B_API_KEY,
+});
+
+const result = await sandbox.claude({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  model: "claude-sonnet-4-20250514",
+}).run("Create a REST API with Express and TypeScript");
+
+// Stream events
+for await (const event of result) {
+  if (event.type === "text") console.log(event.content);
+  if (event.type === "tool_use") console.log(`Using tool: ${event.tool}`);
+}
+
+// Native sandbox methods work directly
+await sandbox.files.write("/app/config.json", JSON.stringify({ port: 3000 }));
+
+await sandbox.close();
 ```
 
-Handle authentication flows for your VibeKit-powered applications.
+### Multiple Agents
 
+```typescript
+const sandbox = await createSandbox({ apiKey });
+
+await sandbox.claude({ apiKey: ANTHROPIC_KEY }).run("Build the frontend");
+await sandbox.codex({ apiKey: OPENAI_KEY }).run("Write tests for api.ts");
+await sandbox.gemini({ apiKey: GOOGLE_KEY }).run("Add documentation");
+```
+
+### Switching Providers
+
+```typescript
+// E2B
+import { createSandbox } from "@vibe-kit/e2b";
+const sandbox = await createSandbox({ apiKey: E2B_KEY });
+
+// Modal
+import { createSandbox } from "@vibe-kit/modal";
+const sandbox = await createSandbox({ image: "ubuntu:22.04" });
+
+// Daytona
+import { createSandbox } from "@vibe-kit/daytona";
+const sandbox = await createSandbox({ apiKey: DAYTONA_KEY });
+
+// Agent usage identical across all providers
+await sandbox.claude({ apiKey, model }).run("Build an app");
+```
+
+### CLI Flags
+
+Pass flags directly to agent CLIs:
+
+```typescript
+await sandbox.claude({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  model: "claude-sonnet-4-20250514",
+  flags: [
+    "--allowedTools", "Edit,Write,Bash",
+    "--verbose",
+    "--max-tokens", "4096",
+  ],
+}).run("Create a web app");
+
+await sandbox.codex({
+  apiKey: process.env.OPENAI_API_KEY,
+  flags: [
+    "--writable-roots", "/app",
+    "--approval", "full-auto",
+  ],
+}).run("Fix the bug");
+```
 
 ## 🤝 Contributing
 

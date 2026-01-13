@@ -18,7 +18,8 @@ jobs:
           cache: 'npm'
       - run: npm install -g npm@latest
       - run: npm ci
-      - run: npm run type-check --workspaces
+      - run: npm run build
+      - run: npm run type-check
 
   test:
     name: Test

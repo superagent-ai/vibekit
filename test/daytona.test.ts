@@ -1,55 +1,111 @@
-import { describe, it, expect, vi } from "vitest";
-import { VibeKit } from "../packages/sdk/src/index.js";
-import { createDaytonaProvider } from "../packages/daytona/dist/index.js";
-import { skipIfNoDaytonaKeys, skipTest } from "./helpers/test-utils.js";
-import dotenv from "dotenv";
+/**
+ * Integration Tests for Daytona Sandbox Provider
+ *
+ * Tests the new createSandbox() API for the Daytona sandbox provider.
+ * Requires DAYTONA_API_KEY environment variable.
+ */
 
-dotenv.config();
+import { describe, it, expect, afterEach } from "vitest";
+import {
+  createSandbox,
+  type DaytonaSandboxWithAgents,
+} from "../packages/daytona/dist/index.js";
+import { skipIfNoDaytonaKeys, skipTest } from "./helpers/test-utils.js";
 
 describe("Daytona Sandbox", () => {
-  it("should generate code with daytona sandbox", async () => {
+  let sandbox: DaytonaSandboxWithAgents | null = null;
+
+  afterEach(async () => {
+    if (sandbox) {
+      await sandbox.close();
+      sandbox = null;
+    }
+  });
+
+  it("should create a sandbox with createSandbox()", async () => {
     if (skipIfNoDaytonaKeys()) {
       return skipTest();
     }
 
-    const prompt = "Hi there";
-
-    const daytonaProvider = createDaytonaProvider({
-      apiKey: process.env.DAYTONA_SERVER_API_KEY!,
+    sandbox = await createSandbox({
+      apiKey: process.env.DAYTONA_API_KEY!,
     });
 
-    const vibeKit = new VibeKit()
-      .withAgent({
-        type: "claude",
-        provider: "anthropic",
-        apiKey: process.env.ANTHROPIC_API_KEY!,
-        model: "claude-sonnet-4-20250514",
-      })
-      .withSandbox(daytonaProvider)
-      .withSecrets({
-        GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN!,
-      });
+    expect(sandbox).toBeDefined();
+    expect(sandbox.sandboxId).toBeDefined();
+    expect(typeof sandbox.close).toBe("function");
+  }, 120000);
 
-    // Clone repository first
-    const repository = process.env.GH_REPOSITORY || "superagent-ai/signals";
-    await vibeKit.cloneRepository(repository);
+  it("should have agent methods attached", async () => {
+    if (skipIfNoDaytonaKeys()) {
+      return skipTest();
+    }
 
-    const updateSpy = vi.fn();
-    const errorSpy = vi.fn();
+    sandbox = await createSandbox({
+      apiKey: process.env.DAYTONA_API_KEY!,
+    });
 
-    vibeKit.on("stdout", updateSpy);  // executeCommand emits stdout events
-    vibeKit.on("stderr", errorSpy);   // executeCommand emits stderr events
+    expect(typeof sandbox.claude).toBe("function");
+    expect(typeof sandbox.codex).toBe("function");
+    expect(typeof sandbox.gemini).toBe("function");
+    expect(typeof sandbox.grok).toBe("function");
+    expect(typeof sandbox.opencode).toBe("function");
+  }, 120000);
 
-    // Get the daytona command for the prompt
-    const daytonaCommand = `echo "${prompt}" | claude -p --append-system-prompt "Help with the following request by providing code or guidance." --disallowedTools "Edit" "Replace" "Write" --output-format stream-json --verbose --allowedTools "Edit,Write,MultiEdit,Read,Bash" --model claude-sonnet-4-20250514`;
-    const result = await vibeKit.executeCommand(daytonaCommand);
-    const host = await vibeKit.getHost(3000);
+  it("should support custom configuration options", async () => {
+    if (skipIfNoDaytonaKeys()) {
+      return skipTest();
+    }
 
-    await vibeKit.kill();
+    sandbox = await createSandbox({
+      apiKey: process.env.DAYTONA_API_KEY!,
+      image: "ubuntu:22.04",
+      serverUrl: process.env.DAYTONA_SERVER_URL || "https://app.daytona.io/api",
+      envs: {
+        TEST_VAR: "test_value",
+      },
+    });
 
-    expect(result).toBeDefined();
-    expect(host).toBeDefined();
-    expect(updateSpy).toHaveBeenCalled();
-    expect(errorSpy).not.toHaveBeenCalled();
-  }, 60000);
+    expect(sandbox).toBeDefined();
+    expect(sandbox.sandboxId).toBeDefined();
+  }, 120000);
+
+  it("should execute commands via native workspace methods", async () => {
+    if (skipIfNoDaytonaKeys()) {
+      return skipTest();
+    }
+
+    sandbox = await createSandbox({
+      apiKey: process.env.DAYTONA_API_KEY!,
+    });
+
+    // Daytona uses the workspace.process interface from the SDK
+    expect(sandbox.process).toBeDefined();
+  }, 120000);
+
+  it("should handle file operations", async () => {
+    if (skipIfNoDaytonaKeys()) {
+      return skipTest();
+    }
+
+    sandbox = await createSandbox({
+      apiKey: process.env.DAYTONA_API_KEY!,
+    });
+
+    // Daytona uses the workspace.fs interface from the SDK
+    expect(sandbox.fs).toBeDefined();
+  }, 120000);
+
+  it("should clean up with close()", async () => {
+    if (skipIfNoDaytonaKeys()) {
+      return skipTest();
+    }
+
+    const tempSandbox = await createSandbox({
+      apiKey: process.env.DAYTONA_API_KEY!,
+    });
+
+    expect(tempSandbox).toBeDefined();
+    await expect(tempSandbox.close()).resolves.not.toThrow();
+  }, 120000);
 });

@@ -1,6 +1,6 @@
 {
   "name": "@vibe-kit/blaxel",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,16 +16,13 @@
     "dev": "tsup src/index.ts --watch",
     "type-check": "tsc --noEmit"
   },
-  "peerDependencies": {
-    "@vibe-kit/sdk": "*"
+  "dependencies": {
+    "@blaxel/core": "^0.2.38",
+    "@vibe-kit/core": "*"
   },
   "devDependencies": {
     "@types/node": "^22.15.18",
     "tsup": "^8.4.0",
     "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "@blaxel/core": "^0.2.48"
   }
 }
-
