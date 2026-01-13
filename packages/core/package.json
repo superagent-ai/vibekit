@@ -1,5 +1,5 @@
 {
-  "name": "@vibe-kit/daytona",
+  "name": "@vibe-kit/core",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -12,13 +12,9 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "build": "tsup",
     "dev": "tsup src/index.ts --watch",
     "type-check": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@daytonaio/sdk": "^0.22.0",
-    "@vibe-kit/core": "*"
   },
   "devDependencies": {
     "@types/node": "^22.15.18",

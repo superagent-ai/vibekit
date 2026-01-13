@@ -1,163 +1,263 @@
+/**
+ * @vibe-kit/cloudflare
+ *
+ * Cloudflare sandbox provider for VibeKit SDK v2.
+ *
+ * @example
+ * ```typescript
+ * import { createSandbox } from "@vibe-kit/cloudflare";
+ *
+ * const sandbox = await createSandbox({
+ *   env: context.env,
+ *   hostname: "my-app.workers.dev",
+ * });
+ *
+ * // Use agents
+ * await sandbox.claude({
+ *   apiKey: process.env.ANTHROPIC_API_KEY,
+ * }).run("Create a web app");
+ *
+ * // Cleanup
+ * await sandbox.close();
+ * ```
+ *
+ * @packageDocumentation
+ */
+
 import { getSandbox, type LogEvent, parseSSEStream, type Sandbox, type SandboxEnv } from "@cloudflare/sandbox";
+import { attachAgents, type BaseSandbox, type Agents, type ProcessHandle } from "@vibe-kit/core";
 
-// Define the interfaces we need from the SDK
-export interface SandboxExecutionResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
+// ============================================================================
+// Configuration Types
+// ============================================================================
 
-export interface SandboxCommandOptions {
-  timeoutMs?: number;
-  background?: boolean;
-  onStdout?: (data: string) => void;
-  onStderr?: (data: string) => void;
-}
-
-export interface SandboxCommands {
-  run(
-    command: string,
-    options?: SandboxCommandOptions
-  ): Promise<SandboxExecutionResult>;
-}
-
-export interface SandboxInstance {
-  sandboxId: string;
-  commands: SandboxCommands;
-  kill(): Promise<void>;
-  pause(): Promise<void>;
-  getHost(port: number): Promise<string>;
-}
-
-export interface SandboxProvider {
-  create(
-    envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini",
-    workingDirectory?: string
-  ): Promise<SandboxInstance>;
-  resume(sandboxId: string): Promise<SandboxInstance>;
-}
-
-export type AgentType = "codex" | "claude" | "opencode" | "gemini";
-
+/**
+ * Configuration for creating a Cloudflare sandbox
+ */
 export interface CloudflareConfig {
+  /**
+   * Cloudflare environment with Sandbox binding
+   */
   env: SandboxEnv;
+
+  /**
+   * Hostname for exposed ports
+   */
   hostname: string;
+
+  /**
+   * Optional sandbox ID (for resuming)
+   */
+  sandboxId?: string;
+
+  /**
+   * Environment variables
+   */
+  envs?: Record<string, string>;
 }
 
-// Cloudflare implementation
-export class CloudflareSandboxInstance implements SandboxInstance {
-  constructor(
-    private sandbox: Sandbox,
-    public sandboxId: string,
-    private hostname: string,
-  ) { }
+// ============================================================================
+// Sandbox Type
+// ============================================================================
 
-  private async handleBackgroundCommand(command: string, options?: SandboxCommandOptions) {
-    const response = await this.sandbox.startProcess(command);
+/**
+ * Cloudflare Sandbox with agents attached
+ */
+export type CloudflareSandboxWithAgents = Sandbox & Agents & {
+  sandboxId: string;
+  close(): Promise<void>;
+};
 
-    // Defer log streaming to avoid blocking the return
-    (async () => {
-      try {
-        const logStream = await this.sandbox.streamProcessLogs(response.id);
-        for await (const log of parseSSEStream<LogEvent>(logStream)) {
-          if (log.type === 'stdout') {
-            options?.onStdout?.(log.data);
-          } else if (log.type === 'stderr') {
-            options?.onStderr?.(log.data);
-          } else if (log.type === 'exit') {
-            await this.sandbox.killProcess(response.id);
-          } else if (log.type === 'error') {
-            options?.onStderr?.(log.data);
-            await this.sandbox.killProcess(response.id);
+// ============================================================================
+// Adapter to make Cloudflare compatible with BaseSandbox interface
+// ============================================================================
+
+function adaptToBaseSandbox(sandbox: Sandbox): BaseSandbox {
+  return {
+    process: {
+      async start(cmd, opts): Promise<ProcessHandle> {
+        const response = await sandbox.startProcess(cmd);
+        
+        let stdoutData = "";
+        let stderrData = "";
+        let processEnded = false;
+
+        // Start streaming logs in background
+        const logsPromise = (async () => {
+          try {
+            const logStream = await sandbox.streamProcessLogs(response.id);
+            for await (const log of parseSSEStream<LogEvent>(logStream)) {
+              if (log.type === "stdout") {
+                stdoutData += log.data;
+                if (opts?.onStdout) opts.onStdout(log.data);
+              } else if (log.type === "stderr") {
+                stderrData += log.data;
+                if (opts?.onStderr) opts.onStderr(log.data);
+              } else if (log.type === "exit" || log.type === "error") {
+                processEnded = true;
+                break;
+              }
+            }
+          } catch {
+            processEnded = true;
           }
-        }
-      } catch (error) {
-        console.error('Background log streaming error:', error);
-      }
-    })();
+          processEnded = true;
+        })();
 
-    // Return immediately for background commands
-    return {
-      exitCode: 0,
-      stdout: "Background command started successfully",
-      stderr: "",
-    };
-  }
-
-  private async handleForegroundCommand(command: string, options?: SandboxCommandOptions) {
-    const response = await this.sandbox.exec(command, {
-      stream: true,
-      onOutput(stream, data) {
-        if (stream === 'stdout') {
-          options?.onStdout?.(data);
-        } else if (stream === 'stderr') {
-          options?.onStderr?.(data);
-        }
+        return {
+          pid: response.id,
+          async wait() {
+            await logsPromise;
+            return { exitCode: 0, stdout: stdoutData, stderr: stderrData };
+          },
+          async kill() {
+            processEnded = true;
+            await sandbox.killProcess(response.id);
+          },
+          stdout: {
+            async *[Symbol.asyncIterator]() {
+              await logsPromise;
+              if (stdoutData) yield stdoutData;
+            },
+          },
+          stderr: {
+            async *[Symbol.asyncIterator]() {
+              await logsPromise;
+              if (stderrData) yield stderrData;
+            },
+          },
+        };
       },
-    });
 
-    return response;
-  }
-
-  get commands(): SandboxCommands {
-    return {
-      run: (command: string, options?: SandboxCommandOptions) => {
-        return options?.background
-          ? this.handleBackgroundCommand(command, options)
-          : this.handleForegroundCommand(command, options);
+      async startAndWait(cmd, opts) {
+        const response = await sandbox.exec(cmd, {
+          stream: true,
+          onOutput(stream: string, data: string) {
+            if (stream === "stdout" && opts?.onStdout) opts.onStdout(data);
+            else if (stream === "stderr" && opts?.onStderr) opts.onStderr(data);
+          },
+        });
+        return { exitCode: response.exitCode, stdout: response.stdout, stderr: response.stderr };
       },
-    };
-  }
+    },
 
-  async kill(): Promise<void> {
-    await this.sandbox.destroy();
-  }
+    files: {
+      async write(path, content) {
+        await sandbox.exec(`cat > "${path}" << 'VIBEKIT_EOF'\n${content}\nVIBEKIT_EOF`);
+      },
 
-  async pause(): Promise<void> {
-    await this.sandbox.stop();
-  }
-
-  async getHost(port: number): Promise<string> {
-    const response = await this.sandbox.exposePort(port, { name: 'vibekit', hostname: this.hostname });
-    return response.url;
-  }
+      async read(path) {
+        const result = await sandbox.exec(`cat "${path}"`);
+        return result.stdout;
+      },
+    },
+  };
 }
 
-export class CloudflareSandboxProvider implements SandboxProvider {
-  constructor(private config: CloudflareConfig) { }
+// ============================================================================
+// Main API
+// ============================================================================
 
-  async create(
-    envs?: Record<string, string>,
-    agentType?: AgentType,
-    workingDirectory?: string
-  ): Promise<SandboxInstance> {
-    if (!this.config.env || !this.config.env.Sandbox) {
-      throw new Error(
-        `Cloudflare Durable Object binding "Sandbox" not found. ` +
-        `Make sure you're running within a Cloudflare Worker and the binding is configured in wrangler.json/toml`
-      );
-    }
+/**
+ * Create a Cloudflare sandbox with agents attached.
+ *
+ * @param config - Configuration for the sandbox
+ * @returns Cloudflare sandbox with agent capabilities
+ */
+export async function createSandbox(config: CloudflareConfig): Promise<CloudflareSandboxWithAgents> {
+  const { env, hostname, sandboxId, envs = {} } = config;
 
-    // Generate a unique sandbox ID
-    const sandboxId = `vibekit-${agentType || 'default'}-${Date.now()}`;
-
-    // Get or create a sandbox instance using the SDK
-    const sandbox = getSandbox(this.config.env.Sandbox, sandboxId) as Sandbox;
-    sandbox.setEnvVars(envs || {});
-    await sandbox.exec(`sudo mkdir -p ${workingDirectory} && sudo chown $USER:$USER ${workingDirectory}`);
-
-    return new CloudflareSandboxInstance(sandbox, sandboxId, this.config.hostname);
+  if (!env || !env.Sandbox) {
+    throw new Error(
+      `Cloudflare Durable Object binding "Sandbox" not found. ` +
+      `Make sure you're running within a Cloudflare Worker and the binding is configured.`
+    );
   }
 
-  async resume(sandboxId: string): Promise<SandboxInstance> {
-    const sandbox = getSandbox(this.config.env.Sandbox, sandboxId) as Sandbox;
-    return new CloudflareSandboxInstance(sandbox, sandboxId, this.config.hostname);
+  const id = sandboxId || `vibekit-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const sandbox = getSandbox(env.Sandbox, id) as Sandbox;
+  
+  if (Object.keys(envs).length > 0) {
+    sandbox.setEnvVars(envs);
   }
+
+  // Create adapted BaseSandbox for agents
+  const baseSandbox = adaptToBaseSandbox(sandbox);
+  const sandboxWithAgents = attachAgents(baseSandbox);
+
+  // Create result with both native methods and agents
+  const result = Object.assign(sandbox, {
+    sandboxId: id,
+    claude: sandboxWithAgents.claude,
+    codex: sandboxWithAgents.codex,
+    gemini: sandboxWithAgents.gemini,
+    grok: sandboxWithAgents.grok,
+    opencode: sandboxWithAgents.opencode,
+    close: async () => {
+      await sandbox.destroy();
+    },
+    async getHost(port: number) {
+      const response = await sandbox.exposePort(port, { name: "vibekit", hostname });
+      return response.url;
+    },
+  }) as CloudflareSandboxWithAgents;
+
+  return result;
 }
 
-export function createCloudflareProvider(
-  config: CloudflareConfig
-): CloudflareSandboxProvider {
-  return new CloudflareSandboxProvider(config);
+// ============================================================================
+// Re-exports
+// ============================================================================
+
+export type {
+  Agent,
+  AgentEvent,
+  AgentResult,
+  FinalResult,
+  ClaudeConfig,
+  CodexConfig,
+  GeminiConfig,
+  GrokConfig,
+  OpencodeConfig,
+} from "@vibe-kit/core";
+
+export type { SandboxEnv } from "@cloudflare/sandbox";
+
+// ============================================================================
+// Legacy API (deprecated)
+// ============================================================================
+
+/**
+ * @deprecated Use `createSandbox` instead.
+ */
+export function createCloudflareProvider(config: { env: SandboxEnv; hostname: string }) {
+  console.warn("⚠️  createCloudflareProvider() is deprecated. Please use createSandbox() instead.");
+  
+  return {
+    async create(envs?: Record<string, string>) {
+      const sandbox = await createSandbox({ ...config, envs });
+      const baseSandbox = adaptToBaseSandbox(sandbox);
+      return {
+        sandboxId: sandbox.sandboxId,
+        commands: {
+          async run(command: string, options?: { timeoutMs?: number; background?: boolean; onStdout?: (data: string) => void; onStderr?: (data: string) => void }) {
+            if (options?.background) {
+              baseSandbox.process.start(command, options);
+              return { exitCode: 0, stdout: "Background command started", stderr: "" };
+            }
+            return baseSandbox.process.startAndWait(command, options);
+          },
+        },
+        async kill() { await sandbox.close(); },
+        async pause() { await sandbox.stop(); },
+        async getHost(port: number) {
+          const response = await sandbox.exposePort(port, { name: "vibekit", hostname: config.hostname });
+          return response.url;
+        },
+      };
+    },
+    async resume(_sandboxId: string) {
+      return this.create();
+    },
+  };
 }

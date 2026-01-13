@@ -1,273 +1,163 @@
-/**
- * Unit Tests for VibeKit Core SDK
- * 
- * Tests core SDK functionality, configuration, and interface compliance
- * without requiring external API calls or real sandbox providers.
- */
+import { describe, it, expect } from "vitest";
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { VibeKit } from '../packages/sdk/src/index.js';
+// Import types from core to verify they are properly exported
+import type {
+  BaseSandbox,
+  Agent,
+  AgentResult,
+  AgentEvent,
+  FinalResult,
+  ClaudeConfig,
+  CodexConfig,
+  GeminiConfig,
+  GrokConfig,
+  OpencodeConfig,
+  Agents,
+  SandboxWithAgents,
+} from "../packages/core/src/index.js";
 
-// Mock provider for testing
-const createMockProvider = () => ({
-  create: vi.fn().mockResolvedValue({
-    sandboxId: 'mock-sandbox-123',
-    commands: {
-      run: vi.fn().mockResolvedValue({
-        exitCode: 0,
-        stdout: 'Mock command output',
-        stderr: ''
-      })
-    },
-    kill: vi.fn().mockResolvedValue(undefined),
-    pause: vi.fn().mockResolvedValue(undefined),
-    getHost: vi.fn().mockResolvedValue('localhost:3000'),
-    on: vi.fn(),
-    emit: vi.fn()
-  }),
-  resume: vi.fn().mockResolvedValue({
-    sandboxId: 'mock-sandbox-123',
-    commands: { run: vi.fn() },
-    kill: vi.fn(),
-    pause: vi.fn(),
-    getHost: vi.fn(),
-    on: vi.fn(),
-    emit: vi.fn()
-  })
+import { attachAgents } from "../packages/core/src/index.js";
+
+describe("@vibe-kit/core Types", () => {
+  it("should have all types properly exported", () => {
+    // Type checking test - these will fail at compile time if types are not exported
+    type TestBaseSandbox = BaseSandbox;
+    type TestAgent = Agent;
+    type TestAgentResult = AgentResult;
+    type TestAgentEvent = AgentEvent;
+    type TestFinalResult = FinalResult;
+    type TestClaudeConfig = ClaudeConfig;
+    type TestCodexConfig = CodexConfig;
+    type TestGeminiConfig = GeminiConfig;
+    type TestGrokConfig = GrokConfig;
+    type TestOpencodeConfig = OpencodeConfig;
+    type TestAgents = Agents;
+    type TestSandboxWithAgents<T extends BaseSandbox> = SandboxWithAgents<T>;
+
+    // If this test compiles and runs, all types are properly exported
+    expect(true).toBe(true);
+  });
+
+  it("should export attachAgents function", () => {
+    expect(typeof attachAgents).toBe("function");
+  });
 });
 
-describe('VibeKit Core SDK - Unit Tests', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+describe("@vibe-kit/core attachAgents", () => {
+  it("should attach agents to a mock sandbox", () => {
+    // Create a mock sandbox that implements BaseSandbox
+    const mockSandbox: BaseSandbox = {
+      process: {
+        async start(_cmd, _opts) {
+          return {
+            pid: "test-pid",
+            async wait() {
+              return { exitCode: 0, stdout: "test output", stderr: "" };
+            },
+            async kill() {},
+            stdout: {
+              async *[Symbol.asyncIterator]() {
+                yield "test output";
+              },
+            },
+            stderr: {
+              async *[Symbol.asyncIterator]() {
+                // Empty stderr
+              },
+            },
+          };
+        },
+        async startAndWait(_cmd, _opts) {
+          return { exitCode: 0, stdout: "test output", stderr: "" };
+        },
+      },
+      files: {
+        async write(_path, _content) {},
+        async read(_path) {
+          return "test content";
+        },
+      },
+    };
+
+    // Attach agents
+    const sandboxWithAgents = attachAgents(mockSandbox);
+
+    // Verify agents are attached
+    expect(typeof sandboxWithAgents.claude).toBe("function");
+    expect(typeof sandboxWithAgents.codex).toBe("function");
+    expect(typeof sandboxWithAgents.gemini).toBe("function");
+    expect(typeof sandboxWithAgents.grok).toBe("function");
+    expect(typeof sandboxWithAgents.opencode).toBe("function");
+
+    // Verify original methods still work
+    expect(typeof sandboxWithAgents.process.start).toBe("function");
+    expect(typeof sandboxWithAgents.process.startAndWait).toBe("function");
+    expect(typeof sandboxWithAgents.files.write).toBe("function");
+    expect(typeof sandboxWithAgents.files.read).toBe("function");
   });
 
-  describe('SDK Initialization', () => {
-    it('should create VibeKit instance', () => {
-      const vibeKit = new VibeKit();
-      expect(vibeKit).toBeDefined();
-      expect(vibeKit).toBeInstanceOf(VibeKit);
+  it("should create agent instances with config", () => {
+    const mockSandbox: BaseSandbox = {
+      process: {
+        async start() {
+          return {
+            pid: "test-pid",
+            async wait() { return { exitCode: 0, stdout: "", stderr: "" }; },
+            async kill() {},
+            stdout: { async *[Symbol.asyncIterator]() {} },
+            stderr: { async *[Symbol.asyncIterator]() {} },
+          };
+        },
+        async startAndWait() {
+          return { exitCode: 0, stdout: "", stderr: "" };
+        },
+      },
+      files: {
+        async write() {},
+        async read() { return ""; },
+      },
+    };
+
+    const sandboxWithAgents = attachAgents(mockSandbox);
+
+    // Create Claude agent
+    const claudeAgent = sandboxWithAgents.claude({
+      apiKey: "test-api-key",
+      model: "claude-sonnet-4-20250514",
+      flags: ["--verbose"],
     });
 
-    it('should provide fluent configuration API', () => {
-      const mockProvider = createMockProvider();
-      
-      const vibeKit = new VibeKit()
-        .withAgent({
-          type: 'claude',
-          provider: 'anthropic',
-          apiKey: 'test-key',
-          model: 'claude-sonnet-4-20250514'
-        })
-        .withSandbox(mockProvider)
-        .withWorkingDirectory('/test/dir');
+    expect(typeof claudeAgent.run).toBe("function");
+    expect(typeof claudeAgent.ask).toBe("function");
 
-      expect(vibeKit).toBeDefined();
-      expect(vibeKit).toBeInstanceOf(VibeKit);
+    // Create Codex agent
+    const codexAgent = sandboxWithAgents.codex({
+      apiKey: "test-api-key",
     });
+
+    expect(typeof codexAgent.run).toBe("function");
+    expect(typeof codexAgent.ask).toBe("function");
   });
+});
 
-  describe('Configuration Methods', () => {
-    it('should configure agent settings', () => {
-      const vibeKit = new VibeKit();
-      
-      const configured = vibeKit.withAgent({
-        type: 'claude',
-        provider: 'anthropic',
-        apiKey: 'test-api-key',
-        model: 'claude-sonnet-4-20250514'
-      });
+describe("AgentEvent types", () => {
+  it("should support all event types", () => {
+    // Test that all event types can be created
+    const textEvent: AgentEvent = { type: "text", content: "Hello" };
+    const toolUseEvent: AgentEvent = { type: "tool_use", tool: "bash", input: { cmd: "ls" } };
+    const toolResultEvent: AgentEvent = { type: "tool_result", tool: "bash", output: "file.txt" };
+    const errorEvent: AgentEvent = { type: "error", message: "Error occurred" };
+    const doneEvent: AgentEvent = {
+      type: "done",
+      result: { success: true, output: "Done", errors: [], exitCode: 0 },
+    };
+    const rawEvent: AgentEvent = { type: "raw", data: '{"type":"unknown"}' };
 
-      expect(configured).toBe(vibeKit); // Should return same instance for chaining
-    });
-
-    it('should configure sandbox provider', () => {
-      const vibeKit = new VibeKit();
-      const mockProvider = createMockProvider();
-      
-      const configured = vibeKit.withSandbox(mockProvider);
-      
-      expect(configured).toBe(vibeKit); // Should return same instance for chaining
-    });
-
-    it('should configure working directory', () => {
-      const vibeKit = new VibeKit();
-      const testDir = '/var/test-workspace';
-      
-      const configured = vibeKit.withWorkingDirectory(testDir);
-      
-      expect(configured).toBe(vibeKit); // Should return same instance for chaining
-    });
-
-    it('should support method chaining', () => {
-      const mockProvider = createMockProvider();
-      
-      const vibeKit = new VibeKit()
-        .withAgent({
-          type: 'claude',
-          provider: 'anthropic',
-          apiKey: 'test-key',
-          model: 'claude-sonnet-4-20250514'
-        })
-        .withSandbox(mockProvider)
-        .withWorkingDirectory('/test/dir');
-
-      expect(vibeKit).toBeInstanceOf(VibeKit);
-    });
+    expect(textEvent.type).toBe("text");
+    expect(toolUseEvent.type).toBe("tool_use");
+    expect(toolResultEvent.type).toBe("tool_result");
+    expect(errorEvent.type).toBe("error");
+    expect(doneEvent.type).toBe("done");
+    expect(rawEvent.type).toBe("raw");
   });
-
-  describe('Agent Configuration Validation', () => {
-    it('should accept valid agent types', () => {
-      const vibeKit = new VibeKit();
-      const agentTypes = ['claude', 'codex', 'opencode', 'gemini', 'grok'] as const;
-      
-      agentTypes.forEach(type => {
-        expect(() => {
-          vibeKit.withAgent({
-            type,
-            provider: 'anthropic',
-            apiKey: 'test-key',
-            model: 'test-model'
-          });
-        }).not.toThrow();
-      });
-    });
-
-    it('should accept provider configurations', () => {
-      const vibeKit = new VibeKit();
-      const providers = ['anthropic', 'openai'] as const;
-      
-      providers.forEach(provider => {
-        expect(() => {
-          vibeKit.withAgent({
-            type: 'claude',
-            provider,
-            apiKey: 'test-key',
-            model: 'test-model'
-          });
-        }).not.toThrow();
-      });
-    });
-  });
-
-  describe('Event Emitter Interface', () => {
-    it('should implement EventEmitter methods', () => {
-      const vibeKit = new VibeKit();
-      
-      expect(typeof vibeKit.on).toBe('function');
-      expect(typeof vibeKit.emit).toBe('function');
-      expect(typeof vibeKit.removeListener).toBe('function');
-    });
-
-    it('should handle event registration and emission', () => {
-      const vibeKit = new VibeKit();
-      const listener = vi.fn();
-      
-      vibeKit.on('test-event', listener);
-      vibeKit.emit('test-event', 'test-data');
-      
-      expect(listener).toHaveBeenCalledWith('test-data');
-    });
-  });
-
-  describe('Command Execution Interface', () => {
-    it('should provide executeCommand method', async () => {
-      const vibeKit = new VibeKit();
-      const mockProvider = createMockProvider();
-      
-      vibeKit.withSandbox(mockProvider);
-      
-      expect(typeof vibeKit.executeCommand).toBe('function');
-    });
-
-    it('should provide generateCode method (deprecated)', async () => {
-      const vibeKit = new VibeKit();
-      const mockProvider = createMockProvider();
-      
-      vibeKit
-        .withAgent({
-          type: 'claude',
-          provider: 'anthropic',
-          apiKey: 'test-key',
-          model: 'claude-sonnet-4-20250514'
-        })
-        .withSandbox(mockProvider);
-      
-      expect(typeof vibeKit.generateCode).toBe('function');
-      // Note: generateCode is deprecated, use executeCommand instead
-    });
-  });
-
-  describe('Lifecycle Management', () => {
-    it('should provide lifecycle methods', () => {
-      const vibeKit = new VibeKit();
-      
-      expect(typeof vibeKit.kill).toBe('function');
-      expect(typeof vibeKit.getHost).toBe('function');
-    });
-
-    it('should handle kill operation', async () => {
-      const vibeKit = new VibeKit();
-      const mockProvider = createMockProvider();
-      
-      vibeKit.withSandbox(mockProvider);
-      
-      // Should not throw
-      await expect(vibeKit.kill()).resolves.not.toThrow();
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should handle missing configuration gracefully', () => {
-      const vibeKit = new VibeKit();
-      
-      // Should not throw during construction
-      expect(vibeKit).toBeDefined();
-    });
-
-    it('should validate required configuration before operations', async () => {
-      const vibeKit = new VibeKit();
-      
-      // Should handle missing sandbox provider gracefully
-      // (Actual behavior depends on implementation)
-      expect(vibeKit).toBeDefined();
-    });
-  });
-
-  describe('Working Directory Configuration', () => {
-    it('should accept various directory formats', () => {
-      const vibeKit = new VibeKit();
-      const directories = [
-        '/var/workspace',
-        '/tmp/test',
-        '/home/user/project',
-        './relative/path'
-      ];
-      
-      directories.forEach(dir => {
-        expect(() => {
-          vibeKit.withWorkingDirectory(dir);
-        }).not.toThrow();
-      });
-    });
-  });
-
-  describe('Type Safety', () => {
-    it('should maintain type safety in configuration', () => {
-      const vibeKit = new VibeKit();
-      const mockProvider = createMockProvider();
-      
-      // This should compile without TypeScript errors
-      const configured = vibeKit
-        .withAgent({
-          type: 'claude',
-          provider: 'anthropic',
-          apiKey: 'test-key',
-          model: 'claude-sonnet-4-20250514'
-        })
-        .withSandbox(mockProvider)
-        .withWorkingDirectory('/test');
-
-      expect(configured).toBeInstanceOf(VibeKit);
-    });
-  });
-}); 
+});

@@ -1,245 +1,304 @@
-import {
-  beamOpts,
-  Image,
-  Sandbox as BeamSandbox,
-  SandboxInstance as BeamSandboxInstance,
-} from "@beamcloud/beam-js";
+/**
+ * @vibe-kit/beam
+ *
+ * Beam sandbox provider for VibeKit SDK v2.
+ *
+ * @example
+ * ```typescript
+ * import { createSandbox } from "@vibe-kit/beam";
+ *
+ * const sandbox = await createSandbox({
+ *   token: process.env.BEAM_TOKEN,
+ *   workspaceId: process.env.BEAM_WORKSPACE_ID,
+ * });
+ *
+ * // Use agents
+ * await sandbox.claude({
+ *   apiKey: process.env.ANTHROPIC_API_KEY,
+ * }).run("Create a web app");
+ *
+ * // Cleanup
+ * await sandbox.close();
+ * ```
+ *
+ * @packageDocumentation
+ */
 
-// Define the interfaces we need from the SDK
-export interface SandboxExecutionResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
+import { beamOpts, Image, Sandbox as BeamSandbox, SandboxInstance as BeamSandboxInstance } from "@beamcloud/beam-js";
+import { attachAgents, type BaseSandbox, type Agents } from "@vibe-kit/core";
 
-export interface SandboxCommandOptions {
-  timeoutMs?: number;
-  background?: boolean;
-  onStdout?: (data: string) => void;
-  onStderr?: (data: string) => void;
-}
+// ============================================================================
+// Configuration Types
+// ============================================================================
 
-export interface SandboxCommands {
-  run(
-    command: string,
-    options?: SandboxCommandOptions
-  ): Promise<SandboxExecutionResult>;
-}
-
-export interface SandboxInstance {
-  sandboxId: string;
-  commands: SandboxCommands;
-  kill(): Promise<void>;
-  pause(): Promise<void>;
-  getHost(port: number): Promise<string>;
-}
-
-export interface SandboxProvider {
-  create(
-    envs?: Record<string, string>,
-    agentType?: "codex" | "claude" | "opencode" | "gemini" | "grok",
-    workingDirectory?: string
-  ): Promise<SandboxInstance>;
-  resume(sandboxId: string): Promise<SandboxInstance>;
-}
-
-export type AgentType = "codex" | "claude" | "opencode" | "gemini" | "grok";
-
+/**
+ * Configuration for creating a Beam sandbox
+ */
 export interface BeamConfig {
+  /**
+   * Beam API token
+   */
   token: string;
+
+  /**
+   * Beam workspace ID
+   */
   workspaceId: string;
+
+  /**
+   * Docker image to use
+   */
   image?: string;
+
+  /**
+   * Number of CPUs
+   */
   cpu?: number;
+
+  /**
+   * Memory allocation (e.g., "1Gi")
+   */
   memory?: number | string;
+
+  /**
+   * Keep warm seconds
+   */
   keepWarmSeconds?: number;
+
+  /**
+   * Environment variables
+   */
+  envs?: Record<string, string>;
 }
 
-const getDockerImageFromAgentType = (agentType?: AgentType): string => {
-  if (agentType === "codex") {
-    return "superagentai/vibekit-codex:1.0";
-  } else if (agentType === "claude") {
-    return "superagentai/vibekit-claude:1.0";
-  } else if (agentType === "opencode") {
-    return "superagentai/vibekit-opencode:1.0";
-  } else if (agentType === "gemini") {
-    return "superagentai/vibekit-gemini:1.1";
-  } else if (agentType === "grok") {
-    return "superagentai/vibekit-grok-cli:1.0";
-  }
-  return "ubuntu:22.04";
+// ============================================================================
+// Sandbox Type
+// ============================================================================
+
+/**
+ * Beam Sandbox with agents attached
+ */
+export type BeamSandboxWithAgents = BeamSandboxInstance & Agents & {
+  close(): Promise<void>;
 };
 
-// Beam implementation
-export class BeamSandboxInstanceWrapper implements SandboxInstance {
-  constructor(private beamInstance: BeamSandboxInstance) {}
+// ============================================================================
+// Adapter to make Beam compatible with BaseSandbox interface
+// ============================================================================
 
-  get sandboxId(): string {
-    return this.beamInstance.sandboxId;
-  }
+function adaptToBaseSandbox(instance: BeamSandboxInstance): BaseSandbox {
+  return {
+    process: {
+      async start(cmd, opts) {
+        const proc = await instance.exec("bash", "-c", cmd);
+        
+        let stdoutData = "";
+        let stderrData = "";
+        let processEnded = false;
 
-  get commands(): SandboxCommands {
-    return {
-      run: async (
-        command: string,
-        options?: SandboxCommandOptions
-      ): Promise<SandboxExecutionResult> => {
-        try {
-          const process = await this.beamInstance.exec("bash", "-c", command);
-
-          let stdoutBuffer = "";
-          let stderrBuffer = "";
-
-          if (options?.background) {
-            // Start async streaming in the background
-            (async () => {
-              try {
-                const stdout = await process.stdout.read();
-                stdoutBuffer += stdout;
-                options.onStdout?.(stdout);
-              } catch (e) {
-                // Ignore errors for background processes
-              }
-            })();
-
-            (async () => {
-              try {
-                const stderr = await process.stderr.read();
-                stderrBuffer += stderr;
-                options.onStderr?.(stderr);
-              } catch (e) {
-                // Ignore errors for background processes
-              }
-            })();
-
-            return {
-              exitCode: 0,
-              stdout: "Background command started successfully",
-              stderr: "",
-            };
-          }
-
-          // For non-background execution, wait for completion and stream output
-          const [exitCode, stdoutData, stderrData] = await Promise.all([
-            process.wait(),
-            process.stdout.read(),
-            process.stderr.read(),
-          ]);
-
-          stdoutBuffer = stdoutData;
-          stderrBuffer = stderrData;
-
-          // Call callbacks if provided
-          if (options?.onStdout && stdoutBuffer) {
-            options.onStdout(stdoutBuffer);
-          }
-          if (options?.onStderr && stderrBuffer) {
-            options.onStderr(stderrBuffer);
-          }
-
-          return {
-            exitCode: exitCode,
-            stdout: stdoutBuffer,
-            stderr: stderrBuffer,
-          };
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          if (options?.onStderr) {
-            options.onStderr(errorMessage);
-          }
-          return {
-            exitCode: 1,
-            stdout: "",
-            stderr: errorMessage,
-          };
-        }
+        return {
+          pid: String(Date.now()),
+          async wait() {
+            const [exitCode, stdout, stderr] = await Promise.all([
+              proc.wait(),
+              proc.stdout.read(),
+              proc.stderr.read(),
+            ]);
+            processEnded = true;
+            stdoutData = stdout;
+            stderrData = stderr;
+            opts?.onStdout?.(stdout);
+            opts?.onStderr?.(stderr);
+            return { exitCode, stdout, stderr };
+          },
+          async kill() {
+            processEnded = true;
+          },
+          stdout: {
+            [Symbol.asyncIterator]() {
+              let done = false;
+              return {
+                async next(): Promise<IteratorResult<string>> {
+                  if (done || processEnded) return { value: "", done: true };
+                  done = true;
+                  const data = await proc.stdout.read();
+                  return { value: data, done: false };
+                },
+              };
+            },
+          },
+          stderr: {
+            [Symbol.asyncIterator]() {
+              let done = false;
+              return {
+                async next(): Promise<IteratorResult<string>> {
+                  if (done || processEnded) return { value: "", done: true };
+                  done = true;
+                  const data = await proc.stderr.read();
+                  return { value: data, done: false };
+                },
+              };
+            },
+          },
+        };
       },
-    };
-  }
 
-  async kill(): Promise<void> {
-    await this.beamInstance.terminate();
-  }
+      async startAndWait(cmd, opts) {
+        const proc = await instance.exec("bash", "-c", cmd);
+        const [exitCode, stdout, stderr] = await Promise.all([
+          proc.wait(),
+          proc.stdout.read(),
+          proc.stderr.read(),
+        ]);
+        opts?.onStdout?.(stdout);
+        opts?.onStderr?.(stderr);
+        return { exitCode, stdout, stderr };
+      },
+    },
 
-  async pause(): Promise<void> {
-    // TODO: Implement using snapshots
-    console.log(
-      "Pause not directly supported for Beam sandboxes - sandbox remains active. Use updateTtl() to manage keep-warm settings."
-    );
-  }
+    files: {
+      async write(path, content) {
+        await instance.exec("bash", "-c", `cat > "${path}" << 'VIBEKIT_EOF'\n${content}\nVIBEKIT_EOF`);
+      },
 
-  async getHost(port: number): Promise<string> {
-    try {
-      const url = await this.beamInstance.exposePort(port);
-      return url;
-    } catch (error) {
-      throw new Error(
-        `Failed to expose port ${port}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  }
+      async read(path) {
+        const proc = await instance.exec("cat", path);
+        await proc.wait();
+        return proc.stdout.read();
+      },
+    },
+  };
 }
 
-export class BeamSandboxProvider implements SandboxProvider {
-  constructor(private config: BeamConfig) {
-    // Configure Beam globally
-    beamOpts.token = this.config.token;
-    beamOpts.workspaceId = this.config.workspaceId;
-  }
+// ============================================================================
+// Main API
+// ============================================================================
 
-  async create(
-    envs?: Record<string, string>,
-    agentType?: AgentType,
-    _workingDirectory?: string
-  ): Promise<SandboxInstance> {
-    try {
-      const imageName =
-        this.config.image || getDockerImageFromAgentType(agentType);
+/**
+ * Create a Beam sandbox with agents attached.
+ *
+ * @param config - Configuration for the sandbox
+ * @returns Beam sandbox with agent capabilities
+ */
+export async function createSandbox(config: BeamConfig): Promise<BeamSandboxWithAgents> {
+  const {
+    token,
+    workspaceId,
+    image = "ubuntu:22.04",
+    cpu = 2,
+    memory = "1Gi",
+    keepWarmSeconds = 300,
+    envs = {},
+  } = config;
 
-      const image = new Image({
-        baseImage: imageName,
-        envVars: envs
-          ? Object.entries(envs).map(([key, value]) => `${key}=${value}`)
-          : [],
-      });
+  // Configure Beam globally
+  beamOpts.token = token;
+  beamOpts.workspaceId = workspaceId;
 
-      const sandbox = new BeamSandbox({
-        name: `vibekit-${agentType || "sandbox"}-${Date.now()}`,
-        image: image,
-        cpu: this.config.cpu || 2,
-        memory: this.config.memory || "1Gi",
-        keepWarmSeconds: this.config.keepWarmSeconds || 300,
-      });
+  const beamImage = new Image({
+    baseImage: image,
+    envVars: Object.entries(envs).map(([key, value]) => `${key}=${value}`),
+  });
 
-      const instance = await sandbox.create();
+  const sandbox = new BeamSandbox({
+    name: `vibekit-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+    image: beamImage,
+    cpu,
+    memory,
+    keepWarmSeconds,
+  });
 
-      return new BeamSandboxInstanceWrapper(instance);
-    } catch (error) {
-      throw new Error(
-        `Failed to create Beam sandbox: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  }
+  const instance = await sandbox.create();
 
-  async resume(sandboxId: string): Promise<SandboxInstance> {
-    try {
+  // Create adapted BaseSandbox for agents
+  const baseSandbox = adaptToBaseSandbox(instance);
+  const sandboxWithAgents = attachAgents(baseSandbox);
+
+  // Create result with both native methods and agents
+  const result = Object.assign(instance, {
+    claude: sandboxWithAgents.claude,
+    codex: sandboxWithAgents.codex,
+    gemini: sandboxWithAgents.gemini,
+    grok: sandboxWithAgents.grok,
+    opencode: sandboxWithAgents.opencode,
+    close: async () => {
+      await instance.terminate();
+    },
+  }) as BeamSandboxWithAgents;
+
+  return result;
+}
+
+// ============================================================================
+// Re-exports
+// ============================================================================
+
+export type {
+  Agent,
+  AgentEvent,
+  AgentResult,
+  FinalResult,
+  ClaudeConfig,
+  CodexConfig,
+  GeminiConfig,
+  GrokConfig,
+  OpencodeConfig,
+} from "@vibe-kit/core";
+
+// ============================================================================
+// Legacy API (deprecated)
+// ============================================================================
+
+/**
+ * @deprecated Use `createSandbox` instead.
+ */
+export function createBeamProvider(config: BeamConfig) {
+  console.warn("⚠️  createBeamProvider() is deprecated. Please use createSandbox() instead.");
+  
+  return {
+    async create(envs?: Record<string, string>) {
+      const sandbox = await createSandbox({ ...config, envs });
+      const baseSandbox = adaptToBaseSandbox(sandbox);
+      return {
+        sandboxId: sandbox.sandboxId,
+        commands: {
+          async run(command: string, options?: { timeoutMs?: number; background?: boolean; onStdout?: (data: string) => void; onStderr?: (data: string) => void }) {
+            if (options?.background) {
+              baseSandbox.process.start(command, options);
+              return { exitCode: 0, stdout: "Background command started", stderr: "" };
+            }
+            return baseSandbox.process.startAndWait(command, options);
+          },
+        },
+        async kill() { await sandbox.close(); },
+        async pause() { console.log("Pause not supported for Beam"); },
+        async getHost(port: number) {
+          return sandbox.exposePort(port);
+        },
+      };
+    },
+    async resume(sandboxId: string) {
+      beamOpts.token = config.token;
+      beamOpts.workspaceId = config.workspaceId;
       const instance = await BeamSandbox.connect(sandboxId);
-
-      return new BeamSandboxInstanceWrapper(instance);
-    } catch (error) {
-      throw new Error(
-        `Failed to resume Beam sandbox: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  }
-}
-
-export function createBeamProvider(config: BeamConfig): BeamSandboxProvider {
-  return new BeamSandboxProvider(config);
+      const baseSandbox = adaptToBaseSandbox(instance);
+      return {
+        sandboxId,
+        commands: {
+          async run(command: string, options?: { timeoutMs?: number; background?: boolean; onStdout?: (data: string) => void; onStderr?: (data: string) => void }) {
+            if (options?.background) {
+              baseSandbox.process.start(command, options);
+              return { exitCode: 0, stdout: "Background command started", stderr: "" };
+            }
+            return baseSandbox.process.startAndWait(command, options);
+          },
+        },
+        async kill() { await instance.terminate(); },
+        async pause() { console.log("Pause not supported for Beam"); },
+        async getHost(port: number) {
+          return instance.exposePort(port);
+        },
+      };
+    },
+  };
 }
