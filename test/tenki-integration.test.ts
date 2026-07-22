@@ -59,4 +59,30 @@ describe("Tenki Sandbox", () => {
       await sandbox.kill();
     }
   }, 120000);
+
+  it("installs and runs the requested agent CLI on the default image", async () => {
+    if (skipIntegrationTest() || skipIfNoTenkiKeys()) {
+      return skipTest();
+    }
+
+    // installAgent defaults to true, so this exercises the *real* create() path:
+    // boot the default base image, `npm i -g` the agent CLI, then invoke it.
+    const provider = createTenkiProvider({
+      apiKey: process.env.TENKI_AUTH_TOKEN,
+    });
+    const sandbox = await provider.create({}, "claude");
+
+    try {
+      // The CLI was installed and is on the PATH.
+      const which = await sandbox.commands.run("command -v claude");
+      expect(which.exitCode).toBe(0);
+      expect(which.stdout).toContain("claude");
+
+      // ...and it actually runs.
+      const version = await sandbox.commands.run("claude --version");
+      expect(version.exitCode).toBe(0);
+    } finally {
+      await sandbox.kill();
+    }
+  }, 240000);
 });

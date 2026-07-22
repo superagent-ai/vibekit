@@ -132,6 +132,36 @@ function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// Tenki's documented resource ranges for create() (see @tenkicloud/sandbox).
+const CPU_CORES_RANGE = { min: 1, max: 16 };
+const MEMORY_MB_RANGE = { min: 128, max: 65536 };
+
+// Fail fast at construction on invalid resource config, rather than minutes
+// later mid-provisioning.
+function validateConfig(config: TenkiConfig): void {
+  const { cpuCores, memoryMb } = config;
+  if (
+    cpuCores !== undefined &&
+    (!Number.isInteger(cpuCores) ||
+      cpuCores < CPU_CORES_RANGE.min ||
+      cpuCores > CPU_CORES_RANGE.max)
+  ) {
+    throw new Error(
+      `Invalid Tenki config: cpuCores must be an integer in [${CPU_CORES_RANGE.min}, ${CPU_CORES_RANGE.max}], got ${cpuCores}.`
+    );
+  }
+  if (
+    memoryMb !== undefined &&
+    (!Number.isInteger(memoryMb) ||
+      memoryMb < MEMORY_MB_RANGE.min ||
+      memoryMb > MEMORY_MB_RANGE.max)
+  ) {
+    throw new Error(
+      `Invalid Tenki config: memoryMb must be an integer in [${MEMORY_MB_RANGE.min}, ${MEMORY_MB_RANGE.max}], got ${memoryMb}.`
+    );
+  }
+}
+
 // Pump a Tenki byte stream into a VibeKit string callback. Uses a single
 // streaming decoder so multi-byte UTF-8 sequences split across chunks are not
 // corrupted at the boundary.
@@ -244,7 +274,9 @@ class TenkiSandboxInstance implements SandboxInstance {
 }
 
 export class TenkiSandboxProvider implements SandboxProvider {
-  constructor(private config: TenkiConfig = {}) {}
+  constructor(private config: TenkiConfig = {}) {
+    validateConfig(config);
+  }
 
   private createClient(): TenkiSandbox {
     return new TenkiSandbox({
@@ -278,13 +310,15 @@ export class TenkiSandboxProvider implements SandboxProvider {
     };
   }
 
-  // Best-effort teardown used only for create-failure cleanup. It swallows the
-  // cleanup error on purpose so the original (actionable) setup error surfaces.
-  private async safeClose(session: Session): Promise<void> {
+  // Best-effort teardown used only for create-failure cleanup. Returns whether
+  // the sandbox was closed, so the caller can surface the id if teardown itself
+  // failed and the VM needs to be terminated manually.
+  private async safeClose(session: Session): Promise<boolean> {
     try {
       await session.close();
+      return true;
     } catch {
-      // Ignore — the setup failure is the one worth reporting.
+      return false;
     }
   }
 
@@ -350,9 +384,12 @@ export class TenkiSandboxProvider implements SandboxProvider {
 
       return new TenkiSandboxInstance(session, session.id);
     } catch (error) {
-      await this.safeClose(session);
+      const closed = await this.safeClose(session);
+      const detail = `Failed to set up Tenki sandbox: ${toMessage(error)}`;
       throw new Error(
-        `Failed to set up Tenki sandbox (sandbox torn down): ${toMessage(error)}`
+        closed
+          ? `${detail} (sandbox ${session.id} was torn down)`
+          : `${detail} (WARNING: automatic teardown of sandbox ${session.id} failed — terminate it manually)`
       );
     }
   }

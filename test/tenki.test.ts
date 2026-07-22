@@ -36,6 +36,22 @@ const identity = {
   workspaces: [{ id: "ws9", name: "ws", projects: [{ id: "proj9", name: "p" }] }],
 };
 
+describe("Tenki provider — config validation", () => {
+  it("rejects out-of-range cpuCores at construction", () => {
+    expect(() => createTenkiProvider({ cpuCores: 999 })).toThrow(/cpuCores/);
+  });
+
+  it("rejects out-of-range memoryMb at construction", () => {
+    expect(() => createTenkiProvider({ memoryMb: 1 })).toThrow(/memoryMb/);
+  });
+
+  it("accepts valid resource config", () => {
+    expect(() =>
+      createTenkiProvider({ cpuCores: 2, memoryMb: 4096 })
+    ).not.toThrow();
+  });
+});
+
 describe("Tenki provider — lifecycle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -56,6 +72,22 @@ describe("Tenki provider — lifecycle", () => {
     await expect(provider.create({}, "claude")).rejects.toThrow(/torn down/i);
     // The created VM must be closed rather than leaked.
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the sandbox id when create-failure cleanup also fails", async () => {
+    hooks.create.mockResolvedValue({
+      id: "sb-leak-1",
+      state: "RUNNING",
+      exec: vi.fn().mockRejectedValue(new Error("install blew up")),
+      close: vi.fn().mockRejectedValue(new Error("terminate failed")),
+    });
+
+    const provider = createTenkiProvider({ apiKey: "tk_x", installAgent: true });
+    const err = await provider.create({}, "claude").catch((e) => e as Error);
+
+    // A leaked VM must be identifiable so it can be terminated by hand.
+    expect(String(err)).toContain("sb-leak-1");
+    expect(String(err)).toMatch(/manually/i);
   });
 
   it("propagates teardown failures from kill() instead of reporting success", async () => {
