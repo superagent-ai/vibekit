@@ -370,8 +370,16 @@ export class TenkiSandboxProvider implements SandboxProvider {
       }
 
       if (workingDirectory) {
+        const dir = shellSingleQuote(workingDirectory);
+        // Tenki's default image runs as a non-root user, so a root-owned path
+        // (e.g. VibeKit's default "/vibe0") can't be created with a plain mkdir.
+        // Try as the current user first (works under $HOME), then fall back to
+        // sudo + chown so the directory is owned by — and writable for — us.
         const mkdir = await session.exec("bash", {
-          args: ["-lc", `mkdir -p ${shellSingleQuote(workingDirectory)}`],
+          args: [
+            "-lc",
+            `mkdir -p ${dir} 2>/dev/null || { sudo -n mkdir -p ${dir} && sudo -n chown "$(id -u):$(id -g)" ${dir}; }`,
+          ],
         });
         if (mkdir.exitCode !== 0 || !isSuccess(mkdir.status)) {
           throw new Error(

@@ -85,4 +85,26 @@ describe("Tenki Sandbox", () => {
       await sandbox.kill();
     }
   }, 240000);
+
+  it("creates a root-owned working directory on the non-root default image", async () => {
+    if (skipIntegrationTest() || skipIfNoTenkiKeys()) {
+      return skipTest();
+    }
+
+    // "/vibe0" (VibeKit's default working dir) is root-owned, and Tenki runs as
+    // a non-root user — so the provider must sudo-create + chown it. Verify the
+    // directory ends up writable by us.
+    const provider = createTenkiProvider({ installAgent: false });
+    const sandbox = await provider.create({}, undefined, "/vibe0");
+
+    try {
+      const check = await sandbox.commands.run(
+        "test -w /vibe0 && touch /vibe0/.probe && echo WRITABLE"
+      );
+      expect(check.exitCode).toBe(0);
+      expect(check.stdout).toContain("WRITABLE");
+    } finally {
+      await sandbox.kill();
+    }
+  }, 120000);
 });
