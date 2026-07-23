@@ -44,7 +44,7 @@ const vibeKit = new VibeKit()
     type: "claude",
     provider: "anthropic",
     apiKey: process.env.ANTHROPIC_API_KEY!,
-    model: "claude-sonnet-4-20250514",
+    model: "sonnet", // alias for the current Sonnet; a pinned dated model can 404
   })
   .withSandbox(tenkiProvider)
   .withWorkingDirectory("/var/vibe0") // optional
@@ -52,11 +52,10 @@ const vibeKit = new VibeKit()
     NODE_ENV: "development",
   });
 
-// Generate code
-const result = await vibeKit.generateCode({
-  prompt: "Create a REST API with Express.js",
-  mode: "ask",
-});
+// Run a command in the sandbox and read its output
+// (executeCommand is VibeKit's supported entrypoint; generateCode is deprecated)
+const result = await vibeKit.executeCommand("echo 'hello from the sandbox'");
+console.log(result.stdout);
 
 // Execute commands in the sandbox
 await vibeKit.executeCommand("npm install && npm test");
