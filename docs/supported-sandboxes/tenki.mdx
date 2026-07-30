@@ -1,0 +1,129 @@
+---
+title: 'Tenki'
+description: 'Configure VibeKit with Tenki disposable microVM sandboxes'
+---
+
+[Tenki](https://tenki.cloud) runs coding agents inside disposable Linux microVMs with per-second billing, public preview URLs, and pause/resume. It is a good fit for VibeKit's "run an agent safely, watch it remotely" workflow, and boots agents on Tenki's default base image with no image maintenance on your side.
+
+## Installation
+
+```bash
+npm install @vibe-kit/tenki
+```
+
+## Prerequisites
+
+1. Sign up for Tenki and create a workspace at [tenki.cloud](https://tenki.cloud).
+2. Create an API key (prefixed `tk_`) in your account settings.
+3. Set it as an environment variable:
+
+```bash
+export TENKI_AUTH_TOKEN=tk_your_key_here
+```
+
+The SDK also accepts `TENKI_API_KEY` as a fallback.
+
+## Configuration
+
+VibeKit uses a builder pattern with method chaining. Configure your Tenki provider and VibeKit instance:
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createTenkiProvider } from "@vibe-kit/tenki";
+
+// Create the Tenki provider
+const tenkiProvider = createTenkiProvider({
+  apiKey: process.env.TENKI_AUTH_TOKEN!, // optional; falls back to TENKI_AUTH_TOKEN / TENKI_API_KEY
+  cpuCores: 2, // optional
+  memoryMb: 4096, // optional
+});
+
+// Create the VibeKit instance with the provider
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "claude",
+    provider: "anthropic",
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+    model: "sonnet", // alias for the current Sonnet; a pinned dated model can 404
+  })
+  .withSandbox(tenkiProvider)
+  .withWorkingDirectory("/var/vibe0") // optional
+  .withSecrets({
+    NODE_ENV: "development",
+  });
+
+try {
+  // Run a command in the sandbox and read its output
+  // (executeCommand is VibeKit's supported entrypoint; generateCode is deprecated)
+  const result = await vibeKit.executeCommand("echo 'hello from the sandbox'");
+  console.log(result.stdout);
+
+  // Execute commands in the sandbox
+  await vibeKit.executeCommand("npm install && npm test");
+
+  // Start a dev server in the background and get its public URL
+  await vibeKit.executeCommand("npm run dev", { background: true });
+  const url = await vibeKit.getHost(3000);
+  console.log(`Service available at: ${url}`);
+} finally {
+  // Always tear the sandbox down, even if a command or getHost() throws.
+  await vibeKit.kill();
+}
+```
+
+## Configuration Options
+
+`createTenkiProvider` accepts:
+
+### Optional Options
+
+- **`apiKey`** (string): your Tenki API key (`tk_…`). Falls back to `TENKI_AUTH_TOKEN`, then `TENKI_API_KEY`.
+- **`baseUrl`** (string): override the Tenki API endpoint (defaults to `https://api.tenki.cloud`).
+- **`workspaceId`** (string): explicit workspace scope — only needed for service-token callers; a workspace API key (`tk_…`) infers it automatically.
+- **`cpuCores`** (number): vCPU cores for the sandbox.
+- **`memoryMb`** (number): memory in MB for the sandbox.
+- **`maxDurationMs`** (number): hard cap on total sandbox lifetime — a backstop so an abandoned sandbox self-terminates.
+- **`idleTimeoutMinutes`** (number): auto-stop after N idle minutes. Keep it longer than your longest single task.
+- **`waitTimeoutMs`** (number): how long `create()` waits for readiness; bounds provisioning independently of per-command timeouts.
+- **`sticky`** (boolean): keep the sandbox persistent/long-lived, enabling reliable `resume`.
+- **`image`** (string | object): boot from a pre-built **Tenki registry** image. This is a Tenki registry reference, **not** a Docker Hub image. When set, the agent CLI is assumed to be pre-installed.
+- **`snapshotId`** (string): boot from a Tenki snapshot. Same skip-install behavior as `image`.
+- **`installAgent`** (boolean): install the requested agent's CLI at create time on Tenki's default base image. Defaults to `true` unless `image`/`snapshotId` is provided.
+
+## How it works
+
+By default the provider boots Tenki's stock base image and installs the requested agent's CLI at create time — `@anthropic-ai/claude-code`, `@openai/codex`, `@google/gemini-cli`, `opencode-ai`, or `@vibe-kit/grok-cli` (the same packages used by the prebuilt VibeKit images). To skip the per-create install, pre-bake those CLIs into a Tenki registry image or snapshot and pass it via `image` / `snapshotId`.
+
+## Features
+
+- Runtime agent-CLI installation on Tenki's default base image (no image maintenance)
+- Optional custom Tenki registry image / snapshot
+- Background command execution with streamed stdout/stderr
+- Preview URLs via exposed ports (`getHost`)
+- Pause / resume of long-lived sandboxes
+- Environment variable injection and custom working directory
+
+## ENV variables and secrets
+
+```bash
+# Required Tenki credential
+TENKI_AUTH_TOKEN=tk_your_key_here
+
+# Agent API keys (as needed)
+ANTHROPIC_API_KEY=your_anthropic_key
+OPENAI_API_KEY=your_openai_key
+GEMINI_API_KEY=your_gemini_key
+
+# Optional GitHub integration
+GITHUB_TOKEN=your_github_token_here
+```
+
+## System Requirements
+
+- **Node.js 18+**
+- **Tenki account** with a workspace and API key
+
+## Support
+
+- **Tenki Platform**: [Tenki Documentation](https://tenki.cloud/docs)
+- **VibeKit Integration**: open an issue on [GitHub](https://github.com/superagent-ai/vibekit/issues)
