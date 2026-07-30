@@ -71,8 +71,7 @@ try {
 
 - **`apiKey`** (string, optional): your Tenki API key (`tk_…`). Falls back to `TENKI_AUTH_TOKEN`, then `TENKI_API_KEY`.
 - **`baseUrl`** (string, optional): override the Tenki API endpoint (defaults to `https://api.tenki.cloud`).
-- **`workspaceId`** (string, optional): Tenki workspace id. Auto-resolved from your first workspace when omitted.
-- **`projectId`** (string, optional): Tenki project id. Auto-resolved from the workspace's first project when omitted.
+- **`workspaceId`** (string, optional): explicit workspace scope — only needed for service-token callers; a workspace API key (`tk_…`) infers it automatically.
 - **`cpuCores`** (number, optional): vCPU cores for the sandbox.
 - **`memoryMb`** (number, optional): memory in MB for the sandbox.
 - **`maxDurationMs`** (number, optional): hard cap on total sandbox lifetime — a backstop so an abandoned sandbox self-terminates.

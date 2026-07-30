@@ -57,10 +57,11 @@ export interface TenkiConfig {
   apiKey?: string;
   /** Override the Tenki API base URL (defaults to https://api.tenki.cloud). */
   baseUrl?: string;
-  /** Tenki workspace id. Auto-resolved from the account's first workspace when omitted. */
+  /**
+   * Explicit workspace scope — only needed for service-token callers. A normal
+   * Tenki workspace API key (`tk_…`) infers the workspace server-side.
+   */
   workspaceId?: string;
-  /** Tenki project id. Auto-resolved from the workspace's first project when omitted. */
-  projectId?: string;
   /**
    * Boot from a pre-built Tenki registry image (ref string or image object).
    * NOTE: this is a Tenki registry reference, NOT a Docker Hub image. When set,
@@ -285,31 +286,6 @@ export class TenkiSandboxProvider implements SandboxProvider {
     });
   }
 
-  // Tenki scopes sandboxes to a workspace + project. Use the configured ids, or
-  // fall back to the account's first workspace/project via whoAmI().
-  private async resolveScope(
-    client: TenkiSandbox
-  ): Promise<{ workspaceId?: string; projectId: string }> {
-    if (this.config.projectId) {
-      return {
-        workspaceId: this.config.workspaceId,
-        projectId: this.config.projectId,
-      };
-    }
-    const identity = await client.whoAmI();
-    const workspace = identity.workspaces?.[0];
-    const project = workspace?.projects?.[0];
-    if (!project) {
-      throw new Error(
-        "Could not resolve a default Tenki project from the account; pass `projectId` (and `workspaceId`) in the provider config."
-      );
-    }
-    return {
-      workspaceId: this.config.workspaceId ?? workspace?.id,
-      projectId: project.id,
-    };
-  }
-
   // Best-effort teardown used only for create-failure cleanup. Returns whether
   // the sandbox was closed, so the caller can surface the id if teardown itself
   // failed and the VM needs to be terminated manually.
@@ -334,7 +310,6 @@ export class TenkiSandboxProvider implements SandboxProvider {
 
     let session: Session;
     try {
-      const { workspaceId, projectId } = await this.resolveScope(client);
       session = await client.create({
         env: envs,
         image: this.config.image,
@@ -345,8 +320,8 @@ export class TenkiSandboxProvider implements SandboxProvider {
         idleTimeoutMinutes: this.config.idleTimeoutMinutes,
         waitTimeoutMs: this.config.waitTimeoutMs,
         sticky: this.config.sticky,
-        workspaceId,
-        projectId,
+        // Only needed for service-token callers; a workspace API key infers scope.
+        workspaceId: this.config.workspaceId,
       });
     } catch (error) {
       throw new Error(`Failed to create Tenki sandbox: ${toMessage(error)}`);

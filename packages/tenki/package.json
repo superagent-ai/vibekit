@@ -27,6 +27,6 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@tenkicloud/sandbox": "^0.4.0"
+    "@tenkicloud/sandbox": "^0.5.4"
   }
 }

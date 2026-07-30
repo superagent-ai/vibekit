@@ -1,17 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Module-level hooks the mock delegates to, so each test can shape behavior.
+// Module-level hook the mock delegates to, so each test can shape create().
 const hooks = {
-  whoAmI: vi.fn(),
   create: vi.fn(),
 };
 
 vi.mock("@tenkicloud/sandbox", () => {
   class TenkiSandbox {
     constructor(_options?: unknown) {}
-    whoAmI() {
-      return hooks.whoAmI();
-    }
     create(options: unknown) {
       return hooks.create(options);
     }
@@ -29,12 +25,6 @@ vi.mock("@tenkicloud/sandbox", () => {
 
 // Import from dist to exercise the built package (as the other tests do).
 import { createTenkiProvider } from "../packages/tenki/dist/index.js";
-
-const identity = {
-  ownerType: "user",
-  ownerId: "u1",
-  workspaces: [{ id: "ws9", name: "ws", projects: [{ id: "proj9", name: "p" }] }],
-};
 
 describe("Tenki provider — config validation", () => {
   it("rejects out-of-range cpuCores at construction", () => {
@@ -55,7 +45,6 @@ describe("Tenki provider — config validation", () => {
 describe("Tenki provider — lifecycle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    hooks.whoAmI.mockResolvedValue(identity);
   });
 
   it("tears down the sandbox when setup fails after create (no leak)", async () => {
@@ -105,7 +94,7 @@ describe("Tenki provider — lifecycle", () => {
     await expect(sandbox.kill()).rejects.toThrow(/terminate failed/);
   });
 
-  it("auto-resolves workspace/project from whoAmI when not configured", async () => {
+  it("passes a configured workspaceId through to create", async () => {
     hooks.create.mockResolvedValue({
       id: "sb1",
       state: "RUNNING",
@@ -113,11 +102,15 @@ describe("Tenki provider — lifecycle", () => {
       close: vi.fn().mockResolvedValue(undefined),
     });
 
-    const provider = createTenkiProvider({ apiKey: "tk_x", installAgent: false });
+    const provider = createTenkiProvider({
+      apiKey: "tk_x",
+      installAgent: false,
+      workspaceId: "ws9",
+    });
     await provider.create();
 
     expect(hooks.create).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: "ws9", projectId: "proj9" })
+      expect.objectContaining({ workspaceId: "ws9" })
     );
   });
 });
