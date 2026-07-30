@@ -46,21 +46,23 @@ const vibeKit = new VibeKit()
     NODE_ENV: "development",
   });
 
-// Run a command in the sandbox and read its output
-// (executeCommand is VibeKit's supported entrypoint; generateCode is deprecated)
-const result = await vibeKit.executeCommand("echo 'hello from the sandbox'");
-console.log(result.stdout);
+try {
+  // Run a command in the sandbox and read its output
+  // (executeCommand is VibeKit's supported entrypoint; generateCode is deprecated)
+  const result = await vibeKit.executeCommand("echo 'hello from the sandbox'");
+  console.log(result.stdout);
 
-// Execute commands in the sandbox
-await vibeKit.executeCommand("npm install && npm test");
+  // Execute commands in the sandbox
+  await vibeKit.executeCommand("npm install && npm test");
 
-// Start a dev server in the background and get its public URL
-await vibeKit.executeCommand("npm run dev", { background: true });
-const url = await vibeKit.getHost(3000);
-console.log(`Service available at: ${url}`);
-
-// Clean up
-await vibeKit.kill();
+  // Start a dev server in the background and get its public URL
+  await vibeKit.executeCommand("npm run dev", { background: true });
+  const url = await vibeKit.getHost(3000);
+  console.log(`Service available at: ${url}`);
+} finally {
+  // Always tear the sandbox down, even if a command or getHost() throws.
+  await vibeKit.kill();
+}
 ```
 
 ## Configuration
