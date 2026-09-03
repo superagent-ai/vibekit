@@ -12,6 +12,7 @@ export type {
   AgentModel,
   E2BConfig,
   DaytonaConfig,
+  FlyIOConfig,
   ModalConfig,
   NorthflankConfig,
   EnvironmentConfig,

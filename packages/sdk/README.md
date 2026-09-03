@@ -92,6 +92,12 @@ const daytonaProvider = createDaytonaProvider({
   image: "my-codex-image", // optional
 });
 
+// Fly.io Sprites
+import { createFlyIOProvider } from "@vibe-kit/flyio";
+const flyioProvider = createFlyIOProvider({
+  token: process.env.SPRITE_TOKEN!,
+});
+
 .withSandbox(provider)
 
 // Modal

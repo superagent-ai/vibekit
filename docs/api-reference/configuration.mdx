@@ -135,6 +135,18 @@ const cloudflareProvider = createCloudflareProvider({
 .withSandbox(cloudflareProvider)
 ```
 
+#### Fly.io Sprites Configuration
+
+```typescript
+import { createFlyIOProvider } from "@vibe-kit/flyio";
+
+const flyioProvider = createFlyIOProvider({
+  token: process.env.SPRITE_TOKEN!,
+});
+
+.withSandbox(flyioProvider)
+```
+
 ### Modal Configuration
 
 ```typescript
