@@ -37,6 +37,15 @@ export type DaytonaConfig = {
   serverUrl?: string;
 };
 
+export type FlyIOConfig = {
+  token: string;
+  baseURL?: string;
+  runtime?: "default" | "dev";
+  urlAuth?: "sprite" | "public";
+  waitForCapacity?: boolean;
+  labels?: string[];
+};
+
 export type ModalConfig = {
   image: string;
   encryptedPorts?: number[];
@@ -64,6 +73,7 @@ export type BeamConfig = {
 export type EnvironmentConfig = {
   e2b?: E2BConfig;
   daytona?: DaytonaConfig;
+  flyio?: FlyIOConfig;
   northflank?: NorthflankConfig;
   modal?: ModalConfig;
   beam?: BeamConfig;

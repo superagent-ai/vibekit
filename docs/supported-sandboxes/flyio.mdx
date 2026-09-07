@@ -1,6 +1,89 @@
 ---
-title: 'Fly.io'
-description: 'Configure VibeKit with Fly.io'
+title: 'Fly.io Sprites'
+description: 'Configure VibeKit with Fly.io Sprites'
 ---
 
-Coming soon...
+# Fly.io Sprites
+
+[Fly.io Sprites](https://sprites.dev) are persistent, isolated computers for
+agents. The VibeKit provider uses the official Sprites JavaScript SDK and the
+agent-ready development runtime.
+
+## Installation
+
+```bash
+npm install @vibe-kit/flyio
+```
+
+The provider requires Node.js 24 or later.
+
+## Authentication
+
+Create a Sprites API token and export it as `SPRITE_TOKEN`:
+
+```bash
+export SPRITE_TOKEN="your-sprites-token"
+```
+
+## Configuration
+
+```typescript
+import { VibeKit } from "@vibe-kit/sdk";
+import { createFlyIOProvider } from "@vibe-kit/flyio";
+
+const flyioProvider = createFlyIOProvider({
+  token: process.env.SPRITE_TOKEN!,
+});
+
+const vibeKit = new VibeKit()
+  .withAgent({
+    type: "codex",
+    provider: "openai",
+    apiKey: process.env.OPENAI_API_KEY!,
+    model: "gpt-5",
+  })
+  .withSandbox(flyioProvider)
+  .withWorkingDirectory("/home/sprite/project");
+
+const result = await vibeKit.executeCommand("codex --version");
+console.log(result);
+
+await vibeKit.kill();
+```
+
+The provider creates the working directory, passes VibeKit secrets into the
+Sprite environment, and starts background commands as detachable sessions.
+Calling `resume()` reconnects to the persistent Sprite by name. Calling
+`kill()` permanently deletes it.
+
+## Configuration options
+
+| Option | Required | Description |
+| --- | --- | --- |
+| `token` | Yes | Fly.io Sprites API token |
+| `baseURL` | No | Alternative Sprites API endpoint |
+| `runtime` | No | `"dev"` (default) includes coding-agent CLIs; `"default"` selects the standard runtime |
+| `urlAuth` | No | `"sprite"` (authenticated default) or `"public"` |
+| `waitForCapacity` | No | Wait for organization capacity during creation |
+| `labels` | No | Additional Sprite labels; `vibekit` is always added |
+
+## HTTP URLs
+
+Every Sprite has one HTTPS URL routed to port 8080 by default:
+
+```typescript
+const url = await vibeKit.getHost(8080);
+```
+
+Unlike providers that create a URL for each requested port, Sprites route one
+URL to one HTTP service. Configure a Sprite service when your application must
+use another port. `getHost()` rejects other ports rather than returning a URL
+that routes somewhere else.
+
+Sprite URLs require authentication by default. Set `urlAuth: "public"` only
+when the service is safe to expose publicly.
+
+## Idle behavior
+
+Sprites suspend automatically when idle, so the provider's `pause()` method is
+a no-op. Persistent filesystem state remains available when the Sprite wakes.

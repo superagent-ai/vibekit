@@ -4,6 +4,7 @@ export enum SANDBOX_PROVIDERS {
   DAGGER = "Dagger",
   DAYTONA = "Daytona",
   E2B = "E2B",
+  FLYIO = "Fly.io Sprites",
   NORTHFLANK = "Northflank",
   MODAL = "Modal",
 }
@@ -14,6 +15,7 @@ export const PROVIDER_TYPES = {
   DAGGER: 'dagger',
   DAYTONA: 'daytona',
   E2B: 'e2b',
+  FLYIO: 'flyio',
   NORTHFLANK: 'northflank',
   MODAL: 'modal'
 } as const;
@@ -43,6 +45,11 @@ export const PROVIDER_TEMPLATES = [
     message: "E2B - Cloud development sandbox platform",
   },
   {
+    name: PROVIDER_TYPES.FLYIO,
+    display: "Fly.io Sprites",
+    message: "Fly.io Sprites - Persistent computers for agents",
+  },
+  {
     name: PROVIDER_TYPES.NORTHFLANK,
     display: "Northflank",
     message: "Northflank - Cloud deployment and infrastructure platform",
@@ -60,6 +67,7 @@ export const PROVIDER_DISPLAY_NAMES: Record<ProviderType, string> = {
   [PROVIDER_TYPES.DAGGER]: 'Dagger',
   [PROVIDER_TYPES.DAYTONA]: 'Daytona',
   [PROVIDER_TYPES.E2B]: 'E2B',
+  [PROVIDER_TYPES.FLYIO]: 'Fly.io Sprites',
   [PROVIDER_TYPES.NORTHFLANK]: 'Northflank',
   [PROVIDER_TYPES.MODAL]: 'Modal'
 };
@@ -70,6 +78,7 @@ export const PROVIDER_DESCRIPTIONS: Record<ProviderType, string> = {
   [PROVIDER_TYPES.DAGGER]: "Container-based CI/CD platform",
   [PROVIDER_TYPES.DAYTONA]: "Development environment orchestration platform",
   [PROVIDER_TYPES.E2B]: "Cloud development sandbox platform",
+  [PROVIDER_TYPES.FLYIO]: "Persistent computers for agents",
   [PROVIDER_TYPES.NORTHFLANK]: "Cloud deployment and infrastructure platform",
   [PROVIDER_TYPES.MODAL]: "Serverless cloud platform for running code in containers",
 };
