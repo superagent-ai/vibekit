@@ -64,7 +64,8 @@
               "supported-sandboxes/e2b",
               "supported-sandboxes/flyio",
               "supported-sandboxes/modal",
-              "supported-sandboxes/northflank"
+              "supported-sandboxes/northflank",
+              "supported-sandboxes/opsen"
             ]
           },
           {
