@@ -32,6 +32,7 @@ class BaseAgent {
 
 
   async run(args) {
+    const executionOptions = { interactive: args.length === 0 && Boolean(process.stdin.isTTY) };
     if (this.agentName === 'claude') {
       args = await resolveClaudeSearchArgs(args, {
         settings: this.settings,
@@ -49,7 +50,7 @@ class BaseAgent {
       // Check if we're already inside a sandbox to prevent double execution
       if (process.env.VIBEKIT_SANDBOX_ACTIVE) {
         // We're already inside a sandbox, run directly
-        return await this.runDirect(args);
+        return await this.runDirect(args, executionOptions);
       }
 
       // Try sandbox execution first
@@ -67,7 +68,7 @@ class BaseAgent {
       }
 
       // Otherwise, fall back to direct execution
-      return await this.runDirect(args);
+      return await this.runDirect(args, executionOptions);
     } catch (error) {
       await this.logger.log('error', `${this.agentName} agent failed`, { 
         error: error.message,
@@ -94,9 +95,9 @@ class BaseAgent {
     }] }, (item) => React.createElement(StatusDisplay, item)));
   }
 
-  async runDirect(args) {
+  async runDirect(args, options = {}) {
     const startTime = Date.now();
-    const result = await this.createChildProcess(this.getAgentCommand(), args);
+    const result = await this.createChildProcess(this.getAgentCommand(), args, options);
     const duration = Date.now() - startTime;
 
     await this.logger.log('info', `${this.agentName} agent completed`, { 
@@ -279,6 +280,7 @@ class BaseAgent {
   }
 
   createChildProcess(command, args, options = {}) {
+    const { interactive, ...processOptions } = options;
     const startTime = Date.now();
     
     // Always capture optimized file snapshot for full analytics
@@ -310,7 +312,7 @@ class BaseAgent {
     analytics.captureCommand(command, args);
     
     // Determine if this is likely an interactive session
-    const isInteractive = args.length === 0 && process.stdin.isTTY;
+    const isInteractive = interactive ?? (args.length === 0 && process.stdin.isTTY);
     
     // Using standard child process for all sessions
     
@@ -358,7 +360,7 @@ class BaseAgent {
           stdio: 'inherit',
           cwd: options.cwd || process.cwd(),
           env,
-          ...options
+          ...processOptions
         };
       } else {
         // For non-interactive mode, capture streams for detailed analytics
@@ -366,7 +368,7 @@ class BaseAgent {
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: options.cwd || process.cwd(),
           env,
-          ...options
+          ...processOptions
         };
       }
       

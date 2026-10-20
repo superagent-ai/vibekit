@@ -18,7 +18,7 @@ const configurationFlags = new Set([
   '--mcp-config', '--strict-mcp-config', '--settings', '--setting-sources',
   '--tools', '--disallowedTools', '--disallowed-tools', '--permission-mode',
   '--plugin-dir', '--agent', '--agents',
-  '--continue', '-c', '--resume', '-r', '--fork-session', '--',
+  '--continue', '-c', '--resume', '-r', '--fork-session',
   '--help', '-h', '--version', '-v'
 ]);
 const subcommands = new Set(['mcp', 'auth', 'config', 'doctor', 'install', 'update', 'setup-token']);
@@ -75,7 +75,7 @@ export async function resolveClaudeSearchArgs(args, {
   const optionArgs = delimiter < 0 ? args : args.slice(0, delimiter);
   const disabled = optionArgs.includes('--no-search');
   const forwarded = args.filter((arg, index) => !(arg === '--no-search' && (delimiter < 0 || index < delimiter)));
-  if (disabled || delimiter >= 0 || Object.hasOwn(settings, 'search') || env.VIBEKIT_SEARCH ||
+  if (disabled || Object.hasOwn(settings, 'search') || env.VIBEKIT_SEARCH ||
       env.CLAUDE_CONFIG_DIR || env.VIBEKIT_SANDBOX_ACTIVE ||
       env.VIBEKIT_SANDBOX_IMAGE || env.VIBEKIT_SANDBOX_FLAGS ||
       env.VIBEKIT_SANDBOX_EXEC_PROFILE || env.VIBEKIT_SANDBOX_EXEC_PROFILE_FILE ||
@@ -116,5 +116,7 @@ export async function resolveClaudeSearchArgs(args, {
   // host's own tools; this restriction never grants MCP tool permission.
   // Both host options are variadic. Append them after the user's prompt so a
   // positional prompt cannot be consumed as another MCP config or denied tool.
-  return [...forwarded, '--mcp-config', parallelConfig, '--disallowedTools', 'WebSearch'];
+  const insertion = delimiter < 0 ? forwarded.length : delimiter;
+  return [...forwarded.slice(0, insertion), '--mcp-config', parallelConfig,
+    '--disallowedTools', 'WebSearch', ...forwarded.slice(insertion)];
 }

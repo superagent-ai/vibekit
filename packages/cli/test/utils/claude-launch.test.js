@@ -49,6 +49,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe('Claude launch path', () => {
+  test('keeps a bare TTY launch interactive after adding MCP arguments', async () => {
+    const previous = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+    try {
+      const instance = agent();
+      await instance.run([]);
+      expect(instance.createChildProcess).toHaveBeenCalledWith('claude',
+        expect.arrayContaining(['--mcp-config', '--disallowedTools', 'WebSearch']),
+        { interactive: true });
+    } finally {
+      if (previous) Object.defineProperty(process.stdin, 'isTTY', previous);
+      else delete process.stdin.isTTY;
+    }
+  });
+
   test('resolves once and forwards the same configuration to the sandbox attempt and direct fallback', async () => {
     const instance = agent();
     const original = [...args];
@@ -57,7 +72,7 @@ describe('Claude launch path', () => {
     expect(resolveClaudeSearchArgs).toHaveBeenCalledWith(original, { settings: {}, sandboxOptions: {} });
     const sandboxArgs = instance.sandboxEngine.executeWithSandbox.mock.calls[0][1];
     expectParallelArgs(sandboxArgs);
-    expect(instance.createChildProcess).toHaveBeenCalledWith('claude', sandboxArgs);
+    expect(instance.createChildProcess).toHaveBeenCalledWith('claude', sandboxArgs, { interactive: false });
     expect(instance.createChildProcess.mock.calls[0][1]).toBe(sandboxArgs);
     expect(original).toEqual(args);
   });
@@ -78,7 +93,7 @@ describe('Claude launch path', () => {
     await instance.run(args);
     expect(resolveClaudeSearchArgs).toHaveBeenCalledTimes(1);
     expect(instance.sandboxEngine.executeWithSandbox).not.toHaveBeenCalled();
-    expect(instance.createChildProcess).toHaveBeenCalledWith('claude', args);
+    expect(instance.createChildProcess).toHaveBeenCalledWith('claude', args, { interactive: false });
   });
 
   test('passes saved settings and sandbox restrictions into the resolver', async () => {
@@ -87,7 +102,7 @@ describe('Claude launch path', () => {
     const instance = agent(ClaudeAgent, { settings, sandboxOptions });
     await instance.run(args);
     expect(resolveClaudeSearchArgs).toHaveBeenCalledWith(args, { settings, sandboxOptions });
-    expect(instance.createChildProcess).toHaveBeenCalledWith('claude', args);
+    expect(instance.createChildProcess).toHaveBeenCalledWith('claude', args, { interactive: false });
   });
 
   test('leaves other agents and their original arguments unchanged', async () => {
@@ -95,6 +110,6 @@ describe('Claude launch path', () => {
     await instance.run(args);
     expect(resolveClaudeSearchArgs).not.toHaveBeenCalled();
     expect(instance.sandboxEngine.executeWithSandbox.mock.calls[0][1]).toBe(args);
-    expect(instance.createChildProcess).toHaveBeenCalledWith('gemini', args);
+    expect(instance.createChildProcess).toHaveBeenCalledWith('gemini', args, { interactive: false });
   });
 });

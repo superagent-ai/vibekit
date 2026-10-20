@@ -173,7 +173,7 @@ describe('Claude search launch configuration', () => {
 
   test('keeps delimiter-protected prompt text unchanged', async () => {
     const args = ['--', '--no-search'];
-    expect(await resolveClaudeSearchArgs(args, options())).toEqual(args);
+    expect((await resolveClaudeSearchArgs(args, options())).slice(4)).toEqual(args);
   });
 
   test('keeps an explicit tool grant without adding further grants', async () => {
