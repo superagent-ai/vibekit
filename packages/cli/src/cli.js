@@ -75,6 +75,7 @@ program
 program
   .command('claude')
   .description('Run Claude Code CLI')
+  .option('--no-search', 'Disable built-in Parallel web search for this launch')
   .option('-s, --sandbox', 'Enable sandbox mode')
   .option('--sandbox-type <type>', 'Sandbox type: docker, podman, none')
   .allowUnknownOption()
@@ -88,7 +89,7 @@ program
     
     const agentOptions = {
       proxy: proxy,
-      settings: settings,
+      settings: options.search === false ? { ...settings, search: false } : settings,
       sandboxOptions: {
         sandbox: options.sandbox,
         sandboxType: options.sandboxType

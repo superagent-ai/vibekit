@@ -9,6 +9,7 @@ import fs from 'fs-extra';
 import crypto from 'crypto';
 import SandboxEngine from '../sandbox/sandbox-engine.js';
 import SandboxConfig from '../sandbox/sandbox-config.js';
+import { resolveClaudeSearchArgs } from '../utils/claude-search.js';
 
 class BaseAgent {
   constructor(agentName, logger, options = {}) {
@@ -31,6 +32,12 @@ class BaseAgent {
 
 
   async run(args) {
+    if (this.agentName === 'claude') {
+      args = await resolveClaudeSearchArgs(args, {
+        settings: this.settings,
+        sandboxOptions: this.sandboxOptions
+      });
+    }
     await this.logger.log('info', `Starting ${this.agentName} agent`, { 
       args
     });

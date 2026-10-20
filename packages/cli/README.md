@@ -61,6 +61,33 @@ vibekit clean --logs
 vibekit clean --docker
 ```
 
+### Claude web search
+
+Fresh `vibekit claude` sessions include [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
+for free web search and page fetching, without a Parallel account or API key.
+Anonymous search uses Fast mode. Claude still asks for tool permission according
+to its normal policy; VibeKit does not automatically approve the tools.
+
+```bash
+vibekit claude "Find the current Node.js release documentation"
+
+# Disable the online search connection, including for offline use
+vibekit claude --no-search
+```
+
+Set `"search": false` in `~/.vibekit/settings.json`, or set `VIBEKIT_SEARCH=off`,
+to disable it across launches. The built-in configuration is passed in memory;
+VibeKit does not write to your Claude configuration. Existing MCP servers,
+search/tool policies, explicit MCP/settings flags and resumed sessions keep their
+own configuration. Unreadable configuration, managed policies, custom Claude
+configuration directories and custom sandbox profiles/images/flags also suppress
+the default. Other agents keep their existing tool configuration.
+
+Search needs network access and is subject to the service's free-tier limits.
+Claude owns connection failures, tool timeouts and cancellation; VibeKit does not
+switch providers after a failed search. You can still configure your own MCP
+servers with Claude's normal settings or `--mcp-config`.
+
 ### Sandbox Options
 
 **Local (Default - Fast & Simple):**

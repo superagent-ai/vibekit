@@ -37,7 +37,7 @@ vibekit claude
 
 🌐 **Universal agent support** - Works with Claude Code, Gemini CLI, Grok CLI, Codex CLI, OpenCode, and more
 
-💻 **Works offline & locally** - No cloud dependencies or internet required — works entirely on your machine
+💻 **Works offline & locally** - The middleware runs on your machine. Use `vibekit claude --no-search` to disable the default online search connection.
 
 ## 📦 Related Packages
 

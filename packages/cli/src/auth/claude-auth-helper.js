@@ -113,6 +113,8 @@ export class ClaudeAuthHelper {
     
     // Use base64 encoding to avoid shell escaping issues with JSON content
     const settingsBase64 = Buffer.from(settingsJson).toString('base64');
+    // Preserve each argv boundary, including inline MCP JSON and quoted prompts.
+    const quotedArgs = args.map(arg => "'" + arg.replace(/'/g, "'\\''") + "'").join(' ');
     
     const mergeScript = `
       # Write our settings to temp file (decode from base64 to avoid shell escaping issues)
@@ -161,7 +163,7 @@ try {
 MERGE_EOF
 
       # Run merge script then start claude
-      node /tmp/merge-settings.js && claude ${args.join(' ')}
+      node /tmp/merge-settings.js && claude ${quotedArgs}
     `;
     
     return {
