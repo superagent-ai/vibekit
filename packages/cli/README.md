@@ -65,13 +65,15 @@ vibekit clean --docker
 
 Fresh `vibekit claude` sessions include [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
 for free web search and page fetching, without a Parallel account or API key.
-Anonymous search uses Fast mode. Claude still asks for tool permission according
-to its normal policy; VibeKit does not automatically approve the tools.
+Anonymous search uses Fast mode. On these unconfigured launches, VibeKit disables
+Claude's native `WebSearch` tool so Parallel is the search default. Claude still
+asks for MCP tool permission according to its normal policy; VibeKit does not
+automatically approve the tools. Native `WebFetch` remains available.
 
 ```bash
 vibekit claude "Find the current Node.js release documentation"
 
-# Disable the online search connection, including for offline use
+# Disable the added connection and restore Claude's own tool selection
 vibekit claude --no-search
 ```
 

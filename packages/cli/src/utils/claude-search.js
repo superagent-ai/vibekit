@@ -96,5 +96,8 @@ export async function resolveClaudeSearchArgs(args, {
   }
 
   // No auth header or process-wide session_id: the host owns conversation scope.
-  return ['--mcp-config', parallelConfig, ...forwarded];
+  // Make this the unconfigured search default, rather than offering two search
+  // providers to the model. Explicit configuration or --no-search restores the
+  // host's own tools; this restriction never grants MCP tool permission.
+  return ['--mcp-config', parallelConfig, '--disallowedTools', 'WebSearch', ...forwarded];
 }
