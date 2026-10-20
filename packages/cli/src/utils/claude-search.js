@@ -23,6 +23,20 @@ const configurationFlags = new Set([
 ]);
 const subcommands = new Set(['mcp', 'auth', 'config', 'doctor', 'install', 'update', 'setup-token']);
 
+function selectsNativeSearch(args) {
+  for (let i = 0; i < args.length; i++) {
+    const [flag, ...inline] = args[i].split('=');
+    if (flag !== '--allowedTools' && flag !== '--allowed-tools') continue;
+    const values = inline.length ? [inline.join('=')] : [];
+    if (!inline.length) {
+      for (let j = i + 1; j < args.length && !args[j].startsWith('-'); j++) values.push(args[j]);
+    }
+    if (values.some(value => value.split(/[,\s]+/).some(tool =>
+      tool === '*' || tool === 'Web*' || tool.startsWith('WebSearch')))) return true;
+  }
+  return false;
+}
+
 function hasToolChoices(value) {
   if (!value || typeof value !== 'object') return false;
   return Object.entries(value).some(([key, entry]) => {
@@ -67,6 +81,7 @@ export async function resolveClaudeSearchArgs(args, {
       env.VIBEKIT_SANDBOX_EXEC_PROFILE || env.VIBEKIT_SANDBOX_EXEC_PROFILE_FILE ||
       env.VIBEKIT_SANDBOX_EXEC_PROFILE_STRING || env.VIBEKIT_SANDBOX_EXEC_PARAMS ||
       settings.sandbox?.sandboxExec || sandboxOptions.sandboxExec ||
+      selectsNativeSearch(optionArgs) ||
       optionArgs.some(arg => configurationFlags.has(arg.split('=')[0])) ||
       subcommands.has(optionArgs[0])) return forwarded;
 
