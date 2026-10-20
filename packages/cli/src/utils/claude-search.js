@@ -17,6 +17,7 @@ const parallelConfig = JSON.stringify({
 const configurationFlags = new Set([
   '--mcp-config', '--strict-mcp-config', '--settings', '--setting-sources',
   '--tools', '--disallowedTools', '--disallowed-tools', '--permission-mode',
+  '--plugin-dir', '--agent', '--agents',
   '--continue', '-c', '--resume', '-r', '--fork-session', '--',
   '--help', '-h', '--version', '-v'
 ]);
@@ -27,7 +28,7 @@ function hasToolChoices(value) {
   return Object.entries(value).some(([key, entry]) => {
     // Empty server maps/lists are the normal unconfigured state. Explicit
     // booleans (including false) still express an enable/disable choice.
-    if (/mcp|search|fetch|permissions|allowedTools|disallowedTools/i.test(key)) {
+    if (/mcp|search|fetch|permissions|allowedTools|disallowedTools|plugin|marketplace/i.test(key)) {
       if (entry === null || typeof entry !== 'object') return true;
       if (entry && typeof entry === 'object' && Object.keys(entry).length) return true;
     }

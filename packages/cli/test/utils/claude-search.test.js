@@ -76,6 +76,8 @@ describe('Claude search launch configuration', () => {
     { permissions: { ask: ['mcp__parallel__*'] } },
     { search: false },
     { searchProvider: 'existing' },
+    { enabledPlugins: { 'search@tools': true } },
+    { extraKnownMarketplaces: { tools: { source: { source: 'github', repo: 'example/tools' } } } },
     { webFetch: false }
   ])('preserves saved tool or provider choices: %j', async value => {
     config(path.join(home, '.claude.json'), value);
@@ -148,6 +150,7 @@ describe('Claude search launch configuration', () => {
     ['--disallowedTools', 'WebSearch'],
     ['--disallowed-tools=WebFetch'],
     ['--permission-mode', 'plan'],
+    ['--plugin-dir', '/custom/plugin'], ['--agent', 'research'], ['--agents={"research":{}}'],
     ['--continue'], ['-c'], ['--resume', 'saved-session'], ['-r', 'saved-session'],
     ['--fork-session'], ['--help'], ['-h'], ['--version'], ['-v'],
     ['mcp', 'list'], ['auth', 'status'], ['config'], ['doctor'], ['install'], ['update'], ['setup-token']
