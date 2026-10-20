@@ -39,10 +39,10 @@ describe('Claude search launch configuration', () => {
     const args = [...originalArgs];
     const resolved = await resolveClaudeSearchArgs(args, options());
     expect(args).toEqual(originalArgs);
-    expect(resolved[0]).toBe('--mcp-config');
-    expect(resolved.slice(2, 4)).toEqual(['--disallowedTools', 'WebSearch']);
-    expect(resolved.slice(4)).toEqual(args);
-    const configuration = JSON.parse(resolved[1]);
+    expect(resolved.slice(0, -4)).toEqual(args);
+    expect(resolved.at(-4)).toBe('--mcp-config');
+    expect(resolved.slice(-2)).toEqual(['--disallowedTools', 'WebSearch']);
+    const configuration = JSON.parse(resolved.at(-3));
     expect(configuration).toEqual({
       mcpServers: {
         parallel: {
@@ -63,7 +63,7 @@ describe('Claude search launch configuration', () => {
       mcpServers: {},
       projects: { [cwd]: { mcpServers: {}, allowedTools: [], disabledMcpjsonServers: [] } }
     });
-    expect((await resolveClaudeSearchArgs(originalArgs, options()))[0]).toBe('--mcp-config');
+    expect((await resolveClaudeSearchArgs(originalArgs, options())).at(-4)).toBe('--mcp-config');
   });
 
   test.each([
@@ -173,13 +173,13 @@ describe('Claude search launch configuration', () => {
 
   test('keeps delimiter-protected prompt text unchanged', async () => {
     const args = ['--', '--no-search'];
-    expect((await resolveClaudeSearchArgs(args, options())).slice(4)).toEqual(args);
+    expect(await resolveClaudeSearchArgs(args, options())).toEqual(args);
   });
 
   test('keeps an explicit tool grant without adding further grants', async () => {
     const args = ['--allowedTools', 'mcp__parallel__web_search', ...originalArgs];
     const resolved = await resolveClaudeSearchArgs(args, options());
-    expect(resolved.slice(4)).toEqual(args);
+    expect(resolved.slice(0, -4)).toEqual(args);
     expect(resolved.filter(value => value === '--allowedTools')).toHaveLength(1);
   });
 

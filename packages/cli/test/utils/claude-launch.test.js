@@ -32,10 +32,10 @@ function agent(Agent = ClaudeAgent, options = {}) {
 }
 
 function expectParallelArgs(resolved) {
-  expect(resolved[0]).toBe('--mcp-config');
-  expect(JSON.parse(resolved[1]).mcpServers.parallel.url).toBe('https://search.parallel.ai/mcp');
-  expect(resolved.slice(2, 4)).toEqual(['--disallowedTools', 'WebSearch']);
-  expect(resolved.slice(4)).toEqual(args);
+  expect(resolved.at(-4)).toBe('--mcp-config');
+  expect(JSON.parse(resolved.at(-3)).mcpServers.parallel.url).toBe('https://search.parallel.ai/mcp');
+  expect(resolved.slice(-2)).toEqual(['--disallowedTools', 'WebSearch']);
+  expect(resolved.slice(0, -4)).toEqual(args);
 }
 
 beforeEach(() => {
